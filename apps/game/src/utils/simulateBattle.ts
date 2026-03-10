@@ -1,14 +1,23 @@
-import { type BattleEvent, type BattleLog, type BattleLogEntry, type PlayerState, type User } from "./simulateBattle.types";
-import { defaultWeapon, defaultWeapon2 } from "./weapon";
+import { type BattleEvent, type BattleLog, type BattleLogEntry, type User } from "./simulateBattle.types";
 
-function simulateBattle(user1: User, user2: User): BattleLog {
+function simulateBattle(players: User[]): BattleLog {
   let eventCounter = 0;
   const generateId = () => `event-${eventCounter++}`;
 
+  // 시뮬레이션을 위한 상태 복사 (원본 보존)
+  // User 객체가 깊은 복사가 되어야 함. (weapons 내부의 currentCooldown 등)
+  const simPlayers = players.map(p => ({
+    ...p,
+    weapons: p.weapons.map(w => w ? { ...w } : null) as User["weapons"]
+  }));
+
+  const deadPlayers = new Set<string>();
+
   // 1. 초기 상태 캡처
   const initialState: BattleLog["initialState"] = {
-    players: [user1, user2].map((u) => ({
+    players: simPlayers.map((u) => ({
       id: u.id,
+      teamId: u.teamId,
       hp: u.hp,
       maxHp: u.maxHp,
       weapons: u.weapons.map((w) => (w ? { name: w.name, damage: w.damage, cooldown: w.cooldown } : null)),
@@ -16,20 +25,31 @@ function simulateBattle(user1: User, user2: User): BattleLog {
   };
 
   const timeline: BattleLogEntry[] = [];
-  const tickUnit = 100; // 더 세밀한 시뮬레이션을 위해 100ms 단위로 조정
+  const tickUnit = 100;
   let currentTick = 0;
 
   // 2. 시뮬레이션 루프
-  while (!isBattleOver(user1, user2)) {
+  while (!isBattleOver(simPlayers)) {
     currentTick += tickUnit;
-    const actions1 = usingWeapon(user1, user2, tickUnit).map((e) => ({ ...e, id: generateId() }));
-    const actions2 = usingWeapon(user2, user1, tickUnit).map((e) => ({ ...e, id: generateId() }));
+    const tickEvents: BattleEvent[] = [];
 
-    const tickEvents: BattleEvent[] = [...actions1, ...actions2];
+    // 모든 플레이어에 대해 행동 처리
+    for (const actor of simPlayers) {
+      if (actor.hp <= 0) continue;
 
-    // 누군가 죽었는지 확인
-    if (user1.hp <= 0) tickEvents.push({ id: generateId(), type: "DEATH", playerId: user1.id });
-    if (user2.hp <= 0) tickEvents.push({ id: generateId(), type: "DEATH", playerId: user2.id });
+      const actions = usingWeapon(actor, simPlayers, tickUnit).map((e) => ({ ...e, id: generateId() }));
+      
+      for (const event of actions) {
+        if (event.type === "DEATH") {
+          if (!deadPlayers.has(event.playerId)) {
+            deadPlayers.add(event.playerId);
+            tickEvents.push(event);
+          }
+        } else {
+          tickEvents.push(event);
+        }
+      }
+    }
 
     if (tickEvents.length > 0) {
       timeline.push({
@@ -38,16 +58,16 @@ function simulateBattle(user1: User, user2: User): BattleLog {
       });
     }
 
-    // 무한 루프 방지 (예: 1분 이상 지속 시 강제 종료)
     if (currentTick > 60000) break;
   }
 
   // 3. 종료 결과 추가
-  const winnerId = user1.hp > 0 && user2.hp <= 0 ? user1.id : user2.hp > 0 && user1.hp <= 0 ? user2.id : null;
+  const remainingTeams = new Set(simPlayers.filter((p) => p.hp > 0).map((p) => p.teamId));
+  const winnerTeamId = remainingTeams.size === 1 ? Array.from(remainingTeams)[0] : null;
 
   timeline.push({
     timestamp: currentTick,
-    events: [{ id: generateId(), type: "BATTLE_END", winnerId }],
+    events: [{ id: generateId(), type: "BATTLE_END", winnerTeamId }],
   });
 
   return {
@@ -58,38 +78,40 @@ function simulateBattle(user1: User, user2: User): BattleLog {
 
 export default simulateBattle;
 
-function isBattleOver(user1: User, user2: User): boolean {
-  return user1.hp <= 0 || user2.hp <= 0;
+function isBattleOver(players: User[]): boolean {
+  const aliveTeams = new Set(players.filter((p) => p.hp > 0).map((p) => p.teamId));
+  return aliveTeams.size <= 1;
 }
 
-function usingWeapon(actor: User, target: User, tickUnit: number): BattleEvent[] {
+function findTarget(actor: User, allPlayers: User[]): User | null {
+  const enemies = allPlayers.filter((p) => p.teamId !== actor.teamId && p.hp > 0);
+  if (enemies.length === 0) return null;
+  return enemies[Math.floor(Math.random() * enemies.length)];
+}
+
+function usingWeapon(actor: User, allPlayers: User[], tickUnit: number): BattleEvent[] {
   const events: BattleEvent[] = [];
   for (const weapon of actor.weapons) {
     if (!weapon) continue;
     weapon.currentCooldown -= tickUnit;
     if (weapon.currentCooldown <= 0) {
+      const target = findTarget(actor, allPlayers);
+      if (!target) continue;
+
       weapon.currentCooldown = weapon.cooldown;
-      events.push(...weapon.use(actor, target, weapon));
-      // 한 틱에 하나의 무기만 사용하도록 설계 (필요 시 수정 가능)
+      const weaponEvents = weapon.use(actor, target, weapon);
+      events.push(...weaponEvents);
+
+      if (target.hp <= 0) {
+        events.push({
+          id: "",
+          type: "DEATH",
+          playerId: target.id,
+        });
+      }
+
       return events;
     }
   }
   return [];
 }
-
-// 테스트용 (필요 시 제거 가능)
-const u1: User = {
-  id: "user1",
-  hp: 100,
-  maxHp: 100,
-  weapons: [defaultWeapon, null, null, null, null],
-};
-const u2: User = {
-  id: "user2",
-  hp: 110,
-  maxHp: 110,
-  weapons: [defaultWeapon2, null, null, null, null],
-};
-
-const log = simulateBattle(u1, u2);
-console.dir(log, { depth: null, colors: true });

@@ -16,14 +16,14 @@ export const BattlePlayer: React.FC<BattlePlayerProps> = ({ player, damageEvents
   const hpPercent = (player.currentHp / player.maxHp) * 100;
 
   return (
-    <PlayerCard>
+    <PlayerCard $isDead={player.isDead}>
       <div style={{ position: "relative" }}>
         <motion.div
           key={lastDamageEventId}
           animate={lastDamageEventId ? { x: [0, -10, 10, -10, 0] } : {}}
           transition={{ duration: 0.2 }}
         >
-          <div style={{ fontSize: "3rem" }}>{isEnemy ? "👾" : "🛡️"}</div>
+          <div style={{ fontSize: "3rem" }}>{player.isDead ? "💀" : (isEnemy ? "👾" : "🛡️")}</div>
         </motion.div>
 
         {/* 데미지 텍스트 애니메이션 */}
@@ -64,12 +64,15 @@ export const BattlePlayer: React.FC<BattlePlayerProps> = ({ player, damageEvents
   );
 };
 
-const PlayerCard = styled(motion.div)`
+const PlayerCard = styled(motion.div)<{ $isDead: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1rem;
   width: 200px;
+  opacity: ${(props) => (props.$isDead ? 0.5 : 1)};
+  filter: ${(props) => (props.$isDead ? "grayscale(100%)" : "none")};
+  transition: opacity 0.5s, filter 0.5s;
 `;
 
 const HpBarContainer = styled.div`

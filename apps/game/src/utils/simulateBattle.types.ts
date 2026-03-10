@@ -8,6 +8,7 @@ export type Weapon = {
 
 export type PlayerState = {
   id: string;
+  teamId: string;
   maxHp: number;
   hp: number;
   weapons: Array<{
@@ -19,6 +20,7 @@ export type PlayerState = {
 
 export type User = {
   id: string;
+  teamId: string;
   hp: number;
   maxHp: number;
   weapons: [Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null];
@@ -29,7 +31,7 @@ export type BattleEvent = { id: string } & (
   | { type: "DAMAGE"; targetId: string; amount: number; remainingHp: number; isCritical: boolean }
   | { type: "COOLDOWN"; actorId: string; weaponIndex: number; duration: number }
   | { type: "DEATH"; playerId: string }
-  | { type: "BATTLE_END"; winnerId: string | null }
+  | { type: "BATTLE_END"; winnerTeamId: string | null }
 );
 
 export type BattleLogEntry = {

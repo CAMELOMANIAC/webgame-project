@@ -5,6 +5,7 @@ import type { BattleEvent, BattleLog, PlayerState } from "./simulateBattle.types
 export type PlayerLiveState = PlayerState & {
   currentHp: number;
   weaponCooldownRemaining: number[];
+  isDead: boolean;
 };
 
 export function useBattlePlayer(battleLog: BattleLog | null) {
@@ -12,6 +13,7 @@ export function useBattlePlayer(battleLog: BattleLog | null) {
   const [currentTime, setCurrentTime] = useState(0);
   const [players, setPlayers] = useState<PlayerLiveState[]>([]);
   const [activeEvents, setActiveEvents] = useState<BattleEvent[]>([]);
+  const [eventHistory, setEventHistory] = useState<BattleEvent[]>([]);
 
   const requestRef = useRef<number>(null);
   const startTimeRef = useRef<number>(null);
@@ -24,11 +26,13 @@ export function useBattlePlayer(battleLog: BattleLog | null) {
         ...p,
         currentHp: p.hp,
         weaponCooldownRemaining: p.weapons.map(() => 0),
+        isDead: false,
       }));
       setPlayers(initialPlayers);
       setCurrentTime(0);
       lastProcessedIndexRef.current = -1;
       setActiveEvents([]);
+      setEventHistory([]);
     }
   }, [battleLog]);
 
@@ -60,10 +64,12 @@ export function useBattlePlayer(battleLog: BattleLog | null) {
   };
 
   const processEvents = (events: BattleEvent[]) => {
-    // UI에 보여줄 "현재 활성 이벤트" 업데이트 (예: 데미지 숫자 띄우기용)
+    // UI에 보여줄 "현재 활성 이벤트" 업데이트
     setActiveEvents((prev) => [...prev, ...events]);
+    // 전체 히스토리에 추가
+    setEventHistory((prev) => [...prev, ...events]);
 
-    // 특정 시간 후 이벤트 목록에서 제거 (청소 작업)
+    // 특정 시간 후 이벤트 목록에서 제거 (팝업용)
     setTimeout(() => {
       setActiveEvents((prev) => prev.filter((e) => !events.includes(e)));
     }, 1000);
@@ -82,6 +88,13 @@ export function useBattlePlayer(battleLog: BattleLog | null) {
             actor.weaponCooldownRemaining[event.weaponIndex] = event.duration;
           }
         }
+        if (event.type === "DEATH") {
+          const target = next.find((p) => p.id === event.playerId);
+          if (target) {
+            target.isDead = true;
+            target.currentHp = 0;
+          }
+        }
       });
       return next;
     });
@@ -92,6 +105,7 @@ export function useBattlePlayer(battleLog: BattleLog | null) {
     setIsPlaying(true);
     startTimeRef.current = null;
     lastProcessedIndexRef.current = -1;
+    setEventHistory([]); // 시작 시 히스토리 초기화
     requestRef.current = requestAnimationFrame(animate);
   };
 
@@ -105,6 +119,7 @@ export function useBattlePlayer(battleLog: BattleLog | null) {
     currentTime,
     isPlaying,
     activeEvents,
+    eventHistory,
     start,
     stop,
   };
