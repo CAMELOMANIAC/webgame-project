@@ -23,7 +23,7 @@ const InventorySlot = ({ slotId, selectedSlot, ...props }: InventorySlotProps) =
       $isSelected={selectedSlot === slotId}
       {...props}
     >
-      {inventoryItem?.name || slotId}
+      {inventoryItem?.item.name || slotId}
     </SlotBox>
   );
 };

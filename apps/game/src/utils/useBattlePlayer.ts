@@ -82,6 +82,10 @@ export function useBattlePlayer(battleLog: BattleLog | null) {
           const target = next.find((p) => p.id === event.targetId);
           if (target) target.currentHp = event.remainingHp;
         }
+        if (event.type === "HEAL") {
+          const target = next.find((p) => p.id === event.targetId);
+          if (target) target.currentHp = event.remainingHp;
+        }
         if (event.type === "COOLDOWN") {
           const actor = next.find((p) => p.id === event.actorId);
           if (actor) {

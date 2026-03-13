@@ -41,6 +41,15 @@ export const BattleLogDisplay: React.FC<BattleLogDisplayProps> = ({ events, play
           </LogItem>
         );
       }
+      case "HEAL": {
+        const target = players.find(p => p.id === event.targetId);
+        return (
+          <LogItem key={event.id} $isHeal>
+            💚 <TargetName $teamId={target?.teamId}>{target?.id}</TargetName> recovers{" "}
+            <HealAmount>{event.amount}</HealAmount> HP! (Current HP: {Math.ceil(event.remainingHp)})
+          </LogItem>
+        );
+      }
       case "DEATH": {
         const player = players.find(p => p.id === event.playerId);
         return (
@@ -92,8 +101,12 @@ const LogContainer = styled.div`
   }
 `;
 
-const LogItem = styled.div<{ $isDamage?: boolean; $isDeath?: boolean; $isEnd?: boolean }>`
-  color: ${props => props.$isDamage ? "#ff8a80" : props.$isDeath ? "#e91e63" : props.$isEnd ? "#ffd700" : "#eee"};
+const LogItem = styled.div<{ $isDamage?: boolean; $isHeal?: boolean; $isDeath?: boolean; $isEnd?: boolean }>`
+  color: ${props => 
+    props.$isDamage ? "#ff8a80" : 
+    props.$isHeal ? "#81c784" :
+    props.$isDeath ? "#e91e63" : 
+    props.$isEnd ? "#ffd700" : "#eee"};
   line-height: 1.4;
   ${props => (props.$isDeath || props.$isEnd) && "font-weight: bold;"}
 `;
@@ -113,6 +126,11 @@ const WeaponName = styled.span`
 
 const DamageAmount = styled.span`
   color: #f44336;
+  font-weight: bold;
+`;
+
+const HealAmount = styled.span`
+  color: #4caf50;
   font-weight: bold;
 `;
 

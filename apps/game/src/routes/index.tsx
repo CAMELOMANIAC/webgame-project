@@ -14,10 +14,10 @@ function RouteComponent() {
   return (
     <Page>
       <div style={divStyle}>
-        {/* <SideBar /> */}
+        <SideBar />
         <div style={{ display: "flex", flexDirection: "column", flex: 1, gap: "20px", padding: "20px" }}>
           <BattleScene />
-          {/* <Inventory /> */}
+          <Inventory />
         </div>
         <Link to="/testpage/" style={linkStyle}>
           go to "/testpage/"

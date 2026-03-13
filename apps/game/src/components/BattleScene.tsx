@@ -1,50 +1,46 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import styled from "styled-components";
 
 import simulateBattle from "../utils/simulateBattle";
 import type { User } from "../utils/simulateBattle.types";
 import { useBattlePlayer } from "../utils/useBattlePlayer";
-import { defaultWeapon, defaultWeapon2 } from "../utils/weapon";
+import { defaultWeapon2, giantSlayer, healingWeapon, sniperRifle } from "../utils/weapon";
 import { BattleLogDisplay } from "./BattleLogDisplay";
 import { BattlePlayer } from "./BattlePlayer";
 
 export const BattleScene: React.FC = () => {
   // 테스트 데이터 생성
-  const initialPlayers: User[] = useMemo(() => [
-    {
-      id: "Hero 1",
-      teamId: "TeamA",
-      hp: 100,
-      maxHp: 100,
-      weapons: [defaultWeapon, null, null, null, null],
-    },
-    {
-      id: "Hero 2",
-      teamId: "TeamA",
-      hp: 80,
-      maxHp: 80,
-      weapons: [defaultWeapon2, null, null, null, null],
-    },
-    {
-      id: "Monster 1",
-      teamId: "TeamB",
-      hp: 120,
-      maxHp: 120,
-      weapons: [defaultWeapon, null, null, null, null],
-    },
-    {
-      id: "Monster 2",
-      teamId: "TeamB",
-      hp: 150,
-      maxHp: 150,
-      weapons: [defaultWeapon2, null, null, null, null],
-    },
-  ], []);
+  const initialPlayers: User[] = useMemo(
+    () => [
+      {
+        id: "Hero (Assassin)",
+        teamId: "TeamA",
+        hp: 100,
+        maxHp: 100,
+        weapons: [sniperRifle, healingWeapon, null, null, null],
+      },
+      {
+        id: "Monster (Boss)",
+        teamId: "TeamB",
+        hp: 120,
+        maxHp: 120,
+        weapons: [giantSlayer, null, null, null, null],
+      },
+      {
+        id: "Monster (Minion)",
+        teamId: "TeamB",
+        hp: 30,
+        maxHp: 30,
+        weapons: [defaultWeapon2, null, null, null, null],
+      },
+    ],
+    [],
+  );
 
   const battleLog = useMemo(() => {
-    const clonedPlayers = initialPlayers.map(p => ({
+    const clonedPlayers = initialPlayers.map((p) => ({
       ...p,
-      weapons: p.weapons.map(w => w ? { ...w, currentCooldown: 0 } : null) as User["weapons"]
+      weapons: p.weapons.map((w) => (w ? { ...w, currentCooldown: 0 } : null)) as User["weapons"],
     }));
     return simulateBattle(clonedPlayers);
   }, [initialPlayers]);
@@ -54,10 +50,10 @@ export const BattleScene: React.FC = () => {
   // 현재 발생한 데미지 이벤트 필터링 (애니메이션용)
   const damageEvents = activeEvents.filter((e) => e.type === "DAMAGE");
 
-  const teamA = players.filter(p => p.teamId === "TeamA");
-  const teamB = players.filter(p => p.teamId === "TeamB");
+  const teamA = players.filter((p) => p.teamId === "TeamA");
+  const teamB = players.filter((p) => p.teamId === "TeamB");
 
-  const winnerEvent = eventHistory.find(e => e.type === "BATTLE_END");
+  const winnerEvent = eventHistory.find((e) => e.type === "BATTLE_END");
   const winnerTeamId = winnerEvent && winnerEvent.type === "BATTLE_END" ? winnerEvent.winnerTeamId : null;
 
   return (
@@ -102,10 +98,7 @@ export const BattleScene: React.FC = () => {
 
       <BattleLogWrapper>
         <h4>Battle Log</h4>
-        <BattleLogDisplay 
-          events={eventHistory} 
-          players={battleLog?.initialState.players || []} 
-        />
+        <BattleLogDisplay events={eventHistory} players={battleLog?.initialState.players || []} />
       </BattleLogWrapper>
 
       <div style={{ marginTop: "1rem", color: "#888", fontSize: "0.9rem" }}>
@@ -165,7 +158,7 @@ const BattleLogWrapper = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  
+
   h4 {
     margin: 0;
     color: #888;

@@ -1,19 +1,31 @@
 import { atom } from "jotai";
 
-type InventoryItemAtom = { id: number; name: string; count?: number };
-const initialInventoryItem: InventoryItemAtom[] = [
-  { id: 1, name: "sword" },
-  { id: 2, name: "armor" },
+import { type Weapon } from "../utils/simulateBattle.types";
+import { defaultWeapon, giantSlayer, healingWeapon, sniperRifle } from "../utils/weapon";
+
+export type InventoryItem = {
+  id: number;
+  count?: number;
+  // 아이템이 무기라면 Weapon 객체를, 아니면 단순히 이름만 가짐
+  item: Weapon | { name: string };
+};
+
+const initialInventoryItem: InventoryItem[] = [
+  { id: 1, item: { ...defaultWeapon, name: "Sword" } },
+  { id: 2, item: { name: "Armor" } },
+  { id: 3, item: healingWeapon },
+  { id: 4, item: sniperRifle },
+  { id: 5, item: giantSlayer },
 ];
-export const inventoryItemAtom = atom<InventoryItemAtom[]>(initialInventoryItem);
+
+export const inventoryItemAtom = atom<InventoryItem[]>(initialInventoryItem);
 
 /**
- * 인벤토리 배열에서 특정 인덱스의 아이템을 읽는 파생 아톰을 반환
- * @param index - 읽어올 인덱스
+ * 인벤토리 배열에서 특정 ID의 아이템을 읽는 파생 아톰을 반환
  */
 export const selectItemAtIndex = (id: number) =>
   atom((get) => {
-    const inventoryItem = get(inventoryItemAtom); // 기본 아톰의 값을 가져옴
-    const item = inventoryItem.find((item) => item.id === id);
+    const inventoryItems = get(inventoryItemAtom);
+    const item = inventoryItems.find((i) => i.id === id);
     return item !== undefined ? item : null;
   });

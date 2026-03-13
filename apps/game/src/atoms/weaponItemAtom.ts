@@ -1,38 +1,56 @@
 import { atom } from "jotai";
 
+import { type Weapon } from "../utils/simulateBattle.types";
 import { inventoryItemAtom } from "./inventoryItemAtom";
 
-type WeaponItemAtom = { id: number; name: string; count?: number };
-const initialWeaponItem: WeaponItemAtom[] = [];
-export const weaponItemAtom = atom<WeaponItemAtom[]>(initialWeaponItem);
+export type WeaponSlot = {
+  id: number;
+  weapon: Weapon | null;
+};
+
+// 기본적으로 5개의 빈 무기 슬롯 초기화
+const initialWeaponItem: WeaponSlot[] = [
+  { id: 0, weapon: null },
+  { id: 1, weapon: null },
+  { id: 2, weapon: null },
+  { id: 3, weapon: null },
+  { id: 4, weapon: null },
+];
+export const weaponItemAtom = atom<WeaponSlot[]>(initialWeaponItem);
 
 /**
- * 인벤토리 배열에서 특정 인덱스의 아이템을 읽는 파생 아톰을 반환
- * @param index - 읽어올 인덱스
+ * 인벤토리 배열에서 특정 ID의 아이템을 읽는 파생 아톰을 반환
  */
 export const selectItemAtIndex = (id: number | null) =>
   atom((get) => {
-    const weaponItem = get(weaponItemAtom); // 기본 아톰의 값을 가져옴
-    const item = weaponItem.find((item) => item.id === id);
+    const weaponItems = get(weaponItemAtom);
+    const item = weaponItems.find((item) => item.id === id);
     return item !== undefined ? item : null;
   });
 
 export const setEquipItemAtom = atom(
   null,
   (get, set, { inventoryId, equipId }: { inventoryId: number | null; equipId: number }) => {
-    console.log(inventoryId, equipId);
-    if (inventoryId === null || equipId === null) return;
+    if (inventoryId === null) return;
 
-    const inventoryItem = get(inventoryItemAtom);
-    const item = inventoryItem.find((item) => item.id === inventoryId);
-    if (!item) return;
+    const inventoryItems = get(inventoryItemAtom);
+    const inventoryItem = inventoryItems.find((i) => i.id === inventoryId);
+    if (!inventoryItem) return;
 
-    const weaponItem = [...get(weaponItemAtom)];
+    // 아이템이 무기인지 확인 (use 함수가 있으면 무기로 판단)
+    if (!("use" in inventoryItem.item)) {
+      console.warn("This item is not a weapon and cannot be equipped.");
+      return;
+    }
 
-    // 찾았을 때만 업데이트
-    weaponItem[equipId] = { id: equipId, name: item.name, count: item.count };
-    console.log("updated weaponItem:", weaponItem);
+    const weaponSlots = [...get(weaponItemAtom)];
+    
+    // 해당 슬롯에 무기 장착
+    weaponSlots[equipId] = { 
+      id: equipId, 
+      weapon: { ...inventoryItem.item } // 객체 복사하여 저장
+    };
 
-    set(weaponItemAtom, weaponItem);
+    set(weaponItemAtom, weaponSlots);
   }
 );

@@ -167,7 +167,7 @@ const WeaponList = () => {
               };
             }}
           >
-            {equipItem[order]?.name || order}
+            {equipItem[order]?.weapon?.name || order}
           </WeaponLi>
         ) : (
           <Fragment key={order}>
