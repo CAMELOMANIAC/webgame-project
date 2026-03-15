@@ -1,14 +1,18 @@
+import { useAtomValue } from "jotai";
 import React, { useMemo } from "react";
 import styled from "styled-components";
 
+import { weaponItemAtom } from "../atoms/weaponItemAtom";
 import simulateBattle from "../utils/simulateBattle";
 import type { User } from "../utils/simulateBattle.types";
 import { useBattlePlayer } from "../utils/useBattlePlayer";
-import { defaultWeapon2, giantSlayer, healingWeapon, sniperRifle } from "../utils/weapon";
+import { defaultWeapon2, giantSlayer } from "../utils/weapon";
 import { BattleLogDisplay } from "./BattleLogDisplay";
 import { BattlePlayer } from "./BattlePlayer";
 
 export const BattleScene: React.FC = () => {
+  const weaponSlots = useAtomValue(weaponItemAtom);
+
   // 테스트 데이터 생성
   const initialPlayers: User[] = useMemo(
     () => [
@@ -17,13 +21,19 @@ export const BattleScene: React.FC = () => {
         teamId: "TeamA",
         hp: 100,
         maxHp: 100,
-        weapons: [sniperRifle, healingWeapon, null, null, null],
+        stamina: 100,      // 추가
+        maxStamina: 100,   // 추가
+        staminaRegen: 2,   // 추가 (틱당 2 회복)
+        weapons: weaponSlots.map((slot) => slot.weapon) as User["weapons"],
       },
       {
         id: "Monster (Boss)",
         teamId: "TeamB",
         hp: 120,
         maxHp: 120,
+        stamina: 100,      // 추가
+        maxStamina: 100,   // 추가
+        staminaRegen: 1,   // 추가
         weapons: [giantSlayer, null, null, null, null],
       },
       {
@@ -31,10 +41,13 @@ export const BattleScene: React.FC = () => {
         teamId: "TeamB",
         hp: 30,
         maxHp: 30,
+        stamina: 50,       // 추가
+        maxStamina: 50,    // 추가
+        staminaRegen: 1,   // 추가
         weapons: [defaultWeapon2, null, null, null, null],
       },
     ],
-    [],
+    [weaponSlots],
   );
 
   const battleLog = useMemo(() => {

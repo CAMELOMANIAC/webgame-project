@@ -14,6 +14,7 @@ interface BattlePlayerProps {
 export const BattlePlayer: React.FC<BattlePlayerProps> = ({ player, damageEvents, isEnemy }) => {
   const lastDamageEventId = damageEvents.length > 0 ? damageEvents[damageEvents.length - 1].id : null;
   const hpPercent = (player.currentHp / player.maxHp) * 100;
+  const staminaPercent = (player.currentStamina / player.maxStamina) * 100;
 
   return (
     <PlayerCard $isDead={player.isDead}>
@@ -41,21 +42,43 @@ export const BattlePlayer: React.FC<BattlePlayerProps> = ({ player, damageEvents
         </AnimatePresence>
       </div>
 
-      <div>{player.id}</div>
+      <div style={{ fontWeight: "bold" }}>{player.id}</div>
 
-      <HpBarContainer>
-        <HpBarFill $percent={hpPercent} initial={{ width: "100%" }} animate={{ width: `${hpPercent}%` }} />
-      </HpBarContainer>
-      <div style={{ fontSize: "0.8rem" }}>
-        {Math.ceil(player.currentHp)} / {player.maxHp}
+      {/* HP 바 */}
+      <div style={{ width: "100%" }}>
+        <BarContainer>
+          <HpBarFill $percent={hpPercent} initial={{ width: "100%" }} animate={{ width: `${hpPercent}%` }} />
+        </BarContainer>
+        <BarLabel>
+          HP: {Math.ceil(player.currentHp)} / {player.maxHp}
+        </BarLabel>
       </div>
 
-      <div style={{ display: "flex", gap: "5px" }}>
+      {/* 스태미너 바 */}
+      <div style={{ width: "100%" }}>
+        <BarContainer>
+          <StaminaBarFill 
+            $percent={staminaPercent} 
+            initial={{ width: "100%" }} 
+            animate={{ width: `${staminaPercent}%` }} 
+          />
+        </BarContainer>
+        <BarLabel>
+          ST: {Math.ceil(player.currentStamina)} / {player.maxStamina}
+        </BarLabel>
+      </div>
+
+      <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", justifyContent: "center" }}>
         {player.weapons.map(
           (w, i) =>
             w && (
               <WeaponSlot key={i} $isCooling={player.weaponCooldownRemaining[i] > 0}>
-                {w.name}
+                <WeaponName>{w.name}</WeaponName>
+                {player.weaponCooldownRemaining[i] > 0 && (
+                  <CooldownOverlay
+                    $percent={(player.weaponCooldownRemaining[i] / w.cooldown) * 100}
+                  />
+                )}
               </WeaponSlot>
             ),
         )}
@@ -68,26 +91,40 @@ const PlayerCard = styled(motion.div)<{ $isDead: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 0.8rem;
   width: 200px;
   opacity: ${(props) => (props.$isDead ? 0.5 : 1)};
   filter: ${(props) => (props.$isDead ? "grayscale(100%)" : "none")};
   transition: opacity 0.5s, filter 0.5s;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
 `;
 
-const HpBarContainer = styled.div`
+const BarContainer = styled.div`
   width: 100%;
-  height: 20px;
-  background: #444;
-  border-radius: 10px;
+  height: 12px;
+  background: #333;
+  border-radius: 6px;
   overflow: hidden;
-  border: 2px solid #000;
+  border: 1px solid #000;
 `;
 
 const HpBarFill = styled(motion.div)<{ $percent: number }>`
   height: 100%;
   background: ${(props) => (props.$percent > 30 ? "#4caf50" : "#f44336")};
-  width: ${(props) => props.$percent}%;
+`;
+
+const StaminaBarFill = styled(motion.div)<{ $percent: number }>`
+  height: 100%;
+  background: #2196f3;
+`;
+
+const BarLabel = styled.div`
+  font-size: 0.7rem;
+  text-align: right;
+  margin-top: 2px;
+  color: #ccc;
 `;
 
 const DamageText = styled(motion.div)`
@@ -101,13 +138,33 @@ const DamageText = styled(motion.div)`
 `;
 
 const WeaponSlot = styled.div<{ $isCooling: boolean }>`
-  width: 50px;
-  height: 50px;
-  background: #333;
-  border: 2px solid ${(props) => (props.$isCooling ? "#ff9800" : "#fff")};
+  width: 45px;
+  height: 45px;
+  background: #222;
+  border: 1px solid ${(props) => (props.$isCooling ? "#ff9800" : "#555")};
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8rem;
-  opacity: ${(props) => (props.$isCooling ? 0.5 : 1)};
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+`;
+
+const WeaponName = styled.div`
+  font-size: 0.5rem;
+  text-align: center;
+  z-index: 2;
+  color: #fff;
+  padding: 2px;
+  word-break: break-all;
+`;
+
+const CooldownOverlay = styled.div<{ $percent: number }>`
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: ${(props) => props.$percent}%;
+  background: rgba(255, 152, 0, 0.4);
+  z-index: 1;
 `;

@@ -36,6 +36,7 @@ export const defaultWeapon: Weapon = {
   damage: 10,
   cooldown: 1000,
   currentCooldown: 0,
+  staminaCost: 10, // 추가
   use: defaultUseWeapon,
 };
 
@@ -44,6 +45,7 @@ export const defaultWeapon2: Weapon = {
   damage: 5,
   cooldown: 800,
   currentCooldown: 0,
+  staminaCost: 5, // 추가
   use: defaultUseWeapon,
 };
 
@@ -52,6 +54,7 @@ export const healingWeapon: Weapon = {
   damage: 0,
   cooldown: 0,
   currentCooldown: 0,
+  staminaCost: 20, // 추가
   isTriggered: false,
   use: (actor, _target, thisWeapon) => {
     if (actor.hp < actor.maxHp * 0.5 && !thisWeapon.isTriggered) {
@@ -77,6 +80,7 @@ export const sniperRifle: Weapon = {
   damage: 25,
   cooldown: 2000,
   currentCooldown: 0,
+  staminaCost: 30, // 추가
   strategy: "WEAKEST", // 체력이 낮은 적 우선 타겟팅
   use: defaultUseWeapon,
 };
@@ -86,6 +90,7 @@ export const giantSlayer: Weapon = {
   damage: 15,
   cooldown: 1200,
   currentCooldown: 0,
+  staminaCost: 15, // 추가
   strategy: "STRONGEST", // 체력이 높은 적 우선 타겟팅
   use: defaultUseWeapon,
 };

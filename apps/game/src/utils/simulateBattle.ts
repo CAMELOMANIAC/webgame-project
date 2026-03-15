@@ -4,8 +4,7 @@ function simulateBattle(players: User[]): BattleLog {
   let eventCounter = 0;
   const generateId = () => `event-${eventCounter++}`;
 
-  // 시뮬레이션을 위한 상태 복사 (원본 보존)
-  // User 객체가 깊은 복사가 되어야 함. (weapons 내부의 currentCooldown 등)
+  // 시뮬레이션을 위한 상태 복사
   const simPlayers = players.map((p) => ({
     ...p,
     weapons: p.weapons.map((w) => (w ? { ...w } : null)) as User["weapons"],
@@ -20,7 +19,9 @@ function simulateBattle(players: User[]): BattleLog {
       teamId: u.teamId,
       hp: u.hp,
       maxHp: u.maxHp,
-      weapons: u.weapons.map((w) => (w ? { name: w.name, damage: w.damage, cooldown: w.cooldown } : null)),
+      stamina: u.stamina,
+      maxStamina: u.maxStamina,
+      weapons: u.weapons.map((w) => (w ? { name: w.name, damage: w.damage, cooldown: w.cooldown, staminaCost: w.staminaCost } : null)),
     })),
   };
 
@@ -37,7 +38,21 @@ function simulateBattle(players: User[]): BattleLog {
     for (const actor of simPlayers) {
       if (actor.hp <= 0) continue;
 
-      const actions = usingWeapon(actor, simPlayers, tickUnit).map((e) => ({ ...e, id: generateId() }));
+      // 스태미너 회복 (틱당 회복량 적용)
+      const prevStamina = actor.stamina;
+      actor.stamina = Math.min(actor.maxStamina, actor.stamina + actor.staminaRegen);
+      
+      // 스태미너가 회복되었을 경우 이벤트 추가 (매 틱마다 발생하므로 효율을 위해 값이 변했을 때만 추가 가능)
+      if (actor.stamina !== prevStamina) {
+        tickEvents.push({
+          id: generateId(),
+          type: "STAMINA_CHANGE",
+          playerId: actor.id,
+          currentStamina: actor.stamina
+        });
+      }
+
+      const actions = usingWeapon(actor, simPlayers, tickUnit, generateId);
 
       for (const event of actions) {
         if (event.type === "DEATH") {
@@ -87,63 +102,64 @@ function findTarget(actor: User, weapon: Weapon, allPlayers: User[]): User | nul
   const enemies = allPlayers.filter((p) => p.teamId !== actor.teamId && p.hp > 0);
   if (enemies.length === 0) return null;
 
-  // 각 적군에게 우선순위 점수를 매깁니다.
   const scoredEnemies = enemies.map((enemy) => {
-    let score = 100; // 기본 점수
-
-    // 1. 처형 우선순위 (체력이 매우 낮으면 우선순위 급상승)
+    let score = 100;
     if (enemy.hp < 20) score += 50;
-
-    // 2. 점사 효율 (체력 %가 낮을수록 가중치)
     score += (1 - enemy.hp / enemy.maxHp) * 30;
 
-    // 3. 무기별 전략 적용 (무기에 strategy 속성이 정의되어 있다면)
     if (weapon.strategy === "WEAKEST") {
       score += (1 - enemy.hp / enemy.maxHp) * 50;
     } else if (weapon.strategy === "STRONGEST") {
       score += (enemy.hp / enemy.maxHp) * 50;
     }
 
-    // 4. 약간의 무작위성 (항상 똑같은 타겟만 잡히는 것 방지)
     score += Math.random() * 15;
-
     return { enemy, score };
   });
 
-  // 점수가 가장 높은 적을 정렬하여 반환
   return scoredEnemies.sort((a, b) => b.score - a.score)[0].enemy;
 }
 
-function usingWeapon(actor: User, allPlayers: User[], tickUnit: number): BattleEvent[] {
+function usingWeapon(actor: User, allPlayers: User[], tickUnit: number, generateId: () => string): BattleEvent[] {
   for (let i = 0; i < actor.weapons.length; i++) {
     const weapon = actor.weapons[i];
     if (!weapon) continue;
 
-    weapon.currentCooldown -= tickUnit;
-    if (weapon.currentCooldown <= 0) {
-      // 무기 정보를 findTarget에 전달하여 전략적인 타겟팅 수행
+    if (weapon.currentCooldown > 0) {
+      weapon.currentCooldown -= tickUnit;
+    }
+
+    if (weapon.currentCooldown <= 0 && actor.stamina >= weapon.staminaCost) {
       const target = findTarget(actor, weapon, allPlayers);
       if (!target) continue;
 
       const weaponEvents = weapon.use(actor, target, weapon);
       if (weaponEvents.length > 0) {
-        weapon.currentCooldown = weapon.cooldown;
-        const events: BattleEvent[] = [...weaponEvents];
+        // 스태미너 소모
+        actor.stamina -= weapon.staminaCost;
+        
+        const events: BattleEvent[] = [
+          ...weaponEvents.map(e => ({ ...e, id: generateId() })),
+          {
+            id: generateId(),
+            type: "STAMINA_CHANGE",
+            playerId: actor.id,
+            currentStamina: actor.stamina
+          }
+        ];
 
-        // Ensure weaponIndex is set for ATTACK events if not already
+        weapon.currentCooldown = weapon.cooldown;
+
         events.forEach((e) => {
-          if (e.type === "ATTACK" && e.weaponIndex === undefined) {
-            e.weaponIndex = i;
+          if (e.type === "ATTACK" && (e as any).weaponIndex === undefined) {
+            (e as any).weaponIndex = i;
           }
         });
 
         if (target.hp <= 0) {
-          events.push({
-            id: "",
-            type: "DEATH",
-            playerId: target.id,
-          });
+          events.push({ id: generateId(), type: "DEATH", playerId: target.id });
         }
+        
         return events;
       }
     }
