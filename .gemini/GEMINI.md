@@ -1,0 +1,12 @@
+## Context Guidelines
+
+- 이 프로젝트는 Turborepo 기반의 모노레포입니다.
+- 작업 시 **현재 작업 중인 디렉토리의 위치**를 먼저 확인하고, 해당 디렉토리 내의 `README.md`나 `PLAN.md`를 우선적으로 참고해줘.
+- **README.md**: 기술 스택(React, Next.js, Jotai 등)과 개발 규칙이 담겨 있음.
+- **PLAN.md**: 현재 구현 중인 기능과 시뮬레이션 게임의 기획 상세가 담겨 있음.
+- 질문에 답하거나 코드를 작성할 때 위 두 파일의 규칙을 절대적으로 준수해줘.
+
+## Core Logic Reminder
+
+- 서버: 게임 로그 및 데이터 처리 담당.
+- 클라이언트: Framer Motion 기반의 애니메이션 및 UI 담당.
