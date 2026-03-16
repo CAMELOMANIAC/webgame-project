@@ -21,7 +21,9 @@ function simulateBattle(players: User[]): BattleLog {
       maxHp: u.maxHp,
       stamina: u.stamina,
       maxStamina: u.maxStamina,
-      weapons: u.weapons.map((w) => (w ? { name: w.name, damage: w.damage, cooldown: w.cooldown, staminaCost: w.staminaCost } : null)),
+      weapons: u.weapons.map((w) =>
+        w ? { name: w.name, damage: w.damage, cooldown: w.cooldown, staminaCost: w.staminaCost } : null,
+      ),
     })),
   };
 
@@ -41,14 +43,14 @@ function simulateBattle(players: User[]): BattleLog {
       // 스태미너 회복 (틱당 회복량 적용)
       const prevStamina = actor.stamina;
       actor.stamina = Math.min(actor.maxStamina, actor.stamina + actor.staminaRegen);
-      
+
       // 스태미너가 회복되었을 경우 이벤트 추가 (매 틱마다 발생하므로 효율을 위해 값이 변했을 때만 추가 가능)
       if (actor.stamina !== prevStamina) {
         tickEvents.push({
           id: generateId(),
           type: "STAMINA_CHANGE",
           playerId: actor.id,
-          currentStamina: actor.stamina
+          currentStamina: actor.stamina,
         });
       }
 
@@ -137,29 +139,29 @@ function usingWeapon(actor: User, allPlayers: User[], tickUnit: number, generate
       if (weaponEvents.length > 0) {
         // 스태미너 소모
         actor.stamina -= weapon.staminaCost;
-        
+
         const events: BattleEvent[] = [
-          ...weaponEvents.map(e => ({ ...e, id: generateId() })),
+          ...weaponEvents.map((e) => ({ ...e, id: generateId() })),
           {
             id: generateId(),
             type: "STAMINA_CHANGE",
             playerId: actor.id,
-            currentStamina: actor.stamina
-          }
+            currentStamina: actor.stamina,
+          },
         ];
 
         weapon.currentCooldown = weapon.cooldown;
 
         events.forEach((e) => {
-          if (e.type === "ATTACK" && (e as any).weaponIndex === undefined) {
-            (e as any).weaponIndex = i;
+          if (e.type === "ATTACK" && e.weaponIndex === undefined) {
+            e.weaponIndex = i;
           }
         });
 
         if (target.hp <= 0) {
           events.push({ id: generateId(), type: "DEATH", playerId: target.id });
         }
-        
+
         return events;
       }
     }

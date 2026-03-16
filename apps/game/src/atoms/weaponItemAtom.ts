@@ -8,15 +8,17 @@ export type WeaponSlot = {
   weapon: Weapon | null;
 };
 
-// 기본적으로 5개의 빈 무기 슬롯 초기화
 const initialWeaponItem: WeaponSlot[] = [
   { id: 0, weapon: null },
   { id: 1, weapon: null },
   { id: 2, weapon: null },
   { id: 3, weapon: null },
   { id: 4, weapon: null },
+  { id: 5, weapon: null },
 ];
 export const weaponItemAtom = atom<WeaponSlot[]>(initialWeaponItem);
+
+export const weaponSlotOrderAtom = atom<number[]>([0, 1, 2, 3, 4, 5]);
 
 /**
  * 인벤토리 배열에서 특정 ID의 아이템을 읽는 파생 아톰을 반환
@@ -44,13 +46,13 @@ export const setEquipItemAtom = atom(
     }
 
     const weaponSlots = [...get(weaponItemAtom)];
-    
+
     // 해당 슬롯에 무기 장착
-    weaponSlots[equipId] = { 
-      id: equipId, 
-      weapon: { ...inventoryItem.item } // 객체 복사하여 저장
+    weaponSlots[equipId] = {
+      id: equipId,
+      weapon: { ...inventoryItem.item }, // 객체 복사하여 저장
     };
 
     set(weaponItemAtom, weaponSlots);
-  }
+  },
 );

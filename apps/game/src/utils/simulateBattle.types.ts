@@ -34,7 +34,7 @@ export type User = {
   stamina: number;    // 현재 스태미너 추가
   maxStamina: number; // 최대 스태미너 추가
   staminaRegen: number; // 틱당 스태미너 회복량 추가
-  weapons: [Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null];
+  weapons: [Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null];
 };
 
 export type BattleEvent = { id: string } & (

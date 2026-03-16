@@ -1,15 +1,15 @@
-import { useAtomValue } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { motion } from "motion/react";
 import { Fragment, type PointerEvent, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { type CSSProperties, styled } from "styled-components";
 
-import { weaponItemAtom } from "../../atoms/weaponItemAtom";
+import { weaponItemAtom, weaponSlotOrderAtom } from "../../atoms/weaponItemAtom";
 
 const duration = 0.2;
 
 const WeaponList = () => {
-  const [weaponSlotOrder, setWeaponSlotOrders] = useState([0, 1, 2, 3]);
+  const [weaponSlotOrder, setWeaponSlotOrders] = useAtom(weaponSlotOrderAtom);
   const [selectedSlot, setSelectedSlot] = useState<null | number>(null);
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const wrapperRef = useRef<HTMLUListElement>(null);

@@ -122,10 +122,6 @@ export function useBattlePlayer(battleLog: BattleLog | null) {
     requestRef.current = requestAnimationFrame(animate);
   };
 
-  const processEvents = () => {
-    // This function is now merged into animate to ensure players state is updated consistently
-  };
-
   const start = () => {
     if (!battleLog) return;
     setIsPlaying(true);
