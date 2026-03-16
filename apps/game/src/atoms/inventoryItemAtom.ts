@@ -1,18 +1,18 @@
 import { atom } from "jotai";
 
-import { type Weapon } from "../utils/simulateBattle.types";
+import { type Item, type Weapon } from "../utils/simulateBattle.types";
 import { defaultWeapon, giantSlayer, healingWeapon, sniperRifle } from "../utils/weapon";
 
 export type InventoryItem = {
   id: number;
   count?: number;
-  // 아이템이 무기라면 Weapon 객체를, 아니면 단순히 이름만 가짐
-  item: Weapon | { name: string };
+  // 아이템이 무기라면 Weapon 객체를, 아니면 단순히 Item 정보를 가짐
+  item: Weapon | Item;
 };
 
 const initialInventoryItem: InventoryItem[] = [
   { id: 1, item: { ...defaultWeapon, name: "Sword" } },
-  { id: 2, item: { name: "Armor" } },
+  { id: 2, item: { id: "item_armor_01", name: "Armor", weight: 20, value: 500 } },
   { id: 3, item: healingWeapon },
   { id: 4, item: sniperRifle },
   { id: 5, item: giantSlayer },

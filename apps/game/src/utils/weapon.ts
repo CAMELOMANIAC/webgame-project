@@ -26,35 +26,47 @@ export const defaultUseWeapon = (actor: User, target: User, thisWeapon: Weapon):
       type: "COOLDOWN",
       actorId: actor.id,
       weaponIndex: weaponIndex,
-      duration: thisWeapon.cooldown,
+      duration: thisWeapon.cooldownTicks,
     },
   ];
 };
 
 export const defaultWeapon: Weapon = {
+  id: "wpn_primary",
   name: "primary",
   damage: 10,
-  cooldown: 1000,
+  cooldownTicks: 10,
   currentCooldown: 0,
-  staminaCost: 10, // 추가
+  staminaCost: 10,
+  castTicks: 0,
+  weight: 5,
+  value: 100,
   use: defaultUseWeapon,
 };
 
 export const defaultWeapon2: Weapon = {
+  id: "wpn_secondary",
   name: "secondary",
   damage: 5,
-  cooldown: 800,
+  cooldownTicks: 8,
   currentCooldown: 0,
-  staminaCost: 5, // 추가
+  staminaCost: 5,
+  castTicks: 0,
+  weight: 3,
+  value: 50,
   use: defaultUseWeapon,
 };
 
 export const healingWeapon: Weapon = {
+  id: "wpn_lifesaver",
   name: "Life-saver",
   damage: 0,
-  cooldown: 0,
+  cooldownTicks: 0,
   currentCooldown: 0,
-  staminaCost: 20, // 추가
+  staminaCost: 20,
+  castTicks: 0,
+  weight: 2,
+  value: 150,
   isTriggered: false,
   use: (actor, _target, thisWeapon) => {
     if (actor.hp < actor.maxHp * 0.5 && !thisWeapon.isTriggered) {
@@ -76,21 +88,29 @@ export const healingWeapon: Weapon = {
 };
 
 export const sniperRifle: Weapon = {
+  id: "wpn_sniper",
   name: "Sniper Rifle",
   damage: 25,
-  cooldown: 2000,
+  cooldownTicks: 20,
   currentCooldown: 0,
-  staminaCost: 30, // 추가
-  strategy: "WEAKEST", // 체력이 낮은 적 우선 타겟팅
+  staminaCost: 30,
+  castTicks: 15,
+  weight: 15,
+  value: 300,
+  strategy: "WEAKEST",
   use: defaultUseWeapon,
 };
 
 export const giantSlayer: Weapon = {
+  id: "wpn_giant_slayer",
   name: "Giant Slayer",
   damage: 15,
-  cooldown: 1200,
+  cooldownTicks: 12,
   currentCooldown: 0,
-  staminaCost: 15, // 추가
-  strategy: "STRONGEST", // 체력이 높은 적 우선 타겟팅
+  staminaCost: 15,
+  castTicks: 5,
+  weight: 10,
+  value: 200,
+  strategy: "STRONGEST",
   use: defaultUseWeapon,
 };

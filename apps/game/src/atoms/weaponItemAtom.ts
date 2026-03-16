@@ -39,7 +39,7 @@ export const setEquipItemAtom = atom(
     const inventoryItem = inventoryItems.find((i) => i.id === inventoryId);
     if (!inventoryItem) return;
 
-    // 아이템이 무기인지 확인 (use 함수가 있으면 무기로 판단)
+    // 아이템이 무기인지 확인
     if (!("use" in inventoryItem.item)) {
       console.warn("This item is not a weapon and cannot be equipped.");
       return;
@@ -50,7 +50,7 @@ export const setEquipItemAtom = atom(
     // 해당 슬롯에 무기 장착
     weaponSlots[equipId] = {
       id: equipId,
-      weapon: { ...inventoryItem.item }, // 객체 복사하여 저장
+      weapon: { ...inventoryItem.item } as Weapon, // 객체 복사하여 저장
     };
 
     set(weaponItemAtom, weaponSlots);

@@ -6,12 +6,17 @@ export type PlayerLiveState = PlayerState & {
   currentHp: number;
   currentStamina: number;
   weaponCooldownRemaining: number[];
+  currentWeaponIndex: number;
   isDead: boolean;
+  castingWeaponIndex: number | null;
+  castingTicksRemaining: number;
 };
+
+const TICK_DURATION = 100; // 1틱당 100ms로 재생
 
 export function useBattlePlayer(battleLog: BattleLog | null) {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0); 
   const [players, setPlayers] = useState<PlayerLiveState[]>([]);
   const [activeEvents, setActiveEvents] = useState<BattleEvent[]>([]);
   const [eventHistory, setEventHistory] = useState<BattleEvent[]>([]);
@@ -29,7 +34,10 @@ export function useBattlePlayer(battleLog: BattleLog | null) {
         currentHp: p.hp,
         currentStamina: p.stamina,
         weaponCooldownRemaining: p.weapons.map(() => 0),
+        currentWeaponIndex: 0,
         isDead: false,
+        castingWeaponIndex: null,
+        castingTicksRemaining: 0,
       }));
       setPlayers(initialPlayers);
       setCurrentTime(0);
@@ -44,44 +52,68 @@ export function useBattlePlayer(battleLog: BattleLog | null) {
       startTimeRef.current = time;
       lastTimeRef.current = time;
     }
-    const deltaTime = time - lastTimeRef.current;
+    const deltaTimeMs = time - lastTimeRef.current;
     lastTimeRef.current = time;
 
-    const elapsed = time - startTimeRef.current;
-    setCurrentTime(elapsed);
+    const elapsedMs = time - startTimeRef.current;
+    const currentTick = Math.floor(elapsedMs / TICK_DURATION);
+    
+    setCurrentTime(currentTick);
 
     if (!battleLog) return;
 
-    // 타임라인 순회하며 현재 시간보다 이전/같은 이벤트들 처리
-    const nextIndex = lastProcessedIndexRef.current + 1;
+    // 타임라인 순회하며 현재 틱보다 이전/같은 이벤트들 처리
     let eventsToProcess: BattleEvent[] = [];
-    if (nextIndex < battleLog.timeline.length) {
+    let nextIndex = lastProcessedIndexRef.current + 1;
+    
+    while (nextIndex < battleLog.timeline.length) {
       const entry = battleLog.timeline[nextIndex];
-      if (elapsed >= entry.timestamp) {
-        eventsToProcess = entry.events;
+      if (currentTick >= entry.timestamp) {
+        eventsToProcess.push(...entry.events);
         lastProcessedIndexRef.current = nextIndex;
+        nextIndex++;
+      } else {
+        break;
       }
     }
 
-    // 실제 플레이어 상태값 업데이트 (이벤트 처리 및 쿨다운 감소)
+    // 실제 플레이어 상태값 업데이트
     setPlayers((prev) => {
       const next = prev.map((p) => ({
         ...p,
-        weaponCooldownRemaining: p.weaponCooldownRemaining.map((cd) => Math.max(0, cd - deltaTime)),
+        weaponCooldownRemaining: p.weaponCooldownRemaining.map((cd) => Math.max(0, cd - (deltaTimeMs / TICK_DURATION))),
+        castingTicksRemaining: Math.max(0, p.castingTicksRemaining - (deltaTimeMs / TICK_DURATION)),
       }));
 
       if (eventsToProcess.length > 0) {
-        // UI에 보여줄 "현재 활성 이벤트" 업데이트
         setActiveEvents((prevEvents) => [...prevEvents, ...eventsToProcess]);
-        // 전체 히스토리에 추가
         setEventHistory((prevHistory) => [...prevHistory, ...eventsToProcess]);
 
-        // 특정 시간 후 이벤트 목록에서 제거 (팝업용)
         setTimeout(() => {
           setActiveEvents((prevEvents) => prevEvents.filter((e) => !eventsToProcess.includes(e)));
         }, 1000);
 
         eventsToProcess.forEach((event) => {
+          if (event.type === "CAST_START") {
+            const actor = next.find((p) => p.id === event.actorId);
+            if (actor) {
+              actor.castingWeaponIndex = event.weaponIndex;
+              actor.castingTicksRemaining = event.duration;
+            }
+          }
+          if (event.type === "CAST_COMPLETE" || event.type === "CAST_CANCEL") {
+            const actor = next.find((p) => p.id === event.actorId);
+            if (actor) {
+              actor.castingWeaponIndex = null;
+              actor.castingTicksRemaining = 0;
+            }
+          }
+          if (event.type === "ATTACK") {
+            const actor = next.find((p) => p.id === event.actorId);
+            if (actor) {
+              actor.currentWeaponIndex = (event.weaponIndex + 1) % 6;
+            }
+          }
           if (event.type === "DAMAGE") {
             const target = next.find((p) => p.id === event.targetId);
             if (target) target.currentHp = event.remainingHp;
@@ -114,7 +146,7 @@ export function useBattlePlayer(battleLog: BattleLog | null) {
 
     // 전투 종료 체크
     const lastEntry = battleLog.timeline[battleLog.timeline.length - 1];
-    if (elapsed >= (lastEntry?.timestamp || 0) + 1000) {
+    if (currentTick >= (lastEntry?.timestamp || 0) + 10) {
       setIsPlaying(false);
       return;
     }
@@ -127,7 +159,7 @@ export function useBattlePlayer(battleLog: BattleLog | null) {
     setIsPlaying(true);
     startTimeRef.current = null;
     lastProcessedIndexRef.current = -1;
-    setEventHistory([]); // 시작 시 히스토리 초기화
+    setEventHistory([]);
     requestRef.current = requestAnimationFrame(animate);
   };
 

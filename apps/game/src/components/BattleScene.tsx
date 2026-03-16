@@ -23,29 +23,41 @@ export const BattleScene: React.FC = () => {
         teamId: "TeamA",
         hp: 100,
         maxHp: 100,
-        stamina: 100, // 추가
-        maxStamina: 100, // 추가
-        staminaRegen: 2, // 추가 (틱당 2 회복)
+        stamina: 100,
+        maxStamina: 100,
+        staminaRegen: 2,
+        weight: 30,
+        maxWeight: 100,
+        day: 1,
+        currentWeaponIndex: 0,
         weapons: weaponOrder.map((order) => weaponSlots[order].weapon) as User["weapons"],
       },
       {
-        id: "Monster (Boss)",
+        id: "Ghost (Veteran)",
         teamId: "TeamB",
         hp: 120,
         maxHp: 120,
-        stamina: 100, // 추가
-        maxStamina: 100, // 추가
-        staminaRegen: 1, // 추가
+        stamina: 100,
+        maxStamina: 100,
+        staminaRegen: 1.5,
+        weight: 50,
+        maxWeight: 120,
+        day: 15,
+        currentWeaponIndex: 0,
         weapons: [giantSlayer, null, null, null, null, null],
       },
       {
-        id: "Monster (Minion)",
+        id: "Scavenger NPC",
         teamId: "TeamB",
-        hp: 30,
-        maxHp: 30,
-        stamina: 50, // 추가
-        maxStamina: 50, // 추가
-        staminaRegen: 1, // 추가
+        hp: 40,
+        maxHp: 40,
+        stamina: 50,
+        maxStamina: 50,
+        staminaRegen: 1,
+        weight: 10,
+        maxWeight: 60,
+        day: 5,
+        currentWeaponIndex: 0,
         weapons: [defaultWeapon2, null, null, null, null, null],
       },
     ],
@@ -53,11 +65,7 @@ export const BattleScene: React.FC = () => {
   );
 
   const battleLog = useMemo(() => {
-    const clonedPlayers = initialPlayers.map((p) => ({
-      ...p,
-      weapons: p.weapons.map((w) => (w ? { ...w, currentCooldown: 0 } : null)) as User["weapons"],
-    }));
-    return simulateBattle(clonedPlayers);
+    return simulateBattle(initialPlayers);
   }, [initialPlayers]);
 
   const { players, isPlaying, start, activeEvents, eventHistory } = useBattlePlayer(battleLog);
@@ -74,7 +82,7 @@ export const BattleScene: React.FC = () => {
   return (
     <SceneContainer>
       <SceneHeader>
-        <BattleTitle>Arena Simulator</BattleTitle>
+        <BattleTitle>Ghost Extraction Simulator</BattleTitle>
         <GameStatus>
           {isPlaying ? (
             <StatusBadge $active>BATTLE IN PROGRESS</StatusBadge>
