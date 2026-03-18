@@ -1,0 +1,26 @@
+{
+  "name": "server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "eslint src"
+    },
+    "dependencies": {
+    "@fastify/cors": "^10.0.2",
+    "@prisma/client": "~6.8.0",
+    "@webgame/types": "workspace:*",
+    "fastify": "^5.2.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.10.7",
+    "prisma": "~6.8.0",
+    "tsx": "^4.19.2",
+    "typescript": "5.9.2"
+  }
+}

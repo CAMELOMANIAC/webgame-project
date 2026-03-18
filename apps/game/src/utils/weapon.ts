@@ -1,4 +1,4 @@
-import type { BattleEvent, User, Weapon } from "./simulateBattle.types";
+import type { BattleEvent, User, Weapon } from "@webgame/types";
 
 export const defaultUseWeapon = (actor: User, target: User, thisWeapon: Weapon): BattleEvent[] => {
   const weaponIndex = actor.weapons.indexOf(thisWeapon);

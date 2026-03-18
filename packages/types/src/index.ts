@@ -1,24 +1,23 @@
 export type TargetingStrategy = "WEAKEST" | "STRONGEST" | "RANDOM";
 
-export type Item = {
+export interface Item {
   id: string;
   name: string;
   weight: number;
   value: number;
-};
+}
 
-export type Weapon = Item & {
+export interface Weapon extends Item {
   damage: number;
   staminaCost: number;
   cooldownTicks: number; // 틱 단위 쿨다운
   castTicks: number;     // 공격 전 선딜레이 틱
   currentCooldown: number; // 현재 남은 쿨다운 틱
-  use: (actor: User, target: User, weapon: Weapon) => BattleEvent[];
   strategy?: TargetingStrategy;
   isTriggered?: boolean;
-};
+}
 
-export type PlayerState = {
+export interface PlayerState {
   id: string;
   teamId: string;
   maxHp: number;
@@ -37,9 +36,9 @@ export type PlayerState = {
     castTicks: number;
     weight: number;
   } | null>;
-};
+}
 
-export type User = {
+export interface User {
   id: string;
   teamId: string;
   hp: number;
@@ -54,7 +53,7 @@ export type User = {
   weapons: [Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null];
   castingWeaponIndex?: number | null;
   castingTicksRemaining?: number;
-};
+}
 
 export type BattleEvent = { id: string } & (
   | { type: "ATTACK"; actorId: string; targetId: string; weaponIndex: number }
@@ -69,14 +68,14 @@ export type BattleEvent = { id: string } & (
   | { type: "BATTLE_END"; winnerTeamId: string | null }
 );
 
-export type BattleLogEntry = {
+export interface BattleLogEntry {
   timestamp: number;
   events: BattleEvent[];
-};
+}
 
-export type BattleLog = {
+export interface BattleLog {
   initialState: {
     players: PlayerState[];
   };
   timeline: BattleLogEntry[];
-};
+}

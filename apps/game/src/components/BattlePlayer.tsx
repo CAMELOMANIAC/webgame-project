@@ -1,9 +1,9 @@
+import type { BattleEvent } from "@webgame/types";
 import { AnimatePresence, motion } from "motion/react";
 import React from "react";
 import styled from "styled-components";
 
-import type { BattleEvent } from "../utils/simulateBattle.types";
-import type { PlayerLiveState } from "../utils/useBattlePlayer";
+import { type PlayerLiveState } from "../utils/useBattlePlayer";
 
 interface BattlePlayerProps {
   player: PlayerLiveState;
@@ -38,7 +38,7 @@ export const BattlePlayer: React.FC<BattlePlayerProps> = ({ player, damageEvents
           transition={{ duration: 0.2 }}
         >
           <Avatar $isEnemy={isEnemy} $isDead={player.isDead}>
-            {player.isDead ? "💀" : (isEnemy ? "👾" : "🦸")}
+            {player.isDead ? "💀" : isEnemy ? "👾" : "🦸"}
           </Avatar>
         </motion.div>
 
@@ -60,43 +60,49 @@ export const BattlePlayer: React.FC<BattlePlayerProps> = ({ player, damageEvents
         {/* HP Bar */}
         <StatRow>
           <BarContainer>
-            <HpBarFill 
-              $percent={hpPercent} 
-              initial={{ width: "100%" }} 
-              animate={{ width: `${hpPercent}%` }} 
+            <HpBarFill
+              $percent={hpPercent}
+              initial={{ width: "100%" }}
+              animate={{ width: `${hpPercent}%` }}
               transition={{ type: "spring", stiffness: 100, damping: 20 }}
             />
           </BarContainer>
           <BarLabel>
-            HP <span>{Math.ceil(player.currentHp)} / {player.maxHp}</span>
+            HP{" "}
+            <span>
+              {Math.ceil(player.currentHp)} / {player.maxHp}
+            </span>
           </BarLabel>
         </StatRow>
 
         {/* Stamina Bar */}
         <StatRow>
           <BarContainer>
-            <StaminaBarFill 
-              $percent={staminaPercent} 
-              initial={{ width: "100%" }} 
-              animate={{ width: `${staminaPercent}%` }} 
+            <StaminaBarFill
+              $percent={staminaPercent}
+              initial={{ width: "100%" }}
+              animate={{ width: `${staminaPercent}%` }}
               transition={{ type: "spring", stiffness: 100, damping: 20 }}
             />
           </BarContainer>
           <BarLabel>
-            STAMINA <span>{Math.ceil(player.currentStamina)} / {player.maxStamina}</span>
+            STAMINA{" "}
+            <span>
+              {Math.ceil(player.currentStamina)} / {player.maxStamina}
+            </span>
           </BarLabel>
         </StatRow>
 
         {/* Weight Bar */}
         <StatRow>
           <BarContainer style={{ height: "4px" }}>
-            <WeightBarFill 
-              $percent={weightPercent} 
-              animate={{ width: `${weightPercent}%` }} 
-            />
+            <WeightBarFill $percent={weightPercent} animate={{ width: `${weightPercent}%` }} />
           </BarContainer>
           <BarLabel style={{ fontSize: "0.55rem" }}>
-            WEIGHT <span>{player.weight} / {player.maxWeight} kg</span>
+            WEIGHT{" "}
+            <span>
+              {player.weight} / {player.maxWeight} kg
+            </span>
           </BarLabel>
         </StatRow>
       </StatsContainer>
@@ -108,23 +114,14 @@ export const BattlePlayer: React.FC<BattlePlayerProps> = ({ player, damageEvents
           const isCastingThis = player.castingWeaponIndex === i;
           const castPercent = isCastingThis && w ? (1 - player.castingTicksRemaining / w.castTicks) * 100 : 0;
           const isActive = player.currentWeaponIndex === i && !player.isDead;
-          
+
           return (
-            <WeaponSlot 
-              key={i} 
-              $isCooling={isCooling} 
-              $isActive={isActive}
-              $isCasting={isCastingThis}
-            >
+            <WeaponSlot key={i} $isCooling={isCooling} $isActive={isActive} $isCasting={isCastingThis}>
               {w ? (
                 <>
                   <WeaponIconText>{w.name.charAt(0)}</WeaponIconText>
-                  {isCooling && (
-                    <CooldownOverlay $percent={(cooldownRemaining / w.cooldownTicks) * 100} />
-                  )}
-                  {isCastingThis && (
-                    <CastOverlay $percent={castPercent} />
-                  )}
+                  {isCooling && <CooldownOverlay $percent={(cooldownRemaining / w.cooldownTicks) * 100} />}
+                  {isCastingThis && <CastOverlay $percent={castPercent} />}
                   <Tooltip>
                     <strong>{w.name}</strong>
                     <br />
@@ -240,11 +237,7 @@ const BarContainer = styled.div`
 const HpBarFill = styled(motion.div)<{ $percent: number }>`
   height: 100%;
   background: ${(props) =>
-    props.$percent > 60
-      ? "linear-gradient(90deg, #2ecc71, #27ae60)"
-      : props.$percent > 30
-      ? "#f1c40f"
-      : "#e74c3c"};
+    props.$percent > 60 ? "linear-gradient(90deg, #2ecc71, #27ae60)" : props.$percent > 30 ? "#f1c40f" : "#e74c3c"};
 `;
 
 const StaminaBarFill = styled(motion.div)<{ $percent: number }>`
@@ -295,8 +288,7 @@ const WeaponSlot = styled.div<{ $isCooling: boolean; $isActive: boolean; $isCast
   width: 32px;
   height: 32px;
   background: ${(props) => (props.$isActive ? "rgba(52, 152, 219, 0.2)" : "rgba(0, 0, 0, 0.3)")};
-  border: 1px solid ${(props) => 
-    props.$isCasting ? "#e67e22" : (props.$isActive ? "#3498db" : "rgba(255,255,255,0.1)")};
+  border: 1px solid ${(props) => (props.$isCasting ? "#e67e22" : props.$isActive ? "#3498db" : "rgba(255,255,255,0.1)")};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -304,13 +296,17 @@ const WeaponSlot = styled.div<{ $isCooling: boolean; $isActive: boolean; $isCast
   position: relative;
   overflow: hidden;
   transition: all 0.2s ease;
-  
-  ${(props) => props.$isActive && `
+
+  ${(props) =>
+    props.$isActive &&
+    `
     box-shadow: 0 0 8px rgba(52, 152, 219, 0.4);
     transform: scale(1.05);
   `}
 
-  ${(props) => props.$isCasting && `
+  ${(props) =>
+    props.$isCasting &&
+    `
     box-shadow: 0 0 8px rgba(230, 126, 34, 0.6);
     transform: scale(1.1);
   `}

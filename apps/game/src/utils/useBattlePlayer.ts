@@ -1,6 +1,5 @@
+import type { BattleEvent, BattleLog, PlayerState } from "@webgame/types";
 import { useEffect, useRef, useState } from "react";
-
-import type { BattleEvent, BattleLog, PlayerState } from "./simulateBattle.types";
 
 export type PlayerLiveState = PlayerState & {
   currentHp: number;
@@ -16,7 +15,7 @@ const TICK_DURATION = 100; // 1틱당 100ms로 재생
 
 export function useBattlePlayer(battleLog: BattleLog | null) {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0); 
+  const [currentTime, setCurrentTime] = useState(0);
   const [players, setPlayers] = useState<PlayerLiveState[]>([]);
   const [activeEvents, setActiveEvents] = useState<BattleEvent[]>([]);
   const [eventHistory, setEventHistory] = useState<BattleEvent[]>([]);
@@ -57,15 +56,15 @@ export function useBattlePlayer(battleLog: BattleLog | null) {
 
     const elapsedMs = time - startTimeRef.current;
     const currentTick = Math.floor(elapsedMs / TICK_DURATION);
-    
+
     setCurrentTime(currentTick);
 
     if (!battleLog) return;
 
     // 타임라인 순회하며 현재 틱보다 이전/같은 이벤트들 처리
-    let eventsToProcess: BattleEvent[] = [];
+    const eventsToProcess: BattleEvent[] = [];
     let nextIndex = lastProcessedIndexRef.current + 1;
-    
+
     while (nextIndex < battleLog.timeline.length) {
       const entry = battleLog.timeline[nextIndex];
       if (currentTick >= entry.timestamp) {
@@ -81,8 +80,8 @@ export function useBattlePlayer(battleLog: BattleLog | null) {
     setPlayers((prev) => {
       const next = prev.map((p) => ({
         ...p,
-        weaponCooldownRemaining: p.weaponCooldownRemaining.map((cd) => Math.max(0, cd - (deltaTimeMs / TICK_DURATION))),
-        castingTicksRemaining: Math.max(0, p.castingTicksRemaining - (deltaTimeMs / TICK_DURATION)),
+        weaponCooldownRemaining: p.weaponCooldownRemaining.map((cd) => Math.max(0, cd - deltaTimeMs / TICK_DURATION)),
+        castingTicksRemaining: Math.max(0, p.castingTicksRemaining - deltaTimeMs / TICK_DURATION),
       }));
 
       if (eventsToProcess.length > 0) {

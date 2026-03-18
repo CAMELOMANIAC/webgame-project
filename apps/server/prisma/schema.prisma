@@ -1,0 +1,73 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-id"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  nickname  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stash      StashItem[]
+  snapshots  GhostSnapshot[]
+}
+
+model WeaponMaster {
+  id            String   @id @default(uuid())
+  name          String
+  damage        Int
+  staminaCost   Int
+  cooldownTicks Int
+  castTicks     Int
+  weight        Int
+  value         Int
+  description   String?
+
+  stashItems    StashItem[]
+}
+
+model StashItem {
+  id             String       @id @default(uuid())
+  userId         String
+  weaponMasterId String
+  quantity       Int          @default(1)
+  
+  user           User         @relation(fields: [userId], references: [id])
+  weaponMaster   WeaponMaster @relation(fields: [weaponMasterId], references: [id])
+}
+
+model GhostSnapshot {
+  id          String   @id @default(uuid())
+  userId      String
+  nodeId      String   // 필드 노드 ID
+  day         Int      // 진행 날짜
+  hp          Int
+  maxHp       Int
+  stamina     Int
+  maxStamina  Int
+  staminaRegen Int
+  weight      Int
+  maxWeight   Int
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+  weapons     GhostWeapon[]
+}
+
+model GhostWeapon {
+  id              String        @id @default(uuid())
+  snapshotId      String
+  weaponMasterId  String
+  slotIndex       Int           // 0~5 슬롯 인덱스
+
+  snapshot        GhostSnapshot @relation(fields: [snapshotId], references: [id])
+}

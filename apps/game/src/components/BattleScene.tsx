@@ -1,11 +1,11 @@
+import type { BattleLog, User } from "@webgame/types";
 import { useAtomValue } from "jotai";
 import { motion } from "motion/react";
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 
 import { weaponItemAtom, weaponSlotOrderAtom } from "../atoms/weaponItemAtom";
 import simulateBattle from "../utils/simulateBattle";
-import type { User } from "../utils/simulateBattle.types";
 import { useBattlePlayer } from "../utils/useBattlePlayer";
 import { defaultWeapon2, giantSlayer } from "../utils/weapon";
 import { BattleLogDisplay } from "./BattleLogDisplay";
@@ -64,8 +64,10 @@ export const BattleScene: React.FC = () => {
     [weaponSlots, weaponOrder],
   );
 
-  const battleLog = useMemo(() => {
-    return simulateBattle(initialPlayers);
+  const [battleLog, setBattleLog] = useState<BattleLog | null>(null);
+
+  useEffect(() => {
+    simulateBattle(initialPlayers).then(setBattleLog);
   }, [initialPlayers]);
 
   const { players, isPlaying, start, activeEvents, eventHistory } = useBattlePlayer(battleLog);

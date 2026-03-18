@@ -1,6 +1,6 @@
+import { type Item, type Weapon } from "@webgame/types";
 import { atom } from "jotai";
 
-import { type Item, type Weapon } from "../utils/simulateBattle.types";
 import { defaultWeapon, giantSlayer, healingWeapon, sniperRifle } from "../utils/weapon";
 
 export type InventoryItem = {

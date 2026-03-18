@@ -12,6 +12,7 @@
   "dependencies": {
     "@tanstack/react-router": "^1.120.5",
     "@tanstack/react-router-devtools": "^1.120.5",
+    "@webgame/types": "workspace:*",
     "jotai": "^2.15.0",
     "lodash-es": "^4.17.21",
     "motion": "^12.23.0",
