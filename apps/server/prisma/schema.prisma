@@ -2,12 +2,13 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-id"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl      = env("DIRECT_URL")
 }
 
 model User {
@@ -33,6 +34,7 @@ model WeaponMaster {
   description   String?
 
   stashItems    StashItem[]
+  ghostWeapons  GhostWeapon[]
 }
 
 model StashItem {
@@ -70,4 +72,5 @@ model GhostWeapon {
   slotIndex       Int           // 0~5 슬롯 인덱스
 
   snapshot        GhostSnapshot @relation(fields: [snapshotId], references: [id])
+  weaponMaster    WeaponMaster  @relation(fields: [weaponMasterId], references: [id])
 }

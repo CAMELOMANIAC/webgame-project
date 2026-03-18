@@ -12,15 +12,15 @@
 - [x] **시뮬레이션 엔진 이식 (Server-Side)**
   - [x] `apps/game`의 `simulateBattle.ts` 로직을 서버의 `src/logic/`으로 이동
   - [x] `POST /battle/simulate` API 구현: 플레이어/적 데이터를 받아 전체 전투 로그(`BattleEvent[]`) 반환
-- [ ] **데이터베이스 모델링 (Prisma + PostgreSQL)**
-  - [ ] Prisma를 사용하여 로컬 PostgreSQL(Supabase Local 개발 환경 대응) 스키마 정의
-  - [ ] `User`, `Stash`, `Weapon` 마스터 데이터 테이블 생성
+- [x] **데이터베이스 모델링 (Prisma + PostgreSQL)**
+  - [x] Prisma를 사용하여 로컬 PostgreSQL(Supabase Local 개발 환경 대응) 스키마 정의
+  - [x] `User`, `Stash`, `Weapon` 마스터 데이터 테이블 생성
 
-## 🗺️ Phase 2: 고스트(Ghost) 및 세션 관리 (예정)
-- [ ] **데이터 영속성 및 스냅샷**
-  - [ ] `GhostSnapshot`: 전투 승리 시 해당 시점의 데이터(HP, 무기 등)를 DB에 저장
-- [ ] **고스트 매칭 엔진**
-  - [ ] 특정 노드/날짜에 맞는 최적의 고스트 데이터를 DB에서 검색하여 반환하는 로직
+## 🗺️ Phase 2: 고스트(Ghost) 및 세션 관리 (진행 중)
+- [x] **데이터 영속성 및 스냅샷**
+  - [x] `GhostSnapshot`: 전투 승리 시 해당 시점의 데이터(HP, 무기 등)를 DB에 저장
+- [x] **고스트 매칭 엔진**
+  - [x] 특정 노드/날짜에 맞는 최적의 고스트 데이터를 DB에서 검색하여 반환하는 로직
 
 ## 🎒 Phase 3: Supabase 연동 및 탐사(Raid) 시스템 (예정)
 - [ ] **Supabase Auth 및 클라우드 연동**
