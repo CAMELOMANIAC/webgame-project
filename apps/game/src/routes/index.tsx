@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useAtomValue } from "jotai";
 import styled from "styled-components";
 
+import { battleUsersAtom } from "../atoms/battleAtom";
 import { BattleScene } from "../components/BattleScene";
-import Inventory from "../components/inventory/Inventory";
 import SideBar from "../components/sideBar/SideBar";
 
 export const Route = createFileRoute("/")({
@@ -10,19 +11,25 @@ export const Route = createFileRoute("/")({
 });
 
 function RouteComponent() {
+  const battleUsers = useAtomValue(battleUsersAtom);
+
   return (
     <PageContainer>
       <SideBar />
       <MainContent>
         <ScrollArea>
-          <BattleScene />
-          <InventorySection>
-             <Inventory />
-          </InventorySection>
+          {battleUsers ? (
+            <BattleScene initialPlayers={battleUsers} />
+          ) : (
+            <NoBattleMessage>
+              <p>No battle in progress.</p>
+              <p>
+                Please go to <DebugLink to="/testpage/">SYSTEM CALIBRATION</DebugLink> to find a match.
+              </p>
+            </NoBattleMessage>
+          )}
         </ScrollArea>
-        <DebugLink to="/testpage/">
-          ⚙️ SYSTEM CALIBRATION
-        </DebugLink>
+        <DebugLink to="/testpage/">⚙️ SYSTEM CALIBRATION</DebugLink>
       </MainContent>
     </PageContainer>
   );
@@ -63,13 +70,6 @@ const ScrollArea = styled.div`
   }
 `;
 
-const InventorySection = styled.div`
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  padding-bottom: 2rem;
-`;
-
 const DebugLink = styled(Link)`
   position: absolute;
   bottom: 20px;
@@ -91,5 +91,20 @@ const DebugLink = styled(Link)`
     color: #ecf0f1;
     background: rgba(255, 255, 255, 0.1);
     transform: translateY(-2px);
+  }
+`;
+
+const NoBattleMessage = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-grow: 1;
+  font-size: 1.5rem;
+  color: #7f8c8d;
+  gap: 1rem;
+
+  p {
+    margin: 0;
   }
 `;

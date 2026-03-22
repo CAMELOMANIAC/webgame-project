@@ -1,85 +1,76 @@
-import type { BattleLog, User } from "@webgame/types";
-import { useAtomValue } from "jotai";
+import { useNavigate } from "@tanstack/react-router"; // Import useNavigate
+import type { BattleLog, Item, User } from "@webgame/types";
 import { motion } from "motion/react";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 
-import { weaponItemAtom, weaponSlotOrderAtom } from "../atoms/weaponItemAtom";
 import simulateBattle from "../utils/simulateBattle";
 import { useBattlePlayer } from "../utils/useBattlePlayer";
-import { defaultWeapon2, giantSlayer } from "../utils/weapon";
 import { BattleLogDisplay } from "./BattleLogDisplay";
 import { BattlePlayer } from "./BattlePlayer";
+import { ExtractionScreen } from "./ExtractionScreen";
+import { LootingScreen } from "./LootingScreen";
 
-export const BattleScene: React.FC = () => {
-  const weaponSlots = useAtomValue(weaponItemAtom);
-  const weaponOrder = useAtomValue(weaponSlotOrderAtom);
+interface BattleSceneProps {
+  initialPlayers: User[];
+}
 
-  // 테스트 데이터 생성
-  const initialPlayers: User[] = useMemo(
-    () => [
-      {
-        id: "Hero (Assassin)",
-        teamId: "TeamA",
-        hp: 100,
-        maxHp: 100,
-        stamina: 100,
-        maxStamina: 100,
-        staminaRegen: 2,
-        weight: 30,
-        maxWeight: 100,
-        day: 1,
-        currentWeaponIndex: 0,
-        weapons: weaponOrder.map((order) => weaponSlots[order].weapon) as User["weapons"],
-      },
-      {
-        id: "Ghost (Veteran)",
-        teamId: "TeamB",
-        hp: 120,
-        maxHp: 120,
-        stamina: 100,
-        maxStamina: 100,
-        staminaRegen: 1.5,
-        weight: 50,
-        maxWeight: 120,
-        day: 15,
-        currentWeaponIndex: 0,
-        weapons: [giantSlayer, null, null, null, null, null],
-      },
-      {
-        id: "Scavenger NPC",
-        teamId: "TeamB",
-        hp: 40,
-        maxHp: 40,
-        stamina: 50,
-        maxStamina: 50,
-        staminaRegen: 1,
-        weight: 10,
-        maxWeight: 60,
-        day: 5,
-        currentWeaponIndex: 0,
-        weapons: [defaultWeapon2, null, null, null, null, null],
-      },
-    ],
-    [weaponSlots, weaponOrder],
-  );
-
+export const BattleScene: React.FC<BattleSceneProps> = ({ initialPlayers }) => {
+  const navigate = useNavigate();
   const [battleLog, setBattleLog] = useState<BattleLog | null>(null);
+  const [showLootingScreen, setShowLootingScreen] = useState(false);
+  const [showExtractionScreen, setShowExtractionScreen] = useState(false); // New state
+  const [availableLoot, setAvailableLoot] = useState<Item[]>([]);
+  const [acquiredItemsDuringLoot, setAcquiredItemsDuringLoot] = useState<Item[]>([]); // To pass to extraction
 
   useEffect(() => {
-    simulateBattle(initialPlayers).then(setBattleLog);
+    if (initialPlayers && initialPlayers.length > 0) {
+      simulateBattle(initialPlayers).then((log) => {
+        setBattleLog(log);
+      });
+    }
   }, [initialPlayers]);
 
   const { players, isPlaying, start, activeEvents, eventHistory } = useBattlePlayer(battleLog);
 
-  // 현재 발생한 데미지 이벤트 필터링 (애니메이션용)
   const damageEvents = activeEvents.filter((e) => e.type === "DAMAGE");
 
-  const teamA = players.filter((p) => p.teamId === "TeamA");
-  const teamB = players.filter((p) => p.teamId === "TeamB");
+  const teamA = players ? players.filter((p) => p.teamId === "TeamA") : [];
+  const teamB = players ? players.filter((p) => p.teamId === "TeamB") : [];
 
   const winnerEvent = eventHistory.find((e) => e.type === "BATTLE_END");
   const winnerTeamId = winnerEvent && winnerEvent.type === "BATTLE_END" ? winnerEvent.winnerTeamId : null;
+
+  useEffect(() => {
+    // When battle ends and TeamA wins, show looting screen
+    if (!isPlaying && winnerTeamId === "TeamA") {
+      const defeatedEnemies = initialPlayers.filter((p) => p.teamId !== "TeamA" && p.droppedItems);
+      const loot: Item[] = defeatedEnemies.flatMap((enemy) => enemy.droppedItems || []);
+      setAvailableLoot(loot);
+      setShowLootingScreen(true);
+      setShowExtractionScreen(false); // Ensure extraction screen is hidden initially
+    } else {
+      setShowLootingScreen(false);
+      setShowExtractionScreen(false); // Hide extraction screen too
+    }
+  }, [isPlaying, winnerTeamId, initialPlayers]);
+
+  const handleAcquireItems = (items: Item[]) => {
+    setAcquiredItemsDuringLoot(items);
+    setShowLootingScreen(false);
+    setShowExtractionScreen(true); // Transition to extraction
+  };
+
+  const handleCloseLooting = () => {
+    setShowLootingScreen(false);
+    // If user leaves loot, they still need to extract or go to lobby
+    setShowExtractionScreen(true); // Still proceed to extraction for now
+  };
+
+  const handleExtractionComplete = () => {
+    setShowExtractionScreen(false);
+    navigate({ to: "/testpage/" }); // Go back to lobby/testpage
+  };
 
   return (
     <SceneContainer>
@@ -153,6 +144,14 @@ export const BattleScene: React.FC = () => {
         </LogHeader>
         <BattleLogDisplay events={eventHistory} players={battleLog?.initialState.players || []} />
       </BattleLogWrapper>
+
+      {showLootingScreen && (
+        <LootingScreen droppedItems={availableLoot} onAcquireItems={handleAcquireItems} onClose={handleCloseLooting} />
+      )}
+
+      {showExtractionScreen && (
+        <ExtractionScreen acquiredItems={acquiredItemsDuringLoot} onExtractionComplete={handleExtractionComplete} />
+      )}
     </SceneContainer>
   );
 };

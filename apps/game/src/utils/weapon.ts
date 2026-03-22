@@ -114,3 +114,42 @@ export const giantSlayer: Weapon = {
   strategy: "STRONGEST",
   use: defaultUseWeapon,
 };
+
+export const dagger: Weapon = {
+  id: "wpn_dagger",
+  name: "Dagger",
+  damage: 7,
+  cooldownTicks: 5,
+  currentCooldown: 0,
+  staminaCost: 5,
+  castTicks: 0,
+  weight: 2,
+  value: 40,
+  use: defaultUseWeapon,
+};
+
+export const greatsword: Weapon = {
+  id: "wpn_greatsword",
+  name: "Greatsword",
+  damage: 30,
+  cooldownTicks: 25,
+  currentCooldown: 0,
+  staminaCost: 35,
+  castTicks: 10,
+  weight: 20,
+  value: 350,
+  use: defaultUseWeapon,
+};
+
+export const staff: Weapon = {
+  id: "wpn_staff",
+  name: "Staff",
+  damage: 18,
+  cooldownTicks: 15,
+  currentCooldown: 0,
+  staminaCost: 20,
+  castTicks: 10,
+  weight: 8,
+  value: 250,
+  use: defaultUseWeapon,
+};

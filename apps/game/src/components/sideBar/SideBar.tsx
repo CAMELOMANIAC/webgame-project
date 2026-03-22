@@ -1,5 +1,6 @@
 import styled, { type CSSProperties } from "styled-components";
 
+import Inventory from "../inventory/Inventory";
 import HitPointBar from "./HitPointBar";
 import WeaponList from "./WeaponList";
 
@@ -9,6 +10,7 @@ const SideBar = () => {
       <BoxContainer>
         <HitPointBar />
         <WeaponList />
+        <Inventory />
       </BoxContainer>
     </div>
   );
