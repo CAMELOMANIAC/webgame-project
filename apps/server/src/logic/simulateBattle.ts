@@ -1,26 +1,24 @@
-import { 
-  BattleEvent, 
-  BattleLog, 
-  BattleLogEntry, 
-  User, 
-  Weapon, 
-  TargetingStrategy 
-} from "@webgame/types";
+import { BattleEvent, BattleLog, BattleLogEntry, User, Weapon } from "@webgame/types";
 
 /**
  * 서버 사이드 전투 시뮬레이터
- * 클라이언트의 로직을 서버로 이관하여 결과만 반환합니다.
  */
 export function simulateBattle(players: User[]): BattleLog {
   let eventCounter = 0;
   const generateId = () => `event-${eventCounter++}`;
 
-  // 시뮬레이션을 위한 상태 복사
-  const simPlayers = players.map((p) => ({
-    ...p,
-    currentWeaponIndex: p.currentWeaponIndex ?? 0,
-    weapons: p.weapons.map((w) => (w ? { ...w } : null)) as User["weapons"],
-  }));
+  // 시뮬레이션을 위한 상태 복사 및 타입 확장
+  const simPlayers = players.map((p) => {
+    const weapons = p.weapons.map((w) => (w ? { ...w, currentCooldown: 0 } : null));
+
+    return {
+      ...p,
+      weapons: weapons as [Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null],
+      currentWeaponIndex: p.currentWeaponIndex ?? 0,
+      castingWeaponIndex: p.castingWeaponIndex ?? null,
+      castingTicksRemaining: p.castingTicksRemaining ?? 0,
+    };
+  }) as unknown as User[];
 
   const deadPlayers = new Set<string>();
 
@@ -37,21 +35,23 @@ export function simulateBattle(players: User[]): BattleLog {
       maxWeight: u.maxWeight,
       day: u.day,
       weapons: u.weapons.map((w) =>
-        w ? { 
-          id: w.id, 
-          name: w.name, 
-          damage: w.damage, 
-          cooldownTicks: w.cooldownTicks, 
-          castTicks: w.castTicks,
-          staminaCost: w.staminaCost,
-          weight: w.weight
-        } : null,
-      ),
+        w
+          ? {
+              id: w.id,
+              name: w.name,
+              damage: w.damage,
+              cooldownTicks: w.cooldownTicks,
+              castTicks: w.castTicks,
+              staminaCost: w.staminaCost,
+              weight: w.weight,
+            }
+          : null,
+      ) as [Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null],
     })),
   };
 
   const timeline: BattleLogEntry[] = [];
-  const tickUnit = 1; 
+  const tickUnit = 1;
   let currentTick = 0;
 
   // 2. 시뮬레이션 루프
@@ -61,7 +61,7 @@ export function simulateBattle(players: User[]): BattleLog {
 
     for (const actor of simPlayers) {
       if (actor.hp <= 0) {
-        if (actor.castingWeaponIndex !== undefined && actor.castingWeaponIndex !== null) {
+        if (actor.castingWeaponIndex !== null && actor.castingWeaponIndex !== undefined) {
           tickEvents.push({
             id: generateId(),
             type: "CAST_CANCEL",
@@ -95,46 +95,45 @@ export function simulateBattle(players: User[]): BattleLog {
         });
       }
 
-      if (actor.castingWeaponIndex !== undefined && actor.castingWeaponIndex !== null) {
-        if (actor.castingTicksRemaining !== undefined) {
-          actor.castingTicksRemaining -= tickUnit;
-          
-          if (actor.castingTicksRemaining <= 0) {
-            const weaponIndex = actor.castingWeaponIndex;
-            const weapon = actor.weapons[weaponIndex];
-            
-            if (weapon) {
-              tickEvents.push({
-                id: generateId(),
-                type: "CAST_COMPLETE",
-                actorId: actor.id,
-                weaponIndex: weaponIndex,
+      if (actor.castingWeaponIndex !== null && actor.castingWeaponIndex !== undefined) {
+        const remaining = actor.castingTicksRemaining ?? 0;
+        const newRemaining = remaining - tickUnit;
+        actor.castingTicksRemaining = newRemaining;
+
+        if (newRemaining <= 0) {
+          const weaponIndex = actor.castingWeaponIndex;
+          const weapon = actor.weapons[weaponIndex];
+
+          if (weapon) {
+            tickEvents.push({
+              id: generateId(),
+              type: "CAST_COMPLETE",
+              actorId: actor.id,
+              weaponIndex: weaponIndex,
+            });
+
+            const target = findTarget(actor, weapon, simPlayers);
+            if (target) {
+              const weaponEvents = processWeaponUse(actor, target, weapon, generateId);
+              weaponEvents.forEach((e) => {
+                tickEvents.push(e);
+                if (e.type === "ATTACK" && e.weaponIndex === undefined) {
+                  e.weaponIndex = weaponIndex;
+                }
               });
 
-              const target = findTarget(actor, weapon, simPlayers);
-              if (target) {
-                const weaponEvents = processWeaponUse(actor, target, weapon, generateId);
-                weaponEvents.forEach(e => {
-                  tickEvents.push(e);
-                  // ATTACK 이벤트에 인덱스 보정
-                  if (e.type === "ATTACK" && (e as any).weaponIndex === undefined) {
-                    (e as any).weaponIndex = weaponIndex;
-                  }
-                });
-
-                if (target.hp <= 0 && !deadPlayers.has(target.id)) {
-                  deadPlayers.add(target.id);
-                  tickEvents.push({ id: generateId(), type: "DEATH", playerId: target.id });
-                }
+              if (target.hp <= 0 && !deadPlayers.has(target.id)) {
+                deadPlayers.add(target.id);
+                tickEvents.push({ id: generateId(), type: "DEATH", playerId: target.id });
               }
-              
-              weapon.currentCooldown = weapon.cooldownTicks;
-              actor.currentWeaponIndex = (weaponIndex + 1) % 6;
             }
-            
-            actor.castingWeaponIndex = null;
-            actor.castingTicksRemaining = 0;
+
+            weapon.currentCooldown = weapon.cooldownTicks;
+            actor.currentWeaponIndex = (weaponIndex + 1) % 6;
           }
+
+          actor.castingWeaponIndex = null;
+          actor.castingTicksRemaining = 0;
         }
       } else {
         const actions = processWeaponSequence(actor, simPlayers, generateId, deadPlayers);
@@ -149,11 +148,12 @@ export function simulateBattle(players: User[]): BattleLog {
       });
     }
 
-    if (currentTick > 5000) break; // 서버에서는 조금 더 긴 전투도 허용
+    if (currentTick > 5000) break;
   }
 
   const remainingTeams = new Set(simPlayers.filter((p) => p.hp > 0).map((p) => p.teamId));
-  const winnerTeamId = remainingTeams.size === 1 ? Array.from(remainingTeams)[0] : null;
+  const teamArray = Array.from(remainingTeams);
+  const winnerTeamId = remainingTeams.size === 1 && teamArray[0] !== undefined ? teamArray[0] : null;
 
   timeline.push({
     timestamp: currentTick,
@@ -190,16 +190,14 @@ function findTarget(actor: User, weapon: Weapon, allPlayers: User[]): User | nul
     return { enemy, score };
   });
 
-  return scoredEnemies.sort((a, b) => b.score - a.score)[0].enemy;
+  const sorted = scoredEnemies.sort((a, b) => b.score - a.score);
+  const best = sorted[0];
+  return best ? best.enemy : null;
 }
 
-/**
- * 무기 사용 시 발생하는 이벤트를 처리하는 헬퍼 함수
- * 기존 클라이언트의 weapon.use() 로직을 통합 관리합니다.
- */
 function processWeaponUse(actor: User, target: User, weapon: Weapon, generateId: () => string): BattleEvent[] {
   const damage = weapon.damage;
-  const isCritical = Math.random() < 0.1; // 기본 크리티컬 확률 10%
+  const isCritical = Math.random() < 0.1;
   const finalDamage = isCritical ? Math.floor(damage * 1.5) : damage;
 
   target.hp = Math.max(0, target.hp - finalDamage);
@@ -210,7 +208,7 @@ function processWeaponUse(actor: User, target: User, weapon: Weapon, generateId:
       type: "ATTACK",
       actorId: actor.id,
       targetId: target.id,
-      weaponIndex: 0, // 나중에 호출부에서 보정됨
+      weaponIndex: 0,
     },
     {
       id: generateId(),
@@ -219,27 +217,27 @@ function processWeaponUse(actor: User, target: User, weapon: Weapon, generateId:
       amount: finalDamage,
       remainingHp: target.hp,
       isCritical: isCritical,
-    }
+    },
   ];
 }
 
 function processWeaponSequence(
-  actor: User, 
-  allPlayers: User[], 
+  actor: User,
+  allPlayers: User[],
   generateId: () => string,
-  deadPlayers: Set<string>
+  deadPlayers: Set<string>,
 ): BattleEvent[] {
-  const startIndex = actor.currentWeaponIndex;
-  
+  const startIndex = actor.currentWeaponIndex || 0;
+
   for (let i = 0; i < 6; i++) {
     const checkIndex = (startIndex + i) % 6;
     const weapon = actor.weapons[checkIndex];
-    
+
     if (!weapon) continue;
 
     if (weapon.currentCooldown <= 0 && actor.stamina >= weapon.staminaCost) {
       const target = findTarget(actor, weapon, allPlayers);
-      if (!target) return []; 
+      if (!target) return [];
 
       if (weapon.castTicks > 0) {
         actor.castingWeaponIndex = checkIndex;
@@ -279,7 +277,7 @@ function processWeaponSequence(
 
         events.forEach((e) => {
           if (e.type === "ATTACK") {
-            (e as any).weaponIndex = checkIndex;
+            e.weaponIndex = checkIndex;
           }
         });
 
@@ -295,6 +293,6 @@ function processWeaponSequence(
       return [];
     }
   }
-  
+
   return [];
 }

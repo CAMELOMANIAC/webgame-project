@@ -2,12 +2,11 @@
   "extends": "@repo/typescript-config/base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
     "baseUrl": ".",
     "paths": {
       "@webgame/types": ["../../packages/types/src/index.ts"]
     }
   },
-  "include": ["src"],
+  "include": ["src", "../../packages/types/src"],
   "exclude": ["node_modules", "dist"]
 }

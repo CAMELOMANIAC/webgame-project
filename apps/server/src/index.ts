@@ -101,6 +101,86 @@ fastify.get("/users", async () => {
   }
 });
 
+// 캐릭터 정보 및 인벤토리/장착 정보 조회 API
+fastify.get("/user/:userId/character", async (request, reply) => {
+  try {
+    const { userId } = request.params as { userId: string };
+    
+    const character = await prisma.character.findUnique({
+      where: { userId },
+      include: {
+        weapons: { include: { weaponMaster: true } },
+        inventory: { include: { weaponMaster: true } },
+      },
+    });
+
+    if (!character) {
+      return reply.status(404).send({ error: "Character not found" });
+    }
+    return character;
+  } catch (error) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: "Failed to fetch character data" });
+  }
+});
+
+// 장착 슬롯 무기 변경 API (인벤토리 검증 포함)
+fastify.patch("/character/:characterId/equipment", async (request, reply) => {
+  try {
+    const { characterId } = request.params as { characterId: string };
+    const { slotIndex, weaponMasterId } = request.body as { 
+      slotIndex: number; 
+      weaponMasterId: string | null; 
+    };
+
+    // 1) 인벤토리 확인 (해당 무기가 인벤토리에 있는지)
+    if (weaponMasterId) {
+      const hasItem = await prisma.raidInventoryItem.findFirst({
+        where: { characterId, weaponMasterId },
+      });
+      if (!hasItem) {
+        return reply.status(400).send({ error: "Item not in inventory" });
+      }
+    }
+
+    // 2) 장착 로직
+    if (weaponMasterId === null) {
+      await prisma.characterWeapon.deleteMany({
+        where: { characterId, slotIndex },
+      });
+    } else {
+      await prisma.characterWeapon.upsert({
+        where: { characterId_slotIndex: { characterId, slotIndex } },
+        update: { weaponMasterId },
+        create: { characterId, slotIndex, weaponMasterId },
+      });
+    }
+    
+    return { status: "success" };
+  } catch (error) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: "Failed to update equipment" });
+  }
+});
+
+// 탐사 상태 변경 API (시작/종료)
+fastify.patch("/character/:characterId/raid/status", async (request, reply) => {
+  try {
+    const { characterId } = request.params as { characterId: string };
+    const { isRaiding } = request.body as { isRaiding: boolean };
+
+    const character = await prisma.character.update({
+      where: { id: characterId },
+      data: { isRaiding },
+    });
+
+    return { status: "success", isRaiding: character.isRaiding };
+  } catch (error) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: "Failed to update raid status" });
+  }
+});
+
 // 고스트 매칭 API
 fastify.get("/ghost/match", async (request, reply) => {
   try {

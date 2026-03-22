@@ -11,10 +11,11 @@ export interface Weapon extends Item {
   damage: number;
   staminaCost: number;
   cooldownTicks: number; // 틱 단위 쿨다운
-  castTicks: number;     // 공격 전 선딜레이 틱
+  castTicks: number; // 공격 전 선딜레이 틱
   currentCooldown: number; // 현재 남은 쿨다운 틱
   strategy?: TargetingStrategy;
   isTriggered?: boolean;
+  use: (actor: User, target: User, weapon: Weapon) => BattleEvent[];
 }
 
 export interface PlayerState {
@@ -53,6 +54,7 @@ export interface User {
   weapons: [Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null];
   castingWeaponIndex?: number | null;
   castingTicksRemaining?: number;
+  droppedItems?: Item[];
 }
 
 export type BattleEvent = { id: string } & (

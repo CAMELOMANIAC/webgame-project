@@ -20,6 +20,47 @@ model User {
 
   stash      StashItem[]
   snapshots  GhostSnapshot[]
+  character  Character?
+}
+
+model Character {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  hp        Int      @default(100)
+  maxHp     Int      @default(100)
+  stamina   Int      @default(100)
+  maxStamina Int     @default(100)
+  staminaRegen Int   @default(10)
+  weight    Int      @default(0)
+  maxWeight Int      @default(50)
+  day       Int      @default(0)
+  isRaiding Boolean  @default(false)
+  
+  user      User     @relation(fields: [userId], references: [id])
+  weapons   CharacterWeapon[]
+  inventory RaidInventoryItem[]
+}
+
+model CharacterWeapon {
+  id             String       @id @default(uuid())
+  characterId    String
+  weaponMasterId String
+  slotIndex      Int          // 0~5
+  
+  character      Character    @relation(fields: [characterId], references: [id])
+  weaponMaster   WeaponMaster @relation(fields: [weaponMasterId], references: [id])
+
+  @@unique([characterId, slotIndex])
+}
+
+model RaidInventoryItem {
+  id             String       @id @default(uuid())
+  characterId    String
+  weaponMasterId String
+  quantity       Int          @default(1)
+  
+  character      Character    @relation(fields: [characterId], references: [id])
+  weaponMaster   WeaponMaster @relation(fields: [weaponMasterId], references: [id])
 }
 
 model WeaponMaster {
@@ -35,6 +76,8 @@ model WeaponMaster {
 
   stashItems    StashItem[]
   ghostWeapons  GhostWeapon[]
+  charWeapons   CharacterWeapon[]
+  raidInventory RaidInventoryItem[]
 }
 
 model StashItem {
