@@ -24,7 +24,7 @@ export default tseslint.config(
     settings: {
       "import/resolver": {
         typescript: {
-          alwaysTryTypes: true,
+          project: "./tsconfig.json",
         },
       },
     },
@@ -35,5 +35,5 @@ export default tseslint.config(
       "simple-import-sort/imports": "error",
       "simple-import-sort/exports": "error",
     },
-  }
+  },
 );
