@@ -1,3 +1,4 @@
+export * from "./weapon";
 export type TargetingStrategy = "WEAKEST" | "STRONGEST" | "RANDOM";
 
 export interface Item {
