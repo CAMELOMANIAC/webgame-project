@@ -1,5 +1,5 @@
 import { LuRefreshCw } from "react-icons/lu";
-import { RiSendPlaneLine } from "react-icons/ri";
+import { TbLocation } from "react-icons/tb";
 import styled from "styled-components";
 
 import { FieldWidget } from "@/components/Commons";
@@ -13,8 +13,8 @@ const FieldNavTargetSection = () => {
           <DestinationText>EXTRACTION ZONE</DestinationText>
           <DestinationText>ALPHA</DestinationText>
           <HighlightText>
-            <RiSendPlaneLine />
-            &nbsp; Moving to Destination
+            <TbLocation />
+            &nbsp;Moving to Destination
           </HighlightText>
         </Column>
         <Column $flexGrow={0}>
@@ -33,7 +33,7 @@ const FieldNavTargetSection = () => {
           <SubLabel>DURATION</SubLabel>
         </TimeContainer>
         <TimeContainer>
-          <TimeText>13:16</TimeText>
+          <TimeText>13:01</TimeText>
           <SubLabel>EXP. TIME</SubLabel>
         </TimeContainer>
       </Row>

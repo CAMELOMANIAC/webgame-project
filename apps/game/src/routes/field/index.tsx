@@ -1,16 +1,20 @@
-import { createFileRoute, useSearch } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import type { Item } from "@webgame/types";
 import { AnimatePresence } from "motion/react";
 import { dagger, greatsword, healingWeapon, staff } from "node_modules/@webgame/types/src/weapon";
+import { useEffect, useState } from "react";
 import { RiWeightLine } from "react-icons/ri";
 import { SlEnergy } from "react-icons/sl";
 import styled from "styled-components";
 
+import CombatInfo from "@/components/CombatInfo";
 import { FieldWidget, InheritMotionDiv, Page } from "@/components/Commons";
 import FieldCharacterInfo from "@/components/FieldCharacterInfo";
 import FieldNavTargetSection from "@/components/FieldNavTargetSection";
 import Equipment from "@/components/itemSlot/Equipment";
 import Stash from "@/components/itemSlot/Stash";
+
+import compass from "../../assets/compass.svg";
 
 export const Route = createFileRoute("/field/")({
   component: RouteComponent,
@@ -23,10 +27,20 @@ const emptyItem: Item = {
   value: 0,
 };
 
-const emptyItemsArray = Array(20).fill(emptyItem);
+const emptyItemsArray = Array(32).fill(emptyItem);
 
 function RouteComponent() {
+  const navigate = useNavigate();
   const { tab } = useSearch({ from: "/field/" });
+  const [isCombat, setIsCombat] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (isCombat) {
+      //전투 시작시 field로 이동
+      navigate({ to: "/field" });
+    }
+  }, [isCombat, navigate]);
+
   return (
     <Page>
       <AnimatePresence initial={false}>
@@ -39,9 +53,35 @@ function RouteComponent() {
             style={{ overflow: "hidden" }}
             key="fieldNavTargetSection"
           >
-            <TopLayout>
-              <FieldNavTargetSection></FieldNavTargetSection>
-            </TopLayout>
+            <AnimatePresence initial={false}>
+              {isCombat ? (
+                <InheritMotionDiv
+                  initial={{ x: "100%", opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={{ x: "-100%", opacity: 0 }}
+                  transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+                  style={{ overflow: "hidden", position: "absolute" }}
+                  key="combatInfo"
+                >
+                  <TopLayout>
+                    <CombatInfo />
+                  </TopLayout>
+                </InheritMotionDiv>
+              ) : (
+                <InheritMotionDiv
+                  initial={{ x: "-100%", opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={{ x: "100%", opacity: 0 }}
+                  transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+                  style={{ overflow: "hidden", position: "absolute" }}
+                  key="fieldNavTargetSection"
+                >
+                  <TopLayout>
+                    <FieldNavTargetSection />
+                  </TopLayout>
+                </InheritMotionDiv>
+              )}
+            </AnimatePresence>
           </InheritMotionDiv>
         )}
         <InheritMotionDiv layout key="fieldInfo">
@@ -52,7 +92,7 @@ function RouteComponent() {
             <Column>
               <FieldWidget>
                 <Row>
-                  <Column $gap="0px">
+                  <Column $gap="0px" onClick={() => setIsCombat((prev) => !prev)}>
                     <WidgetLabel>ENERGY</WidgetLabel>
                     <CapacityText>10/12</CapacityText>
                   </Column>
@@ -90,6 +130,9 @@ function RouteComponent() {
           </InheritMotionDiv>
         )}
       </AnimatePresence>
+      <BackgroundContainer>
+        <CompassImage src={compass} />
+      </BackgroundContainer>
     </Page>
   );
 }
@@ -152,4 +195,24 @@ const CapacityText = styled.p`
   font-size: 12px;
   font-weight: 600;
   color: white;
+`;
+
+const CompassImage = styled.img`
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+`;
+
+const BackgroundContainer = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  overflow: hidden;
 `;

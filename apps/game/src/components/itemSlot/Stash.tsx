@@ -25,11 +25,12 @@ export default Stash;
 
 const Container = styled.div`
   width: 100%;
+  height: 100%;
   display: flex;
   flex: 1;
   flex-direction: column;
   background-color: rgba(14, 14, 14, 0.6);
-  overflow: hidden;
+  overflow: auto;
 `;
 
 const GridContainer = styled.section`
@@ -40,7 +41,7 @@ const GridContainer = styled.section`
   justify-content: space-between;
   row-gap: 8px;
   padding: 0 24px 8px;
-  overflow: hidden;
+  overflow: auto;
 `;
 
 const StashTitle = styled.h3`

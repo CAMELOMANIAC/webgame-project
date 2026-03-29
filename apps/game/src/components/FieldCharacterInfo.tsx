@@ -20,7 +20,7 @@ const FieldCharacterInfo = () => {
       <Column>
         <HPLabelContainer>
           <HPLabel>VITALITY (HP)</HPLabel>
-          <HPText>89</HPText>
+          <HPText>89/100</HPText>
         </HPLabelContainer>
         <HPContainer></HPContainer>
       </Column>
