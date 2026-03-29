@@ -3,18 +3,41 @@ import styled from "styled-components";
 
 import BackpackSlot from "@/components/itemSlot/BackpackSlot";
 import SlotManager from "@/components/itemSlot/SlotManager";
+import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import useItemSlot from "@/utils/hooks/useItemSlot";
 
 interface BackpackProps {
   initialItems: Item[];
 }
-const Backpack = ({ initialItems }: BackpackProps) => {
+const Backpack = ({ initialItems: fallbackItems }: BackpackProps) => {
+  const { data: characterData, isLoading, isError } = useGetCharacter();
+
+  // Use fetched items if available, otherwise use the fallback items from props
+  const initialItems = characterData?.inventory || fallbackItems;
   const { items } = useItemSlot({ initialItems });
+
+  if (isLoading) {
+    return (
+      <Container>
+        <Title>Backpack Storage</Title>
+        <MessageContainer>Loading inventory...</MessageContainer>
+      </Container>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Container>
+        <Title>Backpack Storage</Title>
+        <MessageContainer>Error loading inventory</MessageContainer>
+      </Container>
+    );
+  }
+
   return (
     <Container>
       <Title>Backpack Storage</Title>
       <GridContainer>
-        {/* GridContainer에서 motion 애니메이션이 정상적으로 동작하지 않음을 확인해야함 */}
         <SlotManager items={items}>{(item, index) => <BackpackSlot item={item} key={item.id + index} />}</SlotManager>
       </GridContainer>
     </Container>
@@ -31,6 +54,12 @@ const Container = styled.div`
   flex-direction: column;
   background-color: rgba(14, 14, 14, 0.6);
   overflow: auto;
+`;
+
+const MessageContainer = styled.div`
+  padding: 24px;
+  color: #ecf0f1;
+  font-size: 14px;
 `;
 
 const GridContainer = styled.section`
