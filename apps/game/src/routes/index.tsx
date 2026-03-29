@@ -30,6 +30,7 @@ function RouteComponent() {
           )}
         </ScrollArea>
         <DebugLink to="/testpage/">⚙️ SYSTEM CALIBRATION</DebugLink>
+        <DebugLink to="/field/">⚙️ Field</DebugLink>
       </MainContent>
     </PageContainer>
   );

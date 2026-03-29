@@ -11,6 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TestpageIndexRouteImport } from './routes/testpage/index'
+import { Route as FieldIndexRouteImport } from './routes/field/index'
+import { Route as FieldUserIndexRouteImport } from './routes/field/user/index'
+import { Route as FieldQuestIndexRouteImport } from './routes/field/quest/index'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +25,64 @@ const TestpageIndexRoute = TestpageIndexRouteImport.update({
   path: '/testpage/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FieldIndexRoute = FieldIndexRouteImport.update({
+  id: '/field/',
+  path: '/field/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FieldUserIndexRoute = FieldUserIndexRouteImport.update({
+  id: '/field/user/',
+  path: '/field/user/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FieldQuestIndexRoute = FieldQuestIndexRouteImport.update({
+  id: '/field/quest/',
+  path: '/field/quest/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/field/': typeof FieldIndexRoute
   '/testpage/': typeof TestpageIndexRoute
+  '/field/quest/': typeof FieldQuestIndexRoute
+  '/field/user/': typeof FieldUserIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/field': typeof FieldIndexRoute
   '/testpage': typeof TestpageIndexRoute
+  '/field/quest': typeof FieldQuestIndexRoute
+  '/field/user': typeof FieldUserIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/field/': typeof FieldIndexRoute
   '/testpage/': typeof TestpageIndexRoute
+  '/field/quest/': typeof FieldQuestIndexRoute
+  '/field/user/': typeof FieldUserIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/testpage/'
+  fullPaths: '/' | '/field/' | '/testpage/' | '/field/quest/' | '/field/user/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/testpage'
-  id: '__root__' | '/' | '/testpage/'
+  to: '/' | '/field' | '/testpage' | '/field/quest' | '/field/user'
+  id:
+    | '__root__'
+    | '/'
+    | '/field/'
+    | '/testpage/'
+    | '/field/quest/'
+    | '/field/user/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  FieldIndexRoute: typeof FieldIndexRoute
   TestpageIndexRoute: typeof TestpageIndexRoute
+  FieldQuestIndexRoute: typeof FieldQuestIndexRoute
+  FieldUserIndexRoute: typeof FieldUserIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +101,36 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TestpageIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/field/': {
+      id: '/field/'
+      path: '/field'
+      fullPath: '/field/'
+      preLoaderRoute: typeof FieldIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/field/user/': {
+      id: '/field/user/'
+      path: '/field/user'
+      fullPath: '/field/user/'
+      preLoaderRoute: typeof FieldUserIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/field/quest/': {
+      id: '/field/quest/'
+      path: '/field/quest'
+      fullPath: '/field/quest/'
+      preLoaderRoute: typeof FieldQuestIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  FieldIndexRoute: FieldIndexRoute,
   TestpageIndexRoute: TestpageIndexRoute,
+  FieldQuestIndexRoute: FieldQuestIndexRoute,
+  FieldUserIndexRoute: FieldUserIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

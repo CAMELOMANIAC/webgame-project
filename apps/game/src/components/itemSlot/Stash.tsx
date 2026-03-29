@@ -11,18 +11,28 @@ interface StashProps {
 const Stash = ({ initialItems }: StashProps) => {
   const { items } = useItemSlot({ initialItems });
   return (
-    <>
+    <Container>
       <StashTitle>Backpack Storage</StashTitle>
-      <Container>
-        <SlotManager items={items}>{(item, index) => <StashSlot item={item} key={index} />}</SlotManager>
-      </Container>
-    </>
+      <GridContainer>
+        {/* GridContainer에서 motion 애니메이션이 정상적으로 동작하지 않음을 확인해야함 */}
+        <SlotManager items={items}>{(item, index) => <StashSlot item={item} key={item.id + index} />}</SlotManager>
+      </GridContainer>
+    </Container>
   );
 };
 
 export default Stash;
 
-const Container = styled.section`
+const Container = styled.div`
+  width: 100%;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  background-color: rgba(14, 14, 14, 0.6);
+  overflow: hidden;
+`;
+
+const GridContainer = styled.section`
   width: 100%;
   display: flex;
   flex-wrap: wrap;
@@ -30,7 +40,7 @@ const Container = styled.section`
   justify-content: space-between;
   row-gap: 8px;
   padding: 0 24px 8px;
-  background-color: rgba(14, 14, 14, 0.6);
+  overflow: hidden;
 `;
 
 const StashTitle = styled.h3`

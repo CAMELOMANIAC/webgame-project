@@ -1,5 +1,5 @@
 import { useAtomValue } from "jotai";
-import { type HTMLMotionProps,motion } from "motion/react";
+import { type HTMLMotionProps, motion } from "motion/react";
 import { useMemo } from "react";
 import { styled } from "styled-components";
 
@@ -36,8 +36,7 @@ type SlotBoxProps = {
 export const SlotBox = styled(motion.div)<SlotBoxProps>`
   position: relative;
 
-  width: 4rem;
-  height: 4rem;
+  flex: 1;
   border: 1px solid black;
 
   opacity: ${({ $isSelected }) => ($isSelected ? "hidden" : "visible")};
