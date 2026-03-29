@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --env-file=.env src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint src"
-    },
-    "dependencies": {
+  },
+  "dependencies": {
     "@fastify/cors": "^10.0.2",
     "@prisma/client": "~6.8.0",
     "@webgame/types": "workspace:*",
