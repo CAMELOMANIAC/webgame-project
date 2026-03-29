@@ -9,6 +9,7 @@ import styled from "styled-components";
 
 import CombatInfo from "@/components/CombatInfo";
 import { FieldWidget, InheritMotionDiv, Page } from "@/components/Commons";
+import EnemyUnit from "@/components/EnemyUnit";
 import FieldCharacterInfo from "@/components/FieldCharacterInfo";
 import FieldNavTargetSection from "@/components/FieldNavTargetSection";
 import Backpack from "@/components/itemSlot/Backpack";
@@ -132,6 +133,7 @@ function RouteComponent() {
       </AnimatePresence>
       <BackgroundContainer>
         <CompassImage src={compass} />
+        <EnemyUnit name="TEST-01" left={"45vw"} top="55vh" />
       </BackgroundContainer>
     </Page>
   );
