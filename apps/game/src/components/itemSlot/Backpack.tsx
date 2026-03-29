@@ -1,27 +1,27 @@
 import type { Item } from "@webgame/types";
 import styled from "styled-components";
 
+import BackpackSlot from "@/components/itemSlot/BackpackSlot";
 import SlotManager from "@/components/itemSlot/SlotManager";
-import StashSlot from "@/components/itemSlot/StashSlot";
 import useItemSlot from "@/utils/hooks/useItemSlot";
 
-interface StashProps {
+interface BackpackProps {
   initialItems: Item[];
 }
-const Stash = ({ initialItems }: StashProps) => {
+const Backpack = ({ initialItems }: BackpackProps) => {
   const { items } = useItemSlot({ initialItems });
   return (
     <Container>
-      <StashTitle>Backpack Storage</StashTitle>
+      <Title>Backpack Storage</Title>
       <GridContainer>
         {/* GridContainer에서 motion 애니메이션이 정상적으로 동작하지 않음을 확인해야함 */}
-        <SlotManager items={items}>{(item, index) => <StashSlot item={item} key={item.id + index} />}</SlotManager>
+        <SlotManager items={items}>{(item, index) => <BackpackSlot item={item} key={item.id + index} />}</SlotManager>
       </GridContainer>
     </Container>
   );
 };
 
-export default Stash;
+export default Backpack;
 
 const Container = styled.div`
   width: 100%;
@@ -44,7 +44,7 @@ const GridContainer = styled.section`
   overflow: auto;
 `;
 
-const StashTitle = styled.h3`
+const Title = styled.h3`
   font-size: 12px;
   font-weight: 700;
   color: #ecf0f1;

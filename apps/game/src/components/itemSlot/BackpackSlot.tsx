@@ -2,10 +2,10 @@ import type { Item } from "@webgame/types";
 import { FiPlus } from "react-icons/fi";
 import styled from "styled-components";
 
-interface StashProps {
+interface BackpackProps {
   item: Item;
 }
-const StashSlot = ({ item }: StashProps) => {
+const BackpackSlot = ({ item }: BackpackProps) => {
   return (
     <Slot>
       {item.name}
@@ -14,7 +14,7 @@ const StashSlot = ({ item }: StashProps) => {
   );
 };
 
-export default StashSlot;
+export default BackpackSlot;
 
 const Slot = styled.div`
   display: flex;

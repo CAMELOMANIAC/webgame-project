@@ -11,8 +11,8 @@ import CombatInfo from "@/components/CombatInfo";
 import { FieldWidget, InheritMotionDiv, Page } from "@/components/Commons";
 import FieldCharacterInfo from "@/components/FieldCharacterInfo";
 import FieldNavTargetSection from "@/components/FieldNavTargetSection";
+import Backpack from "@/components/itemSlot/Backpack";
 import Equipment from "@/components/itemSlot/Equipment";
-import Stash from "@/components/itemSlot/Stash";
 
 import compass from "../../assets/compass.svg";
 
@@ -126,7 +126,7 @@ function RouteComponent() {
             key="stash"
             layout
           >
-            <Stash initialItems={emptyItemsArray} />
+            <Backpack initialItems={emptyItemsArray} />
           </InheritMotionDiv>
         )}
       </AnimatePresence>
