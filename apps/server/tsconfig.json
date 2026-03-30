@@ -7,6 +7,6 @@
       "@webgame/types": ["../../packages/types/src/index.ts"]
     }
   },
-  "include": ["src", "../../packages/types/src"],
+  "include": ["src", "prisma", "../../packages/types/src"],
   "exclude": ["node_modules", "dist"]
 }

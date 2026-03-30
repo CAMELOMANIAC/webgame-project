@@ -78,6 +78,30 @@ model WeaponMaster {
   ghostWeapons  GhostWeapon[]
   charWeapons   CharacterWeapon[]
   raidInventory RaidInventoryItem[]
+  monsterWeapons MonsterWeapon[]
+}
+
+model MonsterMaster {
+  id            String   @id @default(uuid())
+  name          String
+  hp            Int
+  maxHp         Int
+  stamina       Int
+  maxStamina    Int
+  staminaRegen  Int
+  level         Int      @default(1)
+  
+  weapons       MonsterWeapon[]
+}
+
+model MonsterWeapon {
+  id              String        @id @default(uuid())
+  monsterId       String
+  weaponMasterId  String
+  slotIndex       Int           // 0~5 슬롯 인덱스
+
+  monster         MonsterMaster @relation(fields: [monsterId], references: [id])
+  weaponMaster    WeaponMaster  @relation(fields: [weaponMasterId], references: [id])
 }
 
 model StashItem {
