@@ -273,6 +273,82 @@ fastify.get("/monster/match", async (request, reply) => {
   }
 });
 
+// 몬스터와 전투 시뮬레이션 API
+fastify.post("/battle/monster", async (request, reply) => {
+  try {
+    const bodySchema = z.object({
+      characterId: z.string(),
+      level: z.number().optional(),
+    });
+    const { characterId, level = 1 } = bodySchema.parse(request.body);
+
+    // 1) 캐릭터 데이터 조회 (장착 무기 포함)
+    const character = await prisma.character.findUnique({
+      where: { id: characterId },
+      include: {
+        weapons: { include: { weaponMaster: true } },
+        user: true,
+      },
+    });
+
+    if (!character) return reply.status(404).send({ error: "Character not found" });
+
+    // 2) 적합한 몬스터 매칭
+    const monsters = await prisma.monsterMaster.findMany({
+      include: { weapons: { include: { weaponMaster: true } } },
+    });
+    const sorted = monsters.sort((a, b) => Math.abs(a.level - level) - Math.abs(b.level - level));
+    const match = sorted[0];
+    if (!match) return reply.status(404).send({ error: "No monsters found" });
+
+    // 3) DB 데이터를 시뮬레이션용 User 타입으로 변환 (브릿지 로직)
+    const playerUser: User = {
+      id: character.user.nickname,
+      teamId: "TeamA",
+      hp: character.hp,
+      maxHp: character.maxHp,
+      stamina: character.stamina,
+      maxStamina: character.maxStamina,
+      staminaRegen: character.staminaRegen,
+      weight: character.weight,
+      maxWeight: character.maxWeight,
+      day: character.day,
+      currentWeaponIndex: 0,
+      weapons: [null, null, null, null, null, null],
+    };
+
+    character.weapons.forEach(w => {
+      if (w.slotIndex < 6) playerUser.weapons[w.slotIndex] = { ...w.weaponMaster, currentCooldown: 0, use: () => [] };
+    });
+
+    const monsterUser: User = {
+      id: `${match.name} (Lv.${match.level})`,
+      teamId: "TeamB",
+      hp: match.hp,
+      maxHp: match.maxHp,
+      stamina: match.stamina,
+      maxStamina: match.maxStamina,
+      staminaRegen: match.staminaRegen,
+      weight: 0,
+      maxWeight: 100,
+      day: 0,
+      currentWeaponIndex: 0,
+      weapons: [null, null, null, null, null, null],
+    };
+
+    match.weapons.forEach(w => {
+      if (w.slotIndex < 6) monsterUser.weapons[w.slotIndex] = { ...w.weaponMaster, currentCooldown: 0, use: () => [] };
+    });
+
+    // 4) 시뮬레이션 실행 및 결과 반환
+    const result = simulateBattle([playerUser, monsterUser]);
+    return result;
+  } catch (error) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: "Failed to process monster battle" });
+  }
+});
+
 fastify.get("/health", async () => {
   return { status: "ok" };
 });
