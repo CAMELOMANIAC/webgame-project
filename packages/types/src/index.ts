@@ -22,6 +22,7 @@ export interface Weapon extends Item {
 export interface PlayerState {
   id: string;
   teamId: string;
+  name: string;
   maxHp: number;
   hp: number;
   maxStamina: number;
@@ -38,6 +39,18 @@ export interface PlayerState {
     castTicks: number;
     weight: number;
   } | null>;
+}
+
+export interface Monster {
+  id: string;
+  name: string;
+  hp: number;
+  maxHp: number;
+  stamina: number;
+  maxStamina: number;
+  staminaRegen: number;
+  weapons: [Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null];
+  droppedItems?: Item[];
 }
 
 export interface User {
