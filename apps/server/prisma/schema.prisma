@@ -33,7 +33,7 @@ model Character {
   staminaRegen Int   @default(10)
   weight    Int      @default(0)
   maxWeight Int      @default(50)
-  day       Int      @default(0)
+  time      Int      @default(0)
   isRaiding Boolean  @default(false)
   
   user      User     @relation(fields: [userId], references: [id])
@@ -118,7 +118,7 @@ model GhostSnapshot {
   id          String   @id @default(uuid())
   userId      String
   nodeId      String   // 필드 노드 ID
-  day         Int      // 진행 날짜
+  time        Int      // 진행 시간 (단위: 분)
   hp          Int
   maxHp       Int
   stamina     Int

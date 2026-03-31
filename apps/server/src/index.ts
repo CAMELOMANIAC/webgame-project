@@ -22,7 +22,7 @@ const SimulateSchema = z.object({
 const GhostSnapshotSchema = z.object({
   userId: z.string(),
   nodeId: z.string(),
-  day: z.number(),
+  time: z.number(),
   hp: z.number(),
   maxHp: z.number(),
   stamina: z.number(),
@@ -58,7 +58,7 @@ fastify.post("/ghost/snapshot", async (request, reply) => {
       data: {
         userId: data.userId,
         nodeId: data.nodeId,
-        day: data.day,
+        time: data.time,
         hp: data.hp,
         maxHp: data.maxHp,
         stamina: data.stamina,
@@ -186,12 +186,12 @@ fastify.get("/ghost/match", async (request, reply) => {
   try {
     const querySchema = z.object({
       nodeId: z.string(),
-      day: z.union([z.string(), z.number()]).transform(Number),
+      time: z.union([z.string(), z.number()]).transform(Number),
     });
 
     const query = querySchema.parse(request.query);
 
-    // 해당 노드에서 가장 최근 혹은 날짜가 비슷한 고스트 조회
+    // 해당 노드의 모든 고스트 조회
     const snapshots = await prisma.ghostSnapshot.findMany({
       where: {
         nodeId: query.nodeId,
@@ -210,8 +210,8 @@ fastify.get("/ghost/match", async (request, reply) => {
       return reply.status(404).send({ error: "No ghost found for this node" });
     }
 
-    // 간단한 매칭 logic: 요청한 날짜와 가장 가까운 고스트 선택
-    const sorted = snapshots.sort((a, b) => Math.abs(a.day - query.day) - Math.abs(b.day - query.day));
+    // 가장 비슷한 시간(time 차이가 최소인 것) 선택
+    const sorted = snapshots.sort((a, b) => Math.abs(a.time - query.time) - Math.abs(b.time - query.time));
     const match = sorted[0];
 
     return match;
@@ -312,7 +312,7 @@ fastify.post("/battle/monster", async (request, reply) => {
       staminaRegen: character.staminaRegen,
       weight: character.weight,
       maxWeight: character.maxWeight,
-      day: character.day,
+      time: character.time,
       currentWeaponIndex: 0,
       weapons: [null, null, null, null, null, null],
     };
@@ -331,7 +331,7 @@ fastify.post("/battle/monster", async (request, reply) => {
       staminaRegen: match.staminaRegen,
       weight: 0,
       maxWeight: 100,
-      day: 0,
+      time: 0,
       currentWeaponIndex: 0,
       weapons: [null, null, null, null, null, null],
     };

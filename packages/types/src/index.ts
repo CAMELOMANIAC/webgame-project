@@ -29,7 +29,7 @@ export interface PlayerState {
   stamina: number;
   weight: number;
   maxWeight: number;
-  day: number;
+  time: number;
   weapons: Array<{
     id: string;
     name: string;
@@ -63,7 +63,7 @@ export interface User {
   staminaRegen: number; // 틱당 회복량
   weight: number;
   maxWeight: number;
-  day: number;
+  time: number;
   currentWeaponIndex: number; // 0~5 순차 공격 인덱스
   weapons: [Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null];
   castingWeaponIndex?: number | null;
