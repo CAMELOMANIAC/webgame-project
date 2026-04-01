@@ -30,7 +30,7 @@ const Backpack = () => {
       <Title>Backpack Storage</Title>
       <GridContainer>
         <SlotManager items={characterData?.inventory || []}>
-          {(item, index) => <BackpackSlot item={item} key={item.id + index} />}
+          {(item, index) => <BackpackSlot item={item} key={item.id + index} slotIndex={"backpack-slot-" + index} />}
         </SlotManager>
       </GridContainer>
     </Container>

@@ -11,7 +11,7 @@ const GlobalNav = () => {
   const { tab } = useSearch({ strict: false });
 
   return (
-    <Container className="global-nav">
+    <Container>
       <Link to="/field" viewTransition={location.pathname !== "/field"}>
         {location.pathname === "/field" && !tab ? (
           <>

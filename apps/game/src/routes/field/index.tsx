@@ -1,3 +1,4 @@
+import { DndContext, DragOverlay, type DragStartEvent, type UniqueIdentifier } from "@dnd-kit/core";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import type { BattleLog } from "@webgame/types";
 import { AnimatePresence } from "motion/react";
@@ -61,73 +62,94 @@ function RouteComponent() {
     }
   }, [isCombat, navigate]);
 
+  const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
+
+  // 드래그 시작 시 ID 저장
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id);
+  };
+
+  // 드래그 종료 시 초기화
+  const handleDragEnd = () => {
+    setActiveId(null);
+    // ... 기존 이동 로직
+  };
+
   return (
     <Page>
-      <AnimatePresence initial={false}>
-        {tab !== "backpack" && (
-          <InheritMotionDiv
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "100%", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ type: "spring", duration: 0.5, bounce: 0 }}
-            style={{ overflow: "hidden" }}
-            key="fieldNavTargetSection"
-          >
-            <AnimatePresence initial={false}>
-              {isCombat ? (
-                <InheritMotionDiv
-                  initial={{ x: "100%", opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: "-100%", opacity: 0 }}
-                  transition={{ type: "spring", duration: 0.5, bounce: 0 }}
-                  style={{ overflow: "hidden", position: "absolute" }}
-                  key="combatInfo"
-                >
-                  <TopLayout>
-                    <CombatLog />
-                  </TopLayout>
-                </InheritMotionDiv>
-              ) : (
-                <InheritMotionDiv
-                  initial={{ x: "-100%", opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: "100%", opacity: 0 }}
-                  transition={{ type: "spring", duration: 0.5, bounce: 0 }}
-                  style={{ overflow: "hidden", position: "absolute" }}
-                  key="fieldNavTargetSection"
-                >
-                  <TopLayout>
-                    <FieldNavTargetSection />
-                  </TopLayout>
-                </InheritMotionDiv>
-              )}
-            </AnimatePresence>
+      <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <AnimatePresence initial={false}>
+          {tab !== "backpack" && (
+            <InheritMotionDiv
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "100%", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+              style={{ overflow: "hidden" }}
+              key="fieldNavTargetSection"
+            >
+              <AnimatePresence initial={false}>
+                {isCombat ? (
+                  <InheritMotionDiv
+                    initial={{ x: "100%", opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: "-100%", opacity: 0 }}
+                    transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+                    style={{ overflow: "hidden", position: "absolute" }}
+                    key="combatInfo"
+                  >
+                    <TopLayout>
+                      <CombatLog />
+                    </TopLayout>
+                  </InheritMotionDiv>
+                ) : (
+                  <InheritMotionDiv
+                    initial={{ x: "-100%", opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: "100%", opacity: 0 }}
+                    transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+                    style={{ overflow: "hidden", position: "absolute" }}
+                    key="fieldNavTargetSection"
+                  >
+                    <TopLayout>
+                      <FieldNavTargetSection />
+                    </TopLayout>
+                  </InheritMotionDiv>
+                )}
+              </AnimatePresence>
+            </InheritMotionDiv>
+          )}
+          <InheritMotionDiv layout key="fieldInfo">
+            <FieldStatusSection setIsCombat={setIsCombat} />
+            <Equipment />
           </InheritMotionDiv>
-        )}
-        <InheritMotionDiv layout key="fieldInfo">
-          <FieldStatusSection setIsCombat={setIsCombat} />
-          <Equipment />
-        </InheritMotionDiv>
-        {tab === "backpack" && (
-          <InheritMotionDiv
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "100%", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ type: "spring", duration: 0.5, bounce: 0 }}
-            style={{ overflow: "hidden" }}
-            key="stash"
-            layout
-          >
-            <Backpack />
-          </InheritMotionDiv>
-        )}
-      </AnimatePresence>
-      <BackgroundContainer>
-        <CompassImage src={compass} />
-        <div onClick={handleEnemyClick} style={{ cursor: "pointer" }}>
-          <EnemyUnit name="TEST-01" left={"45vw"} top="55vh" />
-        </div>
-      </BackgroundContainer>
+          {tab === "backpack" && (
+            <InheritMotionDiv
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "100%", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+              style={{ overflow: "hidden" }}
+              key="stash"
+              layout
+            >
+              <Backpack />
+              <DragOverlay>
+                {activeId ? (
+                  // 드래그 중인 아이템과 똑같이 생긴 UI를 여기에 렌더링
+                  <div style={{ width: "100px", height: "100px", backgroundColor: "red" }} />
+                ) : null}
+              </DragOverlay>
+            </InheritMotionDiv>
+          )}
+        </AnimatePresence>
+        <BackgroundContainer>
+          <CompassImage src={compass} />
+          <div onClick={handleEnemyClick} style={{ cursor: "pointer" }}>
+            <EnemyUnit name="TEST-01" left={"45vw"} top="55vh" />
+          </div>
+        </BackgroundContainer>
+      </DndContext>
     </Page>
   );
 }
