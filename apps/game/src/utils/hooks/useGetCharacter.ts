@@ -4,12 +4,12 @@ import type { Item } from "@webgame/types";
 const API_BASE_URL = "http://localhost:3001";
 
 // Temporary hardcoded userId for development
-const TEMP_USER_ID = "976eca2b-dadd-49d0-8b70-0ac3849d2706";
+const TEMP_USER_ID = "da30ac6b-e93c-44d9-b344-ab67f99d2f80";
 
-interface CharacterResponse {
+export interface CharacterResponse {
   id: string;
   userId: string;
-  weapons: Array<{
+  equipment: Array<{
     id: string;
     slotIndex: number;
     weaponMaster: {
@@ -22,10 +22,11 @@ interface CharacterResponse {
       cooldownTicks: number;
       castTicks: number;
       description: string;
-    };
+    } | null;
   }>;
   inventory: Array<{
     id: string;
+    slotIndex: number;
     weaponMaster: {
       id: string;
       name: string;
@@ -36,7 +37,7 @@ interface CharacterResponse {
       cooldownTicks: number;
       castTicks: number;
       description: string;
-    };
+    } | null;
     quantity: number;
   }>;
 }
@@ -57,50 +58,61 @@ export const useGetCharacter = (userId: string = TEMP_USER_ID) => {
       }
       const data: CharacterResponse = await response.json();
 
-      const emptyItem: Item = {
-        id: "",
-        name: "",
-        weight: 0,
-        value: 0,
-      };
-
-      // 1. Map equipment (6 slots)
-      const equipment: Item[] = Array(6)
-        .fill(null)
-        .map((_, index) => ({
-          ...emptyItem,
-          id: `empty-eq-${index}`,
-        }));
-
-      data.weapons.forEach((weapon) => {
-        if (weapon.slotIndex >= 0 && weapon.slotIndex < 6) {
-          equipment[weapon.slotIndex] = {
-            id: weapon.weaponMaster.id,
-            name: weapon.weaponMaster.name,
-            weight: weapon.weaponMaster.weight,
-            value: weapon.weaponMaster.value,
-          };
-        }
+      // 정규화된 데이터 생성 함수
+      const createEmptyWeapon = (index: number) => ({
+        id: `empty-wpn-${index}`,
+        slotIndex: index,
+        weaponMaster: null as CharacterResponse["equipment"][number]["weaponMaster"],
       });
 
-      // 2. Map inventory (up to 32 slots)
-      const inventoryItems: Item[] = data.inventory.map((item) => ({
-        id: item.weaponMaster.id,
-        name: item.weaponMaster.name,
-        weight: item.weaponMaster.weight,
-        value: item.weaponMaster.value,
+      const createEmptyInventory = (index: number) => ({
+        id: `empty-inv-${index}`,
+        slotIndex: index,
+        weaponMaster: null as CharacterResponse["inventory"][number]["weaponMaster"],
+        quantity: 0,
+      });
+
+      // 1. 장착창 정규화 (6슬롯 고정)
+      const normalizedEquipment: CharacterResponse["equipment"] = Array(6)
+        .fill(null)
+        .map((_, i) => createEmptyWeapon(i));
+      data.equipment.forEach((w) => {
+        if (w.slotIndex < 6) normalizedEquipment[w.slotIndex] = w;
+      });
+
+      // 2. 백팩 정규화 (32슬롯 고정)
+      const normalizedInventory: CharacterResponse["inventory"] = Array(32)
+        .fill(null)
+        .map((_, i) => createEmptyInventory(i));
+      data.inventory.forEach((i) => {
+        if (i.slotIndex < 32) normalizedInventory[i.slotIndex] = i;
+      });
+
+      const rawNormalized: CharacterResponse = {
+        ...data,
+        equipment: normalizedEquipment,
+        inventory: normalizedInventory,
+      };
+
+      // 컴포넌트 편의를 위한 단순 Item 배열 추출
+      const equipment = normalizedEquipment.map((w) => ({
+        id: w.weaponMaster?.id || w.id,
+        name: w.weaponMaster?.name || "",
+        weight: w.weaponMaster?.weight || 0,
+        value: w.weaponMaster?.value || 0,
       }));
 
-      // Pad to 32 items
-      const inventory = [...inventoryItems];
-      while (inventory.length < 32) {
-        inventory.push({ ...emptyItem, id: `empty-inv-${inventory.length}` });
-      }
+      const inventory = normalizedInventory.map((i) => ({
+        id: i.weaponMaster?.id || i.id,
+        name: i.weaponMaster?.name || "",
+        weight: i.weaponMaster?.weight || 0,
+        value: i.weaponMaster?.value || 0,
+      }));
 
       return {
         equipment,
         inventory,
-        raw: data,
+        raw: rawNormalized,
       };
     },
     staleTime: Infinity,

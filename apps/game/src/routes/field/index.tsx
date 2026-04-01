@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import type { Item } from "@webgame/types";
+import type { BattleLog } from "@webgame/types";
 import { AnimatePresence } from "motion/react";
-import { dagger, greatsword, healingWeapon, staff } from "node_modules/@webgame/types/src/weapon";
 import { useEffect, useState } from "react";
 import styled from "styled-components";
 
@@ -14,24 +13,46 @@ import Backpack from "@/components/itemSlot/Backpack";
 import Equipment from "@/components/itemSlot/Equipment";
 
 import compass from "../../assets/compass.svg";
+import { useBattlePlayer } from "../../utils/hooks/useBattlePlayer";
+import { useGetCharacter } from "../../utils/hooks/useGetCharacter";
+import { useStartMonsterBattle } from "../../utils/hooks/useStartMonsterBattle";
 
 export const Route = createFileRoute("/field/")({
   component: RouteComponent,
 });
 
-const emptyItem: Item = {
-  id: "",
-  name: "",
-  weight: 0,
-  value: 0,
-};
-
-const emptyItemsArray = Array(32).fill(emptyItem);
-
 function RouteComponent() {
   const navigate = useNavigate();
   const { tab } = useSearch({ from: "/field/" });
   const [isCombat, setIsCombat] = useState<boolean>(false);
+
+  const { data: characterData } = useGetCharacter();
+
+  // 전투 관련 로직
+  const [battleLog, setBattleLog] = useState<BattleLog | null>(null);
+  const startMonsterBattle = useStartMonsterBattle();
+  const { start: startPlayback } = useBattlePlayer(battleLog);
+
+  const handleEnemyClick = () => {
+    if (!characterData?.raw.id) return;
+    startMonsterBattle.mutate(
+      { characterId: characterData.raw.id, level: 1 },
+      {
+        onSuccess: (log) => {
+          setBattleLog(log);
+          setIsCombat(true);
+        },
+      },
+    );
+  };
+
+  useEffect(() => {
+    console.log(characterData);
+  }, [characterData]);
+
+  useEffect(() => {
+    if (battleLog && isCombat) startPlayback();
+  }, [battleLog, isCombat, startPlayback]);
 
   useEffect(() => {
     if (isCombat) {
@@ -85,7 +106,7 @@ function RouteComponent() {
         )}
         <InheritMotionDiv layout key="fieldInfo">
           <FieldStatusSection setIsCombat={setIsCombat} />
-          <Equipment initialItems={[healingWeapon, dagger, greatsword, staff, emptyItem, emptyItem]} />
+          <Equipment />
         </InheritMotionDiv>
         {tab === "backpack" && (
           <InheritMotionDiv
@@ -97,13 +118,15 @@ function RouteComponent() {
             key="stash"
             layout
           >
-            <Backpack initialItems={emptyItemsArray} />
+            <Backpack />
           </InheritMotionDiv>
         )}
       </AnimatePresence>
       <BackgroundContainer>
         <CompassImage src={compass} />
-        <EnemyUnit name="TEST-01" left={"45vw"} top="55vh" />
+        <div onClick={handleEnemyClick} style={{ cursor: "pointer" }}>
+          <EnemyUnit name="TEST-01" left={"45vw"} top="55vh" />
+        </div>
       </BackgroundContainer>
     </Page>
   );
