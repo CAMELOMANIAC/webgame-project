@@ -58,9 +58,12 @@ model RaidInventoryItem {
   characterId    String
   weaponMasterId String
   quantity       Int          @default(1)
+  slotIndex      Int          // 0~31
   
   character      Character    @relation(fields: [characterId], references: [id])
   weaponMaster   WeaponMaster @relation(fields: [weaponMasterId], references: [id])
+
+  @@unique([characterId, slotIndex])
 }
 
 model WeaponMaster {

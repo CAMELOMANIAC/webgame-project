@@ -1,5 +1,5 @@
-import { PrismaClient, WeaponMaster } from '@prisma/client'
-const prisma = new PrismaClient()
+import { PrismaClient, WeaponMaster } from "@prisma/client";
+const prisma = new PrismaClient();
 
 async function main() {
   const weapons = [
@@ -11,7 +11,7 @@ async function main() {
       castTicks: 0,
       weight: 5,
       value: 100,
-      description: "A standard sword."
+      description: "A standard sword.",
     },
     {
       name: "Secondary Dagger",
@@ -21,7 +21,7 @@ async function main() {
       castTicks: 0,
       weight: 3,
       value: 50,
-      description: "Quick but weak."
+      description: "Quick but weak.",
     },
     {
       name: "Life-saver",
@@ -31,7 +31,7 @@ async function main() {
       castTicks: 0,
       weight: 2,
       value: 150,
-      description: "Heals you when health is low."
+      description: "Heals you when health is low.",
     },
     {
       name: "Sniper Rifle",
@@ -41,7 +41,7 @@ async function main() {
       castTicks: 15,
       weight: 15,
       value: 300,
-      description: "Heavy damage from distance."
+      description: "Heavy damage from distance.",
     },
     {
       name: "Giant Slayer",
@@ -51,31 +51,31 @@ async function main() {
       castTicks: 5,
       weight: 10,
       value: 200,
-      description: "Strong against tanky enemies."
-    }
-  ]
+      description: "Strong against tanky enemies.",
+    },
+  ];
 
-  console.log('Clearing existing data...')
-  await prisma.raidInventoryItem.deleteMany()
-  await prisma.characterWeapon.deleteMany()
-  await prisma.character.deleteMany()
-  await prisma.monsterWeapon.deleteMany()
-  await prisma.monsterMaster.deleteMany()
-  await prisma.ghostWeapon.deleteMany()
-  await prisma.ghostSnapshot.deleteMany()
-  await prisma.stashItem.deleteMany()
-  await prisma.weaponMaster.deleteMany()
+  console.log("Clearing existing data...");
+  await prisma.raidInventoryItem.deleteMany();
+  await prisma.characterWeapon.deleteMany();
+  await prisma.character.deleteMany();
+  await prisma.monsterWeapon.deleteMany();
+  await prisma.monsterMaster.deleteMany();
+  await prisma.ghostWeapon.deleteMany();
+  await prisma.ghostSnapshot.deleteMany();
+  await prisma.stashItem.deleteMany();
+  await prisma.weaponMaster.deleteMany();
 
-  console.log('Seeding weapons...')
-  const weaponData: WeaponMaster[] = []
+  console.log("Seeding weapons...");
+  const weaponData: WeaponMaster[] = [];
   for (const w of weapons) {
     const created = await prisma.weaponMaster.create({
-      data: w
-    })
-    weaponData.push(created)
+      data: w,
+    });
+    weaponData.push(created);
   }
 
-  console.log('Seeding monsters...')
+  console.log("Seeding monsters...");
   const monsters = [
     {
       name: "Slime",
@@ -103,51 +103,51 @@ async function main() {
       maxStamina: 120,
       staminaRegen: 10,
       level: 7,
-    }
-  ]
+    },
+  ];
 
-  const primarySword = weaponData.find(w => w.name === "Primary Sword")
-  const secondaryDagger = weaponData.find(w => w.name === "Secondary Dagger")
-  const giantSlayer = weaponData.find(w => w.name === "Giant Slayer")
-  const sniperRifle = weaponData.find(w => w.name === "Sniper Rifle")
-  const lifeSaver = weaponData.find(w => w.name === "Life-saver")
+  const primarySword = weaponData.find((w) => w.name === "Primary Sword");
+  const secondaryDagger = weaponData.find((w) => w.name === "Secondary Dagger");
+  const giantSlayer = weaponData.find((w) => w.name === "Giant Slayer");
+  const sniperRifle = weaponData.find((w) => w.name === "Sniper Rifle");
+  const lifeSaver = weaponData.find((w) => w.name === "Life-saver");
 
   for (const m of monsters) {
     const createdMonster = await prisma.monsterMaster.create({
-      data: m
-    })
+      data: m,
+    });
 
     if (m.name === "Slime" && secondaryDagger) {
       await prisma.monsterWeapon.create({
-        data: { monsterId: createdMonster.id, weaponMasterId: secondaryDagger.id, slotIndex: 0 }
-      })
+        data: { monsterId: createdMonster.id, weaponMasterId: secondaryDagger.id, slotIndex: 0 },
+      });
     } else if (m.name === "Goblin" && primarySword) {
       await prisma.monsterWeapon.create({
-        data: { monsterId: createdMonster.id, weaponMasterId: primarySword.id, slotIndex: 0 }
-      })
+        data: { monsterId: createdMonster.id, weaponMasterId: primarySword.id, slotIndex: 0 },
+      });
     } else if (m.name === "Orc Warrior") {
       if (primarySword) {
         await prisma.monsterWeapon.create({
-          data: { monsterId: createdMonster.id, weaponMasterId: primarySword.id, slotIndex: 0 }
-        })
+          data: { monsterId: createdMonster.id, weaponMasterId: primarySword.id, slotIndex: 0 },
+        });
       }
       if (giantSlayer) {
         await prisma.monsterWeapon.create({
-          data: { monsterId: createdMonster.id, weaponMasterId: giantSlayer.id, slotIndex: 1 }
-        })
+          data: { monsterId: createdMonster.id, weaponMasterId: giantSlayer.id, slotIndex: 1 },
+        });
       }
     }
   }
 
-  console.log('Creating test user and character...')
+  console.log("Creating test user and character...");
   const user = await prisma.user.upsert({
-    where: { email: 'test@example.com' },
+    where: { email: "test@example.com" },
     update: {},
     create: {
-      email: 'test@example.com',
-      nickname: 'TestPlayer',
+      email: "test@example.com",
+      nickname: "TestPlayer",
     },
-  })
+  });
 
   const character = await prisma.character.upsert({
     where: { userId: user.id },
@@ -159,7 +159,7 @@ async function main() {
       staminaRegen: 10,
       weight: 0,
       maxWeight: 60,
-      day: 0,
+      time: 0,
       isRaiding: false,
     },
     create: {
@@ -171,55 +171,55 @@ async function main() {
       staminaRegen: 10,
       weight: 0,
       maxWeight: 60,
-      day: 0,
+      time: 0,
       isRaiding: false,
-    }
-  })
+    },
+  });
 
-  console.log('Equipping character weapons...')
+  console.log("Equipping character weapons...");
   if (primarySword) {
     await prisma.characterWeapon.create({
-      data: { characterId: character.id, weaponMasterId: primarySword.id, slotIndex: 0 }
-    })
+      data: { characterId: character.id, weaponMasterId: primarySword.id, slotIndex: 0 },
+    });
   }
   if (secondaryDagger) {
     await prisma.characterWeapon.create({
-      data: { characterId: character.id, weaponMasterId: secondaryDagger.id, slotIndex: 1 }
-    })
+      data: { characterId: character.id, weaponMasterId: secondaryDagger.id, slotIndex: 1 },
+    });
   }
 
-  console.log('Adding items to character inventory (backpack)...')
+  console.log("Adding items to character inventory (backpack)...");
   if (sniperRifle) {
     await prisma.raidInventoryItem.create({
-      data: { characterId: character.id, weaponMasterId: sniperRifle.id, quantity: 1 }
-    })
+      data: { characterId: character.id, weaponMasterId: sniperRifle.id, slotIndex: 0 },
+    });
   }
   if (lifeSaver) {
     await prisma.raidInventoryItem.create({
-      data: { characterId: character.id, weaponMasterId: lifeSaver.id, quantity: 1 }
-    })
+      data: { characterId: character.id, weaponMasterId: lifeSaver.id, slotIndex: 1 },
+    });
   }
 
-  console.log('Adding weapons to user stash (warehouse)...')
-  const weaponMasters = await prisma.weaponMaster.findMany()
+  console.log("Adding weapons to user stash (warehouse)...");
+  const weaponMasters = await prisma.weaponMaster.findMany();
   for (const wm of weaponMasters) {
     await prisma.stashItem.create({
       data: {
         userId: user.id,
         weaponMasterId: wm.id,
-        quantity: 1
-      }
-    })
+        quantity: 1,
+      },
+    });
   }
 
-  console.log('Seed completed')
+  console.log("Seed completed");
 }
 
 main()
   .catch((e) => {
-    console.error(e)
-    process.exit(1)
+    console.error(e);
+    process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect()
-  })
+    await prisma.$disconnect();
+  });
