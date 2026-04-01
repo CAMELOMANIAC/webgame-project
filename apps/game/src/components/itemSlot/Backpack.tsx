@@ -1,20 +1,11 @@
-import type { Item } from "@webgame/types";
 import styled from "styled-components";
 
 import BackpackSlot from "@/components/itemSlot/BackpackSlot";
 import SlotManager from "@/components/itemSlot/SlotManager";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
-import useItemSlot from "@/utils/hooks/useItemSlot";
 
-interface BackpackProps {
-  initialItems: Item[];
-}
-const Backpack = ({ initialItems: fallbackItems }: BackpackProps) => {
+const Backpack = () => {
   const { data: characterData, isLoading, isError } = useGetCharacter();
-
-  // Use fetched items if available, otherwise use the fallback items from props
-  const initialItems = characterData?.inventory || fallbackItems;
-  const { items } = useItemSlot({ initialItems });
 
   if (isLoading) {
     return (
@@ -38,7 +29,9 @@ const Backpack = ({ initialItems: fallbackItems }: BackpackProps) => {
     <Container>
       <Title>Backpack Storage</Title>
       <GridContainer>
-        <SlotManager items={items}>{(item, index) => <BackpackSlot item={item} key={item.id + index} />}</SlotManager>
+        <SlotManager items={characterData?.inventory || []}>
+          {(item, index) => <BackpackSlot item={item} key={item.id + index} />}
+        </SlotManager>
       </GridContainer>
     </Container>
   );
