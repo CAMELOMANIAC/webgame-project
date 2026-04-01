@@ -109,18 +109,115 @@ fastify.get("/user/:userId/character", async (request, reply) => {
     const character = await prisma.character.findUnique({
       where: { userId },
       include: {
-        weapons: { include: { weaponMaster: true } },
-        inventory: { include: { weaponMaster: true } },
+        weapons: { 
+          include: { weaponMaster: true },
+          orderBy: { slotIndex: 'asc' }
+        },
+        inventory: { 
+          include: { weaponMaster: true },
+          orderBy: { slotIndex: 'asc' }
+        },
       },
     });
 
     if (!character) {
       return reply.status(404).send({ error: "Character not found" });
     }
-    return character;
+
+    // weapons를 equipment로 필드명 변경하여 응답
+    const { weapons, ...rest } = character;
+    return { ...rest, equipment: weapons };
   } catch (error) {
     fastify.log.error(error);
     return reply.status(500).send({ error: "Failed to fetch character data" });
+  }
+});
+
+// 아이템 슬롯 일괄 동기화 API
+const SyncSlotsSchema = z.object({
+  equipment: z.array(z.object({
+    weaponMasterId: z.string(),
+    slotIndex: z.number()
+  })),
+  inventory: z.array(z.object({
+    weaponMasterId: z.string(),
+    slotIndex: z.number(),
+    quantity: z.number().optional()
+  }))
+});
+
+fastify.post("/character/:characterId/slots/sync", async (request, reply) => {
+  try {
+    const { characterId } = request.params as { characterId: string };
+    const { equipment, inventory } = SyncSlotsSchema.parse(request.body);
+
+    // 1. 현재 DB에 저장된 실제 아이템 목록 조회 (검증용)
+    const [currentWeapons, currentInventory] = await Promise.all([
+      prisma.characterWeapon.findMany({ where: { characterId } }),
+      prisma.raidInventoryItem.findMany({ where: { characterId } })
+    ]);
+
+    // 2. 보유 아이템 ID 및 개수 맵 생성
+    const actualItemCounts = new Map<string, number>();
+    [...currentWeapons, ...currentInventory].forEach(item => {
+      const count = actualItemCounts.get(item.weaponMasterId) || 0;
+      actualItemCounts.set(item.weaponMasterId, count + 1);
+    });
+
+    // 3. 클라이언트가 보낸 아이템 목록의 합계 계산
+    const requestItemCounts = new Map<string, number>();
+    [...equipment, ...inventory].forEach(item => {
+      const count = requestItemCounts.get(item.weaponMasterId) || 0;
+      requestItemCounts.set(item.weaponMasterId, count + 1);
+    });
+
+    // 4. 대조 검증 (아이템 위변조 방지)
+    if (actualItemCounts.size !== requestItemCounts.size) {
+      return reply.status(400).send({ error: "Item set mismatch: distinct items count differs" });
+    }
+
+    for (const [id, count] of actualItemCounts) {
+      if (requestItemCounts.get(id) !== count) {
+        return reply.status(400).send({ error: `Item mismatch for ${id}: count differs` });
+      }
+    }
+
+    // 5. 비즈니스 로직 제약 조건 확인 (장착 슬롯 개수 등)
+    if (equipment.length > 6) {
+      return reply.status(400).send({ error: "Too many weapons equipped (max 6)" });
+    }
+
+    // 6. 모든 검증 통과 시 트랜잭션 실행
+    await prisma.$transaction(async (tx) => {
+      await tx.characterWeapon.deleteMany({ where: { characterId } });
+      await tx.raidInventoryItem.deleteMany({ where: { characterId } });
+
+      if (equipment.length > 0) {
+        await tx.characterWeapon.createMany({
+          data: equipment.map(w => ({
+            characterId,
+            weaponMasterId: w.weaponMasterId,
+            slotIndex: w.slotIndex
+          }))
+        });
+      }
+
+      if (inventory.length > 0) {
+        await tx.raidInventoryItem.createMany({
+          data: inventory.map(i => ({
+            characterId,
+            weaponMasterId: i.weaponMasterId,
+            slotIndex: i.slotIndex,
+            quantity: i.quantity || 1
+          }))
+        });
+      }
+    });
+
+    return { status: "success" };
+  } catch (error) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: "Failed to sync slots" });
   }
 });
 
