@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import { z } from "zod";
 import { simulateBattle } from "./logic/simulateBattle";
 import { User } from "@webgame/types";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { prisma } from "./db";
 
 const fastify = Fastify({
@@ -15,8 +16,44 @@ fastify.register(cors, {
 });
 
 // 요청 데이터 스키마 정의
+const WeaponSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  damage: z.number(),
+  staminaCost: z.number(),
+  cooldownTicks: z.number(),
+  castTicks: z.number(),
+  weight: z.number(),
+  value: z.number(),
+  currentCooldown: z.number(),
+  strategy: z.enum(["WEAKEST", "STRONGEST", "RANDOM"]).optional(),
+  isTriggered: z.boolean().optional(),
+});
+
+const UserSchema = z.object({
+  id: z.string(),
+  teamId: z.string(),
+  hp: z.number(),
+  maxHp: z.number(),
+  stamina: z.number(),
+  maxStamina: z.number(),
+  staminaRegen: z.number(),
+  weight: z.number(),
+  maxWeight: z.number(),
+  time: z.number(),
+  currentWeaponIndex: z.number(),
+  weapons: z.tuple([
+    WeaponSchema.nullable(),
+    WeaponSchema.nullable(),
+    WeaponSchema.nullable(),
+    WeaponSchema.nullable(),
+    WeaponSchema.nullable(),
+    WeaponSchema.nullable(),
+  ]),
+});
+
 const SimulateSchema = z.object({
-  players: z.array(z.any()), // 복잡한 User 타입을 일단 any로 받고 내부에서 캐스팅
+  players: z.array(UserSchema),
 });
 
 const GhostSnapshotSchema = z.object({
@@ -188,7 +225,7 @@ fastify.post("/character/:characterId/slots/sync", async (request, reply) => {
     }
 
     // 6. 모든 검증 통과 시 트랜잭션 실행
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.characterWeapon.deleteMany({ where: { characterId } });
       await tx.raidInventoryItem.deleteMany({ where: { characterId } });
 

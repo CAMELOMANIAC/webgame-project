@@ -27,13 +27,14 @@ export function simulateBattle(players: User[]): BattleLog {
     players: simPlayers.map((u) => ({
       id: u.id,
       teamId: u.teamId,
+      name: u.id,
       hp: u.hp,
       maxHp: u.maxHp,
       stamina: u.stamina,
       maxStamina: u.maxStamina,
       weight: u.weight,
       maxWeight: u.maxWeight,
-      day: u.day,
+      time: u.time,
       weapons: u.weapons.map((w) =>
         w
           ? {
