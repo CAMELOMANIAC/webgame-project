@@ -48,10 +48,6 @@ function RouteComponent() {
   };
 
   useEffect(() => {
-    console.log(characterData);
-  }, [characterData]);
-
-  useEffect(() => {
     if (battleLog && isCombat) startPlayback();
   }, [battleLog, isCombat, startPlayback]);
 
@@ -66,6 +62,10 @@ function RouteComponent() {
 
   // 드래그 시작 시 ID 저장
   const handleDragStart = (event: DragStartEvent) => {
+    if (event.active.id.toString().includes("empty")) {
+      setActiveId(null);
+      return;
+    }
     setActiveId(event.active.id);
   };
 
@@ -137,7 +137,7 @@ function RouteComponent() {
               <DragOverlay>
                 {activeId ? (
                   // 드래그 중인 아이템과 똑같이 생긴 UI를 여기에 렌더링
-                  <div style={{ width: "100px", height: "100px", backgroundColor: "red" }} />
+                  <SlotOverlay />
                 ) : null}
               </DragOverlay>
             </InheritMotionDiv>
@@ -182,4 +182,17 @@ const BackgroundContainer = styled.div`
   height: 100%;
   z-index: -1;
   overflow: hidden;
+`;
+
+const SlotOverlay = styled.div`
+  display: flex;
+  position: relative;
+  width: 76.5px;
+  aspect-ratio: 1/1;
+  border: 1px solid rgb(33, 33, 33);
+  border-radius: 16px;
+  color: #ecf0f1;
+  touch-action: none;
+  cursor: grabbing;
+  background-color: rgba(255, 255, 255, 0.1);
 `;

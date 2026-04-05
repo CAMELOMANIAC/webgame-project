@@ -1,5 +1,9 @@
+import { AnimatePresence } from "motion/react";
+import { CgSpinner } from "react-icons/cg";
+import { IoMdRefresh } from "react-icons/io";
 import styled from "styled-components";
 
+import { InheritMotionDiv } from "@/components/Commons";
 import BackpackSlot from "@/components/itemSlot/BackpackSlot";
 import SlotManager from "@/components/itemSlot/SlotManager";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
@@ -7,32 +11,59 @@ import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 const Backpack = () => {
   const { data: characterData, isLoading, isError } = useGetCharacter();
 
-  if (isLoading) {
-    return (
-      <Container>
-        <Title>Backpack Storage</Title>
-        <MessageContainer>Loading inventory...</MessageContainer>
-      </Container>
-    );
-  }
-
-  if (isError) {
-    return (
-      <Container>
-        <Title>Backpack Storage</Title>
-        <MessageContainer>Error loading inventory</MessageContainer>
-      </Container>
-    );
-  }
-
   return (
     <Container>
       <Title>Backpack Storage</Title>
-      <GridContainer>
-        <SlotManager items={characterData?.inventory || []}>
-          {(item, index) => <BackpackSlot item={item} key={item.id + index} slotIndex={"backpack-slot-" + index} />}
-        </SlotManager>
-      </GridContainer>
+      <AnimatePresence>
+        {isLoading && (
+          <InheritMotionDiv
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "100%", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+            style={{ overflow: "hidden" }}
+            key="backpackloading"
+          >
+            <button>
+              <CgSpinner />
+            </button>
+          </InheritMotionDiv>
+        )}
+
+        {isError && (
+          <InheritMotionDiv
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "100%", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+            style={{ overflow: "hidden" }}
+            key="backpackLoaderror"
+          >
+            <button>
+              <MessageContainer>Something went wrong, please retry</MessageContainer>
+              <IoMdRefresh />
+            </button>
+          </InheritMotionDiv>
+        )}
+        {characterData && (
+          <InheritMotionDiv
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "100%", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+            style={{ overflow: "hidden" }}
+            key="backpackLoadComplete"
+          >
+            <GridContainer>
+              <SlotManager items={characterData?.inventory || []}>
+                {(item, index) => (
+                  <BackpackSlot item={item} key={item.id + index} slotIndex={"backpack-slot-" + index} />
+                )}
+              </SlotManager>
+            </GridContainer>
+          </InheritMotionDiv>
+        )}
+      </AnimatePresence>
     </Container>
   );
 };
@@ -57,6 +88,7 @@ const MessageContainer = styled.div`
 
 const GridContainer = styled.section`
   width: 100%;
+  height: 100%;
   display: flex;
   flex-wrap: wrap;
   flex-direction: row;
