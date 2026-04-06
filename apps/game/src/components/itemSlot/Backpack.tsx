@@ -1,3 +1,5 @@
+import { DndContext, type DragEndEvent } from "@dnd-kit/core";
+import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence } from "motion/react";
 import { CgSpinner } from "react-icons/cg";
 import { IoMdRefresh } from "react-icons/io";
@@ -6,10 +8,53 @@ import styled from "styled-components";
 import { InheritMotionDiv } from "@/components/Commons";
 import BackpackSlot from "@/components/itemSlot/BackpackSlot";
 import SlotManager from "@/components/itemSlot/SlotManager";
-import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
+import { type CharacterData, useGetCharacter } from "@/utils/hooks/useGetCharacter";
 
 const Backpack = () => {
+  const queryClient = useQueryClient();
   const { data: characterData, isLoading, isError } = useGetCharacter();
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = active.id.toString();
+    const overId = over.id.toString();
+
+    if (activeId === overId) return;
+
+    queryClient.setQueryData(["character", characterData?.raw.userId], (old: CharacterData | undefined) => {
+      if (!old) return old;
+
+      const newInventory = [...old.inventory];
+      const newRawInventory = [...old.raw.inventory];
+
+      const activeIndex = newInventory.findIndex((item) => item.id === activeId);
+      const overIndex = newInventory.findIndex((item) => item.id === overId);
+
+      if (activeIndex === -1 || overIndex === -1) return old;
+
+      // Swap items
+      [newInventory[activeIndex], newInventory[overIndex]] = [newInventory[overIndex], newInventory[activeIndex]];
+      [newRawInventory[activeIndex], newRawInventory[overIndex]] = [
+        newRawInventory[overIndex],
+        newRawInventory[activeIndex],
+      ];
+
+      // Update slotIndex for server sync later
+      newRawInventory[activeIndex] = { ...newRawInventory[activeIndex], slotIndex: activeIndex };
+      newRawInventory[overIndex] = { ...newRawInventory[overIndex], slotIndex: overIndex };
+
+      return {
+        ...old,
+        inventory: newInventory,
+        raw: {
+          ...old.raw,
+          inventory: newRawInventory,
+        },
+      };
+    });
+  };
 
   return (
     <Container>
@@ -54,13 +99,13 @@ const Backpack = () => {
             style={{ overflow: "hidden" }}
             key="backpackLoadComplete"
           >
-            <GridContainer>
-              <SlotManager items={characterData?.inventory || []}>
-                {(item, index) => (
-                  <BackpackSlot item={item} key={item.id + index} slotIndex={"backpack-slot-" + index} />
-                )}
-              </SlotManager>
-            </GridContainer>
+            <DndContext onDragEnd={handleDragEnd}>
+              <GridContainer>
+                <SlotManager items={characterData?.inventory || []}>
+                  {(item, index) => <BackpackSlot item={item} key={item.id + index} />}
+                </SlotManager>
+              </GridContainer>
+            </DndContext>
           </InheritMotionDiv>
         )}
       </AnimatePresence>

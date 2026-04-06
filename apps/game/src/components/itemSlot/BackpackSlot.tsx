@@ -5,11 +5,10 @@ import styled from "styled-components";
 
 interface BackpackProps {
   item: Item;
-  slotIndex: string;
 }
-const BackpackSlot = ({ item, slotIndex }: BackpackProps) => {
+const BackpackSlot = ({ item }: BackpackProps) => {
   const { setNodeRef: setDropRef, isOver } = useDroppable({
-    id: slotIndex, // 예: "slot-1"
+    id: item?.id,
   });
 
   const {
