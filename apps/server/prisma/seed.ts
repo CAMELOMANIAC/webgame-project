@@ -1,4 +1,4 @@
-import { PrismaClient, WeaponMaster } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
@@ -67,7 +67,7 @@ async function main() {
   await prisma.weaponMaster.deleteMany();
 
   console.log("Seeding weapons...");
-  const weaponData: WeaponMaster[] = [];
+  const weaponData: any[] = []; // Using any here for local storage, but creating with prisma types
   for (const w of weapons) {
     const created = await prisma.weaponMaster.create({
       data: w,

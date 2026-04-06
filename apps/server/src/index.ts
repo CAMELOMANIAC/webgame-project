@@ -104,7 +104,7 @@ fastify.post("/ghost/snapshot", async (request, reply) => {
         weight: data.weight,
         maxWeight: data.maxWeight,
         weapons: {
-          create: data.weapons.map(w => ({
+          create: data.weapons.map((w: { weaponMasterId: string; slotIndex: number }) => ({
             weaponMasterId: w.weaponMasterId,
             slotIndex: w.slotIndex,
           })),
@@ -196,14 +196,14 @@ fastify.post("/character/:characterId/slots/sync", async (request, reply) => {
 
     // 2. 보유 아이템 ID 및 개수 맵 생성
     const actualItemCounts = new Map<string, number>();
-    [...currentWeapons, ...currentInventory].forEach(item => {
+    [...currentWeapons, ...currentInventory].forEach((item: { weaponMasterId: string }) => {
       const count = actualItemCounts.get(item.weaponMasterId) || 0;
       actualItemCounts.set(item.weaponMasterId, count + 1);
     });
 
     // 3. 클라이언트가 보낸 아이템 목록의 합계 계산
     const requestItemCounts = new Map<string, number>();
-    [...equipment, ...inventory].forEach(item => {
+    [...equipment, ...inventory].forEach((item: { weaponMasterId: string }) => {
       const count = requestItemCounts.get(item.weaponMasterId) || 0;
       requestItemCounts.set(item.weaponMasterId, count + 1);
     });
@@ -231,7 +231,7 @@ fastify.post("/character/:characterId/slots/sync", async (request, reply) => {
 
       if (equipment.length > 0) {
         await tx.characterWeapon.createMany({
-          data: equipment.map(w => ({
+          data: equipment.map((w: { weaponMasterId: string; slotIndex: number }) => ({
             characterId,
             weaponMasterId: w.weaponMasterId,
             slotIndex: w.slotIndex
@@ -241,7 +241,7 @@ fastify.post("/character/:characterId/slots/sync", async (request, reply) => {
 
       if (inventory.length > 0) {
         await tx.raidInventoryItem.createMany({
-          data: inventory.map(i => ({
+          data: inventory.map((i: { weaponMasterId: string; slotIndex: number; quantity?: number }) => ({
             characterId,
             weaponMasterId: i.weaponMasterId,
             slotIndex: i.slotIndex,
@@ -345,7 +345,13 @@ fastify.get("/ghost/match", async (request, reply) => {
     }
 
     // 가장 비슷한 시간(time 차이가 최소인 것) 선택
-    const sorted = snapshots.sort((a, b) => Math.abs(a.time - query.time) - Math.abs(b.time - query.time));
+    type SnapshotWithDetails = Prisma.GhostSnapshotGetPayload<{
+      include: { weapons: { include: { weaponMaster: true } }; user: true };
+    }>;
+    const sorted = snapshots.sort(
+      (a: SnapshotWithDetails, b: SnapshotWithDetails) =>
+        Math.abs(a.time - query.time) - Math.abs(b.time - query.time),
+    );
     const match = sorted[0];
 
     return match;
@@ -385,15 +391,23 @@ fastify.get("/monster/match", async (request, reply) => {
     }
 
     // 간단한 로직: 레벨 차이가 가장 적은 몬스터들 중 하나 랜덤 선택
-    const sorted = monsters.sort((a, b) => Math.abs(a.level - level) - Math.abs(b.level - level));
+    type MonsterWithDetails = Prisma.MonsterMasterGetPayload<{
+      include: { weapons: { include: { weaponMaster: true } } };
+    }>;
+    const sorted = monsters.sort(
+      (a: MonsterWithDetails, b: MonsterWithDetails) =>
+        Math.abs(a.level - level) - Math.abs(b.level - level),
+    );
     const firstMonster = sorted[0];
-    
+
     if (!firstMonster) {
       return reply.status(404).send({ error: "No monsters found after sorting" });
     }
 
     const minDiff = Math.abs(firstMonster.level - level);
-    const closestMonsters = sorted.filter(m => Math.abs(m.level - level) === minDiff);
+    const closestMonsters = sorted.filter(
+      (m: MonsterWithDetails) => Math.abs(m.level - level) === minDiff,
+    );
     const match = closestMonsters[Math.floor(Math.random() * closestMonsters.length)];
 
     if (!match) {
@@ -431,7 +445,13 @@ fastify.post("/battle/monster", async (request, reply) => {
     const monsters = await prisma.monsterMaster.findMany({
       include: { weapons: { include: { weaponMaster: true } } },
     });
-    const sorted = monsters.sort((a, b) => Math.abs(a.level - level) - Math.abs(b.level - level));
+    type MonsterWithDetails = Prisma.MonsterMasterGetPayload<{
+      include: { weapons: { include: { weaponMaster: true } } };
+    }>;
+    const sorted = monsters.sort(
+      (a: MonsterWithDetails, b: MonsterWithDetails) =>
+        Math.abs(a.level - level) - Math.abs(b.level - level),
+    );
     const match = sorted[0];
     if (!match) return reply.status(404).send({ error: "No monsters found" });
 
@@ -451,8 +471,12 @@ fastify.post("/battle/monster", async (request, reply) => {
       weapons: [null, null, null, null, null, null],
     };
 
-    character.weapons.forEach(w => {
-      if (w.slotIndex < 6) playerUser.weapons[w.slotIndex] = { ...w.weaponMaster, currentCooldown: 0, use: () => [] };
+    type CharacterWeaponWithMaster = Prisma.CharacterWeaponGetPayload<{
+      include: { weaponMaster: true };
+    }>;
+    character.weapons.forEach((w: CharacterWeaponWithMaster) => {
+      if (w.slotIndex < 6)
+        playerUser.weapons[w.slotIndex] = { ...w.weaponMaster, currentCooldown: 0, use: () => [] };
     });
 
     const monsterUser: User = {
@@ -470,8 +494,12 @@ fastify.post("/battle/monster", async (request, reply) => {
       weapons: [null, null, null, null, null, null],
     };
 
-    match.weapons.forEach(w => {
-      if (w.slotIndex < 6) monsterUser.weapons[w.slotIndex] = { ...w.weaponMaster, currentCooldown: 0, use: () => [] };
+    type MonsterWeaponWithMaster = Prisma.MonsterWeaponGetPayload<{
+      include: { weaponMaster: true };
+    }>;
+    match.weapons.forEach((w: MonsterWeaponWithMaster) => {
+      if (w.slotIndex < 6)
+        monsterUser.weapons[w.slotIndex] = { ...w.weaponMaster, currentCooldown: 0, use: () => [] };
     });
 
     // 4) 시뮬레이션 실행 및 결과 반환
