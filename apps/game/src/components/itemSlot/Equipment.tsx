@@ -14,7 +14,7 @@ const Equipment = () => {
   return (
     <Container>
       <SlotManager items={characterData?.equipment || []}>
-        {(item, index) => <EquipmentSlot item={item} key={index} />}
+        {(item) => <EquipmentSlot item={item} />}
       </SlotManager>
     </Container>
   );
