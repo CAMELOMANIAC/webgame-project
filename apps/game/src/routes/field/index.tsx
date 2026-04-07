@@ -1,7 +1,8 @@
-import { DndContext, DragOverlay, type DragStartEvent, type UniqueIdentifier } from "@dnd-kit/core";
+import { DndContext, type DragEndEvent, DragOverlay, type DragStartEvent, type UniqueIdentifier } from "@dnd-kit/core";
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import type { BattleLog } from "@webgame/types";
-import { AnimatePresence } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import styled from "styled-components";
 
@@ -12,6 +13,7 @@ import FieldNavTargetSection from "@/components/FieldNavTargetSection";
 import FieldStatusSection from "@/components/FieldStatusSection";
 import Backpack from "@/components/itemSlot/Backpack";
 import Equipment from "@/components/itemSlot/Equipment";
+import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 
 import compass from "../../assets/compass.svg";
 import { useBattlePlayer } from "../../utils/hooks/useBattlePlayer";
@@ -24,6 +26,7 @@ export const Route = createFileRoute("/field/")({
 
 function RouteComponent() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { tab } = useSearch({ from: "/field/" });
   const [isCombat, setIsCombat] = useState<boolean>(false);
 
@@ -69,11 +72,53 @@ function RouteComponent() {
     setActiveId(event.active.id);
   };
 
-  // 드래그 종료 시 초기화
-  const handleDragEnd = () => {
+  // 드래그 종료 시 로직 (아이템 스왑 포함)
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
     setActiveId(null);
-    // ... 기존 이동 로직
+
+    if (!over || !characterData) return;
+
+    const activeIdStr = active.id.toString();
+    const overIdStr = over.id.toString();
+
+    if (activeIdStr === overIdStr) return;
+
+    // 인벤토리 아이템 스왑 로직
+    queryClient.setQueryData(["character", characterData.raw.userId], (old: CharacterData | undefined) => {
+      if (!old) return old;
+
+      const newInventory = [...old.inventory];
+      const newRawInventory = [...old.raw.inventory];
+
+      const activeIndex = newInventory.findIndex((item) => item.id === activeIdStr);
+      const overIndex = newInventory.findIndex((item) => item.id === overIdStr);
+
+      if (activeIndex === -1 || overIndex === -1) return old;
+
+      // Swap items
+      [newInventory[activeIndex], newInventory[overIndex]] = [newInventory[overIndex], newInventory[activeIndex]];
+      [newRawInventory[activeIndex], newRawInventory[overIndex]] = [
+        newRawInventory[overIndex],
+        newRawInventory[activeIndex],
+      ];
+
+      // Update slotIndex for server sync later
+      newRawInventory[activeIndex] = { ...newRawInventory[activeIndex], slotIndex: activeIndex };
+      newRawInventory[overIndex] = { ...newRawInventory[overIndex], slotIndex: overIndex };
+
+      return {
+        ...old,
+        inventory: newInventory,
+        raw: {
+          ...old.raw,
+          inventory: newRawInventory,
+        },
+      };
+    });
   };
+
+  const activeItem = characterData?.inventory.find((item) => item.id === activeId);
 
   return (
     <Page>
@@ -134,10 +179,18 @@ function RouteComponent() {
               layout
             >
               <Backpack />
-              <DragOverlay>
+              <DragOverlay dropAnimation={null}>
                 {activeId ? (
-                  // 드래그 중인 아이템과 똑같이 생긴 UI를 여기에 렌더링
-                  <SlotOverlay />
+                  <SlotOverlay
+                    layoutId={String(activeId)}
+                    transition={{
+                      type: "spring",
+                      stiffness: 500,
+                      damping: 30,
+                    }}
+                  >
+                    {activeItem?.name}
+                  </SlotOverlay>
                 ) : null}
               </DragOverlay>
             </InheritMotionDiv>
@@ -184,15 +237,19 @@ const BackgroundContainer = styled.div`
   overflow: hidden;
 `;
 
-const SlotOverlay = styled.div`
+const SlotOverlay = styled(motion.div)`
   display: flex;
   position: relative;
   width: 76.5px;
   aspect-ratio: 1/1;
-  border: 1px solid rgb(33, 33, 33);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 16px;
   color: #ecf0f1;
   touch-action: none;
   cursor: grabbing;
   background-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  pointer-events: none;
 `;

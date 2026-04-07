@@ -15,7 +15,7 @@ const BackpackSlot = ({ item }: BackpackProps) => {
     attributes,
     listeners,
     setNodeRef: setDragRef,
-    transform,
+    isDragging,
   } = useDraggable({
     id: item?.id,
     disabled: item?.id.toString().includes("empty"),
@@ -30,8 +30,8 @@ const BackpackSlot = ({ item }: BackpackProps) => {
     <Slot
       ref={combinedRef}
       draggable={!item?.id.toString().includes("empty")}
-      $transform={transform}
       $isOver={isOver}
+      $isDragging={isDragging}
       $isDraggable={!item?.id.toString().includes("empty")}
       {...attributes}
       {...listeners}
@@ -45,16 +45,12 @@ const BackpackSlot = ({ item }: BackpackProps) => {
 export default BackpackSlot;
 
 type SlotProps = {
-  $transform: { x: number; y: number } | null;
   $isOver: boolean;
+  $isDragging: boolean;
   $isDraggable: boolean;
 };
 
-const Slot = styled.div.attrs<SlotProps>((props) => ({
-  style: {
-    transform: props.$transform ? `translate3d(${props.$transform.x}px, ${props.$transform.y}px, 0)` : "none",
-  },
-}))<SlotProps>`
+const Slot = styled.div<SlotProps>`
   display: flex;
   position: relative;
   width: 76.5px;
@@ -63,11 +59,15 @@ const Slot = styled.div.attrs<SlotProps>((props) => ({
   border-radius: 16px;
   color: #ecf0f1;
   touch-action: none;
-  cursor: ${(props) => (props.$isDraggable ? "grab" : "")};
+  cursor: ${(props) => (props.$isDraggable ? (props.$isDragging ? "grabbing" : "grab") : "")};
 
   background-color: ${(props) => (props.$isOver ? "rgba(255, 255, 255, 0.1)" : "rgba(19, 19, 19, 0.4)")};
-  transition: background-color 0.2s ease-in-out;
-`;
+  opacity: ${(props) => (props.$isDragging ? 0 : 1)};
+  transition:
+    background-color 0.2s ease-in-out,
+    opacity 0.2s ease-in-out;
+  `;
+
 
 const PlusIcon = styled(FiPlus)`
   position: absolute;
