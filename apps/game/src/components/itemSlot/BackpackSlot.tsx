@@ -62,12 +62,11 @@ const Slot = styled.div<SlotProps>`
   cursor: ${(props) => (props.$isDraggable ? (props.$isDragging ? "grabbing" : "grab") : "")};
 
   background-color: ${(props) => (props.$isOver ? "rgba(255, 255, 255, 0.1)" : "rgba(19, 19, 19, 0.4)")};
-  opacity: ${(props) => (props.$isDragging ? 0 : 1)};
+  opacity: ${(props) => (props.$isDragging ? 0.2 : 1)};
   transition:
     background-color 0.2s ease-in-out,
     opacity 0.2s ease-in-out;
-  `;
-
+`;
 
 const PlusIcon = styled(FiPlus)`
   position: absolute;

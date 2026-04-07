@@ -12,7 +12,7 @@ const SlotManager = <T extends { id: string | number }>({ items, children }: Slo
       {items.map((item, index) => (
         <motion.div
           key={item.id}
-          layout
+          layout="position"
           layoutId={String(item.id)}
           transition={{
             type: "spring",

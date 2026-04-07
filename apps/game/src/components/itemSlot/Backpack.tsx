@@ -1,4 +1,4 @@
-import { AnimatePresence } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { CgSpinner } from "react-icons/cg";
 import { IoMdRefresh } from "react-icons/io";
 import styled from "styled-components";
@@ -54,7 +54,7 @@ const Backpack = () => {
             style={{ overflow: "hidden" }}
             key="backpackLoadComplete"
           >
-            <GridContainer>
+            <GridContainer layout>
               <SlotManager items={characterData?.inventory || []}>{(item) => <BackpackSlot item={item} />}</SlotManager>
             </GridContainer>
           </InheritMotionDiv>
@@ -82,7 +82,7 @@ const MessageContainer = styled.div`
   font-size: 14px;
 `;
 
-const GridContainer = styled.section`
+const GridContainer = styled(motion.section)`
   width: 100%;
   height: 100%;
   display: flex;

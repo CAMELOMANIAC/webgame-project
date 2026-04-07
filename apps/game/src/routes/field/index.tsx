@@ -2,7 +2,7 @@ import { DndContext, type DragEndEvent, DragOverlay, type DragStartEvent, type U
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import type { BattleLog } from "@webgame/types";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import styled from "styled-components";
 
@@ -123,79 +123,86 @@ function RouteComponent() {
   return (
     <Page>
       <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <AnimatePresence initial={false}>
-          {tab !== "backpack" && (
-            <InheritMotionDiv
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "100%", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ type: "spring", duration: 0.5, bounce: 0 }}
-              style={{ overflow: "hidden" }}
-              key="fieldNavTargetSection"
-            >
-              <AnimatePresence initial={false}>
-                {isCombat ? (
-                  <InheritMotionDiv
-                    initial={{ x: "100%", opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    exit={{ x: "-100%", opacity: 0 }}
-                    transition={{ type: "spring", duration: 0.5, bounce: 0 }}
-                    style={{ overflow: "hidden", position: "absolute" }}
-                    key="combatInfo"
-                  >
-                    <TopLayout>
-                      <CombatLog />
-                    </TopLayout>
-                  </InheritMotionDiv>
-                ) : (
-                  <InheritMotionDiv
-                    initial={{ x: "-100%", opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    exit={{ x: "100%", opacity: 0 }}
-                    transition={{ type: "spring", duration: 0.5, bounce: 0 }}
-                    style={{ overflow: "hidden", position: "absolute" }}
-                    key="fieldNavTargetSection"
-                  >
-                    <TopLayout>
-                      <FieldNavTargetSection />
-                    </TopLayout>
-                  </InheritMotionDiv>
-                )}
-              </AnimatePresence>
+        <LayoutGroup id="inventory-group">
+          <AnimatePresence initial={false}>
+            {tab !== "backpack" && (
+              <InheritMotionDiv
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "100%", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+                style={{ overflow: "hidden" }}
+                key="fieldNavTargetSection"
+              >
+                <AnimatePresence initial={false}>
+                  {isCombat ? (
+                    <InheritMotionDiv
+                      initial={{ x: "100%", opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      exit={{ x: "-100%", opacity: 0 }}
+                      transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+                      style={{ overflow: "hidden", position: "absolute" }}
+                      key="combatInfo"
+                    >
+                      <TopLayout>
+                        <CombatLog />
+                      </TopLayout>
+                    </InheritMotionDiv>
+                  ) : (
+                    <InheritMotionDiv
+                      initial={{ x: "-100%", opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      exit={{ x: "100%", opacity: 0 }}
+                      transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+                      style={{ overflow: "hidden", position: "absolute" }}
+                      key="fieldNavTargetSection"
+                    >
+                      <TopLayout>
+                        <FieldNavTargetSection />
+                      </TopLayout>
+                    </InheritMotionDiv>
+                  )}
+                </AnimatePresence>
+              </InheritMotionDiv>
+            )}
+            <InheritMotionDiv layout key="fieldInfo">
+              <FieldStatusSection setIsCombat={setIsCombat} />
+              <Equipment />
             </InheritMotionDiv>
-          )}
-          <InheritMotionDiv layout key="fieldInfo">
-            <FieldStatusSection setIsCombat={setIsCombat} />
-            <Equipment />
-          </InheritMotionDiv>
-          {tab === "backpack" && (
-            <InheritMotionDiv
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "100%", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ type: "spring", duration: 0.5, bounce: 0 }}
-              style={{ overflow: "hidden" }}
-              key="stash"
-              layout
-            >
-              <Backpack />
-              <DragOverlay dropAnimation={null}>
-                {activeId ? (
-                  <SlotOverlay
-                    layoutId={String(activeId)}
-                    transition={{
-                      type: "spring",
-                      stiffness: 500,
-                      damping: 30,
-                    }}
-                  >
-                    {activeItem?.name}
-                  </SlotOverlay>
-                ) : null}
-              </DragOverlay>
-            </InheritMotionDiv>
-          )}
-        </AnimatePresence>
+            {tab === "backpack" && (
+              <InheritMotionDiv
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "100%", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+                style={{ overflow: "hidden" }}
+                key="stash"
+                layout
+              >
+                <Backpack />
+                <DragOverlay dropAnimation={null}>
+                  <AnimatePresence>
+                    {activeId && (
+                      <SlotOverlay
+                        key={String(activeId)}
+                        layoutId={String(activeId)}
+                        transition={{
+                          type: "spring",
+                          stiffness: 500,
+                          damping: 30,
+                          mass: 0.8,
+                        }}
+                      >
+                        {activeItem?.name}
+                      </SlotOverlay>
+                    )}
+                  </AnimatePresence>
+                </DragOverlay>
+              </InheritMotionDiv>
+            )}
+
+          </AnimatePresence>
+        </LayoutGroup>
         <BackgroundContainer>
           <CompassImage src={compass} />
           <div onClick={handleEnemyClick} style={{ cursor: "pointer" }}>
@@ -240,7 +247,7 @@ const BackgroundContainer = styled.div`
 const SlotOverlay = styled(motion.div)`
   display: flex;
   position: relative;
-  width: 76.5px;
+  width: 90px;
   aspect-ratio: 1/1;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 16px;
