@@ -10,9 +10,12 @@ const fastify = Fastify({
   logger: true,
 });
 
-// CORS 설정 (클라이언트 접속 허용)
+// CORS 설정 (인증 정보를 사용하지 않는 경우 단순화)
 fastify.register(cors, {
-  origin: true,
+  origin: true, // 모든 요청 허용
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: false, // 인증 정보(쿠키 등) 미사용
 });
 
 // 요청 데이터 스키마 정의
@@ -514,6 +517,12 @@ fastify.post("/battle/monster", async (request, reply) => {
 fastify.get("/health", async () => {
   return { status: "ok" };
 });
+
+// Vercel 서버리스 함수를 위한 export
+export default async (req: any, res: any) => {
+  await fastify.ready();
+  fastify.server.emit("request", req, res);
+};
 
 const start = async () => {
   try {
