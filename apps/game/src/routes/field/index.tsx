@@ -13,6 +13,7 @@ import FieldNavTargetSection from "@/components/FieldNavTargetSection";
 import FieldStatusSection from "@/components/FieldStatusSection";
 import Backpack from "@/components/itemSlot/Backpack";
 import Equipment from "@/components/itemSlot/Equipment";
+import RetreadButton from "@/components/RetreadButton";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 
 import compass from "../../assets/compass.svg";
@@ -146,6 +147,7 @@ function RouteComponent() {
                     >
                       <TopLayout>
                         <CombatLog />
+                        <RetreadButton />
                       </TopLayout>
                     </InheritMotionDiv>
                   ) : (
@@ -200,7 +202,6 @@ function RouteComponent() {
                 </DragOverlay>
               </InheritMotionDiv>
             )}
-
           </AnimatePresence>
         </LayoutGroup>
         <BackgroundContainer>
@@ -246,7 +247,7 @@ const BackgroundContainer = styled.div`
 
 const SlotOverlay = styled(motion.div)`
   display: flex;
-  position: relative;
+  position: absolute;
   width: 90px;
   aspect-ratio: 1/1;
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -258,5 +259,5 @@ const SlotOverlay = styled(motion.div)`
   backdrop-filter: blur(4px);
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
   z-index: 1000;
-  pointer-events: none;
+  //pointer-events: none;
 `;
