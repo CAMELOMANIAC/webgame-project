@@ -1,4 +1,4 @@
-import { LuRefreshCw } from "react-icons/lu";
+import { MdAltRoute } from "react-icons/md";
 import { TbLocation } from "react-icons/tb";
 import styled from "styled-components";
 
@@ -19,7 +19,7 @@ const FieldNavTargetSection = () => {
         </Column>
         <Column $flexGrow={0}>
           <ChangeTarget>
-            <LuRefreshCw />
+            <ChangeTargetIcon />
           </ChangeTarget>
         </Column>
       </Row>
@@ -80,10 +80,15 @@ const ChangeTarget = styled.button`
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  width: 40px;
+  width: 50px;
   aspect-ratio: 1/1;
   border-radius: 50%;
   background-color: #252525;
+`;
+
+const ChangeTargetIcon = styled(MdAltRoute)`
+  width: 25px;
+  height: 25px;
 `;
 
 const SubTitle = styled.h3`

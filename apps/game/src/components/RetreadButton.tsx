@@ -2,6 +2,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { FaRunning } from "react-icons/fa";
 import { ImWarning } from "react-icons/im";
+import { MdRadar } from "react-icons/md";
+import { RiErrorWarningLine } from "react-icons/ri";
 import styled from "styled-components";
 
 const RETREAT_STATUS = {
@@ -40,7 +42,10 @@ const RetreadButton = () => {
             transition={{ duration: 0.2 }}
             style={{ display: "flex", alignItems: "center", gap: "8px", zIndex: 1 }}
           >
-            {retreatStatus === RETREAT_STATUS.READY ? <FaRunning /> : <ImWarning />}
+            {retreatStatus === RETREAT_STATUS.READY && <FaRunning />}
+            {retreatStatus === RETREAT_STATUS.DETECTED || (retreatStatus === RETREAT_STATUS.ENGAGED && <ImWarning />)}
+            {retreatStatus === RETREAT_STATUS.PREPARING && <MdRadar />}
+            {retreatStatus === RETREAT_STATUS.EXPIRED && <RiErrorWarningLine />}
             <span>{retreatStatus}</span>
           </motion.div>
         </AnimatePresence>
