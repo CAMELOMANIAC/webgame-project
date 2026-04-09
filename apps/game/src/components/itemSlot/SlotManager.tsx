@@ -1,14 +1,14 @@
+import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { motion } from "motion/react";
 import React from "react";
 
 interface SlotManagerProps<T> {
   items: T[];
-  // children이 함수 형태이며, 아이템 데이터를 인자로 받습니다.
   children: (item: T, index: number) => React.ReactNode;
 }
 const SlotManager = <T extends { id: string | number }>({ items, children }: SlotManagerProps<T>) => {
   return (
-    <>
+    <SortableContext items={items.map((i) => i.id)} strategy={horizontalListSortingStrategy}>
       {items.map((item, index) => (
         <motion.div
           key={item.id}
@@ -24,7 +24,7 @@ const SlotManager = <T extends { id: string | number }>({ items, children }: Slo
           {children(item, index)}
         </motion.div>
       ))}
-    </>
+    </SortableContext>
   );
 };
 

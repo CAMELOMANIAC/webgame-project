@@ -73,7 +73,7 @@ function RouteComponent() {
     setActiveId(event.active.id);
   };
 
-  // 드래그 종료 시 로직 (아이템 스왑 포함)
+  // 드래그 종료 시 로직 (아이템 스왑 및 교환 포함)
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
@@ -85,37 +85,59 @@ function RouteComponent() {
 
     if (activeIdStr === overIdStr) return;
 
-    // 인벤토리 아이템 스왑 로직
     queryClient.setQueryData(["character", characterData.raw.userId], (old: CharacterData | undefined) => {
       if (!old) return old;
 
+      const newEquipment = [...old.equipment];
       const newInventory = [...old.inventory];
       const newRawInventory = [...old.raw.inventory];
 
-      const activeIndex = newInventory.findIndex((item) => item.id === activeIdStr);
-      const overIndex = newInventory.findIndex((item) => item.id === overIdStr);
+      const activeEquipIdx = newEquipment.findIndex((i) => i.id === activeIdStr);
+      const overEquipIdx = newEquipment.findIndex((i) => i.id === overIdStr);
+      const activeInvIdx = newInventory.findIndex((i) => i.id === activeIdStr);
+      const overInvIdx = newInventory.findIndex((i) => i.id === overIdStr);
 
-      if (activeIndex === -1 || overIndex === -1) return old;
+      // 1. Equipment 내 정렬
+      if (activeEquipIdx !== -1 && overEquipIdx !== -1) {
+        [newEquipment[activeEquipIdx], newEquipment[overEquipIdx]] = [
+          newEquipment[overEquipIdx],
+          newEquipment[activeEquipIdx],
+        ];
+        return { ...old, equipment: newEquipment };
+      }
 
-      // Swap items
-      [newInventory[activeIndex], newInventory[overIndex]] = [newInventory[overIndex], newInventory[activeIndex]];
-      [newRawInventory[activeIndex], newRawInventory[overIndex]] = [
-        newRawInventory[overIndex],
-        newRawInventory[activeIndex],
-      ];
+      // 2. Inventory 내 정렬
+      if (activeInvIdx !== -1 && overInvIdx !== -1) {
+        [newInventory[activeInvIdx], newInventory[overInvIdx]] = [newInventory[overInvIdx], newInventory[activeInvIdx]];
+        [newRawInventory[activeInvIdx], newRawInventory[overInvIdx]] = [
+          newRawInventory[overInvIdx],
+          newRawInventory[activeInvIdx],
+        ];
+        return { ...old, inventory: newInventory, raw: { ...old.raw, inventory: newRawInventory } };
+      }
 
-      // Update slotIndex for server sync later
-      newRawInventory[activeIndex] = { ...newRawInventory[activeIndex], slotIndex: activeIndex };
-      newRawInventory[overIndex] = { ...newRawInventory[overIndex], slotIndex: overIndex };
+      // 3. Inventory -> Equipment
+      if (activeInvIdx !== -1 && overEquipIdx !== -1) {
+        const itemToEquip = newInventory[activeInvIdx];
+        const itemToUnequip = newEquipment[overEquipIdx];
 
-      return {
-        ...old,
-        inventory: newInventory,
-        raw: {
-          ...old.raw,
-          inventory: newRawInventory,
-        },
-      };
+        newEquipment[overEquipIdx] = itemToEquip;
+        newInventory[activeInvIdx] = itemToUnequip;
+        // RawInventory 동기화 (간략화)
+        return { ...old, equipment: newEquipment, inventory: newInventory };
+      }
+
+      // 4. Equipment -> Inventory
+      if (activeEquipIdx !== -1 && overInvIdx !== -1) {
+        const itemToUnequip = newEquipment[activeEquipIdx];
+        const itemToEquip = newInventory[overInvIdx];
+
+        newEquipment[activeEquipIdx] = itemToEquip;
+        newInventory[overInvIdx] = itemToUnequip;
+        return { ...old, equipment: newEquipment, inventory: newInventory };
+      }
+
+      return old;
     });
   };
 
