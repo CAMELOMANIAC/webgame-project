@@ -1,11 +1,33 @@
+import type { BattleEvent } from "@webgame/types";
+import { useAtomValue } from "jotai";
+import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useState } from "react";
 import { FaPause } from "react-icons/fa6";
 import styled from "styled-components";
 
+import { currentTimeAtom, flattenedTimelineAtom } from "@/atoms/globalAtom";
 import { FieldWidget } from "@/components/Commons";
 
 import portrait from "../assets/portrait.png";
 
 const CombatLog = () => {
+  const events = useAtomValue(flattenedTimelineAtom);
+  const currentTime = useAtomValue(currentTimeAtom);
+  const [displayEvents, setDisplayEvents] = useState<BattleEvent[]>([]);
+
+  // currentTime 변경 시 새로운 이벤트만 상태에 추가
+  useEffect(() => {
+    const activeEvents = events.filter((e) => e.timestamp <= currentTime && "actorId" in e);
+    // 최신 5개만 유지
+    setDisplayEvents((prev) => {
+      // 내용이 실제로 바뀌었는지 비교 후 업데이트
+      if (JSON.stringify(prev) !== JSON.stringify(activeEvents)) {
+        return activeEvents;
+      }
+      return prev;
+    });
+  }, [events, currentTime]);
+
   return (
     <FieldWidget>
       <Row $justifyContent={"space-between"} $padding="0 0 16px">
@@ -17,41 +39,24 @@ const CombatLog = () => {
       </Row>
       <Row>
         <ActionLogList>
-          <ActionLogItem>
-            <BackgroundImgDiv></BackgroundImgDiv>
-            <ActionLogItemTextContainer>
-              <ActionLogUnitName>TEST-01</ActionLogUnitName>
-              <ActionLogUnitAction>HACK</ActionLogUnitAction>
-            </ActionLogItemTextContainer>
-          </ActionLogItem>
-          <ActionLogItem>
-            <BackgroundImgDiv></BackgroundImgDiv>
-            <ActionLogItemTextContainer>
-              <ActionLogUnitName>TEST-01</ActionLogUnitName>
-              <ActionLogUnitAction>HACK</ActionLogUnitAction>
-            </ActionLogItemTextContainer>
-          </ActionLogItem>
-          <ActionLogItem>
-            <BackgroundImgDiv></BackgroundImgDiv>
-            <ActionLogItemTextContainer>
-              <ActionLogUnitName>TEST-01</ActionLogUnitName>
-              <ActionLogUnitAction>HACK</ActionLogUnitAction>
-            </ActionLogItemTextContainer>
-          </ActionLogItem>
-          <ActionLogItem>
-            <BackgroundImgDiv></BackgroundImgDiv>
-            <ActionLogItemTextContainer>
-              <ActionLogUnitName>TEST-01</ActionLogUnitName>
-              <ActionLogUnitAction>HACK</ActionLogUnitAction>
-            </ActionLogItemTextContainer>
-          </ActionLogItem>
-          <ActionLogItem>
-            <BackgroundImgDiv></BackgroundImgDiv>
-            <ActionLogItemTextContainer>
-              <ActionLogUnitName>TEST-01</ActionLogUnitName>
-              <ActionLogUnitAction>HACK</ActionLogUnitAction>
-            </ActionLogItemTextContainer>
-          </ActionLogItem>
+          <AnimatePresence initial={false} mode="popLayout">
+            {[...displayEvents].reverse().map((event) => (
+              <ActionLogItem
+                key={`${event.id}-${event.timestamp}`}
+                as={motion.li}
+                layout
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+              >
+                <BackgroundImgDiv></BackgroundImgDiv>
+                <ActionLogItemTextContainer>
+                  <ActionLogUnitName>{event.type}</ActionLogUnitName>
+                  <ActionLogUnitAction>{"actorId" in event ? event.actorId : "system"}</ActionLogUnitAction>
+                </ActionLogItemTextContainer>
+              </ActionLogItem>
+            ))}
+          </AnimatePresence>
         </ActionLogList>
       </Row>
     </FieldWidget>

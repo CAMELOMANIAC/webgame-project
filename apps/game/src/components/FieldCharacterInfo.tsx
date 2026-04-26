@@ -1,10 +1,39 @@
+import { useAtomValue } from "jotai";
+import { useMemo } from "react";
 import styled from "styled-components";
 
+import { battleLogAtom, currentTimeAtom } from "@/atoms/globalAtom";
 import { FieldWidget } from "@/components/Commons";
 
 import portrait from "../assets/portrait.png";
 
 const FieldCharacterInfo = () => {
+  const battleLog = useAtomValue(battleLogAtom);
+  const currentTime = useAtomValue(currentTimeAtom);
+
+  const stats = useMemo(() => {
+    if (!battleLog) return null;
+    const player = battleLog.initialState.players[0];
+    let hp = player.hp;
+    let stamina = player.stamina;
+
+    const events = battleLog.timeline
+      .flatMap((entry) => entry.events)
+      .filter((e) => e.timestamp <= currentTime);
+
+    for (const event of events) {
+      if ((event.type === "DAMAGE" || event.type === "HEAL") && event.targetId === player.id) {
+        hp = event.remainingHp;
+      }
+      if (event.type === "STAMINA_CHANGE" && event.playerId === player.id) {
+        stamina = event.currentStamina;
+      }
+    }
+    return { hp, stamina, maxHp: player.maxHp, maxStamina: player.maxStamina };
+  }, [battleLog, currentTime]);
+
+  if (!stats) return null;
+
   return (
     <Container>
       <Row>
@@ -13,16 +42,22 @@ const FieldCharacterInfo = () => {
         </PortraitContainer>
         <Column>
           <CharacterName>CHARACTER NAME</CharacterName>
-          <StatusText>STATUS: NORMAL</StatusText>
+          <StatusText>STATUS: {stats.hp <= 0 ? "DEFEATED" : "NORMAL"}</StatusText>
         </Column>
       </Row>
-      {/* <Column>asdf</Column> */}
       <Column>
         <HPLabelContainer>
           <HPLabel>VITALITY (HP)</HPLabel>
-          <HPText>89/100</HPText>
+          <HPText>{stats.hp}/{stats.maxHp}</HPText>
         </HPLabelContainer>
-        <HPContainer></HPContainer>
+        <HPContainer $percent={(stats.hp / stats.maxHp) * 100} />
+      </Column>
+      <Column>
+        <HPLabelContainer>
+          <HPLabel>STAMINA</HPLabel>
+          <HPText>{stats.stamina}/{stats.maxStamina}</HPText>
+        </HPLabelContainer>
+        <HPContainer $percent={(stats.stamina / stats.maxStamina) * 100} />
       </Column>
     </Container>
   );
@@ -73,11 +108,23 @@ const CharacterName = styled.p`
   color: white;
 `;
 
-const HPContainer = styled.div`
+const HPContainer = styled.div<{ $percent: number }>`
   width: 100%;
   height: 6px;
   border-radius: 6px;
   background-color: black;
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: ${(props) => props.$percent}%;
+    background-color: #ff716c;
+    border-radius: 6px;
+    transition: width 0.3s ease;
+  }
 `;
 
 const HPLabelContainer = styled.div`
