@@ -514,6 +514,16 @@ fastify.post("/battle/monster", async (request, reply) => {
   }
 });
 
+fastify.post("/battle/reveal", async (request, reply) => {
+  const { encodedBackLog } = request.body as { encodedBackLog: string };
+  try {
+    const decoded = JSON.parse(Buffer.from(encodedBackLog, 'base64').toString('utf-8'));
+    return { backLog: decoded };
+  } catch (e) {
+    return reply.status(400).send({ error: "Invalid key or malformed log" });
+  }
+});
+
 fastify.get("/health", async () => {
   return { status: "ok" };
 });

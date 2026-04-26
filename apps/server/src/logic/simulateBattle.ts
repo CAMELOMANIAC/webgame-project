@@ -17,8 +17,9 @@ export function simulateBattle(players: User[]): BattleLog {
       currentWeaponIndex: p.currentWeaponIndex ?? 0,
       castingWeaponIndex: p.castingWeaponIndex ?? null,
       castingTicksRemaining: p.castingTicksRemaining ?? 0,
+      retreatGauge: 0,
     };
-  }) as unknown as User[];
+  }) as unknown as (User & { retreatGauge: number })[];
 
   const deadPlayers = new Set<string>();
 
@@ -54,6 +55,7 @@ export function simulateBattle(players: User[]): BattleLog {
   const timeline: BattleLogEntry[] = [];
   const tickUnit = 1;
   let currentTick = 0;
+  let retreatPoint: BattleLog["retreatPoint"] = undefined;
 
   // 2. 시뮬레이션 루프
   while (!isBattleOver(simPlayers)) {
@@ -116,6 +118,16 @@ export function simulateBattle(players: User[]): BattleLog {
             const target = findTarget(actor, weapon, simPlayers);
             if (target) {
               const weaponEvents = processWeaponUse(actor, target, weapon, generateId);
+              
+              // [후퇴 게이지] 피격 시 게이지 증가
+              target.retreatGauge = Math.min(100, target.retreatGauge + 10);
+              tickEvents.push({ id: generateId(), type: "RETREAT_GAUGE_UPDATE", playerId: target.id, currentGauge: target.retreatGauge });
+              
+              if (target.retreatGauge === 100 && !retreatPoint) {
+                retreatPoint = { timestamp: currentTick, expiryTimestamp: currentTick + 50 };
+                tickEvents.push({ id: generateId(), type: "RETREAT_READY", playerId: target.id });
+              }
+
               weaponEvents.forEach((e) => {
                 tickEvents.push(e);
                 if (e.type === "ATTACK" && e.weaponIndex === undefined) {
@@ -155,16 +167,26 @@ export function simulateBattle(players: User[]): BattleLog {
   const remainingTeams = new Set(simPlayers.filter((p) => p.hp > 0).map((p) => p.teamId));
   const teamArray = Array.from(remainingTeams);
   const winnerTeamId = remainingTeams.size === 1 && teamArray[0] !== undefined ? teamArray[0] : null;
+// 3. 로그 분할 및 암호화
+let frontLog: BattleLogEntry[] = [];
+let backLog: BattleLogEntry[] = [];
 
-  timeline.push({
-    timestamp: currentTick,
-    events: [{ id: generateId(), type: "BATTLE_END", winnerTeamId }],
-  });
+if (retreatPoint) {
+  frontLog = timeline.filter((e) => e.timestamp <= retreatPoint.expiryTimestamp);
+  backLog = timeline.filter((e) => e.timestamp > retreatPoint.expiryTimestamp);
+} else {
+  frontLog = timeline;
+}
 
-  return {
-    initialState,
-    timeline,
-  };
+// 간단한 난독화 (Base64) - 추후 복잡한 암호화로 교체 가능
+const encodedBackLog = btoa(JSON.stringify(backLog));
+
+return {
+  initialState,
+  timeline: frontLog,
+  retreatPoint,
+  encodedBackLog, // 암호화된 후반부 로그 전달
+};
 }
 
 function isBattleOver(players: User[]): boolean {

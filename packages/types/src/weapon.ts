@@ -1,6 +1,6 @@
 import type { BattleEvent, User, Weapon } from ".";
 
-export const defaultUseWeapon = (actor: User, target: User, thisWeapon: Weapon): BattleEvent[] => {
+export const defaultUseWeapon = (actor: User, target: User, thisWeapon: Weapon, timestamp: number): BattleEvent[] => {
   const weaponIndex = actor.weapons.indexOf(thisWeapon);
   const damage = thisWeapon.damage;
   target.hp = Math.max(0, target.hp - damage);
@@ -8,6 +8,7 @@ export const defaultUseWeapon = (actor: User, target: User, thisWeapon: Weapon):
   return [
     {
       id: "",
+      timestamp,
       type: "ATTACK",
       actorId: actor.id,
       targetId: target.id,
@@ -15,6 +16,7 @@ export const defaultUseWeapon = (actor: User, target: User, thisWeapon: Weapon):
     },
     {
       id: "",
+      timestamp,
       type: "DAMAGE",
       targetId: target.id,
       amount: damage,
@@ -23,6 +25,7 @@ export const defaultUseWeapon = (actor: User, target: User, thisWeapon: Weapon):
     },
     {
       id: "",
+      timestamp,
       type: "COOLDOWN",
       actorId: actor.id,
       weaponIndex: weaponIndex,
@@ -68,7 +71,7 @@ export const healingWeapon: Weapon = {
   weight: 2,
   value: 150,
   isTriggered: false,
-  use: (actor, _target, thisWeapon) => {
+  use: (actor, _target, thisWeapon, timestamp) => {
     if (actor.hp < actor.maxHp * 0.5 && !thisWeapon.isTriggered) {
       thisWeapon.isTriggered = true;
       const healAmount = 50;
@@ -76,6 +79,7 @@ export const healingWeapon: Weapon = {
       return [
         {
           id: "",
+          timestamp,
           type: "HEAL",
           targetId: actor.id,
           amount: healAmount,

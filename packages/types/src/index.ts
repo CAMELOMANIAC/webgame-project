@@ -16,7 +16,7 @@ export interface Weapon extends Item {
   currentCooldown: number; // 현재 남은 쿨다운 틱
   strategy?: TargetingStrategy;
   isTriggered?: boolean;
-  use: (actor: User, target: User, weapon: Weapon) => BattleEvent[];
+  use: (actor: User, target: User, weapon: Weapon, timestamp: number) => BattleEvent[];
 }
 
 export interface PlayerState {
@@ -71,7 +71,7 @@ export interface User {
   droppedItems?: Item[];
 }
 
-export type BattleEvent = { id: string } & (
+export type BattleEvent = { id: string; timestamp: number } & (
   | { type: "ATTACK"; actorId: string; targetId: string; weaponIndex: number }
   | { type: "DAMAGE"; targetId: string; amount: number; remainingHp: number; isCritical: boolean }
   | { type: "HEAL"; targetId: string; amount: number; remainingHp: number }
@@ -82,6 +82,8 @@ export type BattleEvent = { id: string } & (
   | { type: "CAST_CANCEL"; actorId: string; weaponIndex: number; reason: string }
   | { type: "DEATH"; playerId: string }
   | { type: "BATTLE_END"; winnerTeamId: string | null }
+  | { type: "RETREAT_GAUGE_UPDATE"; playerId: string; currentGauge: number }
+  | { type: "RETREAT_READY"; playerId: string }
 );
 
 export interface BattleLogEntry {
@@ -94,4 +96,9 @@ export interface BattleLog {
     players: PlayerState[];
   };
   timeline: BattleLogEntry[];
+  retreatPoint?: {
+    timestamp: number;
+    expiryTimestamp: number;
+  };
+  encodedBackLog?: string;
 }
