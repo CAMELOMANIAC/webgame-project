@@ -60,6 +60,7 @@ const Slot = styled.div<SlotProps>`
   color: #ecf0f1;
   touch-action: none;
   cursor: ${(props) => (props.$isDraggable ? (props.$isDragging ? "grabbing" : "grab") : "")};
+  touch-action: ${(props) => (props.$isDraggable ? "none" : "pan-y")};
 
   background-color: ${(props) => (props.$isOver ? "rgba(255, 255, 255, 0.1)" : "rgba(19, 19, 19, 0.4)")};
   opacity: ${(props) => (props.$isDragging ? 0.2 : 1)};

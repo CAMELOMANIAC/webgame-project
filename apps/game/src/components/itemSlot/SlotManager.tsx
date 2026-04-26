@@ -1,4 +1,4 @@
-import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
+import { horizontalListSortingStrategy, SortableContext } from "@dnd-kit/sortable";
 import { motion } from "motion/react";
 import React from "react";
 

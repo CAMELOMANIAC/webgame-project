@@ -1,11 +1,12 @@
 import { DndContext, type DragEndEvent, DragOverlay, type DragStartEvent, type UniqueIdentifier } from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import type { BattleLog } from "@webgame/types";
+import { useAtom, useSetAtom } from "jotai";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import styled from "styled-components";
 
+import { battleLogAtom, currentTimeAtom } from "@/atoms/globalAtom";
 import CombatLog from "@/components/CombatLog";
 import { InheritMotionDiv, Page } from "@/components/Commons";
 import EnemyUnit from "@/components/EnemyUnit";
@@ -17,7 +18,7 @@ import RetreadButton from "@/components/RetreadButton";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 
 import compass from "../../assets/compass.svg";
-import { useBattlePlayer } from "../../utils/hooks/useBattlePlayer";
+import { useBattleData } from "../../utils/hooks/useBattleData";
 import { useGetCharacter } from "../../utils/hooks/useGetCharacter";
 import { useStartMonsterBattle } from "../../utils/hooks/useStartMonsterBattle";
 
@@ -32,28 +33,34 @@ function RouteComponent() {
   const [isCombat, setIsCombat] = useState<boolean>(false);
 
   const { data: characterData } = useGetCharacter();
-
-  // 전투 관련 로직
-  const [battleLog, setBattleLog] = useState<BattleLog | null>(null);
   const startMonsterBattle = useStartMonsterBattle();
-  const { start: startPlayback } = useBattlePlayer(battleLog);
+  const { setBattleLog } = useBattleData();
+
+  const setTime = useSetAtom(currentTimeAtom);
+  const [battleLog] = useAtom(battleLogAtom);
+
+  // 전투 타이머 로직
+  useEffect(() => {
+    if (!isCombat || !battleLog) return;
+    const timer = setInterval(() => {
+      setTime((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isCombat, battleLog, setTime]);
 
   const handleEnemyClick = () => {
-    if (!characterData?.raw.id) return;
+    if (isCombat || !characterData?.raw.id) return;
     startMonsterBattle.mutate(
       { characterId: characterData.raw.id, level: 1 },
       {
         onSuccess: (log) => {
           setBattleLog(log);
+          setTime(0); // 시간 초기화
           setIsCombat(true);
         },
       },
     );
   };
-
-  useEffect(() => {
-    if (battleLog && isCombat) startPlayback();
-  }, [battleLog, isCombat, startPlayback]);
 
   useEffect(() => {
     if (isCombat) {
@@ -169,7 +176,7 @@ function RouteComponent() {
                     >
                       <TopLayout>
                         <CombatLog />
-                        <RetreadButton />
+                        <RetreadButton gauge={0} />
                       </TopLayout>
                     </InheritMotionDiv>
                   ) : (
@@ -191,6 +198,9 @@ function RouteComponent() {
             )}
             <InheritMotionDiv layout key="fieldInfo">
               <FieldStatusSection setIsCombat={setIsCombat} />
+              <button onClick={() => handleEnemyClick()} style={{ color: "white" }}>
+                test
+              </button>
               <Equipment />
             </InheritMotionDiv>
             {tab === "backpack" && (
@@ -228,7 +238,7 @@ function RouteComponent() {
         </LayoutGroup>
         <BackgroundContainer>
           <CompassImage src={compass} />
-          <div onClick={handleEnemyClick} style={{ cursor: "pointer" }}>
+          <div>
             <EnemyUnit name="TEST-01" left={"45vw"} top="55vh" />
           </div>
         </BackgroundContainer>
