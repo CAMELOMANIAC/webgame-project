@@ -18,7 +18,7 @@
 - **`src/atoms/`**: 게임 내 인벤토리, 무기, 전역 설정 등을 관리하는 Jotai Atoms 정의.
 - **`src/components/`**: 재사용 가능한 UI 컴포넌트들.
 - **`src/routes/`**: TanStack Router 기반의 페이지 경로 정의. `__root.tsx`는 레이아웃의 루트 역할을 합니다.
-- **`src/utils/`**: 서버와 통신하여 전투 결과를 처리하는 커스텀 훅(`useBattlePlayer.ts`), 계산 로직(`calc.ts`) 등 유틸리티 함수 모음.
+- **`src/utils/`**: 서버와 통신하여 전투 결과를 처리하는 커스텀 훅(`useBattleData.ts`), 계산 로직(`calc.ts`) 등 유틸리티 함수 모음.
 
 ## 3. 코드 규칙
 
