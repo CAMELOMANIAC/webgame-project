@@ -1,12 +1,12 @@
 import { DndContext, type DragEndEvent, DragOverlay, type DragStartEvent, type UniqueIdentifier } from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 
-import { battleLogAtom, currentTimeAtom } from "@/atoms/globalAtom";
+import { battleLogAtom, currentTimeAtom, flattenedTimelineAtom } from "@/atoms/globalAtom";
 import CombatLog from "@/components/CombatLog";
 import { InheritMotionDiv, Page } from "@/components/Commons";
 import EnemyUnit from "@/components/EnemyUnit";
@@ -38,6 +38,12 @@ function RouteComponent() {
 
   const setTime = useSetAtom(currentTimeAtom);
   const [battleLog] = useAtom(battleLogAtom);
+  const currentTime = useAtomValue(currentTimeAtom);
+  const timeline = useAtomValue(flattenedTimelineAtom);
+
+  const activeAttacks = useMemo(() => {
+    return timeline.filter((e) => e.type === "ATTACK" && e.timestamp === currentTime);
+  }, [timeline, currentTime]);
 
   // 전투 타이머 로직
   useEffect(() => {
@@ -150,6 +156,31 @@ function RouteComponent() {
 
   const activeItem = characterData?.inventory.find((item) => item.id === activeId);
 
+  const enemyPositions = useMemo(() => {
+    if (!battleLog) return new Map();
+    const map = new Map();
+    const centerX = 50; 
+    const centerY = 50;
+    const maxRadius = 40; 
+    const rotationOffset = Math.random() * 2 * Math.PI; // 랜덤 회전 오프셋 추가
+
+    battleLog.initialState.players
+      .filter(
+        (p) =>
+          p.teamId !==
+          battleLog.initialState.players.find((player) => player.id === characterData?.raw.user.nickname)?.teamId
+      )
+      .forEach((enemy, index, arr) => {
+        const angle = (index / arr.length) * 2 * Math.PI + rotationOffset;
+        const radius = 20 + Math.random() * (maxRadius - 20);
+        map.set(enemy.id, {
+          x: centerX + Math.cos(angle) * radius,
+          y: centerY + Math.sin(angle) * radius,
+        });
+      });
+    return map;
+  }, [battleLog, characterData?.raw.user.nickname]);
+
   return (
     <Page>
       <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -238,9 +269,62 @@ function RouteComponent() {
         </LayoutGroup>
         <BackgroundContainer>
           <CompassImage src={compass} />
-          <div>
-            <EnemyUnit name="TEST-01" left={"45vw"} top="55vh" />
-          </div>
+          {isCombat &&
+            battleLog?.initialState.players
+              .filter(
+                (p) =>
+                  p.teamId !==
+                  battleLog.initialState.players.find((player) => player.id === characterData?.raw.user.nickname)?.teamId
+              )
+              .map((enemy) => {
+                const pos = enemyPositions.get(enemy.id);
+                if (!pos) return null;
+                const isAttacking = activeAttacks.some((a) => a.type === "ATTACK" && a.actorId === enemy.id);
+                return (
+                  <motion.div
+                    key={`enemy-${enemy.id}`}
+                    initial={false}
+                    animate={{
+                      x: isAttacking ? (50 - pos.x) * 1.5 : 0,
+                      y: isAttacking ? (50 - pos.y) * 1.5 : 0,
+                    }}
+                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                    style={{ position: "absolute", left: `${pos.x}%`, top: `${pos.y}%`, zIndex: 10 }}
+                  >
+                    <EnemyUnit name={enemy.name} left="0" top="0" />
+                  </motion.div>
+                );
+              })}
+          <svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: -1 }}>
+            {activeAttacks.map((attack) => {
+              if (attack.type !== "ATTACK") return null;
+              const actorPos =
+                attack.actorId === characterData?.raw.user.nickname
+                  ? { x: 50, y: 50 }
+                  : enemyPositions.get(attack.actorId);
+              const targetPos =
+                attack.targetId === characterData?.raw.user.nickname
+                  ? { x: 50, y: 50 }
+                  : enemyPositions.get(attack.targetId);
+
+              if (!actorPos || !targetPos) return null;
+
+              return (
+                <motion.line
+                  key={attack.id}
+                  x1={`${actorPos.x}%`}
+                  y1={`${actorPos.y}%`}
+                  x2={`${targetPos.x}%`}
+                  y2={`${targetPos.y}%`}
+                  stroke="#ff716c"
+                  strokeWidth="2"
+                  initial={{ pathLength: 0, opacity: 1 }}
+                  animate={{ pathLength: 1, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                />
+              );
+            })}
+          </svg>
         </BackgroundContainer>
       </DndContext>
     </Page>

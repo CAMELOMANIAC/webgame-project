@@ -149,6 +149,7 @@ fastify.get("/user/:userId/character", async (request, reply) => {
     const character = await prisma.character.findUnique({
       where: { userId },
       include: {
+        user: true,
         weapons: { 
           include: { weaponMaster: true },
           orderBy: { slotIndex: 'asc' }

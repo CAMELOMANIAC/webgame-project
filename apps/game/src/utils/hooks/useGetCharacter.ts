@@ -9,6 +9,9 @@ const TEMP_USER_ID = "da30ac6b-e93c-44d9-b344-ab67f99d2f80";
 export interface CharacterResponse {
   id: string;
   userId: string;
+  user: {
+    nickname: string;
+  };
   equipment: Array<{
     id: string;
     slotIndex: number;

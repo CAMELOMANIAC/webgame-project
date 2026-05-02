@@ -22,7 +22,7 @@ type ContainerProps = {
 };
 const Container = styled.div<ContainerProps>`
   display: flex;
-  position: fixed;
+  position: absolute;
   left: ${(props) => props.$left};
   top: ${(props) => props.$top};
 `;

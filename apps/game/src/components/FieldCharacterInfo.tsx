@@ -2,35 +2,51 @@ import { useAtomValue } from "jotai";
 import { useMemo } from "react";
 import styled from "styled-components";
 
-import { battleLogAtom, currentTimeAtom } from "@/atoms/globalAtom";
+import { battleLogAtom, currentTimeAtom, flattenedTimelineAtom } from "@/atoms/globalAtom";
 import { FieldWidget } from "@/components/Commons";
+import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 
 import portrait from "../assets/portrait.png";
 
 const FieldCharacterInfo = () => {
   const battleLog = useAtomValue(battleLogAtom);
+  const events = useAtomValue(flattenedTimelineAtom);
   const currentTime = useAtomValue(currentTimeAtom);
+  const { data: characterData } = useGetCharacter();
 
   const stats = useMemo(() => {
-    if (!battleLog) return null;
-    const player = battleLog.initialState.players[0];
-    let hp = player.hp;
-    let stamina = player.stamina;
+    // 1. 전투 중인 경우 로그 기반 계산
+    if (battleLog) {
+      const player = battleLog.initialState.players[0];
+      let hp = player.hp;
+      let stamina = player.stamina;
 
-    const events = battleLog.timeline
-      .flatMap((entry) => entry.events)
-      .filter((e) => e.timestamp <= currentTime);
+      const activeEvents = events.filter((e) => e.timestamp <= currentTime);
 
-    for (const event of events) {
-      if ((event.type === "DAMAGE" || event.type === "HEAL") && event.targetId === player.id) {
-        hp = event.remainingHp;
+      for (const event of activeEvents) {
+        if ((event.type === "DAMAGE" || event.type === "HEAL") && event.targetId === player.id) {
+          hp = event.remainingHp;
+        }
+        if (event.type === "STAMINA_CHANGE" && event.playerId === player.id) {
+          stamina = event.currentStamina;
+        }
       }
-      if (event.type === "STAMINA_CHANGE" && event.playerId === player.id) {
-        stamina = event.currentStamina;
-      }
+      return { hp, stamina, maxHp: player.maxHp, maxStamina: player.maxStamina, name: player.name };
     }
-    return { hp, stamina, maxHp: player.maxHp, maxStamina: player.maxStamina };
-  }, [battleLog, currentTime]);
+
+    // 2. 평상시 상태 (Character API 활용)
+    if (characterData) {
+      return {
+        hp: characterData.raw.hp,
+        stamina: characterData.raw.stamina,
+        maxHp: characterData.raw.maxHp,
+        maxStamina: characterData.raw.maxStamina,
+        name: characterData.raw.name,
+      };
+    }
+
+    return null;
+  }, [battleLog, events, currentTime, characterData]);
 
   if (!stats) return null;
 
@@ -41,8 +57,8 @@ const FieldCharacterInfo = () => {
           <img src={portrait} />
         </PortraitContainer>
         <Column>
-          <CharacterName>CHARACTER NAME</CharacterName>
-          <StatusText>STATUS: {stats.hp <= 0 ? "DEFEATED" : "NORMAL"}</StatusText>
+          <CharacterName>{stats.name}</CharacterName>
+          <StatusText>STATUS: {battleLog ? (stats.hp <= 0 ? "DEFEATED" : "IN COMBAT") : "NORMAL"}</StatusText>
         </Column>
       </Row>
       <Column>
