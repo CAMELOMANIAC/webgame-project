@@ -1,11 +1,12 @@
 import { DndContext, DragOverlay } from "@dnd-kit/core";
 import { createFileRoute, useSearch } from "@tanstack/react-router";
+import type { BattleEvent } from "@webgame/types";
 import { useAtomValue } from "jotai";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { useMemo } from "react";
 import styled from "styled-components";
 
-import { currentTimeAtom, flattenedTimelineAtom } from "@/atoms/globalAtom";
+import { currentTimeAtom, displayEventsAtom } from "@/atoms/globalAtom";
 import { InheritMotionDiv, Page } from "@/components/Commons";
 import { FieldBackground } from "@/components/FieldBackground";
 import { FieldHeader } from "@/components/FieldHeader";
@@ -26,15 +27,15 @@ function RouteComponent() {
   const { data: characterData } = useGetCharacter();
 
   const currentTime = useAtomValue(currentTimeAtom);
-  const timeline = useAtomValue(flattenedTimelineAtom);
+  const displayEvents = useAtomValue(displayEventsAtom);
 
   const { isCombat, setIsCombat, handleEnemyClick, battleLog } = useFieldCombat(characterData);
   const { activeId, handleDragStart, handleDragEnd } = useInventoryDrag(characterData);
   const enemyPositions = useEnemyPositions(battleLog, characterData?.raw.user.nickname);
 
   const activeAttacks = useMemo(() => {
-    return timeline.filter((e) => e.type === "ATTACK" && e.timestamp === currentTime);
-  }, [timeline, currentTime]);
+    return displayEvents.filter((e: BattleEvent) => e.type === "ATTACK");
+  }, [displayEvents]);
 
   const activeItem = characterData?.inventory.find((item) => item.id === activeId);
 
@@ -100,6 +101,7 @@ function RouteComponent() {
           battleLog={battleLog}
           enemyPositions={enemyPositions}
           activeAttacks={activeAttacks}
+          currentTime={currentTime}
           characterNickname={characterData?.raw.user.nickname}
         />
       </DndContext>

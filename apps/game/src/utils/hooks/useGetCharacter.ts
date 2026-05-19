@@ -9,6 +9,14 @@ const TEMP_USER_ID = "da30ac6b-e93c-44d9-b344-ab67f99d2f80";
 export interface CharacterResponse {
   id: string;
   userId: string;
+  hp: number;
+  maxHp: number;
+  stamina: number;
+  maxStamina: number;
+  staminaRegen: number;
+  weight: number;
+  maxWeight: number;
+  time: number;
   user: {
     nickname: string;
   };

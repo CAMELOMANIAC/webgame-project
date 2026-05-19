@@ -41,7 +41,7 @@ const FieldCharacterInfo = () => {
         stamina: characterData.raw.stamina,
         maxHp: characterData.raw.maxHp,
         maxStamina: characterData.raw.maxStamina,
-        name: characterData.raw.name,
+        name: characterData.raw.user.nickname,
       };
     }
 
