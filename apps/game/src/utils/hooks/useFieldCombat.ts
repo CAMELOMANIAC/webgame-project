@@ -1,27 +1,75 @@
-import { useEffect, useState } from "react";
-import { useAtom, useSetAtom } from "jotai";
 import { useNavigate } from "@tanstack/react-router";
-import { battleLogAtom, currentTimeAtom } from "@/atoms/globalAtom";
+import type { BattleEvent } from "@webgame/types";
+import { useAtom, useAtomValue,useSetAtom } from "jotai";
+import { useEffect, useRef,useState } from "react";
+
+import { battleLogAtom, currentTimeAtom, displayEventsAtom,flattenedTimelineAtom } from "@/atoms/globalAtom";
 import { useBattleData } from "@/utils/hooks/useBattleData";
-import { useStartMonsterBattle } from "@/utils/hooks/useStartMonsterBattle";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
+import { useStartMonsterBattle } from "@/utils/hooks/useStartMonsterBattle";
 
 export function useFieldCombat(characterData: CharacterData | undefined) {
   const navigate = useNavigate();
   const [isCombat, setIsCombat] = useState<boolean>(false);
   const { setBattleLog } = useBattleData();
   const startMonsterBattle = useStartMonsterBattle();
-  const setTime = useSetAtom(currentTimeAtom);
+  const [time, setTime] = useAtom(currentTimeAtom);
   const [battleLog] = useAtom(battleLogAtom);
+  const timeline = useAtomValue(flattenedTimelineAtom);
+  const setDisplayEvents = useSetAtom(displayEventsAtom);
+  
+  const [isProcessing, setIsProcessing] = useState(false);
+  const pendingEventsRef = useRef<BattleEvent[]>([]);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 전투 타이머 로직
+  // 전투 타이머 로직: 1초마다 다음 틱으로 넘어가려 시도
   useEffect(() => {
-    if (!isCombat || !battleLog) return;
+    if (!isCombat || !battleLog || isProcessing) return;
+
     const timer = setInterval(() => {
-      setTime((prev) => prev + 1);
+      // 현재 시간에 해당하는 이벤트들 가져오기
+      const currentTickEvents = timeline.filter((e: BattleEvent) => e.timestamp === time);
+      
+      if (currentTickEvents.length > 0) {
+        console.log(`[Battle] Processing ${currentTickEvents.length} events at tick ${time}`);
+        pendingEventsRef.current = [...currentTickEvents];
+        setIsProcessing(true);
+      } else {
+        setTime((prev) => prev + 1);
+      }
     }, 1000);
+
     return () => clearInterval(timer);
-  }, [isCombat, battleLog, setTime]);
+  }, [isCombat, battleLog, setTime, time, timeline, isProcessing]);
+
+  // 이벤트 순차 처리 로직
+  useEffect(() => {
+    if (!isProcessing) return;
+
+    const processNextEvent = () => {
+      if (pendingEventsRef.current.length > 0) {
+        const nextEvent = pendingEventsRef.current.shift();
+        if (nextEvent) {
+          console.log(`[Battle] Displaying event: ${nextEvent.type} (${nextEvent.id})`);
+          setDisplayEvents([nextEvent]);
+          
+          // 일정 시간 후 다음 이벤트 처리 (대기 시간 500ms)
+          timeoutRef.current = setTimeout(processNextEvent, 500);
+        }
+      } else {
+        console.log(`[Battle] All events processed for tick ${time}. Moving to next tick.`);
+        setIsProcessing(false);
+        setDisplayEvents([]);
+        setTime((prev) => prev + 1);
+      }
+    };
+
+    processNextEvent();
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [isProcessing, setTime, setDisplayEvents, time]);
 
   const handleEnemyClick = () => {
     if (isCombat || !characterData?.raw.id) return;
@@ -29,8 +77,11 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       { characterId: characterData.raw.id, level: 1 },
       {
         onSuccess: (log) => {
+          console.log("[Battle] Started new battle");
           setBattleLog(log);
-          setTime(0); // 시간 초기화
+          setTime(0);
+          setDisplayEvents([]);
+          setIsProcessing(false);
           setIsCombat(true);
         },
       },
@@ -39,7 +90,6 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
 
   useEffect(() => {
     if (isCombat) {
-      // 전투 시작 시 field로 이동
       navigate({ to: "/field" });
     }
   }, [isCombat, navigate]);
