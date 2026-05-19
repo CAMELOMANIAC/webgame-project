@@ -1,5 +1,6 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import styled from "styled-components";
+
 import CombatLog from "@/components/CombatLog";
 import { InheritMotionDiv } from "@/components/Commons";
 import FieldNavTargetSection from "@/components/FieldNavTargetSection";

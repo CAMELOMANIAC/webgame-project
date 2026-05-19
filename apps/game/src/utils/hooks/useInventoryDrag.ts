@@ -1,6 +1,7 @@
-import { useState } from "react";
 import { type DragEndEvent, type DragStartEvent, type UniqueIdentifier } from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 
 export function useInventoryDrag(characterData: CharacterData | undefined) {
