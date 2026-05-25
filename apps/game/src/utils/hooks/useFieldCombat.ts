@@ -3,7 +3,7 @@ import type { BattleEvent } from "@webgame/types";
 import { useAtom, useAtomValue,useSetAtom } from "jotai";
 import { useEffect, useRef,useState } from "react";
 
-import { battleLogAtom, currentTimeAtom, displayEventsAtom,flattenedTimelineAtom } from "@/atoms/globalAtom";
+import { battleLogAtom, currentTimeAtom, displayEventsAtom,flattenedTimelineAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { useBattleData } from "@/utils/hooks/useBattleData";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 import { useStartMonsterBattle } from "@/utils/hooks/useStartMonsterBattle";
@@ -17,6 +17,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
   const [battleLog] = useAtom(battleLogAtom);
   const timeline = useAtomValue(flattenedTimelineAtom);
   const setDisplayEvents = useSetAtom(displayEventsAtom);
+  const setProcessedEvents = useSetAtom(processedEventsAtom);
   
   const [isProcessing, setIsProcessing] = useState(false);
   const pendingEventsRef = useRef<BattleEvent[]>([]);
@@ -53,8 +54,15 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
           console.log(`[Battle] Displaying event: ${nextEvent.type} (${nextEvent.id})`);
           setDisplayEvents([nextEvent]);
           
-          // 일정 시간 후 다음 이벤트 처리 (대기 시간 500ms)
-          timeoutRef.current = setTimeout(processNextEvent, 500);
+          // 시각적으로 처리된 이벤트 리스트에 추가 (체력바 등 동기화용)
+          setProcessedEvents((prev) => [...prev, nextEvent]);
+          
+          // 사망(DEATH) 이벤트는 연출 딜레이 없이 즉시 다음으로 진행
+          const nextPeek = pendingEventsRef.current[0];
+          const isImmediate = nextEvent.type === "DEATH" || nextPeek?.type === "DEATH";
+          const delay = isImmediate ? 0 : 500;
+          
+          timeoutRef.current = setTimeout(processNextEvent, delay);
         }
       } else {
         console.log(`[Battle] All events processed for tick ${time}. Moving to next tick.`);
@@ -69,7 +77,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [isProcessing, setTime, setDisplayEvents, time]);
+  }, [isProcessing, setTime, setDisplayEvents, time, setProcessedEvents]);
 
   const handleEnemyClick = () => {
     if (isCombat || !characterData?.raw.id) return;
@@ -81,6 +89,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
           setBattleLog(log);
           setTime(0);
           setDisplayEvents([]);
+          setProcessedEvents([]);
           setIsProcessing(false);
           setIsCombat(true);
         },

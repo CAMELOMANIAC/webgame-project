@@ -1,32 +1,18 @@
-import type { BattleEvent } from "@webgame/types";
 import { useAtomValue } from "jotai";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
 import { FaPause } from "react-icons/fa6";
 import styled from "styled-components";
 
-import { currentTimeAtom, flattenedTimelineAtom } from "@/atoms/globalAtom";
+import { processedEventsAtom } from "@/atoms/globalAtom";
 import { FieldWidget } from "@/components/Commons";
 
 import portrait from "../assets/portrait.png";
 
 const CombatLog = () => {
-  const events = useAtomValue(flattenedTimelineAtom);
-  const currentTime = useAtomValue(currentTimeAtom);
-  const [displayEvents, setDisplayEvents] = useState<BattleEvent[]>([]);
+  const processedEvents = useAtomValue(processedEventsAtom);
 
-  // currentTime 변경 시 새로운 이벤트만 상태에 추가
-  useEffect(() => {
-    const activeEvents = events.filter((e) => e.timestamp <= currentTime && "actorId" in e);
-    // 최신 5개만 유지
-    setDisplayEvents((prev) => {
-      // 내용이 실제로 바뀌었는지 비교 후 업데이트
-      if (JSON.stringify(prev) !== JSON.stringify(activeEvents)) {
-        return activeEvents;
-      }
-      return prev;
-    });
-  }, [events, currentTime]);
+  // actorId가 있는 유의미한 이벤트만 필터링하여 최근 10개 표시
+  const logHistory = processedEvents.filter((e) => "actorId" in e).slice(-10);
 
   return (
     <FieldWidget>
@@ -40,7 +26,7 @@ const CombatLog = () => {
       <Row>
         <ActionLogList>
           <AnimatePresence initial={false} mode="popLayout">
-            {[...displayEvents].reverse().map((event) => (
+            {[...logHistory].reverse().map((event) => (
               <ActionLogItem
                 key={`${event.id}-${event.timestamp}`}
                 as={motion.li}

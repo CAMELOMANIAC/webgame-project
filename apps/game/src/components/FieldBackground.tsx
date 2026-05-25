@@ -1,10 +1,12 @@
 import type { BattleEvent, BattleLog } from "@webgame/types";
+import { useAtomValue } from "jotai";
 import { useMemo } from "react";
 import { Image, Layer, Stage } from "react-konva";
 import styled from "styled-components";
 import useImage from "use-image";
 
 import compass from "@/assets/compass.svg";
+import { processedEventsAtom } from "@/atoms/globalAtom";
 import CanvasEnemyUnit from "@/components/CanvasEnemyUnit";
 import RadarAttackLine from "@/components/RadarAttackLine";
 import { useWindowSize } from "@/utils/hooks/useWindowSize";
@@ -23,24 +25,21 @@ export function FieldBackground({
   battleLog,
   enemyPositions,
   activeAttacks,
-  currentTime,
   characterNickname,
 }: FieldBackgroundProps) {
   const { width, height } = useWindowSize();
   const [compassImg] = useImage(compass);
+  const processedEvents = useAtomValue(processedEventsAtom);
 
   const deadEnemyIds = useMemo(() => {
-    if (!battleLog) return new Set<string>();
     const ids = new Set<string>();
-    battleLog.timeline.forEach((entry) => {
-      entry.events.forEach((event) => {
-        if (event.type === "DEATH" && entry.timestamp <= currentTime) {
-          ids.add(event.playerId);
-        }
-      });
+    processedEvents.forEach((event) => {
+      if (event.type === "DEATH") {
+        ids.add(event.playerId);
+      }
     });
     return ids;
-  }, [battleLog, currentTime]);
+  }, [processedEvents]);
 
   return (
     <BackgroundContainer>

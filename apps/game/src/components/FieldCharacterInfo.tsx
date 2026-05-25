@@ -2,7 +2,7 @@ import { useAtomValue } from "jotai";
 import { useMemo } from "react";
 import styled from "styled-components";
 
-import { battleLogAtom, currentTimeAtom, flattenedTimelineAtom } from "@/atoms/globalAtom";
+import { battleLogAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { FieldWidget } from "@/components/Commons";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 
@@ -10,20 +10,18 @@ import portrait from "../assets/portrait.png";
 
 const FieldCharacterInfo = () => {
   const battleLog = useAtomValue(battleLogAtom);
-  const events = useAtomValue(flattenedTimelineAtom);
-  const currentTime = useAtomValue(currentTimeAtom);
+  const processedEvents = useAtomValue(processedEventsAtom);
   const { data: characterData } = useGetCharacter();
 
   const stats = useMemo(() => {
-    // 1. 전투 중인 경우 로그 기반 계산
+    // 1. 전투 중인 경우 시각적으로 처리된 로그 기반 계산
     if (battleLog) {
       const player = battleLog.initialState.players[0];
       let hp = player.hp;
       let stamina = player.stamina;
 
-      const activeEvents = events.filter((e) => e.timestamp <= currentTime);
-
-      for (const event of activeEvents) {
+      // 애니메이션이 완료된 이벤트들만 반영
+      for (const event of processedEvents) {
         if ((event.type === "DAMAGE" || event.type === "HEAL") && event.targetId === player.id) {
           hp = event.remainingHp;
         }
@@ -46,7 +44,7 @@ const FieldCharacterInfo = () => {
     }
 
     return null;
-  }, [battleLog, events, currentTime, characterData]);
+  }, [battleLog, processedEvents, characterData]);
 
   if (!stats) return null;
 
@@ -64,14 +62,18 @@ const FieldCharacterInfo = () => {
       <Column>
         <HPLabelContainer>
           <HPLabel>VITALITY (HP)</HPLabel>
-          <HPText>{stats.hp}/{stats.maxHp}</HPText>
+          <HPText>
+            {stats.hp}/{stats.maxHp}
+          </HPText>
         </HPLabelContainer>
         <HPContainer $percent={(stats.hp / stats.maxHp) * 100} />
       </Column>
       <Column>
         <HPLabelContainer>
           <HPLabel>STAMINA</HPLabel>
-          <HPText>{stats.stamina}/{stats.maxStamina}</HPText>
+          <HPText>
+            {stats.stamina}/{stats.maxStamina}
+          </HPText>
         </HPLabelContainer>
         <HPContainer $percent={(stats.stamina / stats.maxStamina) * 100} />
       </Column>
