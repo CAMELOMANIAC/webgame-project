@@ -1,6 +1,6 @@
 import Konva from "konva";
 import { useEffect, useMemo,useRef, useState } from "react";
-import { Circle, Group, Layer, Shape,Stage } from "react-konva";
+import { Circle, Group, Layer, Line,Shape, Stage } from "react-konva";
 import styled from "styled-components";
 
 import mapData from "../assets/map_graph.json";
@@ -10,10 +10,39 @@ interface Node {
   y: number;
 }
 
-type Edge = [number, number];
+interface Edge {
+  source: number;
+  target: number;
+  type: "minor" | "major" | "main";
+}
+
+interface Building {
+  id: number;
+  height: number;
+  coordinates: { x: number; y: number }[];
+  flatPoints: number[]; // 렌더링 성능 최적화를 위해 플랫화된 정점 캐시
+  roadNodeId: number;
+}
+
+interface WaterPoint {
+  x: number;
+  y: number;
+}
+type Water = WaterPoint[];
 
 const nodes = mapData.nodes as Node[];
-const edges = mapData.edges as Edge[];
+const edges = mapData.edges as unknown as Edge[];
+
+// 빌딩 렌더링 고속화를 위해 coordinates 배열을 1차원 플랫 구조로 미리 변환 (모듈 스코프 1회 수행)
+const buildings = ((mapData.buildings || []) as unknown as Building[]).map((b) => ({
+  ...b,
+  flatPoints: b.coordinates.flatMap((p) => [p.x, p.y]),
+}));
+
+const water = (mapData.water || []) as unknown as Water;
+
+// Konva Line 렌더링에 적합하도록 통합된 물 좌표 배열을 1차원 플랫 구조로 변환
+const waterPoints = water.flatMap((p) => [p.x, p.y]);
 
 const DEFAULT_NODE_COLOR = "#4d7cff";
 const DEFAULT_NODE_RADIUS = 4;
@@ -29,7 +58,11 @@ export default function MapGraphCanvas() {
     scale: 0.8,
   });
 
-  const [hoveredNode, setHoveredNode] = useState<{ index: number } | null>(null);
+  const [showNodes, setShowNodes] = useState(true);
+  const [showEdges, setShowEdges] = useState(true);
+  const [showBuildings, setShowBuildings] = useState(true);
+  const [isOptionsExpanded, setIsOptionsExpanded] = useState(false);
+  const [isStatusExpanded, setIsStatusExpanded] = useState(true);
 
   // 1. ResizeObserver를 사용하여 부모 컨테이너 크기 추적 (모바일 뷰포트 대응)
   useEffect(() => {
@@ -97,8 +130,6 @@ export default function MapGraphCanvas() {
   }, [dimensions.width, dimensions.height]);
 
   // 3. 뷰포트 기준 경계 상자(Bounding Box) 계산
-  // 드래그 중에는 뷰포트 갱신을 하지 않으므로 margin을 400px로 크게 잡아
-  // 사용자가 화면을 슬라이드해도 경계 바깥 노드가 자연스럽게 미리 보이도록 처리합니다.
   const visibleBounds = useMemo(() => {
     const { width, height } = dimensions;
     const { x, y, scale } = stageTransform;
@@ -131,7 +162,23 @@ export default function MapGraphCanvas() {
     return indices;
   }, [visibleBounds]);
 
-  // 5. 마우스 휠 이벤트로 줌 처리 (커서 좌표 기준 줌)
+  // 5. 뷰포트 내부에 위치하는 빌딩 필터링 (컬링)
+  const visibleBuildings = useMemo(() => {
+    const { minX, minY, maxX, maxY } = visibleBounds;
+
+    return buildings.filter((b) => {
+      const first = b.coordinates[0];
+      if (!first) return false;
+      return (
+        first.x >= minX &&
+        first.x <= maxX &&
+        first.y >= minY &&
+        first.y <= maxY
+      );
+    });
+  }, [visibleBounds]);
+
+  // 6. 마우스 휠 이벤트로 줌 처리 (커서 좌표 기준 줌)
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
     const stage = stageRef.current;
@@ -168,8 +215,7 @@ export default function MapGraphCanvas() {
     });
   };
 
-  // 6. 드래그(팬)가 완전히 끝났을 때만 뷰포트 상태를 업데이트하여 컬링 연산 재계산
-  // 드래그 중(onDragMove)에는 캔버스 하드웨어 가속 이동만 사용하므로 리액트 렌더링 병목이 전혀 없습니다.
+  // 7. 드래그(팬)가 완전히 끝났을 때만 뷰포트 상태를 업데이트하여 컬링 연산 재계산
   const handleDragEnd = () => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -180,43 +226,101 @@ export default function MapGraphCanvas() {
     });
   };
 
+  // 8. 노드/건물 호버 해제 안전 헬퍼 (Display 토글 조작 시 HUD 잔상 초기화)
+  const resetHoverHud = () => {
+    const el = document.getElementById("hud-hover-detail");
+    if (el) {
+      el.style.display = "none";
+      el.innerHTML = "";
+    }
+  };
+
   return (
     <CanvasContainer ref={containerRef}>
       {/* 하이테크 스타일 정보 패널 오버레이 */}
-      <InfoPanel>
-        <PanelTitle>NETWORK MATRIX STATUS</PanelTitle>
-        <MetricRow>
-          <MetricLabel>Total Nodes / Edges</MetricLabel>
-          <MetricValue>{nodes.length} / {edges.length}</MetricValue>
-        </MetricRow>
-        <MetricRow>
-          <MetricLabel>Rendered Nodes (Culled)</MetricLabel>
-          <MetricValue>{visibleNodeIndices.size} ({Math.round((visibleNodeIndices.size / nodes.length) * 100)}%)</MetricValue>
-        </MetricRow>
-        <MetricRow>
-          <MetricLabel>Rendered Edges (Unified)</MetricLabel>
-          <MetricValue>{edges.length} (1 DrawCall)</MetricValue>
-        </MetricRow>
-        <MetricRow>
-          <MetricLabel>Zoom Factor</MetricLabel>
-          <MetricValue>{Math.round(stageTransform.scale * 100)}%</MetricValue>
-        </MetricRow>
-        <MetricRow>
-          <MetricLabel>Viewport Area</MetricLabel>
-          <MetricValue>{dimensions.width}x{dimensions.height}</MetricValue>
-        </MetricRow>
+      <InfoPanel
+        onMouseDown={(e) => e.stopPropagation()}
+        onWheel={(e) => e.stopPropagation()}
+      >
+        <ExpandableHeader 
+          onClick={() => setIsStatusExpanded(!isStatusExpanded)} 
+          style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}
+        >
+          <SectionLabel style={{ color: "#4d7cff", letterSpacing: "1.5px" }}>NETWORK MATRIX STATUS</SectionLabel>
+          <ExpandIcon $expanded={isStatusExpanded}>▼</ExpandIcon>
+        </ExpandableHeader>
+
+        <ExpandableContent $expanded={isStatusExpanded}>
+          <MetricRow style={{ marginTop: "12px" }}>
+            <MetricLabel>Total Nodes / Edges</MetricLabel>
+            <MetricValue>{nodes.length} / {edges.length}</MetricValue>
+          </MetricRow>
+          <MetricRow>
+            <MetricLabel>Total Buildings</MetricLabel>
+            <MetricValue>{buildings.length}</MetricValue>
+          </MetricRow>
+          <MetricRow>
+            <MetricLabel>Rendered Nodes (Culled)</MetricLabel>
+            <MetricValue>{showNodes ? visibleNodeIndices.size : 0} ({showNodes ? Math.round((visibleNodeIndices.size / nodes.length) * 100) : 0}%)</MetricValue>
+          </MetricRow>
+          <MetricRow>
+            <MetricLabel>Rendered Buildings (Culled)</MetricLabel>
+            <MetricValue>{showBuildings ? visibleBuildings.length : 0} ({showBuildings ? Math.round((visibleBuildings.length / buildings.length) * 100) : 0}%)</MetricValue>
+          </MetricRow>
+          <MetricRow>
+            <MetricLabel>Zoom Factor</MetricLabel>
+            <MetricValue>{Math.round(stageTransform.scale * 100)}%</MetricValue>
+          </MetricRow>
+          <MetricRow>
+            <MetricLabel>Viewport Area</MetricLabel>
+            <MetricValue>{dimensions.width}x{dimensions.height}</MetricValue>
+          </MetricRow>
+        </ExpandableContent>
         
-        {hoveredNode && (
-          <HoverDetail>
-            <DetailHeader style={{ color: DEFAULT_NODE_COLOR }}>
-              NODE #{hoveredNode.index}
-            </DetailHeader>
-            <DetailBody>
-              X: {nodes[hoveredNode.index].x.toFixed(2)}<br />
-              Y: {nodes[hoveredNode.index].y.toFixed(2)}
-            </DetailBody>
-          </HoverDetail>
-        )}
+        {/* 접이식(Expandable) 렌더링 옵션 아코디언 */}
+        <ExpandableHeader onClick={() => setIsOptionsExpanded(!isOptionsExpanded)}>
+          <SectionLabel>Rendering Config</SectionLabel>
+          <ExpandIcon $expanded={isOptionsExpanded}>▼</ExpandIcon>
+        </ExpandableHeader>
+        
+        <ExpandableContent $expanded={isOptionsExpanded}>
+          <MetricRow>
+            <MetricLabel>Display Nodes</MetricLabel>
+            <ToggleButton 
+              $active={showNodes} 
+              onClick={() => {
+                setShowNodes(!showNodes);
+                resetHoverHud();
+              }}
+            >
+              {showNodes ? "ON" : "OFF"}
+            </ToggleButton>
+          </MetricRow>
+          <MetricRow>
+            <MetricLabel>Display Edges</MetricLabel>
+            <ToggleButton 
+              $active={showEdges} 
+              onClick={() => setShowEdges(!showEdges)}
+            >
+              {showEdges ? "ON" : "OFF"}
+            </ToggleButton>
+          </MetricRow>
+          <MetricRow>
+            <MetricLabel>Display Buildings</MetricLabel>
+            <ToggleButton 
+              $active={showBuildings} 
+              onClick={() => {
+                setShowBuildings(!showBuildings);
+                resetHoverHud();
+              }}
+            >
+              {showBuildings ? "ON" : "OFF"}
+            </ToggleButton>
+          </MetricRow>
+        </ExpandableContent>
+        
+        {/* 호버 정보 상세 표시창 (React 리렌더링 차단을 위해 DOM 명령형 주입) */}
+        <HoverDetail id="hud-hover-detail" style={{ display: "none" }} />
         
         <ControlHint>Drag to Pan / Scroll to Zoom</ControlHint>
       </InfoPanel>
@@ -230,61 +334,270 @@ export default function MapGraphCanvas() {
           onWheel={handleWheel}
           onDragEnd={handleDragEnd}
         >
-          {/* Layer 1: Edges (연결선) - 하나의 Shape로 묶어 드로우콜 1번으로 단축 */}
+          {/* Layer 1: Water Backdrop (통합된 물 영역) - 최하단 레이어 (1 DrawCall) */}
           <Layer listening={false}>
-            <Shape
-              sceneFunc={(context, shape) => {
-                context.beginPath();
-                edges.forEach(([startIdx, endIdx]) => {
-                  const start = nodes[startIdx];
-                  const end = nodes[endIdx];
-                  if (start && end) {
-                    context.moveTo(start.x, start.y);
-                    context.lineTo(end.x, end.y);
-                  }
-                });
-                context.fillStrokeShape(shape);
-              }}
-              stroke="rgba(77, 124, 255, 0.08)"
-              strokeWidth={1.5}
-            />
+            {waterPoints.length > 0 && (
+              <Line
+                points={waterPoints}
+                closed
+                fill="rgba(20, 42, 85, 0.35)"
+                stroke="rgba(77, 124, 255, 0.2)"
+                strokeWidth={1.5}
+              />
+            )}
           </Layer>
 
-          {/* Layer 2: Nodes (노드 포인트) */}
-          <Layer>
-            {Array.from(visibleNodeIndices).map((nodeIdx) => {
-              const node = nodes[nodeIdx];
-              const isHovered = hoveredNode?.index === nodeIdx;
+          {/* Layer 2: Buildings (건물 배치) */}
+          {showBuildings && (
+            <Layer>
+              {stageTransform.scale >= 3.0 ? (
+                // 줌인 상태(300% 이상): 개별 인터랙티브 다각형 그리기 (호버 감지 활성화)
+                visibleBuildings.map((b) => {
+                  return (
+                    <Line
+                      key={`building-${b.id}`}
+                      points={b.flatPoints}
+                      closed
+                      fill="rgba(30, 35, 55, 0.45)"
+                      stroke="rgba(77, 124, 255, 0.12)"
+                      strokeWidth={1}
+                      onMouseEnter={(e) => {
+                        const shape = e.target;
+                        
+                        // Z-Index 최상단 이동: 겹치는 건물 중 호버된 건물이 위로 올라오도록 처리
+                        shape.moveToTop();
 
-              return (
-                <Group
-                  key={`node-${nodeIdx}`}
-                  x={node.x}
-                  y={node.y}
-                  onMouseEnter={(e) => {
-                    const container = e.target.getStage()?.container();
-                    if (container) container.style.cursor = "pointer";
-                    setHoveredNode({ index: nodeIdx });
+                        // React 리렌더링 방지를 위해 Konva 객체 직접 조작
+                        shape.setAttrs({
+                          fill: "rgba(43, 203, 186, 0.45)",
+                          stroke: "#ffffff",
+                          strokeWidth: 2,
+                          shadowColor: "#2bcbba",
+                          shadowBlur: 12,
+                          shadowOpacity: 0.9,
+                        });
+                        shape.getLayer()?.batchDraw();
+
+                        const container = shape.getStage()?.container();
+                        if (container) container.style.cursor = "pointer";
+
+                        // DOM 직접 조작으로 HUD 업데이트 (React Reconciliation 우회)
+                        const el = document.getElementById("hud-hover-detail");
+                        if (el) {
+                          el.style.display = "block";
+                          el.innerHTML = `
+                            <div style="color: #2bcbba; font-size: 11px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">
+                              BUILDING #${b.id}
+                            </div>
+                            <div style="font-size: 10px; color: #8a8d98; font-family: monospace; line-height: 1.4;">
+                              Height: ${b.height.toFixed(2)}m<br />
+                              Connected Road: Node #${b.roadNodeId}
+                            </div>
+                          `;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        const shape = e.target;
+                        shape.setAttrs({
+                          fill: "rgba(30, 35, 55, 0.45)",
+                          stroke: "rgba(77, 124, 255, 0.12)",
+                          strokeWidth: 1,
+                          shadowBlur: 0,
+                          shadowOpacity: 0,
+                        });
+                        shape.getLayer()?.batchDraw();
+
+                        const container = shape.getStage()?.container();
+                        if (container) container.style.cursor = "default";
+
+                        resetHoverHud();
+                      }}
+                    />
+                  );
+                })
+              ) : (
+                // 줌아웃 상태(300% 미만): 1 DrawCall 병합 드로잉 (성능 극대화, 이벤트 비활성화)
+                <Shape
+                  sceneFunc={(context, shape) => {
+                    context.beginPath();
+                    visibleBuildings.forEach((b) => {
+                      if (b.coordinates.length < 3) return;
+                      const first = b.coordinates[0];
+                      context.moveTo(first.x, first.y);
+                      for (let i = 1; i < b.coordinates.length; i++) {
+                        context.lineTo(b.coordinates[i].x, b.coordinates[i].y);
+                      }
+                      context.closePath();
+                    });
+                    context.fillStrokeShape(shape);
                   }}
-                  onMouseLeave={(e) => {
-                    const container = e.target.getStage()?.container();
-                    if (container) container.style.cursor = "default";
-                    setHoveredNode(null);
+                  fill="rgba(30, 35, 55, 0.45)"
+                  stroke="rgba(77, 124, 255, 0.12)"
+                  strokeWidth={1}
+                  listening={false}
+                />
+              )}
+            </Layer>
+          )}
+
+          {/* Layer 3: Edges (도로망) - showEdges가 true일 때 3 DrawCalls로 분할하여 최적화 및 타입별 시각화 */}
+          {showEdges && (
+            <Layer listening={false}>
+              {/* 1. Main 도로 (가장 두껍고 선명한 청백색 형광) */}
+              <Shape
+                sceneFunc={(context, shape) => {
+                  context.beginPath();
+                  edges.forEach((edge) => {
+                    if (edge.type !== "main") return;
+                    const start = nodes[edge.source];
+                    const end = nodes[edge.target];
+                    if (start && end) {
+                      context.moveTo(start.x, start.y);
+                      context.lineTo(end.x, end.y);
+                    }
+                  });
+                  context.fillStrokeShape(shape);
+                }}
+                stroke="rgba(85, 140, 255, 0.25)"
+                strokeWidth={2.8}
+              />
+              {/* 2. Major 도로 (중간 굵기) */}
+              <Shape
+                sceneFunc={(context, shape) => {
+                  context.beginPath();
+                  edges.forEach((edge) => {
+                    if (edge.type !== "major") return;
+                    const start = nodes[edge.source];
+                    const end = nodes[edge.target];
+                    if (start && end) {
+                      context.moveTo(start.x, start.y);
+                      context.lineTo(end.x, end.y);
+                    }
+                  });
+                  context.fillStrokeShape(shape);
+                }}
+                stroke="rgba(77, 124, 255, 0.14)"
+                strokeWidth={1.8}
+              />
+              {/* 3. Minor 도로 (가장 얇고 희미한 골목망) */}
+              <Shape
+                sceneFunc={(context, shape) => {
+                  context.beginPath();
+                  edges.forEach((edge) => {
+                    if (edge.type !== "minor") return;
+                    const start = nodes[edge.source];
+                    const end = nodes[edge.target];
+                    if (start && end) {
+                      context.moveTo(start.x, start.y);
+                      context.lineTo(end.x, end.y);
+                    }
+                  });
+                  context.fillStrokeShape(shape);
+                }}
+                stroke="rgba(77, 124, 255, 0.05)"
+                strokeWidth={1}
+              />
+            </Layer>
+          )}
+
+          {/* Layer 4: Nodes (도로망 교차점 정점) */}
+          {showNodes && (
+            <Layer>
+              {stageTransform.scale >= 3.0 ? (
+                // 줌인 상태(300% 이상): 개별 인터랙티브 노드 그리기 (호버 감지 활성화)
+                Array.from(visibleNodeIndices).map((nodeIdx) => {
+                  const node = nodes[nodeIdx];
+                  if (!node) return null;
+                  return (
+                    <Group
+                      key={`node-${nodeIdx}`}
+                      x={node.x}
+                      y={node.y}
+                      onMouseEnter={(e) => {
+                        const shape = e.target;
+                        
+                        // Z-Index 최상단 이동: 겹치는 노드 중 호버된 노드가 위로 올라오도록 처리
+                        shape.moveToTop();
+
+                        // React 리렌더링 방지를 위해 Konva 객체 속성 직접 조작
+                        shape.setAttrs({
+                          radius: DEFAULT_NODE_RADIUS + 3,
+                          fill: "#ffffff",
+                          stroke: DEFAULT_NODE_COLOR,
+                          strokeWidth: 2.5,
+                          shadowColor: DEFAULT_NODE_COLOR,
+                          shadowBlur: 12,
+                          shadowOpacity: 0.9,
+                        });
+                        shape.getLayer()?.batchDraw();
+
+                        const container = shape.getStage()?.container();
+                        if (container) container.style.cursor = "pointer";
+
+                        // DOM 직접 조작으로 HUD 업데이트
+                        const el = document.getElementById("hud-hover-detail");
+                        if (el) {
+                          el.style.display = "block";
+                          el.innerHTML = `
+                            <div style="color: ${DEFAULT_NODE_COLOR}; font-size: 11px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">
+                              NODE #${nodeIdx}
+                            </div>
+                            <div style="font-size: 10px; color: #8a8d98; font-family: monospace; line-height: 1.4;">
+                              X: ${node.x.toFixed(2)}<br />
+                              Y: ${node.y.toFixed(2)}
+                            </div>
+                          `;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        const shape = e.target;
+                        shape.setAttrs({
+                          radius: DEFAULT_NODE_RADIUS,
+                          fill: DEFAULT_NODE_COLOR,
+                          stroke: "rgba(10, 10, 12, 0.8)",
+                          strokeWidth: 1,
+                          shadowBlur: 0,
+                          shadowOpacity: 0,
+                        });
+                        shape.getLayer()?.batchDraw();
+
+                        const container = shape.getStage()?.container();
+                        if (container) container.style.cursor = "default";
+
+                        resetHoverHud();
+                      }}
+                    >
+                      <Circle
+                        radius={DEFAULT_NODE_RADIUS}
+                        fill={DEFAULT_NODE_COLOR}
+                        stroke="rgba(10, 10, 12, 0.8)"
+                        strokeWidth={1}
+                      />
+                    </Group>
+                  );
+                })
+              ) : (
+                // 줌아웃 상태(300% 미만): 1 DrawCall 병합 드로잉 (성능 극대화, 이벤트 비활성화)
+                <Shape
+                  sceneFunc={(context, shape) => {
+                    context.beginPath();
+                    visibleNodeIndices.forEach((nodeIdx) => {
+                      const node = nodes[nodeIdx];
+                      if (node) {
+                        context.moveTo(node.x + DEFAULT_NODE_RADIUS, node.y);
+                        context.arc(node.x, node.y, DEFAULT_NODE_RADIUS, 0, Math.PI * 2);
+                      }
+                    });
+                    context.fillStrokeShape(shape);
                   }}
-                >
-                  <Circle
-                    radius={isHovered ? DEFAULT_NODE_RADIUS + 3 : DEFAULT_NODE_RADIUS}
-                    fill={isHovered ? "#ffffff" : DEFAULT_NODE_COLOR}
-                    stroke={isHovered ? DEFAULT_NODE_COLOR : "rgba(10, 10, 12, 0.8)"}
-                    strokeWidth={isHovered ? 2.5 : 1}
-                    shadowColor={DEFAULT_NODE_COLOR}
-                    shadowBlur={isHovered ? 12 : 0}
-                    shadowOpacity={isHovered ? 0.9 : 0}
-                  />
-                </Group>
-              );
-            })}
-          </Layer>
+                  fill={DEFAULT_NODE_COLOR}
+                  stroke="rgba(10, 10, 12, 0.8)"
+                  strokeWidth={1}
+                  listening={false}
+                />
+              )}
+            </Layer>
+          )}
         </Stage>
       )}
     </CanvasContainer>
@@ -313,18 +626,7 @@ const InfoPanel = styled.div`
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
   font-family: 'Outfit', 'Inter', sans-serif;
   color: #e4e6eb;
-  pointer-events: none; /* Stage 마우스 이벤트를 가로막지 않음 */
-`;
-
-const PanelTitle = styled.h2`
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  color: #4d7cff;
-  margin: 0 0 12px 0;
-  text-transform: uppercase;
-  border-bottom: 1px dashed rgba(77, 124, 255, 0.3);
-  padding-bottom: 6px;
+  pointer-events: auto; /* 패널 내부 스위치 등을 클릭할 수 있도록 활성화 */
 `;
 
 const MetricRow = styled.div`
@@ -345,25 +647,64 @@ const MetricValue = styled.span`
   font-family: monospace;
 `;
 
+const ExpandableHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  border-top: 1px dashed rgba(77, 124, 255, 0.2);
+  padding-top: 12px;
+  cursor: pointer;
+  user-select: none;
+`;
+
+const SectionLabel = styled.span`
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+`;
+
+const ExpandIcon = styled.span<{ $expanded: boolean }>`
+  font-size: 8px;
+  color: #4d7cff;
+  transition: transform 0.2s ease;
+  transform: rotate(${props => props.$expanded ? "180deg" : "0deg"});
+`;
+
+const ExpandableContent = styled.div<{ $expanded: boolean }>`
+  max-height: ${props => props.$expanded ? "200px" : "0px"};
+  overflow: hidden;
+  transition: max-height 0.25s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: ${props => props.$expanded ? "12px" : "0px"};
+`;
+
+const ToggleButton = styled.button<{ $active: boolean }>`
+  background: ${props => props.$active ? "rgba(77, 124, 255, 0.2)" : "rgba(255, 255, 255, 0.05)"};
+  border: 1px solid ${props => props.$active ? "#4d7cff" : "rgba(255, 255, 255, 0.15)"};
+  color: ${props => props.$active ? "#ffffff" : "#8a8d98"};
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: monospace;
+
+  &:hover {
+    background: ${props => props.$active ? "rgba(77, 124, 255, 0.3)" : "rgba(255, 255, 255, 0.1)"};
+    border-color: ${props => props.$active ? "#4d7cff" : "rgba(255, 255, 255, 0.3)"};
+  }
+`;
+
 const HoverDetail = styled.div`
   margin-top: 12px;
   padding-top: 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-`;
-
-const DetailHeader = styled.div`
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  margin-bottom: 2px;
-  line-height: 1.4;
-`;
-
-const DetailBody = styled.div`
-  font-size: 10px;
-  color: #8a8d98;
-  font-family: monospace;
-  line-height: 1.4;
 `;
 
 const ControlHint = styled.div`
