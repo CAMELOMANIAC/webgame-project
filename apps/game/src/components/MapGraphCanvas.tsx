@@ -1,6 +1,6 @@
 import Konva from "konva";
 import { useEffect, useMemo,useRef, useState } from "react";
-import { Circle, Group,Layer, Line, Stage } from "react-konva";
+import { Circle, Group, Layer, Shape,Stage } from "react-konva";
 import styled from "styled-components";
 
 import mapData from "../assets/map_graph.json";
@@ -97,11 +97,13 @@ export default function MapGraphCanvas() {
   }, [dimensions.width, dimensions.height]);
 
   // 3. 뷰포트 기준 경계 상자(Bounding Box) 계산
+  // 드래그 중에는 뷰포트 갱신을 하지 않으므로 margin을 400px로 크게 잡아
+  // 사용자가 화면을 슬라이드해도 경계 바깥 노드가 자연스럽게 미리 보이도록 처리합니다.
   const visibleBounds = useMemo(() => {
     const { width, height } = dimensions;
     const { x, y, scale } = stageTransform;
 
-    const margin = 100; // 화면 외곽 클리핑 여유 공간
+    const margin = 400; 
     const minX = -x / scale - margin;
     const minY = -y / scale - margin;
     const maxX = minX + (width / scale) + margin * 2;
@@ -129,16 +131,7 @@ export default function MapGraphCanvas() {
     return indices;
   }, [visibleBounds]);
 
-  // 5. 활성화된(화면에 그려질) 엣지들 필터링
-  // 양끝 노드 중 최소 한 개가 화면 내에 있는 경우만 드로잉
-  const visibleEdges = useMemo(() => {
-    return edges.filter(
-      ([startIdx, endIdx]) =>
-        visibleNodeIndices.has(startIdx) || visibleNodeIndices.has(endIdx)
-    );
-  }, [visibleNodeIndices]);
-
-  // 6. 마우스 휠 이벤트로 줌 처리 (커서 좌표 기준 줌)
+  // 5. 마우스 휠 이벤트로 줌 처리 (커서 좌표 기준 줌)
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
     const stage = stageRef.current;
@@ -175,8 +168,9 @@ export default function MapGraphCanvas() {
     });
   };
 
-  // 7. 드래그(팬)에 따른 뷰포트 트랜스폼 갱신
-  const handleDragMove = () => {
+  // 6. 드래그(팬)가 완전히 끝났을 때만 뷰포트 상태를 업데이트하여 컬링 연산 재계산
+  // 드래그 중(onDragMove)에는 캔버스 하드웨어 가속 이동만 사용하므로 리액트 렌더링 병목이 전혀 없습니다.
+  const handleDragEnd = () => {
     const stage = stageRef.current;
     if (!stage) return;
     setStageTransform({
@@ -200,8 +194,8 @@ export default function MapGraphCanvas() {
           <MetricValue>{visibleNodeIndices.size} ({Math.round((visibleNodeIndices.size / nodes.length) * 100)}%)</MetricValue>
         </MetricRow>
         <MetricRow>
-          <MetricLabel>Rendered Edges (Culled)</MetricLabel>
-          <MetricValue>{visibleEdges.length} ({Math.round((visibleEdges.length / edges.length) * 100)}%)</MetricValue>
+          <MetricLabel>Rendered Edges (Unified)</MetricLabel>
+          <MetricValue>{edges.length} (1 DrawCall)</MetricValue>
         </MetricRow>
         <MetricRow>
           <MetricLabel>Zoom Factor</MetricLabel>
@@ -234,25 +228,26 @@ export default function MapGraphCanvas() {
           height={dimensions.height}
           draggable
           onWheel={handleWheel}
-          onDragMove={handleDragMove}
-          onDragEnd={handleDragMove}
+          onDragEnd={handleDragEnd}
         >
-          {/* Layer 1: Edges (연결선) - 최적화를 위해 listening={false} 처리 */}
+          {/* Layer 1: Edges (연결선) - 하나의 Shape로 묶어 드로우콜 1번으로 단축 */}
           <Layer listening={false}>
-            {visibleEdges.map(([startIdx, endIdx], idx) => {
-              const start = nodes[startIdx];
-              const end = nodes[endIdx];
-              if (!start || !end) return null;
-              
-              return (
-                <Line
-                  key={`edge-${idx}`}
-                  points={[start.x, start.y, end.x, end.y]}
-                  stroke="rgba(77, 124, 255, 0.08)"
-                  strokeWidth={1.5}
-                />
-              );
-            })}
+            <Shape
+              sceneFunc={(context, shape) => {
+                context.beginPath();
+                edges.forEach(([startIdx, endIdx]) => {
+                  const start = nodes[startIdx];
+                  const end = nodes[endIdx];
+                  if (start && end) {
+                    context.moveTo(start.x, start.y);
+                    context.lineTo(end.x, end.y);
+                  }
+                });
+                context.fillStrokeShape(shape);
+              }}
+              stroke="rgba(77, 124, 255, 0.08)"
+              strokeWidth={1.5}
+            />
           </Layer>
 
           {/* Layer 2: Nodes (노드 포인트) */}
