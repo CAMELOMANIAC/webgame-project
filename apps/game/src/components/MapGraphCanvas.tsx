@@ -4,6 +4,7 @@ import { Circle, Group, Layer, Line,Shape, Stage } from "react-konva";
 import styled from "styled-components";
 
 import mapData from "../assets/map_graph.json";
+import { findShortestPath } from "../utils/pathfinding";
 
 interface Node {
   x: number;
@@ -63,6 +64,33 @@ export default function MapGraphCanvas() {
   const [showBuildings, setShowBuildings] = useState(true);
   const [isOptionsExpanded, setIsOptionsExpanded] = useState(false);
   const [isStatusExpanded, setIsStatusExpanded] = useState(true);
+
+  // 네비게이션/길찾기 상태 변수
+  const [currentNodeId, setCurrentNodeId] = useState(0);
+  const [targetNodeId, setTargetNodeId] = useState<number | null>(null);
+  const [shortestPath, setShortestPath] = useState<number[]>([]);
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  // 플레이어의 실제 화면 드로잉 좌표 상태 및 최신 값 동기화용 Ref (부드러운 보간용)
+  const [playerCoords, setPlayerCoords] = useState<{ x: number; y: number } | null>(null);
+  const playerCoordsRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // 플레이어 마커 및 경로 라인 Konva 레퍼런스 (애니메이션 떨림 차단용 직접 조작)
+  const playerMarkerRef = useRef<Konva.Group | null>(null);
+  const pathLineRef = useRef<Konva.Line | null>(null);
+
+  // 네비게이션 경로 및 현재 도달 스텝을 추적하는 Ref (단일 requestAnimationFrame 유지용)
+  const navigationPathRef = useRef<number[]>([]);
+  const currentPathStepRef = useRef<number>(1);
+
+  // 카메라 자동 화면 따라가기 상태 및 Ref
+  const [followPlayer, setFollowPlayer] = useState(true);
+  const followPlayerRef = useRef(true);
+
+  // followPlayer 상태에 맞춰 ref를 항시 최신화
+  useEffect(() => {
+    followPlayerRef.current = followPlayer;
+  }, [followPlayer]);
 
   // 1. ResizeObserver를 사용하여 부모 컨테이너 크기 추적 (모바일 뷰포트 대응)
   useEffect(() => {
@@ -134,14 +162,15 @@ export default function MapGraphCanvas() {
     const { width, height } = dimensions;
     const { x, y, scale } = stageTransform;
 
-    const margin = 400; 
+    // 네비게이션 주행 중에는 카메라 스크롤에 따른 리액트 리렌더링(컬링 갱신)을 원천 차단하기 위해 마진을 6000px로 대폭 확장
+    const margin = isNavigating ? 6000 : 400; 
     const minX = -x / scale - margin;
     const minY = -y / scale - margin;
     const maxX = minX + (width / scale) + margin * 2;
     const maxY = minY + (height / scale) + margin * 2;
 
     return { minX, minY, maxX, maxY };
-  }, [stageTransform, dimensions]);
+  }, [stageTransform, dimensions, isNavigating]);
 
   // 4. 뷰포트 내부에 위치하는 노드의 인덱스들 필터링 (컬링)
   const visibleNodeIndices = useMemo(() => {
@@ -177,6 +206,199 @@ export default function MapGraphCanvas() {
       );
     });
   }, [visibleBounds]);
+
+  // 5.1. 실시간 최단 경로 연산 (A* 알고리즘 연동)
+  useEffect(() => {
+    if (targetNodeId !== null) {
+      const path = findShortestPath(currentNodeId, targetNodeId);
+      setShortestPath(path);
+    } else {
+      setShortestPath([]);
+    }
+  }, [currentNodeId, targetNodeId]);
+
+  // 5.2. 드로잉을 위한 최단 경로 플랫 좌표 배열
+  const shortestPathPoints = useMemo(() => {
+    return shortestPath.flatMap((nodeIdx) => {
+      const node = nodes[nodeIdx];
+      return node ? [node.x, node.y] : [];
+    });
+  }, [shortestPath]);
+
+  // 5.3. playerCoords 상태값에 맞춰 ref를 항시 최신화
+  useEffect(() => {
+    if (playerCoords) {
+      playerCoordsRef.current = playerCoords;
+    }
+  }, [playerCoords]);
+
+  // 5.4. 대기 중(네비게이션 정지) 상태 시 플레이어 좌표를 현재 currentNodeId에 즉시 강제 고정
+  useEffect(() => {
+    if (!isNavigating && nodes[currentNodeId]) {
+      const initPos = { x: nodes[currentNodeId].x, y: nodes[currentNodeId].y };
+      setPlayerCoords(initPos);
+      playerCoordsRef.current = initPos;
+    }
+  }, [currentNodeId, isNavigating]);
+
+  // 5.5. requestAnimationFrame 기반 등속(Constant Speed) 부드러운 네비게이션 보간 루프 (단일 세션 유지)
+  useEffect(() => {
+    if (!isNavigating || targetNodeId === null || shortestPath.length <= 1) {
+      return;
+    }
+
+    // 네비게이션 시작 시점의 경로와 스텝 초기화
+    navigationPathRef.current = shortestPath;
+    currentPathStepRef.current = 1;
+
+    let animId: number;
+    let lastTime = performance.now();
+    const speed = 180; // 일정한 속도로 이동 (초당 180 픽셀)
+
+    // 실시간 카메라 중심 카메라 트래킹 헬퍼
+    const updateCameraFollow = (px: number, py: number) => {
+      if (!followPlayerRef.current || !stageRef.current) return;
+      const stage = stageRef.current;
+      const scale = stage.scaleX();
+      const newStageX = dimensions.width / 2 - px * scale;
+      const newStageY = dimensions.height / 2 - py * scale;
+      stage.position({ x: newStageX, y: newStageY });
+      stage.batchDraw();
+    };
+
+    const tick = (time: number) => {
+      const deltaTime = (time - lastTime) / 1000;
+      lastTime = time;
+
+      const path = navigationPathRef.current;
+      const stepIdx = currentPathStepRef.current;
+
+      if (stepIdx >= path.length) {
+        // 경로의 끝에 도달 완료
+        const finalNodeId = path[path.length - 1];
+        if (finalNodeId !== undefined) {
+          setCurrentNodeId(finalNodeId);
+        }
+        setIsNavigating(false);
+        setTargetNodeId(null);
+
+        // 최종 목적지 도달 시에만 카메라 트랜스폼 상태를 리액트에 단 1회 갱신 (컬링 영역 최종 싱크)
+        if (stageRef.current) {
+          const stage = stageRef.current;
+          setStageTransform({
+            x: stage.x(),
+            y: stage.y(),
+            scale: stage.scaleX(),
+          });
+        }
+        return;
+      }
+
+      const nextNodeId = path[stepIdx];
+      if (nextNodeId === undefined) {
+        setIsNavigating(false);
+        return;
+      }
+      const nextNode = nodes[nextNodeId];
+      if (!nextNode) {
+        setIsNavigating(false);
+        return;
+      }
+
+      let currentPos = playerCoordsRef.current;
+      // 방어 코드: currentPos가 0,0이거나 없으면 이전 노드의 좌표로 복구
+      if ((!currentPos || (currentPos.x === 0 && currentPos.y === 0))) {
+        const prevNodeId = path[stepIdx - 1] ?? currentNodeId;
+        const prevNode = nodes[prevNodeId];
+        if (prevNode) {
+          currentPos = { x: prevNode.x, y: prevNode.y };
+          playerCoordsRef.current = currentPos;
+        } else {
+          setIsNavigating(false);
+          return;
+        }
+      }
+
+      const dx = nextNode.x - currentPos.x;
+      const dy = nextNode.y - currentPos.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      const step = speed * deltaTime;
+
+      if (distance <= step) {
+        // 목표 다음 노드에 근접하여 도착 완료
+        const arrivedPos = { x: nextNode.x, y: nextNode.y };
+        playerCoordsRef.current = arrivedPos;
+        setPlayerCoords(arrivedPos);
+
+        if (playerMarkerRef.current) {
+          playerMarkerRef.current.x(arrivedPos.x);
+          playerMarkerRef.current.y(arrivedPos.y);
+          playerMarkerRef.current.getLayer()?.batchDraw();
+        }
+
+        // 카메라 추적 활성화 시 즉시 카메라 중앙 정렬
+        updateCameraFollow(arrivedPos.x, arrivedPos.y);
+
+        // 실시간 경로선 꼬리 깎기 (에메랄드 라인 시작점을 다음 목표 노드로 단축)
+        if (pathLineRef.current) {
+          const remainingPoints = path.slice(stepIdx).flatMap((idx) => {
+            const node = nodes[idx];
+            return node ? [node.x, node.y] : [];
+          });
+          pathLineRef.current.points(remainingPoints);
+          pathLineRef.current.getLayer()?.batchDraw();
+        }
+        
+        // 다음 스텝 인덱스로 진행 (리액트 리렌더링 없이 즉시 연속 이동)
+        currentPathStepRef.current += 1;
+
+        animId = requestAnimationFrame(tick);
+      } else {
+        // 등속 선형 보간 전진 (나누기 0에 의한 NaN 방지)
+        const ratio = distance > 0 ? step / distance : 0;
+        const newPos = {
+          x: currentPos.x + dx * ratio,
+          y: currentPos.y + dy * ratio,
+        };
+        
+        playerCoordsRef.current = newPos;
+
+        // 리액트 State 리렌더링 우회: Konva 노드를 직접 위치 변경
+        if (playerMarkerRef.current) {
+          playerMarkerRef.current.x(newPos.x);
+          playerMarkerRef.current.y(newPos.y);
+          playerMarkerRef.current.getLayer()?.batchDraw();
+        }
+
+        // 실시간 카메라 트래킹 적용
+        updateCameraFollow(newPos.x, newPos.y);
+
+        // 실시간 경로선 꼬리 깎기 (에메랄드 라인 시작점을 플레이어의 현재 실시간 좌표에 고정)
+        if (pathLineRef.current) {
+          const remainingPoints = [
+            newPos.x,
+            newPos.y,
+            ...path.slice(stepIdx).flatMap((idx) => {
+              const node = nodes[idx];
+              return node ? [node.x, node.y] : [];
+            }),
+          ];
+          pathLineRef.current.points(remainingPoints);
+          pathLineRef.current.getLayer()?.batchDraw();
+        }
+
+        animId = requestAnimationFrame(tick);
+      }
+    };
+
+    animId = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNavigating]);
 
   // 6. 마우스 휠 이벤트로 줌 처리 (커서 좌표 기준 줌)
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
@@ -317,10 +539,56 @@ export default function MapGraphCanvas() {
               {showBuildings ? "ON" : "OFF"}
             </ToggleButton>
           </MetricRow>
+          <MetricRow>
+            <MetricLabel>Track Player</MetricLabel>
+            <ToggleButton 
+              $active={followPlayer} 
+              onClick={() => setFollowPlayer(!followPlayer)}
+            >
+              {followPlayer ? "ON" : "OFF"}
+            </ToggleButton>
+          </MetricRow>
         </ExpandableContent>
         
         {/* 호버 정보 상세 표시창 (React 리렌더링 차단을 위해 DOM 명령형 주입) */}
         <HoverDetail id="hud-hover-detail" style={{ display: "none" }} />
+
+        {/* 네비게이션 인터페이스 조작 HUD */}
+        {targetNodeId !== null && (
+          <StyledNavigationSection>
+            <SectionLabel style={{ color: "#2bcbba" }}>Navigation Matrix</SectionLabel>
+            <MetricRow style={{ marginTop: "8px" }}>
+              <MetricLabel>Current Position</MetricLabel>
+              <MetricValue>Node #{currentNodeId}</MetricValue>
+            </MetricRow>
+            <MetricRow>
+              <MetricLabel>Target Destination</MetricLabel>
+              <MetricValue>Node #{targetNodeId}</MetricValue>
+            </MetricRow>
+            <MetricRow>
+              <MetricLabel>Route Cost</MetricLabel>
+              <MetricValue>
+                {shortestPath.length > 0 ? `${shortestPath.length - 1} hops` : "UNREACHABLE"}
+              </MetricValue>
+            </MetricRow>
+            
+            <StyledNavButtonGroup>
+              <StyledNavButton 
+                $primary 
+                disabled={shortestPath.length <= 1 || isNavigating}
+                onClick={() => setIsNavigating(true)}
+              >
+                {isNavigating ? "IN TRANSIT..." : "START EXTRACT"}
+              </StyledNavButton>
+              <StyledNavButton 
+                disabled={isNavigating}
+                onClick={() => setTargetNodeId(null)}
+              >
+                CANCEL
+              </StyledNavButton>
+            </StyledNavButtonGroup>
+          </StyledNavigationSection>
+        )}
         
         <ControlHint>Drag to Pan / Scroll to Zoom</ControlHint>
       </InfoPanel>
@@ -349,9 +617,9 @@ export default function MapGraphCanvas() {
 
           {/* Layer 2: Buildings (건물 배치) */}
           {showBuildings && (
-            <Layer>
-              {stageTransform.scale >= 3.0 ? (
-                // 줌인 상태(300% 이상): 개별 인터랙티브 다각형 그리기 (호버 감지 활성화)
+            <Layer listening={!isNavigating}>
+              {stageTransform.scale >= 3.0 && !isNavigating ? (
+                // 줌인 상태(300% 이상, 이동 중 아님): 개별 인터랙티브 다각형 그리기 (호버 감지 활성화)
                 visibleBuildings.map((b) => {
                   return (
                     <Line
@@ -361,6 +629,14 @@ export default function MapGraphCanvas() {
                       fill="rgba(30, 35, 55, 0.45)"
                       stroke="rgba(77, 124, 255, 0.12)"
                       strokeWidth={1}
+                      onClick={() => {
+                        if (isNavigating) return;
+                        setTargetNodeId(b.roadNodeId);
+                      }}
+                      onTap={() => {
+                        if (isNavigating) return;
+                        setTargetNodeId(b.roadNodeId);
+                      }}
                       onMouseEnter={(e) => {
                         const shape = e.target;
                         
@@ -500,11 +776,75 @@ export default function MapGraphCanvas() {
             </Layer>
           )}
 
+          {/* Layer 3.5: Path Visuals (길찾기 가이드 라인 및 타겟 비콘) */}
+          {(shortestPathPoints.length > 0 || targetNodeId !== null) && (
+            <Layer listening={false}>
+              {/* 형광 에메랄드 최단 경로선 */}
+              {shortestPathPoints.length > 1 && (
+                <Line
+                  ref={pathLineRef}
+                  points={shortestPathPoints}
+                  stroke="#2bcbba"
+                  strokeWidth={5}
+                  lineCap="round"
+                  lineJoin="round"
+                  opacity={0.65}
+                  shadowColor="#2bcbba"
+                  shadowBlur={10}
+                  shadowOpacity={0.8}
+                />
+              )}
+              {/* 타겟 목적지 마커 */}
+              {targetNodeId !== null && nodes[targetNodeId] && (
+                <Group x={nodes[targetNodeId].x} y={nodes[targetNodeId].y}>
+                  <Circle
+                    radius={10}
+                    stroke="#ff4757"
+                    strokeWidth={1.5}
+                    shadowColor="#ff4757"
+                    shadowBlur={8}
+                    shadowOpacity={0.8}
+                  />
+                  <Circle
+                    radius={3}
+                    fill="#ff4757"
+                  />
+                </Group>
+              )}
+            </Layer>
+          )}
+
+          {/* Layer 3.8: Player Marker (실시간 위치 비콘) */}
+          <Layer listening={false}>
+            {playerCoords && (
+              <Group 
+                ref={playerMarkerRef}
+                x={playerCoords.x}
+                y={playerCoords.y}
+              >
+                <Circle
+                  radius={12}
+                  stroke="#2ed573"
+                  strokeWidth={1.5}
+                  shadowColor="#2ed573"
+                  shadowBlur={12}
+                  shadowOpacity={0.9}
+                />
+                <Circle
+                  radius={5}
+                  fill="#2ed573"
+                  stroke="#ffffff"
+                  strokeWidth={1}
+                />
+              </Group>
+            )}
+          </Layer>
+
           {/* Layer 4: Nodes (도로망 교차점 정점) */}
           {showNodes && (
-            <Layer>
-              {stageTransform.scale >= 3.0 ? (
-                // 줌인 상태(300% 이상): 개별 인터랙티브 노드 그리기 (호버 감지 활성화)
+            <Layer listening={!isNavigating}>
+              {stageTransform.scale >= 3.0 && !isNavigating ? (
+                // 줌인 상태(300% 이상, 이동 중 아님): 개별 인터랙티브 노드 그리기 (호버 감지 활성화)
                 Array.from(visibleNodeIndices).map((nodeIdx) => {
                   const node = nodes[nodeIdx];
                   if (!node) return null;
@@ -513,6 +853,14 @@ export default function MapGraphCanvas() {
                       key={`node-${nodeIdx}`}
                       x={node.x}
                       y={node.y}
+                      onClick={() => {
+                        if (isNavigating) return;
+                        setTargetNodeId(nodeIdx);
+                      }}
+                      onTap={() => {
+                        if (isNavigating) return;
+                        setTargetNodeId(nodeIdx);
+                      }}
                       onMouseEnter={(e) => {
                         const shape = e.target;
                         
@@ -714,4 +1062,43 @@ const ControlHint = styled.div`
   text-align: center;
   opacity: 0.8;
   letter-spacing: 0.5px;
+`;
+
+const StyledNavigationSection = styled.div`
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(43, 203, 186, 0.3);
+`;
+
+const StyledNavButtonGroup = styled.div`
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+`;
+
+const StyledNavButton = styled.button<{ $primary?: boolean }>`
+  flex: 1;
+  background: ${props => props.$primary ? "rgba(43, 203, 186, 0.2)" : "rgba(255, 71, 87, 0.15)"};
+  border: 1px solid ${props => props.$primary ? "#2bcbba" : "rgba(255, 71, 87, 0.4)"};
+  color: ${props => props.$primary ? "#2bcbba" : "#ff4757"};
+  padding: 6px 0;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Outfit', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+
+  &:hover:not(:disabled) {
+    background: ${props => props.$primary ? "rgba(43, 203, 186, 0.35)" : "rgba(255, 71, 87, 0.25)"};
+    border-color: ${props => props.$primary ? "#2bcbba" : "#ff4757"};
+    box-shadow: 0 0 10px ${props => props.$primary ? "rgba(43, 203, 186, 0.3)" : "rgba(255, 71, 87, 0.3)"};
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
 `;
