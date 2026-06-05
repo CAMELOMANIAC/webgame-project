@@ -552,46 +552,51 @@ export default function MapGraphCanvas() {
         
         {/* 호버 정보 상세 표시창 (React 리렌더링 차단을 위해 DOM 명령형 주입) */}
         <HoverDetail id="hud-hover-detail" style={{ display: "none" }} />
-
-        {/* 네비게이션 인터페이스 조작 HUD */}
-        {targetNodeId !== null && (
-          <StyledNavigationSection>
-            <SectionLabel style={{ color: "#2bcbba" }}>Navigation Matrix</SectionLabel>
-            <MetricRow style={{ marginTop: "8px" }}>
-              <MetricLabel>Current Position</MetricLabel>
-              <MetricValue>Node #{currentNodeId}</MetricValue>
-            </MetricRow>
-            <MetricRow>
-              <MetricLabel>Target Destination</MetricLabel>
-              <MetricValue>Node #{targetNodeId}</MetricValue>
-            </MetricRow>
-            <MetricRow>
-              <MetricLabel>Route Cost</MetricLabel>
-              <MetricValue>
-                {shortestPath.length > 0 ? `${shortestPath.length - 1} hops` : "UNREACHABLE"}
-              </MetricValue>
-            </MetricRow>
-            
-            <StyledNavButtonGroup>
-              <StyledNavButton 
-                $primary 
-                disabled={shortestPath.length <= 1 || isNavigating}
-                onClick={() => setIsNavigating(true)}
-              >
-                {isNavigating ? "IN TRANSIT..." : "START EXTRACT"}
-              </StyledNavButton>
-              <StyledNavButton 
-                disabled={isNavigating}
-                onClick={() => setTargetNodeId(null)}
-              >
-                CANCEL
-              </StyledNavButton>
-            </StyledNavButtonGroup>
-          </StyledNavigationSection>
-        )}
         
         <ControlHint>Drag to Pan / Scroll to Zoom</ControlHint>
       </InfoPanel>
+
+      {/* 하단 플로팅 네비게이션 HUD */}
+      {targetNodeId !== null && (
+        <NavigationPanel
+          onMouseDown={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+        >
+          <NavInfoArea>
+            <SectionLabel style={{ color: "#2bcbba", display: "block", marginBottom: "4px" }}>Navigation Matrix</SectionLabel>
+            <MetricRow style={{ margin: 0, display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                <MetricLabel>Current:</MetricLabel>
+                <MetricValue>Node #{currentNodeId}</MetricValue>
+              </div>
+              <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                <MetricLabel>Target:</MetricLabel>
+                <MetricValue>Node #{targetNodeId}</MetricValue>
+              </div>
+              <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                <MetricLabel>Cost:</MetricLabel>
+                <MetricValue>{shortestPath.length > 0 ? `${shortestPath.length - 1} hops` : "UNREACHABLE"}</MetricValue>
+              </div>
+            </MetricRow>
+          </NavInfoArea>
+          
+          <NavButtonArea>
+            <StyledNavButton 
+              $primary 
+              disabled={shortestPath.length <= 1 || isNavigating}
+              onClick={() => setIsNavigating(true)}
+            >
+              {isNavigating ? "IN TRANSIT..." : "START EXTRACT"}
+            </StyledNavButton>
+            <StyledNavButton 
+              disabled={isNavigating}
+              onClick={() => setTargetNodeId(null)}
+            >
+              CANCEL
+            </StyledNavButton>
+          </NavButtonArea>
+        </NavigationPanel>
+      )}
 
       {dimensions.width > 0 && dimensions.height > 0 && (
         <Stage
@@ -1064,16 +1069,50 @@ const ControlHint = styled.div`
   letter-spacing: 0.5px;
 `;
 
-const StyledNavigationSection = styled.div`
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px dashed rgba(43, 203, 186, 0.3);
+const NavigationPanel = styled.div`
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  width: calc(100% - 48px);
+  max-width: 500px;
+  padding: 14px 20px;
+  background: rgba(10, 11, 18, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(43, 203, 186, 0.4);
+  border-radius: 20px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 0 0 15px rgba(43, 203, 186, 0.15);
+  font-family: 'Outfit', 'Inter', sans-serif;
+  color: #e4e6eb;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: auto;
+
+  @media (min-width: 600px) {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
 `;
 
-const StyledNavButtonGroup = styled.div`
+const NavInfoArea = styled.div`
   display: flex;
-  gap: 8px;
-  margin-top: 10px;
+  flex-direction: column;
+  flex: 1;
+`;
+
+const NavButtonArea = styled.div`
+  display: flex;
+  gap: 10px;
+  width: 100%;
+
+  @media (min-width: 600px) {
+    width: auto;
+    min-width: 220px;
+  }
 `;
 
 const StyledNavButton = styled.button<{ $primary?: boolean }>`
