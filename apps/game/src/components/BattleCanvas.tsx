@@ -84,9 +84,7 @@ export function BattleCanvas({
   const activeRotation = useMemo(() => {
     if (!characterNickname) return playerRotation;
 
-    const playerAttack = activeAttacks.find(
-      (a) => a.type === "ATTACK" && a.actorId === characterNickname
-    );
+    const playerAttack = activeAttacks.find((a) => a.type === "ATTACK" && a.actorId === characterNickname);
 
     if (playerAttack && playerAttack.type === "ATTACK") {
       const enemyPos = enemyPositions.get(playerAttack.targetId);
@@ -120,18 +118,10 @@ export function BattleCanvas({
           <Layer listening={false}>
             <Group x={width / 2} y={height / 2}>
               {compassImg && (
-                <Image
-                  image={compassImg}
-                  width={50}
-                  height={50}
-                  offsetX={25}
-                  offsetY={25}
-                  rotation={activeRotation}
-                />
+                <Image image={compassImg} width={50} height={50} offsetX={25} offsetY={25} rotation={activeRotation} />
               )}
             </Group>
           </Layer>
-
 
           {/* Layer 2: Dynamic Units and Effects */}
           <Layer>
@@ -153,12 +143,31 @@ export function BattleCanvas({
                   const pixelX = safePos.x;
                   const pixelY = safePos.y;
 
+                  // 캔버스 밖 스폰 좌표 계산 (플레이어 중심에서 적을 향하는 방향 연장)
+                  const centerX = width / 2;
+                  const centerY = height / 2;
+                  const dx = pixelX - centerX;
+                  const dy = pixelY - centerY;
+                  const dist = Math.sqrt(dx * dx + dy * dy);
+
+                  let spawnX = pixelX;
+                  let spawnY = -100; // fallback: 화면 위쪽 밖
+
+                  if (dist > 0) {
+                    const maxDim = Math.max(width, height);
+                    // 플레이어 중심에서 적의 방향 벡터를 연장하여 화면 밖 스폰 좌표 설정
+                    spawnX = centerX + (dx / dist) * maxDim;
+                    spawnY = centerY + (dy / dist) * maxDim;
+                  }
+
                   return (
                     <CanvasEnemyUnit
                       key={`enemy-${enemy.id}`}
                       name={enemy.name}
                       x={pixelX}
                       y={pixelY}
+                      spawnX={spawnX}
+                      spawnY={spawnY}
                       isAttacking={isAttacking}
                     />
                   );
@@ -171,10 +180,18 @@ export function BattleCanvas({
               const actorPos = enemyPositions.get(attack.actorId);
               const targetPos = enemyPositions.get(attack.targetId);
 
-              const x1 = attack.actorId === characterNickname ? width / 2 : (actorPos ? getSafeCoords(actorPos).x : width / 2);
-              const y1 = attack.actorId === characterNickname ? height / 2 : (actorPos ? getSafeCoords(actorPos).y : height / 2);
-              const x2 = attack.targetId === characterNickname ? width / 2 : (targetPos ? getSafeCoords(targetPos).x : width / 2);
-              const y2 = attack.targetId === characterNickname ? height / 2 : (targetPos ? getSafeCoords(targetPos).y : height / 2);
+              const x1 =
+                attack.actorId === characterNickname ? width / 2 : actorPos ? getSafeCoords(actorPos).x : width / 2;
+              const y1 =
+                attack.actorId === characterNickname ? height / 2 : actorPos ? getSafeCoords(actorPos).y : height / 2;
+              const x2 =
+                attack.targetId === characterNickname ? width / 2 : targetPos ? getSafeCoords(targetPos).x : width / 2;
+              const y2 =
+                attack.targetId === characterNickname
+                  ? height / 2
+                  : targetPos
+                    ? getSafeCoords(targetPos).y
+                    : height / 2;
 
               return <RadarAttackLine key={attack.id} points={[x1, y1, x2, y2]} />;
             })}
@@ -191,11 +208,8 @@ const Container = styled.div`
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 5;
+  z-index: 0;
   overflow: hidden;
   background: transparent; /* 뒷배경 지도가 완전하고 뚜렷하게 보이도록 투명 설정 */
   pointer-events: none;
 `;
-
-
-
