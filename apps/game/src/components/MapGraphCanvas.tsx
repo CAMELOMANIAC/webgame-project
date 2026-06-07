@@ -57,7 +57,7 @@ const water = (mapData.water || []) as unknown as Water;
 // Konva Line 렌더링에 적합하도록 통합된 물 좌표 배열을 1차원 플랫 구조로 변환
 const waterPoints = water.flatMap((p) => [p.x, p.y]);
 
-const DEFAULT_NODE_COLOR = "#4d7cff";
+const DEFAULT_NODE_COLOR = "#8e95a5";
 const DEFAULT_NODE_RADIUS = 4;
 
 interface MapGraphCanvasProps {
@@ -720,8 +720,8 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
               <Line
                 points={waterPoints}
                 closed
-                fill="rgba(20, 42, 85, 0.35)"
-                stroke="rgba(77, 124, 255, 0.2)"
+                fill="rgba(30, 30, 32, 0.35)"
+                stroke="rgba(120, 120, 128, 0.2)"
                 strokeWidth={1.5}
               />
             )}
@@ -738,8 +738,8 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
                       key={`building-${b.id}`}
                       points={b.flatPoints}
                       closed
-                      fill="rgba(30, 35, 55, 0.45)"
-                      stroke="rgba(77, 124, 255, 0.12)"
+                      fill="rgba(35, 35, 38, 0.45)"
+                      stroke="rgba(120, 120, 128, 0.12)"
                       strokeWidth={1}
                       onClick={() => handleTargetSelect(b.roadNodeId)}
                       onTap={() => handleTargetSelect(b.roadNodeId)}
@@ -781,8 +781,8 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
                       onMouseLeave={(e) => {
                         const shape = e.target;
                         shape.setAttrs({
-                          fill: "rgba(30, 35, 55, 0.45)",
-                          stroke: "rgba(77, 124, 255, 0.12)",
+                          fill: "rgba(35, 35, 38, 0.45)",
+                          stroke: "rgba(80, 80, 85, 0.12)",
                           strokeWidth: 1,
                           shadowBlur: 0,
                           shadowOpacity: 0,
@@ -813,8 +813,8 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
                     });
                     context.fillStrokeShape(shape);
                   }}
-                  fill="rgba(30, 35, 55, 0.45)"
-                  stroke="rgba(77, 124, 255, 0.12)"
+                  fill="rgba(35, 35, 38, 0.45)"
+                  stroke="rgba(80, 80, 85, 0.12)"
                   strokeWidth={1}
                   listening={false}
                 />
@@ -840,7 +840,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
                   });
                   context.fillStrokeShape(shape);
                 }}
-                stroke="rgba(85, 140, 255, 0.25)"
+                stroke="rgba(180, 180, 185, 0.25)"
                 strokeWidth={2.8}
               />
               {/* 2. Major 도로 (중간 굵기) */}
@@ -858,7 +858,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
                   });
                   context.fillStrokeShape(shape);
                 }}
-                stroke="rgba(77, 124, 255, 0.14)"
+                stroke="rgba(100, 100, 105, 0.14)"
                 strokeWidth={1.8}
               />
               {/* 3. Minor 도로 (가장 얇고 희미한 골목망) */}
@@ -876,7 +876,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
                   });
                   context.fillStrokeShape(shape);
                 }}
-                stroke="rgba(77, 124, 255, 0.05)"
+                stroke="rgba(60, 60, 65, 0.05)"
                 strokeWidth={1}
               />
             </Layer>
@@ -890,12 +890,12 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
                 <Line
                   ref={pathLineRef}
                   points={shortestPathPoints}
-                  stroke="#2bcbba"
+                  stroke="#ffffff"
                   strokeWidth={5}
                   lineCap="round"
                   lineJoin="round"
                   opacity={0.65}
-                  shadowColor="#2bcbba"
+                  shadowColor="#ffffff"
                   shadowBlur={10}
                   shadowOpacity={0.8}
                 />
@@ -905,13 +905,13 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
                 <Group x={nodes[targetNodeId].x} y={nodes[targetNodeId].y}>
                   <Circle
                     radius={10}
-                    stroke="#ff4757"
+                    stroke="#ffffff"
                     strokeWidth={1.5}
-                    shadowColor="#ff4757"
+                    shadowColor="#ffffff"
                     shadowBlur={8}
                     shadowOpacity={0.8}
                   />
-                  <Circle radius={3} fill="#ff4757" />
+                  <Circle radius={3} fill="#ffffff" />
                 </Group>
               )}
             </Layer>
@@ -1069,7 +1069,7 @@ const CanvasContainer = styled.div`
   width: 100%;
   height: 100%;
   position: relative;
-  background: radial-gradient(circle at center, #0f111a 0%, #06070a 100%);
+  background: radial-gradient(circle at center, #1b1b1f 0%, #0c0c0e 100%);
   overflow: hidden;
 `;
 

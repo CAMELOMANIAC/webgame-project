@@ -19,7 +19,16 @@ import { useFieldCombat } from "@/utils/hooks/useFieldCombat";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useInventoryDrag } from "@/utils/hooks/useInventoryDrag";
 
+type FieldSearch = {
+  tab?: string;
+};
+
 export const Route = createFileRoute("/field/")({
+  validateSearch: (search: Record<string, unknown>): FieldSearch => {
+    return {
+      tab: search.tab as string | undefined,
+    };
+  },
   component: RouteComponent,
 });
 
@@ -36,10 +45,9 @@ function RouteComponent() {
 
   const [currentNodeId] = useAtom(currentNodeIdAtom);
   const [isNavigating] = useAtom(isNavigatingAtom);
-  
+
   // 중복 요청 및 무한 루프 방지를 위한 마지막 보고 노드 기록 Ref
   const lastReportedNodeRef = useRef<number | null>(null);
-
 
   // 1. 노드 이동 완료 시 서버에 도착 알림 및 인카운터 트리거 판정 요청
   useEffect(() => {
@@ -98,7 +106,7 @@ function RouteComponent() {
                 animate={{ height: "100%", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ type: "spring", duration: 0.5, bounce: 0 }}
-                style={{ overflow: "hidden" }}
+                style={{ overflow: "hidden", zIndex: 1 }}
                 key="stash"
                 layout
               >

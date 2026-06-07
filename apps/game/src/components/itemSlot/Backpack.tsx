@@ -17,9 +17,9 @@ const Backpack = () => {
       <AnimatePresence>
         {isLoading && (
           <InheritMotionDiv
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "100%", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ type: "spring", duration: 0.5, bounce: 0 }}
             style={{ overflow: "hidden" }}
             key="backpackloading"
@@ -32,9 +32,9 @@ const Backpack = () => {
 
         {isError && (
           <InheritMotionDiv
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "100%", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ type: "spring", duration: 0.5, bounce: 0 }}
             style={{ overflow: "hidden" }}
             key="backpackLoaderror"
@@ -47,9 +47,9 @@ const Backpack = () => {
         )}
         {characterData && (
           <InheritMotionDiv
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "100%", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ type: "spring", duration: 0.5, bounce: 0 }}
             style={{ overflow: "hidden" }}
             key="backpackLoadComplete"
@@ -72,7 +72,6 @@ const Container = styled.div`
   display: flex;
   flex: 1;
   flex-direction: column;
-  background-color: rgba(14, 14, 14, 0.6);
   overflow: auto;
 `;
 
