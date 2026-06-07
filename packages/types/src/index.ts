@@ -82,8 +82,6 @@ export type BattleEvent = { id: string; timestamp: number } & (
   | { type: "CAST_CANCEL"; actorId: string; weaponIndex: number; reason: string }
   | { type: "DEATH"; playerId: string }
   | { type: "BATTLE_END"; winnerTeamId: string | null }
-  | { type: "RETREAT_GAUGE_UPDATE"; playerId: string; currentGauge: number }
-  | { type: "RETREAT_READY"; playerId: string }
 );
 
 export interface BattleLogEntry {
@@ -96,9 +94,5 @@ export interface BattleLog {
     players: PlayerState[];
   };
   timeline: BattleLogEntry[];
-  retreatPoint?: {
-    timestamp: number;
-    expiryTimestamp: number;
-  };
-  encodedBackLog?: string;
 }
+

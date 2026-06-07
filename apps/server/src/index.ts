@@ -508,6 +508,102 @@ fastify.post("/battle/monster", async (request, reply) => {
 
     // 4) 시뮬레이션 실행 및 결과 반환
     const result = simulateBattle([playerUser, monsterUser]);
+
+    // 전투 결과 분석 및 DB 자동 반영
+    let playerWon = false;
+    let playerDied = false;
+    let remainingPlayerHp = playerUser.hp;
+
+    for (const entry of result.timeline) {
+      for (const event of entry.events) {
+        if (event.type === "DAMAGE" && event.targetId === playerUser.id) {
+          remainingPlayerHp = event.remainingHp;
+        }
+        if (event.type === "DEATH") {
+          if (event.playerId === playerUser.id) {
+            playerDied = true;
+          } else if (event.playerId === monsterUser.id) {
+            playerWon = true;
+          }
+        }
+      }
+    }
+
+    if (playerDied) {
+      // 캐릭터 사망: 모든 백팩 및 장비 유실, 로비 사출
+      await prisma.$transaction(async (tx) => {
+        await tx.raidInventoryItem.deleteMany({ where: { characterId } });
+        await tx.characterWeapon.deleteMany({ where: { characterId } });
+        await tx.character.update({
+          where: { id: characterId },
+          data: {
+            isRaiding: false,
+            hp: 100,
+            stamina: 100,
+            time: 0,
+          },
+        });
+      });
+      (result as any).playerDied = true;
+    } else {
+      // 플레이어 승리 또는 무승부
+      let rewardItemName: string | null = null;
+      if (playerWon) {
+        // 전리품 획득: 몬스터의 무기 중 하나를 무작위로 지급
+        const monsterWeapons = match.weapons;
+        const randomWeapon = monsterWeapons.length > 0
+          ? monsterWeapons[Math.floor(Math.random() * monsterWeapons.length)]
+          : null;
+        const rewardWeaponMasterId = randomWeapon
+          ? randomWeapon.weaponMasterId
+          : (await prisma.weaponMaster.findFirst())?.id;
+
+        if (rewardWeaponMasterId) {
+          const currentInventory = await prisma.raidInventoryItem.findMany({
+            where: { characterId },
+          });
+          const occupiedSlots = new Set(currentInventory.map((item) => item.slotIndex));
+          let emptySlotIndex = -1;
+          for (let i = 0; i < 32; i++) {
+            if (!occupiedSlots.has(i)) {
+              emptySlotIndex = i;
+              break;
+            }
+          }
+
+          if (emptySlotIndex !== -1) {
+            const rewardWeapon = await prisma.weaponMaster.findUnique({
+              where: { id: rewardWeaponMasterId },
+            });
+            if (rewardWeapon) {
+              rewardItemName = rewardWeapon.name;
+              await prisma.raidInventoryItem.create({
+                data: {
+                  characterId,
+                  weaponMasterId: rewardWeaponMasterId,
+                  slotIndex: emptySlotIndex,
+                  quantity: 1,
+                },
+              });
+            }
+          }
+        }
+      }
+
+      // 캐릭터 체력 업데이트
+      await prisma.character.update({
+        where: { id: characterId },
+        data: {
+          hp: Math.max(1, remainingPlayerHp),
+        },
+      });
+
+      // 클라이언트에 보상 정보 추가 제공
+      if (rewardItemName) {
+        (result as any).rewardItemName = rewardItemName;
+      }
+    }
+
     return result;
   } catch (error) {
     fastify.log.error(error);
@@ -515,13 +611,246 @@ fastify.post("/battle/monster", async (request, reply) => {
   }
 });
 
-fastify.post("/battle/reveal", async (request, reply) => {
-  const { encodedBackLog } = request.body as { encodedBackLog: string };
+
+
+// 유저 창고 조회 API
+fastify.get("/user/:userId/stash", async (request, reply) => {
   try {
-    const decoded = JSON.parse(Buffer.from(encodedBackLog, 'base64').toString('utf-8'));
-    return { backLog: decoded };
-  } catch (e) {
-    return reply.status(400).send({ error: "Invalid key or malformed log" });
+    const { userId } = request.params as { userId: string };
+    const stash = await prisma.stashItem.findMany({
+      where: { userId },
+      include: { weaponMaster: true },
+    });
+    return stash;
+  } catch (error) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: "Failed to fetch stash data" });
+  }
+});
+
+// 로비 아이템 이동 API (창고 <-> 가방)
+const MoveItemSchema = z.object({
+  direction: z.enum(["to_backpack", "to_stash"]),
+  weaponMasterId: z.string(),
+  slotIndex: z.number().min(0).max(31),
+});
+
+fastify.post("/character/:characterId/inventory/move", async (request, reply) => {
+  try {
+    const { characterId } = request.params as { characterId: string };
+    const { direction, weaponMasterId, slotIndex } = MoveItemSchema.parse(request.body);
+
+    const character = await prisma.character.findUnique({
+      where: { id: characterId },
+      include: { user: true },
+    });
+
+    if (!character) {
+      return reply.status(404).send({ error: "Character not found" });
+    }
+
+    const userId = character.userId;
+
+    if (direction === "to_backpack") {
+      // 1. 창고 아이템 확인
+      const stashItem = await prisma.stashItem.findFirst({
+        where: { userId, weaponMasterId },
+      });
+
+      if (!stashItem || stashItem.quantity <= 0) {
+        return reply.status(400).send({ error: "Item not found in stash" });
+      }
+
+      // 2. 가방 슬롯이 비어있는지 확인
+      const targetSlot = await prisma.raidInventoryItem.findUnique({
+        where: { characterId_slotIndex: { characterId, slotIndex } },
+      });
+
+      if (targetSlot) {
+        return reply.status(400).send({ error: "Backpack slot already occupied" });
+      }
+
+      // 3. 트랜잭션 실행
+      await prisma.$transaction(async (tx) => {
+        if (stashItem.quantity === 1) {
+          await tx.stashItem.delete({ where: { id: stashItem.id } });
+        } else {
+          await tx.stashItem.update({
+            where: { id: stashItem.id },
+            data: { quantity: stashItem.quantity - 1 },
+          });
+        }
+
+        await tx.raidInventoryItem.create({
+          data: {
+            characterId,
+            weaponMasterId,
+            slotIndex,
+            quantity: 1,
+          },
+        });
+      });
+    } else {
+      // to_stash
+      // 1. 가방 아이템 확인
+      const backpackItem = await prisma.raidInventoryItem.findUnique({
+        where: { characterId_slotIndex: { characterId, slotIndex } },
+      });
+
+      if (!backpackItem || backpackItem.weaponMasterId !== weaponMasterId) {
+        return reply.status(400).send({ error: "Item not found in specified backpack slot" });
+      }
+
+      // 2. 트랜잭션 실행
+      await prisma.$transaction(async (tx) => {
+        await tx.raidInventoryItem.delete({
+          where: { id: backpackItem.id },
+        });
+
+        const existingStash = await tx.stashItem.findFirst({
+          where: { userId, weaponMasterId },
+        });
+
+        if (existingStash) {
+          await tx.stashItem.update({
+            where: { id: existingStash.id },
+            data: { quantity: existingStash.quantity + 1 },
+          });
+        } else {
+          await tx.stashItem.create({
+            data: {
+              userId,
+              weaponMasterId,
+              quantity: 1,
+            },
+          });
+        }
+      });
+    }
+
+    return { status: "success" };
+  } catch (error) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: "Failed to move item" });
+  }
+});
+
+// 탐사 시작 API
+fastify.post("/character/:characterId/raid/start", async (request, reply) => {
+  try {
+    const { characterId } = request.params as { characterId: string };
+
+    const character = await prisma.character.update({
+      where: { id: characterId },
+      data: {
+        isRaiding: true,
+        hp: 100,
+        stamina: 100,
+        time: 0,
+      },
+    });
+
+    return { status: "success", isRaiding: character.isRaiding };
+  } catch (error) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: "Failed to start raid" });
+  }
+});
+
+// 탈출 성공 API
+fastify.post("/character/:characterId/raid/extract", async (request, reply) => {
+  try {
+    const { characterId } = request.params as { characterId: string };
+
+    const character = await prisma.character.findUnique({
+      where: { id: characterId },
+      include: { inventory: true },
+    });
+
+    if (!character) {
+      return reply.status(404).send({ error: "Character not found" });
+    }
+
+    const userId = character.userId;
+    const items = character.inventory;
+
+    await prisma.$transaction(async (tx) => {
+      // 1. 백팩 아이템 창고로 병합
+      for (const item of items) {
+        const existingStash = await tx.stashItem.findFirst({
+          where: { userId, weaponMasterId: item.weaponMasterId },
+        });
+
+        if (existingStash) {
+          await tx.stashItem.update({
+            where: { id: existingStash.id },
+            data: { quantity: existingStash.quantity + item.quantity },
+          });
+        } else {
+          await tx.stashItem.create({
+            data: {
+              userId,
+              weaponMasterId: item.weaponMasterId,
+              quantity: item.quantity,
+            },
+          });
+        }
+      }
+
+      // 2. 백팩 비우기
+      await tx.raidInventoryItem.deleteMany({
+        where: { characterId },
+      });
+
+      // 3. 상태 업데이트
+      await tx.character.update({
+        where: { id: characterId },
+        data: {
+          isRaiding: false,
+          time: 0,
+        },
+      });
+    });
+
+    return { status: "success" };
+  } catch (error) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: "Failed to extract" });
+  }
+});
+
+// 사망 실패 API
+fastify.post("/character/:characterId/raid/die", async (request, reply) => {
+  try {
+    const { characterId } = request.params as { characterId: string };
+
+    await prisma.$transaction(async (tx) => {
+      // 1. 백팩 아이템 삭제
+      await tx.raidInventoryItem.deleteMany({
+        where: { characterId },
+      });
+
+      // 2. 장착 무기 삭제
+      await tx.characterWeapon.deleteMany({
+        where: { characterId },
+      });
+
+      // 3. 상태 복구 및 탐사 해제
+      await tx.character.update({
+        where: { id: characterId },
+        data: {
+          isRaiding: false,
+          hp: 100,
+          stamina: 100,
+          time: 0,
+        },
+      });
+    });
+
+    return { status: "success" };
+  } catch (error) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: "Failed to process character death" });
   }
 });
 

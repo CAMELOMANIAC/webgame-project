@@ -17,6 +17,7 @@ export interface CharacterResponse {
   weight: number;
   maxWeight: number;
   time: number;
+  isRaiding: boolean;
   user: {
     nickname: string;
   };

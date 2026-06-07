@@ -4,7 +4,7 @@
 
 ![Demo GIF](https://raw.githubusercontent.com/CAMELOMANIAC/webgame-project/8478dde31ca8b1e7cc26d7daade96a9a7ea458fa/apps/game/demo.gif)
 
-[게임 기획 문서 보기](PLAN.md)
+[게임 기획 문서 보기](../../PLAN.md)
 
 ## 1. 주요 특징
 

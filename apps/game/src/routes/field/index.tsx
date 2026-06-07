@@ -1,12 +1,13 @@
 import { DndContext, DragOverlay } from "@dnd-kit/core";
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import type { BattleEvent } from "@webgame/types";
-import { useAtomValue } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import styled from "styled-components";
 
 import { currentTimeAtom, displayEventsAtom } from "@/atoms/globalAtom";
+import { currentNodeIdAtom, isNavigatingAtom } from "@/atoms/raidAtom";
 import { InheritMotionDiv, Page } from "@/components/Commons";
 import { FieldBackground } from "@/components/FieldBackground";
 import { FieldHeader } from "@/components/FieldHeader";
@@ -17,6 +18,8 @@ import { useEnemyPositions } from "@/utils/hooks/useEnemyPositions";
 import { useFieldCombat } from "@/utils/hooks/useFieldCombat";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useInventoryDrag } from "@/utils/hooks/useInventoryDrag";
+
+import mapData from "../../assets/map_graph.json";
 
 export const Route = createFileRoute("/field/")({
   component: RouteComponent,
@@ -32,6 +35,25 @@ function RouteComponent() {
   const { isCombat, setIsCombat, handleEnemyClick, battleLog } = useFieldCombat(characterData);
   const { activeId, handleDragStart, handleDragEnd } = useInventoryDrag(characterData);
   const enemyPositions = useEnemyPositions(battleLog, characterData?.raw.user.nickname);
+
+  const [currentNodeId] = useAtom(currentNodeIdAtom);
+  const [isNavigating] = useAtom(isNavigatingAtom);
+
+  // 1. 노드 이동 완료 시 인카운터(전투) 자동 시작
+  useEffect(() => {
+    if (isNavigating) return;
+    if (isCombat) return;
+    if (!characterData?.raw.id) return;
+
+    // 도착한 노드가 건물에 연결된 노드인지 검사
+    const buildings = (mapData.buildings || []) as Array<{ roadNodeId: number }>;
+    const isAtBuilding = buildings.some((b) => b.roadNodeId === currentNodeId);
+
+    if (isAtBuilding) {
+      console.log(`[Raid] Arrived at building node #${currentNodeId}. Triggering battle!`);
+      handleEnemyClick();
+    }
+  }, [isNavigating, currentNodeId, isCombat, characterData, handleEnemyClick]);
 
   const activeAttacks = useMemo(() => {
     return displayEvents.filter((e: BattleEvent) => e.type === "ATTACK");
@@ -58,9 +80,6 @@ function RouteComponent() {
             )}
             <InheritMotionDiv layout key="fieldInfo">
               <FieldStatusSection setIsCombat={setIsCombat} />
-              <button onClick={() => handleEnemyClick()} style={{ color: "white" }}>
-                test
-              </button>
               <Equipment />
             </InheritMotionDiv>
             {tab === "backpack" && (
@@ -96,15 +115,15 @@ function RouteComponent() {
             )}
           </AnimatePresence>
         </LayoutGroup>
-        <FieldBackground
-          isCombat={isCombat}
-          battleLog={battleLog}
-          enemyPositions={enemyPositions}
-          activeAttacks={activeAttacks}
-          currentTime={currentTime}
-          characterNickname={characterData?.raw.user.nickname}
-        />
       </DndContext>
+      <FieldBackground
+        isCombat={isCombat}
+        battleLog={battleLog}
+        enemyPositions={enemyPositions}
+        activeAttacks={activeAttacks}
+        currentTime={currentTime}
+        characterNickname={characterData?.raw.user.nickname}
+      />
     </Page>
   );
 }

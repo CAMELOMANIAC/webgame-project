@@ -17,9 +17,8 @@ export function simulateBattle(players: User[]): BattleLog {
       currentWeaponIndex: p.currentWeaponIndex ?? 0,
       castingWeaponIndex: p.castingWeaponIndex ?? null,
       castingTicksRemaining: p.castingTicksRemaining ?? 0,
-      retreatGauge: 0,
     };
-  }) as unknown as (User & { retreatGauge: number })[];
+  }) as unknown as User[];
 
   const deadPlayers = new Set<string>();
 
@@ -55,7 +54,6 @@ export function simulateBattle(players: User[]): BattleLog {
   const timeline: BattleLogEntry[] = [];
   const tickUnit = 1;
   let currentTick = 0;
-  let retreatPoint: BattleLog["retreatPoint"] = undefined;
 
   // 2. 시뮬레이션 루프
   while (!isBattleOver(simPlayers)) {
@@ -71,6 +69,7 @@ export function simulateBattle(players: User[]): BattleLog {
             actorId: actor.id,
             weaponIndex: actor.castingWeaponIndex,
             reason: "DEATH",
+            timestamp: currentTick,
           });
           actor.castingWeaponIndex = null;
           actor.castingTicksRemaining = 0;
@@ -95,6 +94,7 @@ export function simulateBattle(players: User[]): BattleLog {
           type: "STAMINA_CHANGE",
           playerId: actor.id,
           currentStamina: actor.stamina,
+          timestamp: currentTick,
         });
       }
 
@@ -113,20 +113,12 @@ export function simulateBattle(players: User[]): BattleLog {
               type: "CAST_COMPLETE",
               actorId: actor.id,
               weaponIndex: weaponIndex,
+              timestamp: currentTick,
             });
 
             const target = findTarget(actor, weapon, simPlayers);
             if (target) {
-              const weaponEvents = processWeaponUse(actor, target, weapon, generateId);
-              
-              // [후퇴 게이지] 피격 시 게이지 증가
-              target.retreatGauge = Math.min(100, target.retreatGauge + 10);
-              tickEvents.push({ id: generateId(), type: "RETREAT_GAUGE_UPDATE", playerId: target.id, currentGauge: target.retreatGauge });
-              
-              if (target.retreatGauge === 100 && !retreatPoint) {
-                retreatPoint = { timestamp: currentTick, expiryTimestamp: currentTick + 50 };
-                tickEvents.push({ id: generateId(), type: "RETREAT_READY", playerId: target.id });
-              }
+              const weaponEvents = processWeaponUse(actor, target, weapon, generateId, currentTick);
 
               weaponEvents.forEach((e) => {
                 tickEvents.push(e);
@@ -137,7 +129,7 @@ export function simulateBattle(players: User[]): BattleLog {
 
               if (target.hp <= 0 && !deadPlayers.has(target.id)) {
                 deadPlayers.add(target.id);
-                tickEvents.push({ id: generateId(), type: "DEATH", playerId: target.id });
+                tickEvents.push({ id: generateId(), type: "DEATH", playerId: target.id, timestamp: currentTick });
               }
             }
 
@@ -149,7 +141,7 @@ export function simulateBattle(players: User[]): BattleLog {
           actor.castingTicksRemaining = 0;
         }
       } else {
-        const actions = processWeaponSequence(actor, simPlayers, generateId, deadPlayers);
+        const actions = processWeaponSequence(actor, simPlayers, generateId, deadPlayers, currentTick);
         tickEvents.push(...actions);
       }
     }
@@ -167,26 +159,10 @@ export function simulateBattle(players: User[]): BattleLog {
   const remainingTeams = new Set(simPlayers.filter((p) => p.hp > 0).map((p) => p.teamId));
   const teamArray = Array.from(remainingTeams);
   const winnerTeamId = remainingTeams.size === 1 && teamArray[0] !== undefined ? teamArray[0] : null;
-// 3. 로그 분할 및 암호화
-let frontLog: BattleLogEntry[] = [];
-let backLog: BattleLogEntry[] = [];
-
-if (retreatPoint) {
-  frontLog = timeline.filter((e) => e.timestamp <= retreatPoint.expiryTimestamp);
-  backLog = timeline.filter((e) => e.timestamp > retreatPoint.expiryTimestamp);
-} else {
-  frontLog = timeline;
-}
-
-// 간단한 난독화 (Base64) - 추후 복잡한 암호화로 교체 가능
-const encodedBackLog = btoa(JSON.stringify(backLog));
-
-return {
-  initialState,
-  timeline: frontLog,
-  retreatPoint,
-  encodedBackLog, // 암호화된 후반부 로그 전달
-};
+  return {
+    initialState,
+    timeline,
+  };
 }
 
 function isBattleOver(players: User[]): boolean {
@@ -218,7 +194,7 @@ function findTarget(actor: User, weapon: Weapon, allPlayers: User[]): User | nul
   return best ? best.enemy : null;
 }
 
-function processWeaponUse(actor: User, target: User, weapon: Weapon, generateId: () => string): BattleEvent[] {
+function processWeaponUse(actor: User, target: User, weapon: Weapon, generateId: () => string, timestamp: number): BattleEvent[] {
   const damage = weapon.damage;
   const isCritical = Math.random() < 0.1;
   const finalDamage = isCritical ? Math.floor(damage * 1.5) : damage;
@@ -232,6 +208,7 @@ function processWeaponUse(actor: User, target: User, weapon: Weapon, generateId:
       actorId: actor.id,
       targetId: target.id,
       weaponIndex: 0,
+      timestamp,
     },
     {
       id: generateId(),
@@ -240,6 +217,7 @@ function processWeaponUse(actor: User, target: User, weapon: Weapon, generateId:
       amount: finalDamage,
       remainingHp: target.hp,
       isCritical: isCritical,
+      timestamp,
     },
   ];
 }
@@ -249,6 +227,7 @@ function processWeaponSequence(
   allPlayers: User[],
   generateId: () => string,
   deadPlayers: Set<string>,
+  timestamp: number,
 ): BattleEvent[] {
   const startIndex = actor.currentWeaponIndex || 0;
 
@@ -274,16 +253,18 @@ function processWeaponSequence(
             actorId: actor.id,
             weaponIndex: checkIndex,
             duration: weapon.castTicks,
+            timestamp,
           },
           {
             id: generateId(),
             type: "STAMINA_CHANGE",
             playerId: actor.id,
             currentStamina: actor.stamina,
+            timestamp,
           },
         ];
       } else {
-        const weaponEvents = processWeaponUse(actor, target, weapon, generateId);
+        const weaponEvents = processWeaponUse(actor, target, weapon, generateId, timestamp);
         actor.stamina -= weapon.staminaCost;
         weapon.currentCooldown = weapon.cooldownTicks;
         actor.currentWeaponIndex = (checkIndex + 1) % 6;
@@ -295,6 +276,7 @@ function processWeaponSequence(
             type: "STAMINA_CHANGE",
             playerId: actor.id,
             currentStamina: actor.stamina,
+            timestamp,
           },
         ];
 
@@ -306,7 +288,7 @@ function processWeaponSequence(
 
         if (target.hp <= 0 && !deadPlayers.has(target.id)) {
           deadPlayers.add(target.id);
-          events.push({ id: generateId(), type: "DEATH", playerId: target.id });
+          events.push({ id: generateId(), type: "DEATH", playerId: target.id, timestamp });
         }
 
         return events;

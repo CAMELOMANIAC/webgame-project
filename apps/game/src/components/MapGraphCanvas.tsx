@@ -1,9 +1,18 @@
+import { useAtom } from "jotai";
 import Konva from "konva";
 import { useEffect, useMemo,useRef, useState } from "react";
 import { Circle, Group, Layer, Line,Shape, Stage } from "react-konva";
 import styled from "styled-components";
 
 import mapData from "../assets/map_graph.json";
+import {
+  currentNodeIdAtom,
+  followPlayerAtom,
+  isNavigatingAtom,
+  playerCoordsAtom,
+  shortestPathAtom,
+  targetNodeIdAtom,
+} from "../atoms/raidAtom";
 import { findShortestPath } from "../utils/pathfinding";
 
 interface Node {
@@ -48,7 +57,11 @@ const waterPoints = water.flatMap((p) => [p.x, p.y]);
 const DEFAULT_NODE_COLOR = "#4d7cff";
 const DEFAULT_NODE_RADIUS = 4;
 
-export default function MapGraphCanvas() {
+interface MapGraphCanvasProps {
+  isCombat?: boolean;
+}
+
+export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   
@@ -65,14 +78,14 @@ export default function MapGraphCanvas() {
   const [isOptionsExpanded, setIsOptionsExpanded] = useState(false);
   const [isStatusExpanded, setIsStatusExpanded] = useState(true);
 
-  // 네비게이션/길찾기 상태 변수
-  const [currentNodeId, setCurrentNodeId] = useState(0);
-  const [targetNodeId, setTargetNodeId] = useState<number | null>(null);
-  const [shortestPath, setShortestPath] = useState<number[]>([]);
-  const [isNavigating, setIsNavigating] = useState(false);
+  // 네비게이션/길찾기 상태 변수 (Jotai Atom 연동)
+  const [currentNodeId, setCurrentNodeId] = useAtom(currentNodeIdAtom);
+  const [targetNodeId, setTargetNodeId] = useAtom(targetNodeIdAtom);
+  const [shortestPath, setShortestPath] = useAtom(shortestPathAtom);
+  const [isNavigating, setIsNavigating] = useAtom(isNavigatingAtom);
 
   // 플레이어의 실제 화면 드로잉 좌표 상태 및 최신 값 동기화용 Ref (부드러운 보간용)
-  const [playerCoords, setPlayerCoords] = useState<{ x: number; y: number } | null>(null);
+  const [playerCoords, setPlayerCoords] = useAtom(playerCoordsAtom);
   const playerCoordsRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // 플레이어 마커 및 경로 라인 Konva 레퍼런스 (애니메이션 떨림 차단용 직접 조작)
@@ -84,7 +97,7 @@ export default function MapGraphCanvas() {
   const currentPathStepRef = useRef<number>(1);
 
   // 카메라 자동 화면 따라가기 상태 및 Ref
-  const [followPlayer, setFollowPlayer] = useState(true);
+  const [followPlayer, setFollowPlayer] = useAtom(followPlayerAtom);
   const followPlayerRef = useRef(true);
 
   // followPlayer 상태에 맞춰 ref를 항시 최신화
@@ -460,10 +473,11 @@ export default function MapGraphCanvas() {
   return (
     <CanvasContainer ref={containerRef}>
       {/* 하이테크 스타일 정보 패널 오버레이 */}
-      <InfoPanel
-        onMouseDown={(e) => e.stopPropagation()}
-        onWheel={(e) => e.stopPropagation()}
-      >
+      {!isCombat && (
+        <InfoPanel
+          onMouseDown={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+        >
         <ExpandableHeader 
           onClick={() => setIsStatusExpanded(!isStatusExpanded)} 
           style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}
@@ -555,9 +569,10 @@ export default function MapGraphCanvas() {
         
         <ControlHint>Drag to Pan / Scroll to Zoom</ControlHint>
       </InfoPanel>
+      )}
 
       {/* 하단 플로팅 네비게이션 HUD */}
-      {targetNodeId !== null && (
+      {!isCombat && targetNodeId !== null && (
         <NavigationPanel
           onMouseDown={(e) => e.stopPropagation()}
           onWheel={(e) => e.stopPropagation()}
@@ -586,7 +601,7 @@ export default function MapGraphCanvas() {
               disabled={shortestPath.length <= 1 || isNavigating}
               onClick={() => setIsNavigating(true)}
             >
-              {isNavigating ? "IN TRANSIT..." : "START EXTRACT"}
+              {isNavigating ? "IN TRANSIT..." : "START NAVIGATION"}
             </StyledNavButton>
             <StyledNavButton 
               disabled={isNavigating}
@@ -603,7 +618,8 @@ export default function MapGraphCanvas() {
           ref={stageRef}
           width={dimensions.width}
           height={dimensions.height}
-          draggable
+          draggable={!isCombat}
+          listening={!isCombat}
           onWheel={handleWheel}
           onDragEnd={handleDragEnd}
         >

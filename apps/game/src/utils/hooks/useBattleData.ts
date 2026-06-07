@@ -24,27 +24,5 @@ export function useBattleData() {
     [setBattleLog, setFlattenedTimeline]
   );
 
-  const revealBackLog = useCallback(
-    async (encodedBackLog: string) => {
-      try {
-        const response = await fetch("http://localhost:3001/battle/reveal", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ encodedBackLog }),
-        });
-        const data = await response.json();
-        if (data.backLog && battleLog) {
-          setBattleLogData({
-            ...battleLog,
-            timeline: [...battleLog.timeline, ...data.backLog],
-          });
-        }
-      } catch (e) {
-        console.error("Failed to reveal backlog:", e);
-      }
-    },
-    [battleLog, setBattleLogData]
-  );
-
-  return { battleLog, setBattleLog: setBattleLogData, revealBackLog };
+  return { battleLog, setBattleLog: setBattleLogData };
 }

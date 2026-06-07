@@ -4,7 +4,6 @@ import styled from "styled-components";
 import CombatLog from "@/components/CombatLog";
 import { InheritMotionDiv } from "@/components/Commons";
 import FieldNavTargetSection from "@/components/FieldNavTargetSection";
-import RetreadButton from "@/components/RetreadButton";
 
 interface FieldHeaderProps {
   isCombat: boolean;
@@ -24,7 +23,6 @@ export function FieldHeader({ isCombat }: FieldHeaderProps) {
         >
           <TopLayout>
             <CombatLog />
-            <RetreadButton gauge={0} />
           </TopLayout>
         </InheritMotionDiv>
       ) : (

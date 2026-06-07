@@ -1,16 +1,18 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import type { BattleEvent } from "@webgame/types";
+import type { BattleEvent, BattleLog } from "@webgame/types";
 import { useAtom, useAtomValue,useSetAtom } from "jotai";
 import { useEffect, useRef,useState } from "react";
 
 import { battleLogAtom, currentTimeAtom, displayEventsAtom,flattenedTimelineAtom, processedEventsAtom } from "@/atoms/globalAtom";
+import { isCombatAtom } from "@/atoms/raidAtom";
 import { useBattleData } from "@/utils/hooks/useBattleData";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 import { useStartMonsterBattle } from "@/utils/hooks/useStartMonsterBattle";
 
 export function useFieldCombat(characterData: CharacterData | undefined) {
   const navigate = useNavigate();
-  const [isCombat, setIsCombat] = useState<boolean>(false);
+  const [isCombat, setIsCombat] = useAtom(isCombatAtom);
   const { setBattleLog } = useBattleData();
   const startMonsterBattle = useStartMonsterBattle();
   const [time, setTime] = useAtom(currentTimeAtom);
@@ -23,9 +25,38 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
   const pendingEventsRef = useRef<BattleEvent[]>([]);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const queryClient = useQueryClient();
+  const TEMP_USER_ID = "da30ac6b-e93c-44d9-b344-ab67f99d2f80";
+
   // 전투 타이머 로직: 1초마다 다음 틱으로 넘어가려 시도
   useEffect(() => {
     if (!isCombat || !battleLog || isProcessing) return;
+
+    const maxTimestamp = timeline.length > 0 ? Math.max(...timeline.map((e: BattleEvent) => e.timestamp)) : 0;
+    if (time > maxTimestamp) {
+      // 전투 종료 처리!
+      setIsCombat(false);
+      
+      // 캐릭터 정보 및 창고 정보 갱신
+      queryClient.invalidateQueries({ queryKey: ["character", TEMP_USER_ID] });
+      queryClient.invalidateQueries({ queryKey: ["stash", TEMP_USER_ID] });
+
+      const playerDied = (battleLog as BattleLog & { playerDied?: boolean }).playerDied === true;
+      const rewardItemName = (battleLog as BattleLog & { rewardItemName?: string }).rewardItemName;
+
+      if (playerDied) {
+        alert("🚨 DEFEAT! You died in battle and lost all your equipped gear and backpack items!");
+        navigate({ to: "/field/user" }); // 로비로 이동
+      } else {
+        if (rewardItemName) {
+          alert(`🏆 VICTORY! You defeated the enemy and looted: ${rewardItemName}`);
+        } else {
+          alert("🏆 VICTORY! Enemy defeated.");
+        }
+        navigate({ to: "/field" }); // 맵으로 복구
+      }
+      return;
+    }
 
     const timer = setInterval(() => {
       // 현재 시간에 해당하는 이벤트들 가져오기
@@ -41,7 +72,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isCombat, battleLog, setTime, time, timeline, isProcessing]);
+  }, [isCombat, battleLog, setTime, time, timeline, isProcessing, characterData, navigate, setIsCombat, queryClient]);
 
   // 이벤트 순차 처리 로직
   useEffect(() => {
