@@ -1,7 +1,7 @@
 import { useAtom } from "jotai";
 import Konva from "konva";
-import { useEffect, useMemo,useRef, useState } from "react";
-import { Circle, Group, Image, Layer, Line,Shape, Stage } from "react-konva";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Circle, Group, Image, Layer, Line, Shape, Stage } from "react-konva";
 import styled from "styled-components";
 import useImage from "use-image";
 
@@ -68,7 +68,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const [compassImg] = useImage(compass);
-  
+
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [stageTransform, setStageTransform] = useState({
     x: 0,
@@ -107,6 +107,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
   // 플레이어 마커 및 경로 라인 Konva 레퍼런스 (애니메이션 떨림 차단용 직접 조작)
   const playerMarkerRef = useRef<Konva.Image | null>(null);
   const pathLineRef = useRef<Konva.Line | null>(null);
+  const sightMaskRef = useRef<Konva.Circle | null>(null);
 
   // 네비게이션 경로 및 현재 도달 스텝을 추적하는 Ref (단일 requestAnimationFrame 유지용)
   const navigationPathRef = useRef<number[]>([]);
@@ -187,10 +188,12 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
 
     const stage = stageRef.current;
     const targetScale = 3.0;
-    
+
     // 플레이어의 현재 위치
-    const playerPos = playerCoordsRef.current || (playerCoords ? playerCoords : { x: nodes[currentNodeId]?.x ?? 0, y: nodes[currentNodeId]?.y ?? 0 });
-    
+    const playerPos =
+      playerCoordsRef.current ||
+      (playerCoords ? playerCoords : { x: nodes[currentNodeId]?.x ?? 0, y: nodes[currentNodeId]?.y ?? 0 });
+
     const targetX = dimensions.width / 2 - playerPos.x * targetScale;
     const targetY = dimensions.height / 2 - playerPos.y * targetScale;
 
@@ -199,8 +202,8 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
     const currentX = stage.x();
     const currentY = stage.y();
     if (
-      Math.abs(currentScale - targetScale) < 0.01 && 
-      Math.abs(currentX - targetX) < 1 && 
+      Math.abs(currentScale - targetScale) < 0.01 &&
+      Math.abs(currentX - targetX) < 1 &&
       Math.abs(currentY - targetY) < 1
     ) {
       return;
@@ -236,11 +239,11 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
     const { x, y, scale } = stageTransform;
 
     // 네비게이션 주행 중에는 카메라 스크롤에 따른 리액트 리렌더링(컬링 갱신)을 원천 차단하기 위해 마진을 6000px로 대폭 확장
-    const margin = isNavigating ? 6000 : 400; 
+    const margin = isNavigating ? 6000 : 400;
     const minX = -x / scale - margin;
     const minY = -y / scale - margin;
-    const maxX = minX + (width / scale) + margin * 2;
-    const maxY = minY + (height / scale) + margin * 2;
+    const maxX = minX + width / scale + margin * 2;
+    const maxY = minY + height / scale + margin * 2;
 
     return { minX, minY, maxX, maxY };
   }, [stageTransform, dimensions, isNavigating]);
@@ -251,12 +254,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
     const { minX, minY, maxX, maxY } = visibleBounds;
 
     nodes.forEach((node, idx) => {
-      if (
-        node.x >= minX &&
-        node.x <= maxX &&
-        node.y >= minY &&
-        node.y <= maxY
-      ) {
+      if (node.x >= minX && node.x <= maxX && node.y >= minY && node.y <= maxY) {
         indices.add(idx);
       }
     });
@@ -271,12 +269,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
     return buildings.filter((b) => {
       const first = b.coordinates[0];
       if (!first) return false;
-      return (
-        first.x >= minX &&
-        first.x <= maxX &&
-        first.y >= minY &&
-        first.y <= maxY
-      );
+      return first.x >= minX && first.x <= maxX && first.y >= minY && first.y <= maxY;
     });
   }, [visibleBounds]);
 
@@ -391,7 +384,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
 
       let currentPos = playerCoordsRef.current;
       // 방어 코드: currentPos가 0,0이거나 없으면 이전 노드의 좌표로 복구
-      if ((!currentPos || (currentPos.x === 0 && currentPos.y === 0))) {
+      if (!currentPos || (currentPos.x === 0 && currentPos.y === 0)) {
         const prevNodeId = path[stepIdx - 1] ?? currentNodeId;
         const prevNode = nodes[prevNodeId];
         if (prevNode) {
@@ -426,6 +419,11 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
           playerMarkerRef.current.getLayer()?.batchDraw();
         }
 
+        if (sightMaskRef.current) {
+          sightMaskRef.current.x(arrivedPos.x);
+          sightMaskRef.current.y(arrivedPos.y);
+        }
+
         // 카메라 추적 활성화 시 즉시 카메라 중앙 정렬
         updateCameraFollow(arrivedPos.x, arrivedPos.y);
 
@@ -438,7 +436,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
           pathLineRef.current.points(remainingPoints);
           pathLineRef.current.getLayer()?.batchDraw();
         }
-        
+
         // 다음 스텝 인덱스로 진행 (리액트 리렌더링 없이 즉시 연속 이동)
         currentPathStepRef.current += 1;
 
@@ -463,7 +461,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
           x: currentPos.x + dx * ratio,
           y: currentPos.y + dy * ratio,
         };
-        
+
         playerCoordsRef.current = newPos;
 
         // 리액트 State 리렌더링 우회: Konva 노드를 직접 위치 변경
@@ -472,6 +470,11 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
           playerMarkerRef.current.y(newPos.y);
           playerMarkerRef.current.rotation(angleDeg);
           playerMarkerRef.current.getLayer()?.batchDraw();
+        }
+
+        if (sightMaskRef.current) {
+          sightMaskRef.current.x(newPos.x);
+          sightMaskRef.current.y(newPos.y);
         }
 
         // 실시간 카메라 트래킹 적용
@@ -521,7 +524,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
 
     const scaleBy = 1.15;
     const newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
-    
+
     // 줌 범위 최소 0.05배 ~ 최대 10배 제한
     const clampedScale = Math.max(0.05, Math.min(10, newScale));
 
@@ -565,111 +568,111 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
     <CanvasContainer ref={containerRef}>
       {/* 하이테크 스타일 정보 패널 오버레이 (개발 모드일 때만 렌더링) */}
       {!isCombat && showDevPanel && (
-        <InfoPanel
-          onMouseDown={(e) => e.stopPropagation()}
-          onWheel={(e) => e.stopPropagation()}
-        >
-        <ExpandableHeader 
-          onClick={() => setIsStatusExpanded(!isStatusExpanded)} 
-          style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}
-        >
-          <SectionLabel style={{ color: "#4d7cff", letterSpacing: "1.5px" }}>NETWORK MATRIX STATUS</SectionLabel>
-          <ExpandIcon $expanded={isStatusExpanded}>▼</ExpandIcon>
-        </ExpandableHeader>
+        <InfoPanel onMouseDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+          <ExpandableHeader
+            onClick={() => setIsStatusExpanded(!isStatusExpanded)}
+            style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}
+          >
+            <SectionLabel style={{ color: "#4d7cff", letterSpacing: "1.5px" }}>NETWORK MATRIX STATUS</SectionLabel>
+            <ExpandIcon $expanded={isStatusExpanded}>▼</ExpandIcon>
+          </ExpandableHeader>
 
-        <ExpandableContent $expanded={isStatusExpanded}>
-          <MetricRow style={{ marginTop: "12px" }}>
-            <MetricLabel>Total Nodes / Edges</MetricLabel>
-            <MetricValue>{nodes.length} / {edges.length}</MetricValue>
-          </MetricRow>
-          <MetricRow>
-            <MetricLabel>Total Buildings</MetricLabel>
-            <MetricValue>{buildings.length}</MetricValue>
-          </MetricRow>
-          <MetricRow>
-            <MetricLabel>Rendered Nodes (Culled)</MetricLabel>
-            <MetricValue>{showNodes ? visibleNodeIndices.size : 0} ({showNodes ? Math.round((visibleNodeIndices.size / nodes.length) * 100) : 0}%)</MetricValue>
-          </MetricRow>
-          <MetricRow>
-            <MetricLabel>Rendered Buildings (Culled)</MetricLabel>
-            <MetricValue>{showBuildings ? visibleBuildings.length : 0} ({showBuildings ? Math.round((visibleBuildings.length / buildings.length) * 100) : 0}%)</MetricValue>
-          </MetricRow>
-          <MetricRow>
-            <MetricLabel>Zoom Factor</MetricLabel>
-            <MetricValue>{Math.round(stageTransform.scale * 100)}%</MetricValue>
-          </MetricRow>
-          <MetricRow>
-            <MetricLabel>Viewport Area</MetricLabel>
-            <MetricValue>{dimensions.width}x{dimensions.height}</MetricValue>
-          </MetricRow>
-        </ExpandableContent>
-        
-        {/* 접이식(Expandable) 렌더링 옵션 아코디언 */}
-        <ExpandableHeader onClick={() => setIsOptionsExpanded(!isOptionsExpanded)}>
-          <SectionLabel>Rendering Config</SectionLabel>
-          <ExpandIcon $expanded={isOptionsExpanded}>▼</ExpandIcon>
-        </ExpandableHeader>
-        
-        <ExpandableContent $expanded={isOptionsExpanded}>
-          <MetricRow>
-            <MetricLabel>Display Nodes</MetricLabel>
-            <ToggleButton 
-              $active={showNodes} 
-              onClick={() => {
-                setShowNodes(!showNodes);
-                resetHoverHud();
-              }}
-            >
-              {showNodes ? "ON" : "OFF"}
-            </ToggleButton>
-          </MetricRow>
-          <MetricRow>
-            <MetricLabel>Display Edges</MetricLabel>
-            <ToggleButton 
-              $active={showEdges} 
-              onClick={() => setShowEdges(!showEdges)}
-            >
-              {showEdges ? "ON" : "OFF"}
-            </ToggleButton>
-          </MetricRow>
-          <MetricRow>
-            <MetricLabel>Display Buildings</MetricLabel>
-            <ToggleButton 
-              $active={showBuildings} 
-              onClick={() => {
-                setShowBuildings(!showBuildings);
-                resetHoverHud();
-              }}
-            >
-              {showBuildings ? "ON" : "OFF"}
-            </ToggleButton>
-          </MetricRow>
-          <MetricRow>
-            <MetricLabel>Track Player</MetricLabel>
-            <ToggleButton 
-              $active={followPlayer} 
-              onClick={() => setFollowPlayer(!followPlayer)}
-            >
-              {followPlayer ? "ON" : "OFF"}
-            </ToggleButton>
-          </MetricRow>
-        </ExpandableContent>
-        
-        {/* 호버 정보 상세 표시창 (React 리렌더링 차단을 위해 DOM 명령형 주입) */}
-        <HoverDetail id="hud-hover-detail" style={{ display: "none" }} />
-        
-        <ControlHint>Drag to Pan / Scroll to Zoom</ControlHint>
-      </InfoPanel>
+          <ExpandableContent $expanded={isStatusExpanded}>
+            <MetricRow style={{ marginTop: "12px" }}>
+              <MetricLabel>Total Nodes / Edges</MetricLabel>
+              <MetricValue>
+                {nodes.length} / {edges.length}
+              </MetricValue>
+            </MetricRow>
+            <MetricRow>
+              <MetricLabel>Total Buildings</MetricLabel>
+              <MetricValue>{buildings.length}</MetricValue>
+            </MetricRow>
+            <MetricRow>
+              <MetricLabel>Rendered Nodes (Culled)</MetricLabel>
+              <MetricValue>
+                {showNodes ? visibleNodeIndices.size : 0} (
+                {showNodes ? Math.round((visibleNodeIndices.size / nodes.length) * 100) : 0}%)
+              </MetricValue>
+            </MetricRow>
+            <MetricRow>
+              <MetricLabel>Rendered Buildings (Culled)</MetricLabel>
+              <MetricValue>
+                {showBuildings ? visibleBuildings.length : 0} (
+                {showBuildings ? Math.round((visibleBuildings.length / buildings.length) * 100) : 0}%)
+              </MetricValue>
+            </MetricRow>
+            <MetricRow>
+              <MetricLabel>Zoom Factor</MetricLabel>
+              <MetricValue>{Math.round(stageTransform.scale * 100)}%</MetricValue>
+            </MetricRow>
+            <MetricRow>
+              <MetricLabel>Viewport Area</MetricLabel>
+              <MetricValue>
+                {dimensions.width}x{dimensions.height}
+              </MetricValue>
+            </MetricRow>
+          </ExpandableContent>
+
+          {/* 접이식(Expandable) 렌더링 옵션 아코디언 */}
+          <ExpandableHeader onClick={() => setIsOptionsExpanded(!isOptionsExpanded)}>
+            <SectionLabel>Rendering Config</SectionLabel>
+            <ExpandIcon $expanded={isOptionsExpanded}>▼</ExpandIcon>
+          </ExpandableHeader>
+
+          <ExpandableContent $expanded={isOptionsExpanded}>
+            <MetricRow>
+              <MetricLabel>Display Nodes</MetricLabel>
+              <ToggleButton
+                $active={showNodes}
+                onClick={() => {
+                  setShowNodes(!showNodes);
+                  resetHoverHud();
+                }}
+              >
+                {showNodes ? "ON" : "OFF"}
+              </ToggleButton>
+            </MetricRow>
+            <MetricRow>
+              <MetricLabel>Display Edges</MetricLabel>
+              <ToggleButton $active={showEdges} onClick={() => setShowEdges(!showEdges)}>
+                {showEdges ? "ON" : "OFF"}
+              </ToggleButton>
+            </MetricRow>
+            <MetricRow>
+              <MetricLabel>Display Buildings</MetricLabel>
+              <ToggleButton
+                $active={showBuildings}
+                onClick={() => {
+                  setShowBuildings(!showBuildings);
+                  resetHoverHud();
+                }}
+              >
+                {showBuildings ? "ON" : "OFF"}
+              </ToggleButton>
+            </MetricRow>
+            <MetricRow>
+              <MetricLabel>Track Player</MetricLabel>
+              <ToggleButton $active={followPlayer} onClick={() => setFollowPlayer(!followPlayer)}>
+                {followPlayer ? "ON" : "OFF"}
+              </ToggleButton>
+            </MetricRow>
+          </ExpandableContent>
+
+          {/* 호버 정보 상세 표시창 (React 리렌더링 차단을 위해 DOM 명령형 주입) */}
+          <HoverDetail id="hud-hover-detail" style={{ display: "none" }} />
+
+          <ControlHint>Drag to Pan / Scroll to Zoom</ControlHint>
+        </InfoPanel>
       )}
 
       {/* 하단 플로팅 네비게이션 HUD (개발 모드일 때만 렌더링) */}
       {!isCombat && showDevPanel && targetNodeId !== null && (
-        <NavigationPanel
-          onMouseDown={(e) => e.stopPropagation()}
-          onWheel={(e) => e.stopPropagation()}
-        >
+        <NavigationPanel onMouseDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
           <NavInfoArea>
-            <SectionLabel style={{ color: "#2bcbba", display: "block", marginBottom: "4px" }}>Navigation Matrix</SectionLabel>
+            <SectionLabel style={{ color: "#2bcbba", display: "block", marginBottom: "4px" }}>
+              Navigation Matrix
+            </SectionLabel>
             <MetricRow style={{ margin: 0, display: "flex", gap: "12px", flexWrap: "wrap" }}>
               <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
                 <MetricLabel>Current:</MetricLabel>
@@ -685,19 +688,16 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
               </div>
             </MetricRow>
           </NavInfoArea>
-          
+
           <NavButtonArea>
-            <StyledNavButton 
-              $primary 
+            <StyledNavButton
+              $primary
               disabled={shortestPath.length <= 1 || isNavigating}
               onClick={() => setIsNavigating(true)}
             >
               {isNavigating ? "IN TRANSIT..." : "START NAVIGATION"}
             </StyledNavButton>
-            <StyledNavButton 
-              disabled={isNavigating}
-              onClick={() => setTargetNodeId(null)}
-            >
+            <StyledNavButton disabled={isNavigating} onClick={() => setTargetNodeId(null)}>
               CANCEL
             </StyledNavButton>
           </NavButtonArea>
@@ -745,7 +745,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
                       onTap={() => handleTargetSelect(b.roadNodeId)}
                       onMouseEnter={(e) => {
                         const shape = e.target;
-                        
+
                         // Z-Index 최상단 이동: 겹치는 건물 중 호버된 건물이 위로 올라오도록 처리
                         shape.moveToTop();
 
@@ -911,12 +911,35 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
                     shadowBlur={8}
                     shadowOpacity={0.8}
                   />
-                  <Circle
-                    radius={3}
-                    fill="#ff4757"
-                  />
+                  <Circle radius={3} fill="#ff4757" />
                 </Group>
               )}
+            </Layer>
+          )}
+
+          {/* Layer 3.7: Vignette / Fog of War (플레이어 시야 외부 어둡게 마스킹) */}
+          {playerCoords && (
+            <Layer listening={false}>
+              <Circle
+                ref={sightMaskRef}
+                x={playerCoords.x}
+                y={playerCoords.y}
+                radius={2000}
+                fillRadialGradientStartPoint={{ x: 0, y: 0 }}
+                fillRadialGradientStartRadius={0}
+                fillRadialGradientEndPoint={{ x: 0, y: 0 }}
+                fillRadialGradientEndRadius={150}
+                fillRadialGradientColorStops={[
+                  0,
+                  "rgba(6, 7, 10, 0)",
+                  0.15,
+                  "rgba(6, 7, 10, 0)",
+                  0.3,
+                  "rgba(6, 7, 10, 0.2)",
+                  0.5,
+                  "rgba(6, 7, 10, 0.5)",
+                ]}
+              />
             </Layer>
           )}
 
@@ -953,7 +976,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
                       onTap={() => handleTargetSelect(nodeIdx)}
                       onMouseEnter={(e) => {
                         const shape = e.target;
-                        
+
                         // Z-Index 최상단 이동: 겹치는 노드 중 호버된 노드가 위로 올라오도록 처리
                         shape.moveToTop();
 
@@ -1062,7 +1085,7 @@ const InfoPanel = styled.div`
   border: 1px solid rgba(77, 124, 255, 0.2);
   border-radius: 16px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-  font-family: 'Outfit', 'Inter', sans-serif;
+  font-family: "Outfit", "Inter", sans-serif;
   color: #e4e6eb;
   pointer-events: auto; /* 패널 내부 스위치 등을 클릭할 수 있도록 활성화 */
 `;
@@ -1108,23 +1131,23 @@ const ExpandIcon = styled.span<{ $expanded: boolean }>`
   font-size: 8px;
   color: #4d7cff;
   transition: transform 0.2s ease;
-  transform: rotate(${props => props.$expanded ? "180deg" : "0deg"});
+  transform: rotate(${(props) => (props.$expanded ? "180deg" : "0deg")});
 `;
 
 const ExpandableContent = styled.div<{ $expanded: boolean }>`
-  max-height: ${props => props.$expanded ? "200px" : "0px"};
+  max-height: ${(props) => (props.$expanded ? "200px" : "0px")};
   overflow: hidden;
   transition: max-height 0.25s ease-out;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: ${props => props.$expanded ? "12px" : "0px"};
+  margin-top: ${(props) => (props.$expanded ? "12px" : "0px")};
 `;
 
 const ToggleButton = styled.button<{ $active: boolean }>`
-  background: ${props => props.$active ? "rgba(77, 124, 255, 0.2)" : "rgba(255, 255, 255, 0.05)"};
-  border: 1px solid ${props => props.$active ? "#4d7cff" : "rgba(255, 255, 255, 0.15)"};
-  color: ${props => props.$active ? "#ffffff" : "#8a8d98"};
+  background: ${(props) => (props.$active ? "rgba(77, 124, 255, 0.2)" : "rgba(255, 255, 255, 0.05)")};
+  border: 1px solid ${(props) => (props.$active ? "#4d7cff" : "rgba(255, 255, 255, 0.15)")};
+  color: ${(props) => (props.$active ? "#ffffff" : "#8a8d98")};
   padding: 4px 12px;
   border-radius: 8px;
   font-size: 10px;
@@ -1134,8 +1157,8 @@ const ToggleButton = styled.button<{ $active: boolean }>`
   font-family: monospace;
 
   &:hover {
-    background: ${props => props.$active ? "rgba(77, 124, 255, 0.3)" : "rgba(255, 255, 255, 0.1)"};
-    border-color: ${props => props.$active ? "#4d7cff" : "rgba(255, 255, 255, 0.3)"};
+    background: ${(props) => (props.$active ? "rgba(77, 124, 255, 0.3)" : "rgba(255, 255, 255, 0.1)")};
+    border-color: ${(props) => (props.$active ? "#4d7cff" : "rgba(255, 255, 255, 0.3)")};
   }
 `;
 
@@ -1167,8 +1190,10 @@ const NavigationPanel = styled.div`
   backdrop-filter: blur(16px);
   border: 1px solid rgba(43, 203, 186, 0.4);
   border-radius: 20px;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 0 0 15px rgba(43, 203, 186, 0.15);
-  font-family: 'Outfit', 'Inter', sans-serif;
+  box-shadow:
+    0 15px 35px rgba(0, 0, 0, 0.6),
+    0 0 15px rgba(43, 203, 186, 0.15);
+  font-family: "Outfit", "Inter", sans-serif;
   color: #e4e6eb;
   display: flex;
   flex-direction: column;
@@ -1202,23 +1227,23 @@ const NavButtonArea = styled.div`
 
 const StyledNavButton = styled.button<{ $primary?: boolean }>`
   flex: 1;
-  background: ${props => props.$primary ? "rgba(43, 203, 186, 0.2)" : "rgba(255, 71, 87, 0.15)"};
-  border: 1px solid ${props => props.$primary ? "#2bcbba" : "rgba(255, 71, 87, 0.4)"};
-  color: ${props => props.$primary ? "#2bcbba" : "#ff4757"};
+  background: ${(props) => (props.$primary ? "rgba(43, 203, 186, 0.2)" : "rgba(255, 71, 87, 0.15)")};
+  border: 1px solid ${(props) => (props.$primary ? "#2bcbba" : "rgba(255, 71, 87, 0.4)")};
+  color: ${(props) => (props.$primary ? "#2bcbba" : "#ff4757")};
   padding: 6px 0;
   border-radius: 8px;
   font-size: 10px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-family: 'Outfit', sans-serif;
+  font-family: "Outfit", sans-serif;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 
   &:hover:not(:disabled) {
-    background: ${props => props.$primary ? "rgba(43, 203, 186, 0.35)" : "rgba(255, 71, 87, 0.25)"};
-    border-color: ${props => props.$primary ? "#2bcbba" : "#ff4757"};
-    box-shadow: 0 0 10px ${props => props.$primary ? "rgba(43, 203, 186, 0.3)" : "rgba(255, 71, 87, 0.3)"};
+    background: ${(props) => (props.$primary ? "rgba(43, 203, 186, 0.35)" : "rgba(255, 71, 87, 0.25)")};
+    border-color: ${(props) => (props.$primary ? "#2bcbba" : "#ff4757")};
+    box-shadow: 0 0 10px ${(props) => (props.$primary ? "rgba(43, 203, 186, 0.3)" : "rgba(255, 71, 87, 0.3)")};
   }
 
   &:disabled {
