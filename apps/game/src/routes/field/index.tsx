@@ -3,7 +3,7 @@ import { createFileRoute, useSearch } from "@tanstack/react-router";
 import type { BattleEvent } from "@webgame/types";
 import { useAtom, useAtomValue } from "jotai";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import styled from "styled-components";
 
 import { currentTimeAtom, displayEventsAtom } from "@/atoms/globalAtom";
@@ -19,8 +19,6 @@ import { useFieldCombat } from "@/utils/hooks/useFieldCombat";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useInventoryDrag } from "@/utils/hooks/useInventoryDrag";
 
-import mapData from "../../assets/map_graph.json";
-
 export const Route = createFileRoute("/field/")({
   component: RouteComponent,
 });
@@ -32,28 +30,32 @@ function RouteComponent() {
   const currentTime = useAtomValue(currentTimeAtom);
   const displayEvents = useAtomValue(displayEventsAtom);
 
-  const { isCombat, setIsCombat, handleEnemyClick, battleLog } = useFieldCombat(characterData);
+  const { isCombat, setIsCombat, handleArriveNode, battleLog } = useFieldCombat(characterData);
   const { activeId, handleDragStart, handleDragEnd } = useInventoryDrag(characterData);
   const enemyPositions = useEnemyPositions(battleLog, characterData?.raw.user.nickname);
 
   const [currentNodeId] = useAtom(currentNodeIdAtom);
   const [isNavigating] = useAtom(isNavigatingAtom);
+  
+  // 중복 요청 및 무한 루프 방지를 위한 마지막 보고 노드 기록 Ref
+  const lastReportedNodeRef = useRef<number | null>(null);
 
-  // 1. 노드 이동 완료 시 인카운터(전투) 자동 시작
+
+  // 1. 노드 이동 완료 시 서버에 도착 알림 및 인카운터 트리거 판정 요청
   useEffect(() => {
-    if (isNavigating) return;
+    if (isNavigating) {
+      // 주행 중일 때 기록 초기화 (도착 시 1회 발송 보장)
+      lastReportedNodeRef.current = null;
+      return;
+    }
     if (isCombat) return;
     if (!characterData?.raw.id) return;
+    if (lastReportedNodeRef.current === currentNodeId) return;
 
-    // 도착한 노드가 건물에 연결된 노드인지 검사
-    const buildings = (mapData.buildings || []) as Array<{ roadNodeId: number }>;
-    const isAtBuilding = buildings.some((b) => b.roadNodeId === currentNodeId);
-
-    if (isAtBuilding) {
-      console.log(`[Raid] Arrived at building node #${currentNodeId}. Triggering battle!`);
-      handleEnemyClick();
-    }
-  }, [isNavigating, currentNodeId, isCombat, characterData, handleEnemyClick]);
+    console.log(`[Raid] Arrived at node #${currentNodeId}. Querying server encounter...`);
+    lastReportedNodeRef.current = currentNodeId;
+    handleArriveNode(currentNodeId);
+  }, [isNavigating, currentNodeId, isCombat, characterData, handleArriveNode]);
 
   const activeAttacks = useMemo(() => {
     return displayEvents.filter((e: BattleEvent) => e.type === "ATTACK");
@@ -63,6 +65,14 @@ function RouteComponent() {
 
   return (
     <Page>
+      <FieldBackground
+        isCombat={isCombat}
+        battleLog={battleLog}
+        enemyPositions={enemyPositions}
+        activeAttacks={activeAttacks}
+        currentTime={currentTime}
+        characterNickname={characterData?.raw.user.nickname}
+      />
       <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <LayoutGroup id="inventory-group">
           <AnimatePresence initial={false}>
@@ -116,14 +126,6 @@ function RouteComponent() {
           </AnimatePresence>
         </LayoutGroup>
       </DndContext>
-      <FieldBackground
-        isCombat={isCombat}
-        battleLog={battleLog}
-        enemyPositions={enemyPositions}
-        activeAttacks={activeAttacks}
-        currentTime={currentTime}
-        characterNickname={characterData?.raw.user.nickname}
-      />
     </Page>
   );
 }

@@ -2,19 +2,19 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { BattleEvent, BattleLog } from "@webgame/types";
 import { useAtom, useAtomValue,useSetAtom } from "jotai";
-import { useEffect, useRef,useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { battleLogAtom, currentTimeAtom, displayEventsAtom,flattenedTimelineAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { isCombatAtom } from "@/atoms/raidAtom";
+import { useArriveRaidNode } from "@/utils/hooks/useArriveRaidNode";
 import { useBattleData } from "@/utils/hooks/useBattleData";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
-import { useStartMonsterBattle } from "@/utils/hooks/useStartMonsterBattle";
 
 export function useFieldCombat(characterData: CharacterData | undefined) {
   const navigate = useNavigate();
   const [isCombat, setIsCombat] = useAtom(isCombatAtom);
   const { setBattleLog } = useBattleData();
-  const startMonsterBattle = useStartMonsterBattle();
+  const arriveRaidNode = useArriveRaidNode();
   const [time, setTime] = useAtom(currentTimeAtom);
   const [battleLog] = useAtom(battleLogAtom);
   const timeline = useAtomValue(flattenedTimelineAtom);
@@ -110,23 +110,30 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     };
   }, [isProcessing, setTime, setDisplayEvents, time, setProcessedEvents]);
 
-  const handleEnemyClick = () => {
+  const handleArriveNode = useCallback((nodeId: number) => {
     if (isCombat || !characterData?.raw.id) return;
-    startMonsterBattle.mutate(
-      { characterId: characterData.raw.id, level: 1 },
+    arriveRaidNode.mutate(
+      { characterId: characterData.raw.id, nodeId },
       {
-        onSuccess: (log) => {
-          console.log("[Battle] Started new battle");
-          setBattleLog(log);
-          setTime(0);
-          setDisplayEvents([]);
-          setProcessedEvents([]);
-          setIsProcessing(false);
-          setIsCombat(true);
+        onSuccess: (res) => {
+          if (res.combatTriggered && res.battleLog) {
+            console.log(`[Raid] Encounter triggered at node #${nodeId}! Starting battle...`);
+            setBattleLog(res.battleLog);
+            setTime(0);
+            setDisplayEvents([]);
+            setProcessedEvents([]);
+            setIsProcessing(false);
+            setIsCombat(true);
+          } else {
+            console.log(`[Raid] Arrived safely at node #${nodeId}`);
+          }
         },
+        onError: (err) => {
+          console.error("Failed to arrive at node:", err);
+        }
       },
     );
-  };
+  }, [isCombat, characterData, arriveRaidNode, setBattleLog, setTime, setDisplayEvents, setProcessedEvents, setIsCombat]);
 
   useEffect(() => {
     if (isCombat) {
@@ -134,5 +141,5 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     }
   }, [isCombat, navigate]);
 
-  return { isCombat, setIsCombat, handleEnemyClick, battleLog };
+  return { isCombat, setIsCombat, handleArriveNode, battleLog };
 }

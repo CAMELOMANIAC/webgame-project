@@ -1,15 +1,18 @@
 import { useAtom } from "jotai";
 import Konva from "konva";
 import { useEffect, useMemo,useRef, useState } from "react";
-import { Circle, Group, Layer, Line,Shape, Stage } from "react-konva";
+import { Circle, Group, Image, Layer, Line,Shape, Stage } from "react-konva";
 import styled from "styled-components";
+import useImage from "use-image";
 
+import compass from "../assets/compass.svg";
 import mapData from "../assets/map_graph.json";
 import {
   currentNodeIdAtom,
   followPlayerAtom,
   isNavigatingAtom,
   playerCoordsAtom,
+  playerRotationAtom,
   shortestPathAtom,
   targetNodeIdAtom,
 } from "../atoms/raidAtom";
@@ -64,32 +67,45 @@ interface MapGraphCanvasProps {
 export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
+  const [compassImg] = useImage(compass);
   
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [stageTransform, setStageTransform] = useState({
     x: 0,
     y: 0,
-    scale: 0.8,
+    scale: 3.0,
   });
 
-  const [showNodes, setShowNodes] = useState(true);
+  const [showNodes, setShowNodes] = useState(false);
   const [showEdges, setShowEdges] = useState(true);
   const [showBuildings, setShowBuildings] = useState(true);
   const [isOptionsExpanded, setIsOptionsExpanded] = useState(false);
   const [isStatusExpanded, setIsStatusExpanded] = useState(true);
+
+  // 개발 환경의 설정에 따라 디버그 오버레이 노출 여부 결정
+  const [showDevPanel] = useState(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const isDevParam = params.get("dev") === "true";
+      const isDevStorage = localStorage.getItem("dev_mode") === "true";
+      return !!(import.meta.env.DEV && (isDevParam || isDevStorage));
+    }
+    return false;
+  });
 
   // 네비게이션/길찾기 상태 변수 (Jotai Atom 연동)
   const [currentNodeId, setCurrentNodeId] = useAtom(currentNodeIdAtom);
   const [targetNodeId, setTargetNodeId] = useAtom(targetNodeIdAtom);
   const [shortestPath, setShortestPath] = useAtom(shortestPathAtom);
   const [isNavigating, setIsNavigating] = useAtom(isNavigatingAtom);
+  const [, setPlayerRotation] = useAtom(playerRotationAtom);
 
   // 플레이어의 실제 화면 드로잉 좌표 상태 및 최신 값 동기화용 Ref (부드러운 보간용)
   const [playerCoords, setPlayerCoords] = useAtom(playerCoordsAtom);
   const playerCoordsRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // 플레이어 마커 및 경로 라인 Konva 레퍼런스 (애니메이션 떨림 차단용 직접 조작)
-  const playerMarkerRef = useRef<Konva.Group | null>(null);
+  const playerMarkerRef = useRef<Konva.Image | null>(null);
   const pathLineRef = useRef<Konva.Line | null>(null);
 
   // 네비게이션 경로 및 현재 도달 스텝을 추적하는 Ref (단일 requestAnimationFrame 유지용)
@@ -104,6 +120,21 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
   useEffect(() => {
     followPlayerRef.current = followPlayer;
   }, [followPlayer]);
+
+  // 대상 노드 선택 시 네비게이션 트리거 (개발 모드인 경우 승인 단계를 거치고, 일반 모드면 즉시 출발)
+  const handleTargetSelect = (targetId: number) => {
+    if (isNavigating) return;
+    if (showDevPanel) {
+      setTargetNodeId(targetId);
+    } else {
+      const path = findShortestPath(currentNodeId, targetId);
+      if (path.length > 1) {
+        setTargetNodeId(targetId);
+        setShortestPath(path);
+        setIsNavigating(true);
+      }
+    }
+  };
 
   // 1. ResizeObserver를 사용하여 부모 컨테이너 크기 추적 (모바일 뷰포트 대응)
   useEffect(() => {
@@ -127,48 +158,77 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
     };
   }, []);
 
-  // 2. 처음 마운트 및 창 크기 변경 시 그래프를 중앙 정렬하고 스크린에 피팅
+  // 2. 처음 마운트 및 창 크기 변경 시 카메라를 플레이어 위치에 고정하고 배율을 3으로 설정
   useEffect(() => {
     if (!stageRef.current || dimensions.width === 0 || dimensions.height === 0) return;
 
     const stage = stageRef.current;
-    
-    // 그래프 전체 바운딩 박스 계산
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
+    const scale = 3.0;
+    const playerNode = nodes[currentNodeId];
+    if (!playerNode) return;
 
-    nodes.forEach(n => {
-      if (n.x < minX) minX = n.x;
-      if (n.x > maxX) maxX = n.x;
-      if (n.y < minY) minY = n.y;
-      if (n.y > maxY) maxY = n.y;
-    });
-
-    const graphWidth = maxX - minX;
-    const graphHeight = maxY - minY;
-    
-    // 약간의 여백을 둔 스케일 계산
-    const scaleX = (dimensions.width * 0.85) / graphWidth;
-    const scaleY = (dimensions.height * 0.85) / graphHeight;
-    const initialScale = Math.min(scaleX, scaleY);
-    
-    // 그래프 중심점 계산
-    const graphCenterX = minX + graphWidth / 2;
-    const graphCenterY = minY + graphHeight / 2;
-
-    const newX = dimensions.width / 2 - graphCenterX * initialScale;
-    const newY = dimensions.height / 2 - graphCenterY * initialScale;
+    const newX = dimensions.width / 2 - playerNode.x * scale;
+    const newY = dimensions.height / 2 - playerNode.y * scale;
 
     stage.position({ x: newX, y: newY });
-    stage.scale({ x: initialScale, y: initialScale });
+    stage.scale({ x: scale, y: scale });
     stage.batchDraw();
 
     setStageTransform({
       x: newX,
       y: newY,
-      scale: initialScale,
+      scale: scale,
     });
-  }, [dimensions.width, dimensions.height]);
+  }, [dimensions.width, dimensions.height, currentNodeId]);
+
+  // 2.1. 전투 시작 시 플레이어 중심 3.0배율 카메라 줌인 트랜지션 (Konva Tween 활용)
+  useEffect(() => {
+    if (!isCombat || !stageRef.current || dimensions.width === 0 || dimensions.height === 0) return;
+
+    const stage = stageRef.current;
+    const targetScale = 3.0;
+    
+    // 플레이어의 현재 위치
+    const playerPos = playerCoordsRef.current || (playerCoords ? playerCoords : { x: nodes[currentNodeId]?.x ?? 0, y: nodes[currentNodeId]?.y ?? 0 });
+    
+    const targetX = dimensions.width / 2 - playerPos.x * targetScale;
+    const targetY = dimensions.height / 2 - playerPos.y * targetScale;
+
+    // 이미 줌 배율이 3.0이고 중심도 맞아있다면 굳이 트윈하지 않음
+    const currentScale = stage.scaleX();
+    const currentX = stage.x();
+    const currentY = stage.y();
+    if (
+      Math.abs(currentScale - targetScale) < 0.01 && 
+      Math.abs(currentX - targetX) < 1 && 
+      Math.abs(currentY - targetY) < 1
+    ) {
+      return;
+    }
+
+    const tween = new Konva.Tween({
+      node: stage,
+      duration: 0.8, // 자연스러운 0.8초 애니메이션
+      x: targetX,
+      y: targetY,
+      scaleX: targetScale,
+      scaleY: targetScale,
+      easing: Konva.Easings.EaseInOut,
+      onFinish: () => {
+        setStageTransform({
+          x: targetX,
+          y: targetY,
+          scale: targetScale,
+        });
+      },
+    });
+
+    tween.play();
+
+    return () => {
+      tween.destroy();
+    };
+  }, [isCombat, dimensions.width, dimensions.height, currentNodeId, setStageTransform]);
 
   // 3. 뷰포트 기준 경계 상자(Bounding Box) 계산
   const visibleBounds = useMemo(() => {
@@ -264,6 +324,17 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
     navigationPathRef.current = shortestPath;
     currentPathStepRef.current = 1;
 
+    // 첫 스텝 각도 계산 및 상태 동기화
+    const startNode = nodes[shortestPath[0]];
+    const nextNode = nodes[shortestPath[1]];
+    if (startNode && nextNode) {
+      const dx = nextNode.x - startNode.x;
+      const dy = nextNode.y - startNode.y;
+      const angleRad = Math.atan2(dy, dx);
+      const angleDeg = (angleRad * 180) / Math.PI + 90;
+      setPlayerRotation(angleDeg);
+    }
+
     let animId: number;
     let lastTime = performance.now();
     const speed = 180; // 일정한 속도로 이동 (초당 180 픽셀)
@@ -336,6 +407,10 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
       const dy = nextNode.y - currentPos.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
+      // 이동 방향 각도 계산 (도 단위 변환 및 나침반 기본 방향 북쪽 상쇄 90도)
+      const angleRad = Math.atan2(dy, dx);
+      const angleDeg = (angleRad * 180) / Math.PI + 90;
+
       const step = speed * deltaTime;
 
       if (distance <= step) {
@@ -347,6 +422,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
         if (playerMarkerRef.current) {
           playerMarkerRef.current.x(arrivedPos.x);
           playerMarkerRef.current.y(arrivedPos.y);
+          playerMarkerRef.current.rotation(angleDeg);
           playerMarkerRef.current.getLayer()?.batchDraw();
         }
 
@@ -366,6 +442,19 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
         // 다음 스텝 인덱스로 진행 (리액트 리렌더링 없이 즉시 연속 이동)
         currentPathStepRef.current += 1;
 
+        const nextStepIdx = currentPathStepRef.current;
+        if (nextStepIdx < path.length) {
+          const nextNextNode = nodes[path[nextStepIdx]];
+          const currNode = nodes[path[nextStepIdx - 1]];
+          if (currNode && nextNextNode) {
+            const nextDx = nextNextNode.x - currNode.x;
+            const nextDy = nextNextNode.y - currNode.y;
+            const nextAngleRad = Math.atan2(nextDy, nextDx);
+            const nextAngleDeg = (nextAngleRad * 180) / Math.PI + 90;
+            setPlayerRotation(nextAngleDeg);
+          }
+        }
+
         animId = requestAnimationFrame(tick);
       } else {
         // 등속 선형 보간 전진 (나누기 0에 의한 NaN 방지)
@@ -381,6 +470,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
         if (playerMarkerRef.current) {
           playerMarkerRef.current.x(newPos.x);
           playerMarkerRef.current.y(newPos.y);
+          playerMarkerRef.current.rotation(angleDeg);
           playerMarkerRef.current.getLayer()?.batchDraw();
         }
 
@@ -416,6 +506,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
   // 6. 마우스 휠 이벤트로 줌 처리 (커서 좌표 기준 줌)
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
+    if (isCombat) return;
     const stage = stageRef.current;
     if (!stage) return;
 
@@ -472,8 +563,8 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
 
   return (
     <CanvasContainer ref={containerRef}>
-      {/* 하이테크 스타일 정보 패널 오버레이 */}
-      {!isCombat && (
+      {/* 하이테크 스타일 정보 패널 오버레이 (개발 모드일 때만 렌더링) */}
+      {!isCombat && showDevPanel && (
         <InfoPanel
           onMouseDown={(e) => e.stopPropagation()}
           onWheel={(e) => e.stopPropagation()}
@@ -571,8 +662,8 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
       </InfoPanel>
       )}
 
-      {/* 하단 플로팅 네비게이션 HUD */}
-      {!isCombat && targetNodeId !== null && (
+      {/* 하단 플로팅 네비게이션 HUD (개발 모드일 때만 렌더링) */}
+      {!isCombat && showDevPanel && targetNodeId !== null && (
         <NavigationPanel
           onMouseDown={(e) => e.stopPropagation()}
           onWheel={(e) => e.stopPropagation()}
@@ -650,14 +741,8 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
                       fill="rgba(30, 35, 55, 0.45)"
                       stroke="rgba(77, 124, 255, 0.12)"
                       strokeWidth={1}
-                      onClick={() => {
-                        if (isNavigating) return;
-                        setTargetNodeId(b.roadNodeId);
-                      }}
-                      onTap={() => {
-                        if (isNavigating) return;
-                        setTargetNodeId(b.roadNodeId);
-                      }}
+                      onClick={() => handleTargetSelect(b.roadNodeId)}
+                      onTap={() => handleTargetSelect(b.roadNodeId)}
                       onMouseEnter={(e) => {
                         const shape = e.target;
                         
@@ -835,29 +920,19 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
             </Layer>
           )}
 
-          {/* Layer 3.8: Player Marker (실시간 위치 비콘) */}
+          {/* Layer 3.8: Player Marker (실시간 위치 Becon - SVG 나침반으로 변경) */}
           <Layer listening={false}>
-            {playerCoords && (
-              <Group 
+            {playerCoords && !isCombat && compassImg && (
+              <Image
                 ref={playerMarkerRef}
+                image={compassImg}
                 x={playerCoords.x}
                 y={playerCoords.y}
-              >
-                <Circle
-                  radius={12}
-                  stroke="#2ed573"
-                  strokeWidth={1.5}
-                  shadowColor="#2ed573"
-                  shadowBlur={12}
-                  shadowOpacity={0.9}
-                />
-                <Circle
-                  radius={5}
-                  fill="#2ed573"
-                  stroke="#ffffff"
-                  strokeWidth={1}
-                />
-              </Group>
+                width={50 / stageTransform.scale}
+                height={50 / stageTransform.scale}
+                offsetX={25 / stageTransform.scale}
+                offsetY={25 / stageTransform.scale}
+              />
             )}
           </Layer>
 
@@ -874,14 +949,8 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
                       key={`node-${nodeIdx}`}
                       x={node.x}
                       y={node.y}
-                      onClick={() => {
-                        if (isNavigating) return;
-                        setTargetNodeId(nodeIdx);
-                      }}
-                      onTap={() => {
-                        if (isNavigating) return;
-                        setTargetNodeId(nodeIdx);
-                      }}
+                      onClick={() => handleTargetSelect(nodeIdx)}
+                      onTap={() => handleTargetSelect(nodeIdx)}
                       onMouseEnter={(e) => {
                         const shape = e.target;
                         

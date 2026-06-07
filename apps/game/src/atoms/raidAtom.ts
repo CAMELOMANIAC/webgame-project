@@ -20,3 +20,7 @@ export const playerCoordsAtom = atom<{ x: number; y: number } | null>(null);
 
 // 카메라 추적 여부
 export const followPlayerAtom = atom<boolean>(true);
+
+// 플레이어의 현재 방향 회전 각도 (도 단위, 0도 = 북쪽)
+export const playerRotationAtom = atom<number>(0);
+

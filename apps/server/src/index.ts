@@ -5,6 +5,7 @@ import { simulateBattle } from "./logic/simulateBattle";
 import { User } from "@webgame/types";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { prisma } from "./db";
+import mapData from "./assets/map_graph.json";
 
 const fastify = Fastify({
   logger: true,
@@ -425,7 +426,182 @@ fastify.get("/monster/match", async (request, reply) => {
   }
 });
 
-// 몬스터와 전투 시뮬레이션 API
+// 공유 몬스터 전투 시뮬레이션 및 DB 영속성 처리 헬퍼
+async function executeMonsterBattle(characterId: string, level: number = 1) {
+  // 1) 캐릭터 데이터 조회 (장착 무기 포함)
+  const character = await prisma.character.findUnique({
+    where: { id: characterId },
+    include: {
+      weapons: { include: { weaponMaster: true } },
+      user: true,
+    },
+  });
+
+  if (!character) throw new Error("Character not found");
+
+  // 2) 적합한 몬스터 매칭
+  const monsters = await prisma.monsterMaster.findMany({
+    include: { weapons: { include: { weaponMaster: true } } },
+  });
+  type MonsterWithDetails = Prisma.MonsterMasterGetPayload<{
+    include: { weapons: { include: { weaponMaster: true } } };
+  }>;
+  const sorted = monsters.sort(
+    (a: MonsterWithDetails, b: MonsterWithDetails) =>
+      Math.abs(a.level - level) - Math.abs(b.level - level),
+  );
+  const match = sorted[0];
+  if (!match) throw new Error("No monsters found");
+
+  // 3) DB 데이터를 시뮬레이션용 User 타입으로 변환 (브릿지 로직)
+  const playerUser: User = {
+    id: character.user.nickname,
+    teamId: "TeamA",
+    hp: character.hp,
+    maxHp: character.maxHp,
+    stamina: character.stamina,
+    maxStamina: character.maxStamina,
+    staminaRegen: character.staminaRegen,
+    weight: character.weight,
+    maxWeight: character.maxWeight,
+    time: character.time,
+    currentWeaponIndex: 0,
+    weapons: [null, null, null, null, null, null],
+  };
+
+  type CharacterWeaponWithMaster = Prisma.CharacterWeaponGetPayload<{
+    include: { weaponMaster: true };
+  }>;
+  character.weapons.forEach((w: CharacterWeaponWithMaster) => {
+    if (w.slotIndex < 6)
+      playerUser.weapons[w.slotIndex] = { ...w.weaponMaster, currentCooldown: 0, use: () => [] };
+  });
+
+  const monsterUser: User = {
+    id: `${match.name} (Lv.${match.level})`,
+    teamId: "TeamB",
+    hp: match.hp,
+    maxHp: match.maxHp,
+    stamina: match.stamina,
+    maxStamina: match.maxStamina,
+    staminaRegen: match.staminaRegen,
+    weight: 0,
+    maxWeight: 100,
+    time: 0,
+    currentWeaponIndex: 0,
+    weapons: [null, null, null, null, null, null],
+  };
+
+  type MonsterWeaponWithMaster = Prisma.MonsterWeaponGetPayload<{
+    include: { weaponMaster: true };
+  }>;
+  match.weapons.forEach((w: MonsterWeaponWithMaster) => {
+    if (w.slotIndex < 6)
+      monsterUser.weapons[w.slotIndex] = { ...w.weaponMaster, currentCooldown: 0, use: () => [] };
+  });
+
+  // 4) 시뮬레이션 실행
+  const result = simulateBattle([playerUser, monsterUser]);
+
+  // 전투 결과 분석 및 DB 자동 반영
+  let playerWon = false;
+  let playerDied = false;
+  let remainingPlayerHp = playerUser.hp;
+
+  for (const entry of result.timeline) {
+    for (const event of entry.events) {
+      if (event.type === "DAMAGE" && event.targetId === playerUser.id) {
+        remainingPlayerHp = event.remainingHp;
+      }
+      if (event.type === "DEATH") {
+        if (event.playerId === playerUser.id) {
+          playerDied = true;
+        } else if (event.playerId === monsterUser.id) {
+          playerWon = true;
+        }
+      }
+    }
+  }
+
+  if (playerDied) {
+    // 캐릭터 사망: 모든 백팩 및 장비 유실, 로비 사출
+    await prisma.$transaction(async (tx) => {
+      await tx.raidInventoryItem.deleteMany({ where: { characterId } });
+      await tx.characterWeapon.deleteMany({ where: { characterId } });
+      await tx.character.update({
+        where: { id: characterId },
+        data: {
+          isRaiding: false,
+          hp: 100,
+          stamina: 100,
+          time: 0,
+        },
+      });
+    });
+    (result as any).playerDied = true;
+  } else {
+    // 플레이어 승리 또는 무승부
+    let rewardItemName: string | null = null;
+    if (playerWon) {
+      // 전리품 획득: 몬스터의 무기 중 하나를 무작위로 지급
+      const monsterWeapons = match.weapons;
+      const randomWeapon = monsterWeapons.length > 0
+        ? monsterWeapons[Math.floor(Math.random() * monsterWeapons.length)]
+        : null;
+      const rewardWeaponMasterId = randomWeapon
+        ? randomWeapon.weaponMasterId
+        : (await prisma.weaponMaster.findFirst())?.id;
+
+      if (rewardWeaponMasterId) {
+        const currentInventory = await prisma.raidInventoryItem.findMany({
+          where: { characterId },
+        });
+        const occupiedSlots = new Set(currentInventory.map((item) => item.slotIndex));
+        let emptySlotIndex = -1;
+        for (let i = 0; i < 32; i++) {
+          if (!occupiedSlots.has(i)) {
+            emptySlotIndex = i;
+            break;
+          }
+        }
+
+        if (emptySlotIndex !== -1) {
+          const rewardWeapon = await prisma.weaponMaster.findUnique({
+            where: { id: rewardWeaponMasterId },
+          });
+          if (rewardWeapon) {
+            rewardItemName = rewardWeapon.name;
+            await prisma.raidInventoryItem.create({
+              data: {
+                characterId,
+                weaponMasterId: rewardWeaponMasterId,
+                slotIndex: emptySlotIndex,
+                quantity: 1,
+              },
+            });
+          }
+        }
+      }
+    }
+
+    // 캐릭터 체력 업데이트
+    await prisma.character.update({
+      where: { id: characterId },
+      data: {
+        hp: Math.max(1, remainingPlayerHp),
+      },
+    });
+
+    // 클라이언트에 보상 정보 추가 제공
+    if (rewardItemName) {
+      (result as any).rewardItemName = rewardItemName;
+    }
+  }
+
+  return result;
+}
+
+// 몬스터와 전투 시뮬레이션 API (디버그/직접 매칭용)
 fastify.post("/battle/monster", async (request, reply) => {
   try {
     const bodySchema = z.object({
@@ -434,180 +610,44 @@ fastify.post("/battle/monster", async (request, reply) => {
     });
     const { characterId, level = 1 } = bodySchema.parse(request.body);
 
-    // 1) 캐릭터 데이터 조회 (장착 무기 포함)
-    const character = await prisma.character.findUnique({
-      where: { id: characterId },
-      include: {
-        weapons: { include: { weaponMaster: true } },
-        user: true,
-      },
-    });
-
-    if (!character) return reply.status(404).send({ error: "Character not found" });
-
-    // 2) 적합한 몬스터 매칭
-    const monsters = await prisma.monsterMaster.findMany({
-      include: { weapons: { include: { weaponMaster: true } } },
-    });
-    type MonsterWithDetails = Prisma.MonsterMasterGetPayload<{
-      include: { weapons: { include: { weaponMaster: true } } };
-    }>;
-    const sorted = monsters.sort(
-      (a: MonsterWithDetails, b: MonsterWithDetails) =>
-        Math.abs(a.level - level) - Math.abs(b.level - level),
-    );
-    const match = sorted[0];
-    if (!match) return reply.status(404).send({ error: "No monsters found" });
-
-    // 3) DB 데이터를 시뮬레이션용 User 타입으로 변환 (브릿지 로직)
-    const playerUser: User = {
-      id: character.user.nickname,
-      teamId: "TeamA",
-      hp: character.hp,
-      maxHp: character.maxHp,
-      stamina: character.stamina,
-      maxStamina: character.maxStamina,
-      staminaRegen: character.staminaRegen,
-      weight: character.weight,
-      maxWeight: character.maxWeight,
-      time: character.time,
-      currentWeaponIndex: 0,
-      weapons: [null, null, null, null, null, null],
-    };
-
-    type CharacterWeaponWithMaster = Prisma.CharacterWeaponGetPayload<{
-      include: { weaponMaster: true };
-    }>;
-    character.weapons.forEach((w: CharacterWeaponWithMaster) => {
-      if (w.slotIndex < 6)
-        playerUser.weapons[w.slotIndex] = { ...w.weaponMaster, currentCooldown: 0, use: () => [] };
-    });
-
-    const monsterUser: User = {
-      id: `${match.name} (Lv.${match.level})`,
-      teamId: "TeamB",
-      hp: match.hp,
-      maxHp: match.maxHp,
-      stamina: match.stamina,
-      maxStamina: match.maxStamina,
-      staminaRegen: match.staminaRegen,
-      weight: 0,
-      maxWeight: 100,
-      time: 0,
-      currentWeaponIndex: 0,
-      weapons: [null, null, null, null, null, null],
-    };
-
-    type MonsterWeaponWithMaster = Prisma.MonsterWeaponGetPayload<{
-      include: { weaponMaster: true };
-    }>;
-    match.weapons.forEach((w: MonsterWeaponWithMaster) => {
-      if (w.slotIndex < 6)
-        monsterUser.weapons[w.slotIndex] = { ...w.weaponMaster, currentCooldown: 0, use: () => [] };
-    });
-
-    // 4) 시뮬레이션 실행 및 결과 반환
-    const result = simulateBattle([playerUser, monsterUser]);
-
-    // 전투 결과 분석 및 DB 자동 반영
-    let playerWon = false;
-    let playerDied = false;
-    let remainingPlayerHp = playerUser.hp;
-
-    for (const entry of result.timeline) {
-      for (const event of entry.events) {
-        if (event.type === "DAMAGE" && event.targetId === playerUser.id) {
-          remainingPlayerHp = event.remainingHp;
-        }
-        if (event.type === "DEATH") {
-          if (event.playerId === playerUser.id) {
-            playerDied = true;
-          } else if (event.playerId === monsterUser.id) {
-            playerWon = true;
-          }
-        }
-      }
-    }
-
-    if (playerDied) {
-      // 캐릭터 사망: 모든 백팩 및 장비 유실, 로비 사출
-      await prisma.$transaction(async (tx) => {
-        await tx.raidInventoryItem.deleteMany({ where: { characterId } });
-        await tx.characterWeapon.deleteMany({ where: { characterId } });
-        await tx.character.update({
-          where: { id: characterId },
-          data: {
-            isRaiding: false,
-            hp: 100,
-            stamina: 100,
-            time: 0,
-          },
-        });
-      });
-      (result as any).playerDied = true;
-    } else {
-      // 플레이어 승리 또는 무승부
-      let rewardItemName: string | null = null;
-      if (playerWon) {
-        // 전리품 획득: 몬스터의 무기 중 하나를 무작위로 지급
-        const monsterWeapons = match.weapons;
-        const randomWeapon = monsterWeapons.length > 0
-          ? monsterWeapons[Math.floor(Math.random() * monsterWeapons.length)]
-          : null;
-        const rewardWeaponMasterId = randomWeapon
-          ? randomWeapon.weaponMasterId
-          : (await prisma.weaponMaster.findFirst())?.id;
-
-        if (rewardWeaponMasterId) {
-          const currentInventory = await prisma.raidInventoryItem.findMany({
-            where: { characterId },
-          });
-          const occupiedSlots = new Set(currentInventory.map((item) => item.slotIndex));
-          let emptySlotIndex = -1;
-          for (let i = 0; i < 32; i++) {
-            if (!occupiedSlots.has(i)) {
-              emptySlotIndex = i;
-              break;
-            }
-          }
-
-          if (emptySlotIndex !== -1) {
-            const rewardWeapon = await prisma.weaponMaster.findUnique({
-              where: { id: rewardWeaponMasterId },
-            });
-            if (rewardWeapon) {
-              rewardItemName = rewardWeapon.name;
-              await prisma.raidInventoryItem.create({
-                data: {
-                  characterId,
-                  weaponMasterId: rewardWeaponMasterId,
-                  slotIndex: emptySlotIndex,
-                  quantity: 1,
-                },
-              });
-            }
-          }
-        }
-      }
-
-      // 캐릭터 체력 업데이트
-      await prisma.character.update({
-        where: { id: characterId },
-        data: {
-          hp: Math.max(1, remainingPlayerHp),
-        },
-      });
-
-      // 클라이언트에 보상 정보 추가 제공
-      if (rewardItemName) {
-        (result as any).rewardItemName = rewardItemName;
-      }
-    }
-
+    const result = await executeMonsterBattle(characterId, level);
     return result;
-  } catch (error) {
+  } catch (error: any) {
     fastify.log.error(error);
-    return reply.status(500).send({ error: "Failed to process monster battle" });
+    return reply.status(500).send({ error: error.message || "Failed to process monster battle" });
+  }
+});
+
+// 탐사 중 특정 노드 도착 시 인카운터(전투) 판정 및 처리 API
+fastify.post("/character/:characterId/raid/arrive", async (request, reply) => {
+  try {
+    const { characterId } = request.params as { characterId: string };
+    const { nodeId } = z.object({ nodeId: z.number() }).parse(request.body);
+
+    // 1. 해당 노드가 건물에 진입하는 노드인지 검사
+    const buildings = (mapData.buildings || []) as Array<{ roadNodeId: number }>;
+    const isAtBuilding = buildings.some((b) => b.roadNodeId === nodeId);
+
+    if (isAtBuilding) {
+      // 2. 70% 확률로 전투 인카운터 발생
+      const roll = Math.random();
+      const TRIGGER_CHANCE = 0.7; // 70% 확률
+
+      if (roll < TRIGGER_CHANCE) {
+        fastify.log.info(`[Raid] Encounter triggered at building node #${nodeId} (roll: ${roll.toFixed(3)})`);
+        const battleLog = await executeMonsterBattle(characterId, 1);
+        return { combatTriggered: true, battleLog };
+      } else {
+        fastify.log.info(`[Raid] No encounter triggered at building node #${nodeId} (roll: ${roll.toFixed(3)})`);
+        return { combatTriggered: false };
+      }
+    }
+
+    // 건물 노드가 아니면 전투 없음
+    return { combatTriggered: false };
+  } catch (error: any) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: error.message || "Failed to process raid arrival" });
   }
 });
 
