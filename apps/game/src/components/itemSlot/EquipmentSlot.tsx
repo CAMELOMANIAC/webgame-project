@@ -1,4 +1,5 @@
-import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { Item } from "@webgame/types";
 import styled from "styled-components";
 
@@ -6,31 +7,23 @@ interface EquipmentProps {
   item: Item;
 }
 const EquipmentSlot = ({ item }: EquipmentProps) => {
-  const { setNodeRef: setDropRef, isOver } = useDroppable({
+  const isEmpty = item.id.toString().includes("empty");
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
+    disabled: isEmpty ? { draggable: true } : false,
   });
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef: setDragRef,
-    isDragging,
-  } = useDraggable({
-    id: item.id,
-    disabled: item.id.toString().includes("empty"),
-  });
-
-  const combinedRef = (node: HTMLElement | null) => {
-    setDropRef(node);
-    setDragRef(node);
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 1 : undefined,
+    opacity: isDragging ? 0.5 : 1,
   };
 
   return (
     <Slot
-      ref={combinedRef}
-      $isOver={isOver}
-      $isDragging={isDragging}
-      $isDraggable={!item.id.toString().includes("empty")}
+      ref={setNodeRef}
+      style={style}
       {...attributes}
       {...listeners}
     >
@@ -41,25 +34,14 @@ const EquipmentSlot = ({ item }: EquipmentProps) => {
 
 export default EquipmentSlot;
 
-type SlotProps = {
-  $isOver: boolean;
-  $isDragging: boolean;
-  $isDraggable: boolean;
-};
-
-const Slot = styled.div<SlotProps>`
+const Slot = styled.div`
   display: flex;
   position: relative;
   width: 50px;
   aspect-ratio: 1/1;
   border: 1px solid rgb(33, 33, 33);
-  background-color: ${(props) => (props.$isOver ? "rgba(255, 255, 255, 0.1)" : "rgb(22, 22, 22)")};
+  background-color: rgb(22, 22, 22);
   border-radius: 16px;
   color: #ecf0f1;
   touch-action: none;
-  cursor: ${(props) => (props.$isDraggable ? (props.$isDragging ? "grabbing" : "grab") : "")};
-  opacity: ${(props) => (props.$isDragging ? 0.5 : 1)};
-  transition:
-    background-color 0.2s ease-in-out,
-    opacity 0.2s ease-in-out;
 `;

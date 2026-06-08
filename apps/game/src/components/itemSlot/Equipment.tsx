@@ -13,7 +13,7 @@ const Equipment = () => {
 
   return (
     <Container>
-      <SlotManager items={characterData?.equipment || []}>
+      <SlotManager items={characterData?.equipment || []} sortable>
         {(item) => <EquipmentSlot item={item} />}
       </SlotManager>
     </Container>

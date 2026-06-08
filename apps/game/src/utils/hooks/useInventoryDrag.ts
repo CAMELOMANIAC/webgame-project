@@ -1,4 +1,5 @@
 import { type DragEndEvent, type DragStartEvent, type UniqueIdentifier } from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSetAtom } from "jotai";
 import { useState } from "react";
@@ -36,7 +37,7 @@ export function useInventoryDrag(characterData: CharacterData | undefined) {
       if (!old) return old;
 
       const newRaw = JSON.parse(JSON.stringify(old.raw)) as typeof old.raw;
-      const { equipment: rawEquipment, inventory: rawInventory } = newRaw;
+      let { equipment: rawEquipment, inventory: rawInventory } = newRaw;
 
       const activeEquipIdx = rawEquipment.findIndex((w) => w.id === activeIdStr);
       const overEquipIdx = rawEquipment.findIndex((w) => w.id === overIdStr);
@@ -45,12 +46,10 @@ export function useInventoryDrag(characterData: CharacterData | undefined) {
 
       let didSwap = false;
 
-      // 1. Equipment 내 정렬
+      // 1. Equipment 내 정렬 (리스트형 - 밀어내기)
       if (activeEquipIdx !== -1 && overEquipIdx !== -1) {
-        [rawEquipment[activeEquipIdx], rawEquipment[overEquipIdx]] = [
-          rawEquipment[overEquipIdx],
-          rawEquipment[activeEquipIdx],
-        ];
+        rawEquipment = arrayMove(rawEquipment, activeEquipIdx, overEquipIdx);
+        newRaw.equipment = rawEquipment;
         didSwap = true;
       }
       // 2. Inventory 내 정렬
