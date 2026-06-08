@@ -5,7 +5,14 @@ import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { useEffect, useRef } from "react";
 import styled from "styled-components";
 
-import { activeDragIdAtom, currentNodeIdAtom, isInventoryDirtyAtom, isNavigatingAtom } from "@/atoms/raidAtom";
+import {
+  activeDragIdAtom,
+  currentNodeIdAtom,
+  isInventoryDirtyAtom,
+  isNavigatingAtom,
+  shortestPathAtom,
+  targetNodeIdAtom,
+} from "@/atoms/raidAtom";
 import { InheritMotionDiv, Page } from "@/components/Commons";
 import { FieldBackground } from "@/components/FieldBackground";
 import { FieldHeader } from "@/components/FieldHeader";
@@ -35,18 +42,28 @@ function RouteComponent() {
   const { tab } = useSearch({ from: "/field/" });
   const { data: characterData } = useGetCharacter();
 
-  const { isCombat, setIsCombat, handleArriveNode, battleLog, isArrivePending } = useFieldCombat(characterData);
+  const { isCombat, setIsCombat, handleArriveNode, battleLog, isArrivePending, navigateRaid, triggerCombat } = useFieldCombat(characterData);
   const { handleDragStart, handleDragEnd } = useInventoryDrag(characterData);
   const activeId = useAtomValue(activeDragIdAtom);
   const enemyPositions = useEnemyPositions(battleLog, characterData?.raw.user.nickname);
 
   const [currentNodeId] = useAtom(currentNodeIdAtom);
-  const [isNavigating] = useAtom(isNavigatingAtom);
+  const [isNavigating, setIsNavigating] = useAtom(isNavigatingAtom);
+  const [, setTargetNodeId] = useAtom(targetNodeIdAtom);
+  const [, setShortestPath] = useAtom(shortestPathAtom);
   const [isInventoryDirty, setIsInventoryDirty] = useAtom(isInventoryDirtyAtom);
   const syncMutation = useSyncItemsMutation();
 
   // 중복 요청 및 무한 루프 방지를 위한 마지막 보고 노드 기록 Ref
   const lastReportedNodeRef = useRef<number | null>(null);
+
+  // 마운트 시 이전 탐사 세션의 연출/이동 상태가 꼬여있다면 강제 리셋 (사망 후 복귀 시 안전장치)
+  useEffect(() => {
+    setIsNavigating(false);
+    setIsCombat(false);
+    setTargetNodeId(null);
+    setShortestPath([]);
+  }, [setIsNavigating, setIsCombat, setTargetNodeId, setShortestPath]);
 
   // 1. 노드 이동 완료 시 서버에 도착 알림 및 인카운터 트리거 판정 요청
   useEffect(() => {
@@ -85,6 +102,8 @@ function RouteComponent() {
         enemyPositions={enemyPositions}
         characterNickname={characterData?.raw.user.nickname}
         isArrivePending={isArrivePending}
+        navigateRaid={navigateRaid}
+        triggerCombat={triggerCombat}
       />
       <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <LayoutGroup id="inventory-group">

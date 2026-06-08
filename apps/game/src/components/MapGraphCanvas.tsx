@@ -89,8 +89,11 @@ const MapGraphCanvas = memo(({
 
   const { data: characterData } = useGetCharacter();
 
-  // 1-Hop Gate 를 위한 서버 응답 저장 Ref
+  // 1-Hop Gate 를 위한 서버 응답 저장 Ref 및 비주얼 상 경로 단절 스포일러 방지용 원본 경로 Ref
   const navigateRaidResponseRef = useRef<NavigateRaidResponse | null>(null);
+  const originalPathRef = useRef<number[]>([]);
+  // 카메라 연출(Tween) 중 맵 캐싱 꼬임 방지를 위한 Ref
+  const isCameraTweeningRef = useRef(false);
 
 
 
@@ -160,6 +163,7 @@ const MapGraphCanvas = memo(({
 
     // 1. 전투 중인 경우: 고정 뷰포트 영역 최초 1회만 타이트하게 캐싱
     if (isCombat) {
+      if (isCameraTweeningRef.current) return; // 카메라 트윈 중에는 캐싱 유보
       if (!force && layer.isCached()) return;
       const x = -stage.x() / scale;
       const y = -stage.y() / scale;
@@ -220,7 +224,7 @@ const MapGraphCanvas = memo(({
   useEffect(() => {
     updateMapCache(true);
     mapLayerRef.current?.batchDraw();
-  }, [isCombat, dimensions.width, dimensions.height]);
+  }, [isCombat, dimensions.width, dimensions.height, stageTransform]);
 
   // 네비게이션 이동 시작/종료에 대응하는 캐시 라이프사이클 관리
   useEffect(() => {
@@ -234,36 +238,53 @@ const MapGraphCanvas = memo(({
 
   const startNavigation = (path: number[]) => {
     if (path.length <= 1) return;
+    if (!characterData?.raw.id) {
+      console.warn('[Navigation] characterData not ready, skipping navigation start.');
+      return; // characterData 없으면 이동 자체를 차단 (1홉 무한 대기 방지)
+    }
 
     // 1-Hop Gate 초기화
     navigateRaidResponseRef.current = null;
 
-    if (characterData?.raw.id) {
-      navigateRaid.mutate(
-        { characterId: characterData.raw.id, path },
-        {
-          onSuccess: (res) => {
-            navigateRaidResponseRef.current = res;
-          },
-          onError: (err) => {
-            console.error("Failed to pre-roll encounters:", err);
-            // 네트워크 에러 발생 시 안전하게 1번 노드까지만 가고 멈춤 처리
-            navigateRaidResponseRef.current = { encounterTriggered: false };
-          }
+    navigateRaid.mutate(
+      { characterId: characterData.raw.id, path },
+      {
+        onSuccess: (res) => {
+          console.log('[startNavigation SUCCESS] navigate response:', res);
+          navigateRaidResponseRef.current = res;
+        },
+        onError: (err) => {
+          console.error("Failed to pre-roll encounters:", err);
+          // 네트워크 에러 발생 시 안전하게 1번 노드까지만 가고 멈춤 처리
+          navigateRaidResponseRef.current = { encounterTriggered: false };
         }
-      );
-    }
+      }
+    );
 
     setIsNavigating(true);
   };
 
   // 대상 노드 선택 시 네비게이션 트리거 (개발 모드인 경우 승인 단계를 거치고, 일반 모드면 즉시 출발)
   const handleTargetSelect = (targetId: number) => {
-    if (isNavigating || isArrivePending || navigateRaid.isPending) return;
+    console.log('[handleTargetSelect] called', {
+      targetId,
+      isCombat,
+      isNavigating,
+      isArrivePending,
+      navigateRaidIsPending: navigateRaid.isPending,
+      navigateRaidStatus: navigateRaid.status,
+      currentNodeId,
+      characterDataId: characterData?.raw.id,
+    });
+    if (isNavigating || isArrivePending || navigateRaid.isPending) {
+      console.warn('[handleTargetSelect] BLOCKED by:', { isNavigating, isArrivePending, navigateRaidIsPending: navigateRaid.isPending });
+      return;
+    }
     if (showDevPanel) {
       setTargetNodeId(targetId);
     } else {
       const path = findShortestPath(currentNodeId, targetId);
+      console.log('[handleTargetSelect] path found:', path);
       if (path.length > 1) {
         setTargetNodeId(targetId);
         setShortestPath(path);
@@ -297,6 +318,7 @@ const MapGraphCanvas = memo(({
   // 2. 처음 마운트 및 창 크기 변경 시 카메라를 플레이어 위치에 고정하고 배율을 3으로 설정
   useEffect(() => {
     if (!stageRef.current || dimensions.width === 0 || dimensions.height === 0) return;
+    if (isNavigating || isCombat) return; // 이동 중이거나 전투 중인 경우 카메라 스냅 차단!
 
     const stage = stageRef.current;
     const scale = 3.0;
@@ -328,7 +350,7 @@ const MapGraphCanvas = memo(({
       y: newY,
       scale: scale,
     });
-  }, [dimensions.width, dimensions.height, currentNodeId]);
+  }, [dimensions.width, dimensions.height, currentNodeId, isNavigating, isCombat]);
 
   // 2.1. 전투 시작 시 플레이어 중심 3.0배율 카메라 줌인 트랜지션 (Konva Tween 활용)
   useEffect(() => {
@@ -357,6 +379,8 @@ const MapGraphCanvas = memo(({
       return;
     }
 
+    isCameraTweeningRef.current = true;
+
     const tween = new Konva.Tween({
       node: stage,
       duration: 0.8, // 자연스러운 0.8초 애니메이션
@@ -366,6 +390,7 @@ const MapGraphCanvas = memo(({
       scaleY: targetScale,
       easing: Konva.Easings.EaseInOut,
       onFinish: () => {
+        isCameraTweeningRef.current = false;
         setStageTransform({
           x: targetX,
           y: targetY,
@@ -463,6 +488,7 @@ const MapGraphCanvas = memo(({
 
     // 네비게이션 시작 시점의 경로와 스텝 초기화
     navigationPathRef.current = shortestPath;
+    originalPathRef.current = shortestPath;
     currentPathStepRef.current = 1;
 
     // 첫 스텝 각도 계산 및 상태 동기화
@@ -491,6 +517,8 @@ const MapGraphCanvas = memo(({
     let accumulatedDistance = 0;
     let animId: number;
     let lastTime = performance.now();
+    let hopGateWaitStart: number | null = null; // 1홉 게이트 대기 시작 시각 기록 (타임아웃 안전장치)
+    let cameraCatchUpStart: number | null = null; // 카메라 정렬 대기 시작 시각 기록 (타임아웃 안전장치)
     const minSpeed = 35;   // 출발 및 도달 부근 최소 속도
     const maxSpeed = 240;  // 중간 구간 최고 속도
 
@@ -522,6 +550,17 @@ const MapGraphCanvas = memo(({
       stage.batchDraw();
     };
 
+    const hasCameraArrived = (px: number, py: number) => {
+      if (!followPlayerRef.current || !stageRef.current) return true;
+      const stage = stageRef.current;
+      const scale = stage.scaleX();
+      const targetStageX = dimensions.width / 2 - px * scale;
+      const targetStageY = dimensions.height / 2 - py * scale;
+      const dx = stage.x() - targetStageX;
+      const dy = stage.y() - targetStageY;
+      return Math.sqrt(dx * dx + dy * dy) < 0.5;
+    };
+
     const tick = (time: number) => {
       const deltaTime = (time - lastTime) / 1000;
       lastTime = time;
@@ -533,9 +572,34 @@ const MapGraphCanvas = memo(({
         // 경로의 끝에 도달 완료
         const finalNodeId = path[path.length - 1];
         if (finalNodeId !== undefined) {
-          setCurrentNodeId(finalNodeId);
           const finalNode = nodes[finalNodeId];
           if (finalNode) {
+            if (cameraCatchUpStart === null) {
+              cameraCatchUpStart = performance.now();
+            }
+            const waitedMs = performance.now() - cameraCatchUpStart;
+            const forceArrived = waitedMs > 1500;
+
+            // 카메라가 플레이어 위치에 부드럽게 도달할 때까지 대기
+            if (!hasCameraArrived(finalNode.x, finalNode.y) && !forceArrived) {
+              const finalPos = { x: finalNode.x, y: finalNode.y };
+              playerCoordsRef.current = finalPos;
+              if (playerMarkerRef.current) {
+                playerMarkerRef.current.x(finalPos.x);
+                playerMarkerRef.current.y(finalPos.y);
+                playerMarkerRef.current.getLayer()?.batchDraw();
+              }
+              if (sightMaskRef.current) {
+                sightMaskRef.current.x(finalPos.x);
+                sightMaskRef.current.y(finalPos.y);
+              }
+              updateCameraFollow(finalPos.x, finalPos.y, deltaTime);
+              animId = requestAnimationFrame(tick);
+              return;
+            }
+
+            cameraCatchUpStart = null; // 대기 완료 시 리셋
+            setCurrentNodeId(finalNodeId);
             const finalPos = { x: finalNode.x, y: finalNode.y };
             setPlayerCoords(finalPos);
             // 최종 도착 후 각도 상태 갱신
@@ -564,7 +628,16 @@ const MapGraphCanvas = memo(({
 
         // 최종 도착한 목적지가 사전 예약된 인카운터(전투) 노드였다면 즉시 전투 트리거
         const res = navigateRaidResponseRef.current;
+        console.log('[Arrival Check] path finished:', {
+          resExists: !!res,
+          encounterTriggered: res?.encounterTriggered,
+          stopNodeId: res?.stopNodeId,
+          finalNodeId,
+          match: res ? res.stopNodeId === finalNodeId : false,
+          hasBattleLog: res ? !!res.battleLog : false
+        });
         if (res && res.encounterTriggered && res.stopNodeId === finalNodeId && res.battleLog) {
+          console.log('[Arrival Check] Triggering combat now!');
           triggerCombat(res.battleLog);
         }
         return;
@@ -637,24 +710,39 @@ const MapGraphCanvas = memo(({
         // 1-Hop Gate: 첫 번째 경유지(nextNodeId가 path[1])에 도달했을 때 서버 응답 확인
         if (stepIdx === 1) {
           if (navigateRaidResponseRef.current === null) {
-            // 서버 응답이 올 때까지 1번 노드 위에 마커를 고정하고 대기시킵니다.
-            const holdPos = { x: nextNode.x, y: nextNode.y };
-            playerCoordsRef.current = holdPos;
-
-            if (playerMarkerRef.current) {
-              playerMarkerRef.current.x(holdPos.x);
-              playerMarkerRef.current.y(holdPos.y);
-              playerMarkerRef.current.rotation(angleDeg);
-              playerMarkerRef.current.getLayer()?.batchDraw();
+            // 대기 시작 시각 기록 (최초 진입 시에만)
+            if (hopGateWaitStart === null) {
+              hopGateWaitStart = performance.now();
             }
-            if (sightMaskRef.current) {
-              sightMaskRef.current.x(holdPos.x);
-              sightMaskRef.current.y(holdPos.y);
-            }
-            updateCameraFollow(holdPos.x, holdPos.y, deltaTime);
+            // 안전장치: 5초 이상 응답 없으면 강제로 안전 통과 처리 (무한 대기 방지)
+            const waitedMs = performance.now() - hopGateWaitStart;
+            if (waitedMs > 5000) {
+              console.warn('[1-Hop Gate] Server response timed out after 5s, forcing safe pass-through.');
+              navigateRaidResponseRef.current = { encounterTriggered: false };
+              hopGateWaitStart = null;
+              // fall-through to response handling below
+            } else {
+              // 서버 응답이 올 때까지 1번 노드 위에 마커를 고정하고 대기시킵니다.
+              const holdPos = { x: nextNode.x, y: nextNode.y };
+              playerCoordsRef.current = holdPos;
 
-            animId = requestAnimationFrame(tick);
-            return;
+              if (playerMarkerRef.current) {
+                playerMarkerRef.current.x(holdPos.x);
+                playerMarkerRef.current.y(holdPos.y);
+                playerMarkerRef.current.rotation(angleDeg);
+                playerMarkerRef.current.getLayer()?.batchDraw();
+              }
+              if (sightMaskRef.current) {
+                sightMaskRef.current.x(holdPos.x);
+                sightMaskRef.current.y(holdPos.y);
+              }
+              updateCameraFollow(holdPos.x, holdPos.y, deltaTime);
+
+              animId = requestAnimationFrame(tick);
+              return;
+            }
+          } else {
+            hopGateWaitStart = null; // 응답 도착 시 타이머 초기화
           }
 
           // 응답이 도착했다면 가로채기 판정 진행
@@ -663,9 +751,34 @@ const MapGraphCanvas = memo(({
           if (res.encounterTriggered && res.stopNodeId !== undefined) {
             const stopNodeId = res.stopNodeId;
 
-            // 만약 1번 노드에서 바로 인카운터가 걸렸다면 여기서 즉각 중단하고 전투 켬
+            // 만약 1번 노드에서 바로 인카운터가 걸렸다면 여기서 즉각 중단하고 전투 켬 (카메라 정렬 후 진입)
             if (stopNodeId === nextNodeId) {
               const arrivedPos = { x: nextNode.x, y: nextNode.y };
+
+              if (cameraCatchUpStart === null) {
+                cameraCatchUpStart = performance.now();
+              }
+              const waitedMs = performance.now() - cameraCatchUpStart;
+              const forceArrived = waitedMs > 1500;
+
+              if (!hasCameraArrived(nextNode.x, nextNode.y) && !forceArrived) {
+                playerCoordsRef.current = arrivedPos;
+                if (playerMarkerRef.current) {
+                  playerMarkerRef.current.x(arrivedPos.x);
+                  playerMarkerRef.current.y(arrivedPos.y);
+                  playerMarkerRef.current.rotation(angleDeg);
+                  playerMarkerRef.current.getLayer()?.batchDraw();
+                }
+                if (sightMaskRef.current) {
+                  sightMaskRef.current.x(arrivedPos.x);
+                  sightMaskRef.current.y(arrivedPos.y);
+                }
+                updateCameraFollow(arrivedPos.x, arrivedPos.y, deltaTime);
+                animId = requestAnimationFrame(tick);
+                return;
+              }
+
+              cameraCatchUpStart = null; // 대기 완료 시 리셋
               playerCoordsRef.current = arrivedPos;
 
               if (playerMarkerRef.current) {
@@ -694,6 +807,11 @@ const MapGraphCanvas = memo(({
                 });
               }
 
+              console.log('[1st Node Encounter Check] Triggering combat now at first node:', {
+                stopNodeId,
+                nextNodeId,
+                hasBattleLog: !!res.battleLog
+              });
               if (res.battleLog) {
                 triggerCombat(res.battleLog);
               }
@@ -736,7 +854,7 @@ const MapGraphCanvas = memo(({
 
         // 실시간 경로선 꼬리 깎기 (에메랄드 라인 시작점을 다음 목표 노드로 단축)
         if (pathLineRef.current) {
-          const remainingPoints = path.slice(stepIdx).flatMap((idx) => {
+          const remainingPoints = originalPathRef.current.slice(stepIdx).flatMap((idx) => {
             const node = nodes[idx];
             return node ? [node.x, node.y] : [];
           });
@@ -782,7 +900,7 @@ const MapGraphCanvas = memo(({
           const remainingPoints = [
             newPos.x,
             newPos.y,
-            ...path.slice(stepIdx).flatMap((idx) => {
+            ...originalPathRef.current.slice(stepIdx).flatMap((idx) => {
               const node = nodes[idx];
               return node ? [node.x, node.y] : [];
             }),
@@ -1011,6 +1129,7 @@ const MapGraphCanvas = memo(({
           listening={!isCombat}
           onWheel={handleWheel}
           onDragEnd={handleDragEnd}
+          onClick={() => console.log('[Stage] clicked, isCombat:', isCombat, 'isNavigating:', isNavigating)}
         >
           {/* Layer 1: Static Map Layer (Water, Edges, Buildings, Nodes) */}
           <Layer ref={mapLayerRef} listening={!isNavigating}>

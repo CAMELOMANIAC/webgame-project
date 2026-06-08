@@ -5,7 +5,14 @@ import { useAtom, useAtomValue,useSetAtom } from "jotai";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { battleLogAtom, currentTimeAtom, displayEventsAtom,flattenedTimelineAtom, processedEventsAtom } from "@/atoms/globalAtom";
-import { isCombatAtom } from "@/atoms/raidAtom";
+import {
+  currentNodeIdAtom,
+  isCombatAtom,
+  isNavigatingAtom,
+  playerCoordsAtom,
+  shortestPathAtom,
+  targetNodeIdAtom,
+} from "@/atoms/raidAtom";
 import { useArriveRaidNode } from "@/utils/hooks/useArriveRaidNode";
 import { useBattleData } from "@/utils/hooks/useBattleData";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
@@ -21,6 +28,12 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
   const timeline = useAtomValue(flattenedTimelineAtom);
   const setDisplayEvents = useSetAtom(displayEventsAtom);
   const setProcessedEvents = useSetAtom(processedEventsAtom);
+
+  const setCurrentNodeId = useSetAtom(currentNodeIdAtom);
+  const setIsNavigating = useSetAtom(isNavigatingAtom);
+  const setTargetNodeId = useSetAtom(targetNodeIdAtom);
+  const setShortestPath = useSetAtom(shortestPathAtom);
+  const setPlayerCoords = useSetAtom(playerCoordsAtom);
   
   const [isProcessing, setIsProcessing] = useState(false);
   const pendingEventsRef = useRef<BattleEvent[]>([]);
@@ -39,7 +52,33 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       setIsCombat(false);
       
       const playerDied = (battleLog as BattleLog & { playerDied?: boolean }).playerDied === true;
-      const rewardItemName = (battleLog as BattleLog & { rewardItemName?: string }).rewardItemName;
+
+      // 전투 종료 시점의 최종 체력/스태미나 계산하여 React Query 캐시에 즉시 선반영 (깜빡임 방지)
+      if (battleLog) {
+        const player = battleLog.initialState.players[0];
+        let finalHp = player.hp;
+        let finalStamina = player.stamina;
+        for (const event of timeline) {
+          if ((event.type === "DAMAGE" || event.type === "HEAL") && event.targetId === player.id) {
+            finalHp = event.remainingHp;
+          }
+          if (event.type === "STAMINA_CHANGE" && event.playerId === player.id) {
+            finalStamina = event.currentStamina;
+          }
+        }
+
+        queryClient.setQueryData(["character", TEMP_USER_ID], (old: CharacterData | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            raw: {
+              ...old.raw,
+              hp: Math.max(1, finalHp),
+              stamina: finalStamina,
+            },
+          };
+        });
+      }
 
       // 전투 관련 전역 상태 초기화
       setBattleLog(null);
@@ -52,14 +91,29 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       queryClient.invalidateQueries({ queryKey: ["stash", TEMP_USER_ID] });
 
       if (playerDied) {
-        alert("🚨 DEFEAT! You died in battle and lost all your equipped gear and backpack items!");
+        // 캐시 업데이트로 로비 진입 시 'RETURN TO ACTIVE RAID' 대신 'LAUNCH EXPEDITION'이 뜨도록 강제
+        queryClient.setQueryData(["character", TEMP_USER_ID], (old: CharacterData | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            raw: {
+              ...old.raw,
+              isRaiding: false,
+              hp: 100,
+              stamina: 100,
+            },
+          };
+        });
+
+        // 클라이언트 탐사 상태 강제 초기화
+        setCurrentNodeId(0);
+        setIsNavigating(false);
+        setTargetNodeId(null);
+        setShortestPath([]);
+        setPlayerCoords(null);
+
         navigate({ to: "/field/user" }); // 로비로 이동
       } else {
-        if (rewardItemName) {
-          alert(`🏆 VICTORY! You defeated the enemy and looted: ${rewardItemName}`);
-        } else {
-          alert("🏆 VICTORY! Enemy defeated.");
-        }
         navigate({ to: "/field" }); // 맵으로 복구
       }
       return;
@@ -78,7 +132,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isCombat, battleLog, setTime, time, timeline, isProcessing, characterData, navigate, setIsCombat, queryClient, setBattleLog, setDisplayEvents, setProcessedEvents]);
+  }, [isCombat, battleLog, setTime, time, timeline, isProcessing, characterData, navigate, setIsCombat, queryClient, setBattleLog, setDisplayEvents, setProcessedEvents, setCurrentNodeId, setIsNavigating, setTargetNodeId, setShortestPath, setPlayerCoords]);
 
   // 이벤트 순차 처리 로직
   useEffect(() => {
