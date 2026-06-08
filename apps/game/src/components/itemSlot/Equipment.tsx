@@ -1,10 +1,11 @@
+import { memo } from "react";
 import styled from "styled-components";
 
 import EquipmentSlot from "@/components/itemSlot/EquipmentSlot";
 import SlotManager from "@/components/itemSlot/SlotManager";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 
-const Equipment = () => {
+const Equipment = memo(() => {
   const { data: characterData, isLoading } = useGetCharacter();
 
   if (isLoading) {
@@ -18,7 +19,7 @@ const Equipment = () => {
       </SlotManager>
     </Container>
   );
-};
+});
 
 const Container = styled.div`
   width: 100%;

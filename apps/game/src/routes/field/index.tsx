@@ -1,12 +1,10 @@
 import { DndContext, DragOverlay } from "@dnd-kit/core";
 import { createFileRoute, useSearch } from "@tanstack/react-router";
-import type { BattleEvent } from "@webgame/types";
 import { useAtom, useAtomValue } from "jotai";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import styled from "styled-components";
 
-import { currentTimeAtom, displayEventsAtom } from "@/atoms/globalAtom";
 import { activeDragIdAtom, currentNodeIdAtom, isInventoryDirtyAtom, isNavigatingAtom } from "@/atoms/raidAtom";
 import { InheritMotionDiv, Page } from "@/components/Commons";
 import { FieldBackground } from "@/components/FieldBackground";
@@ -36,9 +34,6 @@ export const Route = createFileRoute("/field/")({
 function RouteComponent() {
   const { tab } = useSearch({ from: "/field/" });
   const { data: characterData } = useGetCharacter();
-
-  const currentTime = useAtomValue(currentTimeAtom);
-  const displayEvents = useAtomValue(displayEventsAtom);
 
   const { isCombat, setIsCombat, handleArriveNode, battleLog, isArrivePending } = useFieldCombat(characterData);
   const { handleDragStart, handleDragEnd } = useInventoryDrag(characterData);
@@ -81,10 +76,6 @@ function RouteComponent() {
     }
   }, [isNavigating, isInventoryDirty, characterData, syncMutation, setIsInventoryDirty]);
 
-  const activeAttacks = useMemo(() => {
-    return displayEvents.filter((e: BattleEvent) => e.type === "ATTACK");
-  }, [displayEvents]);
-
   const activeItem = characterData?.equipment.find((item) => item.id === activeId)
     || characterData?.inventory.find((item) => item.id === activeId);
 
@@ -94,8 +85,6 @@ function RouteComponent() {
         isCombat={isCombat}
         battleLog={battleLog}
         enemyPositions={enemyPositions}
-        activeAttacks={activeAttacks}
-        currentTime={currentTime}
         characterNickname={characterData?.raw.user.nickname}
         isArrivePending={isArrivePending}
       />
@@ -114,7 +103,7 @@ function RouteComponent() {
                 <FieldHeader isCombat={isCombat} />
               </InheritMotionDiv>
             )}
-            <InheritMotionDiv layout key="fieldInfo">
+            <InheritMotionDiv layout={isCombat ? undefined : true} key="fieldInfo">
               <FieldStatusSection setIsCombat={setIsCombat} />
               <Equipment />
             </InheritMotionDiv>
@@ -126,7 +115,7 @@ function RouteComponent() {
                 transition={{ type: "spring", duration: 0.5, bounce: 0 }}
                 style={{ overflow: "hidden", zIndex: 1 }}
                 key="stash"
-                layout
+                layout={isCombat ? undefined : true}
               >
                 <Backpack />
               </InheritMotionDiv>

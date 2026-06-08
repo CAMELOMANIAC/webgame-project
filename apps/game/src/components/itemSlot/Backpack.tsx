@@ -1,15 +1,19 @@
+import { useAtomValue } from "jotai";
 import { AnimatePresence, motion } from "motion/react";
+import { memo } from "react";
 import { CgSpinner } from "react-icons/cg";
 import { IoMdRefresh } from "react-icons/io";
 import styled from "styled-components";
 
+import { isCombatAtom } from "@/atoms/raidAtom";
 import { InheritMotionDiv } from "@/components/Commons";
 import BackpackSlot from "@/components/itemSlot/BackpackSlot";
 import SlotManager from "@/components/itemSlot/SlotManager";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 
-const Backpack = () => {
+const Backpack = memo(() => {
   const { data: characterData, isLoading, isError } = useGetCharacter();
+  const isCombat = useAtomValue(isCombatAtom);
 
   return (
     <Container>
@@ -54,7 +58,7 @@ const Backpack = () => {
             style={{ overflow: "hidden" }}
             key="backpackLoadComplete"
           >
-            <GridContainer layout>
+            <GridContainer layout={isCombat ? undefined : true}>
               <SlotManager items={characterData?.inventory || []}>{(item) => <BackpackSlot item={item} />}</SlotManager>
             </GridContainer>
           </InheritMotionDiv>
@@ -62,7 +66,7 @@ const Backpack = () => {
       </AnimatePresence>
     </Container>
   );
-};
+});
 
 export default Backpack;
 
