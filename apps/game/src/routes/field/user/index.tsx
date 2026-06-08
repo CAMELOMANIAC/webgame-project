@@ -5,7 +5,15 @@ import { FaBolt, FaHeart, FaSignInAlt, FaWeightHanging } from "react-icons/fa";
 import { GiBackpack, GiChest } from "react-icons/gi";
 import styled from "styled-components";
 
-import { currentNodeIdAtom, isCombatAtom } from "@/atoms/raidAtom";
+import { battleLogAtom } from "@/atoms/globalAtom";
+import {
+  currentNodeIdAtom,
+  isCombatAtom,
+  isNavigatingAtom,
+  playerCoordsAtom,
+  shortestPathAtom,
+  targetNodeIdAtom,
+} from "@/atoms/raidAtom";
 import { Page } from "@/components/Commons";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useGetStash } from "@/utils/hooks/useGetStash";
@@ -26,6 +34,11 @@ function RouteComponent() {
 
   const [, setCurrentNodeId] = useAtom(currentNodeIdAtom);
   const [, setIsCombat] = useAtom(isCombatAtom);
+  const [, setIsNavigating] = useAtom(isNavigatingAtom);
+  const [, setTargetNodeId] = useAtom(targetNodeIdAtom);
+  const [, setShortestPath] = useAtom(shortestPathAtom);
+  const [, setPlayerCoords] = useAtom(playerCoordsAtom);
+  const [, setBattleLog] = useAtom(battleLogAtom);
 
   if (charLoading || stashLoading) {
     return (
@@ -55,6 +68,11 @@ function RouteComponent() {
           // 탐사 상태 초기화
           setCurrentNodeId(0);
           setIsCombat(false);
+          setIsNavigating(false);
+          setTargetNodeId(null);
+          setShortestPath([]);
+          setPlayerCoords(null);
+          setBattleLog(null);
           navigate({ to: "/field" });
         },
       });

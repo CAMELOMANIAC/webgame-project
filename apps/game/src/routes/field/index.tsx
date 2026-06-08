@@ -59,7 +59,6 @@ function RouteComponent() {
     if (!characterData?.raw.id) return;
     if (lastReportedNodeRef.current === currentNodeId) return;
 
-    console.log(`[Raid] Arrived at node #${currentNodeId}. Querying server encounter...`);
     lastReportedNodeRef.current = currentNodeId;
     handleArriveNode(currentNodeId);
   }, [isNavigating, currentNodeId, isCombat, characterData, handleArriveNode]);
@@ -67,7 +66,6 @@ function RouteComponent() {
   // 1.1. 네비게이션 시작 시 변경된 인벤토리가 있다면 백그라운드 동기화 요청
   useEffect(() => {
     if (isNavigating && isInventoryDirty && characterData?.raw.id) {
-      console.log("[Raid] Navigation started. Syncing dirty inventory with server in background...");
       setIsInventoryDirty(false); // 플래그 초기화
       syncMutation.mutate({
         characterId: characterData.raw.id,

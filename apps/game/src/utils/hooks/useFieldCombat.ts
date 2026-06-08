@@ -10,8 +10,6 @@ import { useArriveRaidNode } from "@/utils/hooks/useArriveRaidNode";
 import { useBattleData } from "@/utils/hooks/useBattleData";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 
-const DEBUG_COMBAT = false; // Set to true if you need verbose battle timeline logs
-
 export function useFieldCombat(characterData: CharacterData | undefined) {
   const navigate = useNavigate();
   const [isCombat, setIsCombat] = useAtom(isCombatAtom);
@@ -39,12 +37,18 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       // 전투 종료 처리!
       setIsCombat(false);
       
+      const playerDied = (battleLog as BattleLog & { playerDied?: boolean }).playerDied === true;
+      const rewardItemName = (battleLog as BattleLog & { rewardItemName?: string }).rewardItemName;
+
+      // 전투 관련 전역 상태 초기화
+      setBattleLog(null);
+      setTime(0);
+      setDisplayEvents([]);
+      setProcessedEvents([]);
+
       // 캐릭터 정보 및 창고 정보 갱신
       queryClient.invalidateQueries({ queryKey: ["character", TEMP_USER_ID] });
       queryClient.invalidateQueries({ queryKey: ["stash", TEMP_USER_ID] });
-
-      const playerDied = (battleLog as BattleLog & { playerDied?: boolean }).playerDied === true;
-      const rewardItemName = (battleLog as BattleLog & { rewardItemName?: string }).rewardItemName;
 
       if (playerDied) {
         alert("🚨 DEFEAT! You died in battle and lost all your equipped gear and backpack items!");
@@ -65,9 +69,6 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       const currentTickEvents = timeline.filter((e: BattleEvent) => e.timestamp === time);
       
       if (currentTickEvents.length > 0) {
-        if (DEBUG_COMBAT) {
-          console.log(`[Battle] Processing ${currentTickEvents.length} events at tick ${time}`);
-        }
         pendingEventsRef.current = [...currentTickEvents];
         setIsProcessing(true);
       } else {
@@ -76,7 +77,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isCombat, battleLog, setTime, time, timeline, isProcessing, characterData, navigate, setIsCombat, queryClient]);
+  }, [isCombat, battleLog, setTime, time, timeline, isProcessing, characterData, navigate, setIsCombat, queryClient, setBattleLog, setDisplayEvents, setProcessedEvents]);
 
   // 이벤트 순차 처리 로직
   useEffect(() => {
@@ -86,9 +87,6 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       if (pendingEventsRef.current.length > 0) {
         const nextEvent = pendingEventsRef.current.shift();
         if (nextEvent) {
-          if (DEBUG_COMBAT) {
-            console.log(`[Battle] Displaying event: ${nextEvent.type} (${nextEvent.id})`);
-          }
           setDisplayEvents([nextEvent]);
           
           // 시각적으로 처리된 이벤트 리스트에 추가 (체력바 등 동기화용)
@@ -102,9 +100,6 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
           timeoutRef.current = setTimeout(processNextEvent, delay);
         }
       } else {
-        if (DEBUG_COMBAT) {
-          console.log(`[Battle] All events processed for tick ${time}. Moving to next tick.`);
-        }
         setIsProcessing(false);
         setDisplayEvents([]);
         setTime((prev) => prev + 1);
@@ -125,19 +120,12 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       {
         onSuccess: (res) => {
           if (res.combatTriggered && res.battleLog) {
-            if (DEBUG_COMBAT) {
-              console.log(`[Raid] Encounter triggered at node #${nodeId}! Starting battle...`);
-            }
             setBattleLog(res.battleLog);
             setTime(0);
             setDisplayEvents([]);
             setProcessedEvents([]);
             setIsProcessing(false);
             setIsCombat(true);
-          } else {
-            if (DEBUG_COMBAT) {
-              console.log(`[Raid] Arrived safely at node #${nodeId}`);
-            }
           }
         },
         onError: (err) => {

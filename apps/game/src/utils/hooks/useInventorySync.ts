@@ -24,7 +24,6 @@ export const useInventorySync = (currentTab: string | undefined) => {
   useEffect(() => {
     if (prevTabRef.current === "backpack" && currentTab !== "backpack") {
       if (characterData) {
-        console.log("Backpack closed. Syncing with server...");
         syncMutation.mutate({
           characterId: characterData.raw.id,
           data: characterData,

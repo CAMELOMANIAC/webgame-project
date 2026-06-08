@@ -149,7 +149,6 @@ export function useInventoryDrag(characterData: CharacterData | undefined) {
     });
 
     if (didChange) {
-      console.log("[InventoryDrag] Item reordered. Marking inventory dirty for sync.");
       setIsInventoryDirty(true);
     }
   };
