@@ -68,7 +68,10 @@ interface MapGraphCanvasProps {
 export default function MapGraphCanvas({ isCombat = false, isArrivePending = false }: MapGraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
+  const mapLayerRef = useRef<Konva.Layer | null>(null);
   const [compassImg] = useImage(compass);
+
+
 
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [stageTransform, setStageTransform] = useState({
@@ -122,6 +125,39 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
   useEffect(() => {
     followPlayerRef.current = followPlayer;
   }, [followPlayer]);
+
+  // 전투 중(isCombat)일 때 맵 그래프의 리드로우 연산(드로잉 부하)을 완전히 멈추기 위해 정지형 레이어 캐싱 적용
+  useEffect(() => {
+    if (!mapLayerRef.current || !stageRef.current) return;
+
+    if (isCombat) {
+      console.log("[MapGraphCanvas] Freezing map layer drawing via viewport cache.");
+      const stage = stageRef.current;
+      const scale = stage.scaleX();
+      
+      // 스크린의 (0, 0)과 (width, height) 가시 영역을 Stage 로컬 좌표계로 역변환
+      const x = -stage.x() / scale;
+      const y = -stage.y() / scale;
+      const w = dimensions.width / scale;
+      const h = dimensions.height / scale;
+
+      // 카메라 쉐이크 시 경계 밖이 잘리지 않도록 여유 버퍼(50px) 패딩 적용
+      const pad = 50 / scale;
+
+      // 줌(scale) 상태에서 이미지가 깨지지 않도록 devicePixelRatio에 scale 배율을 곱해서 캐싱
+      mapLayerRef.current.cache({
+        x: x - pad,
+        y: y - pad,
+        width: w + pad * 2,
+        height: h + pad * 2,
+        pixelRatio: (window.devicePixelRatio || 1) * scale
+      });
+    } else {
+      console.log("[MapGraphCanvas] Unfreezing map layer cache.");
+      mapLayerRef.current.clearCache();
+    }
+    mapLayerRef.current.batchDraw();
+  }, [isCombat, dimensions.width, dimensions.height]);
 
   // 대상 노드 선택 시 네비게이션 트리거 (개발 모드인 경우 승인 단계를 거치고, 일반 모드면 즉시 출발)
   const handleTargetSelect = (targetId: number) => {
@@ -716,7 +752,7 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
           onDragEnd={handleDragEnd}
         >
           {/* Layer 1: Static Map Layer (Water, Edges, Buildings, Nodes) */}
-          <Layer listening={!isNavigating}>
+          <Layer ref={mapLayerRef} listening={!isNavigating}>
             {/* 1.1 Water Backdrop (통합된 물 영역 - 이벤트 불필요) */}
             <Group listening={false}>
               {waterPoints.length > 0 && (

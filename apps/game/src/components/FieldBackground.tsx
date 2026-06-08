@@ -1,4 +1,5 @@
-import type { BattleEvent, BattleLog } from "@webgame/types";
+import type { BattleLog } from "@webgame/types";
+import { useEffect, useRef } from "react";
 import styled from "styled-components";
 
 import { BattleCanvas } from "@/components/BattleCanvas";
@@ -8,8 +9,6 @@ interface FieldBackgroundProps {
   isCombat: boolean;
   battleLog: BattleLog | null | undefined;
   enemyPositions: Map<string, { x: number; y: number }>;
-  activeAttacks: BattleEvent[];
-  currentTime: number;
   characterNickname: string | undefined;
   isArrivePending: boolean;
 }
@@ -18,14 +17,57 @@ export function FieldBackground({
   isCombat,
   battleLog,
   enemyPositions,
-  activeAttacks,
-  currentTime,
   characterNickname,
   isArrivePending,
 }: FieldBackgroundProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let activeInterval: ReturnType<typeof setInterval> | null = null;
+
+    const handleShake = (e: Event) => {
+      const customEvent = e as CustomEvent<{ intensity: number }>;
+      const intensity = customEvent.detail.intensity;
+
+      if (activeInterval) {
+        clearInterval(activeInterval);
+      }
+
+      let count = 0;
+      const maxCount = 8;
+      activeInterval = setInterval(() => {
+        if (count >= maxCount) {
+          container.style.transform = "translate3d(0, 0, 0)";
+          if (activeInterval) {
+            clearInterval(activeInterval);
+            activeInterval = null;
+          }
+          return;
+        }
+        const angle = Math.random() * Math.PI * 2;
+        const currentIntensity = intensity * (1 - count / maxCount);
+        const dx = Math.cos(angle) * currentIntensity;
+        const dy = Math.sin(angle) * currentIntensity;
+        container.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+        count++;
+      }, 50);
+    };
+
+    window.addEventListener("combat-shake", handleShake);
+    return () => {
+      window.removeEventListener("combat-shake", handleShake);
+      if (activeInterval) {
+        clearInterval(activeInterval);
+      }
+    };
+  }, []);
+
   return (
-    <Container>
-      {/* 맵 그래프 캔버스 (항상 뒤쪽에 렌더링) */}
+    <Container ref={containerRef}>
+      {/* 맵 그래프 캔버스 (전투 시 캐시 동결 처리로 최적화됨) */}
       <MapGraphCanvas isCombat={isCombat} isArrivePending={isArrivePending} />
 
       {/* 전투 시뮬레이터 캔버스 (전투 중일 때만 맵 위에 렌더링) */}
@@ -34,8 +76,6 @@ export function FieldBackground({
           isCombat={isCombat}
           battleLog={battleLog}
           enemyPositions={enemyPositions}
-          activeAttacks={activeAttacks}
-          currentTime={currentTime}
           characterNickname={characterNickname}
         />
       )}
@@ -49,4 +89,5 @@ const Container = styled.div`
   left: 0;
   width: 100%;
   height: 100%;
+  will-change: transform;
 `;
