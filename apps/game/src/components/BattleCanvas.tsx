@@ -104,14 +104,29 @@ export function BattleCanvas({
     };
   }, [width, height]);
 
-  // 플레이어가 적극적으로 공격 중일 때 적을 향하도록 회전각 재계산
+  const deadEnemyIds = useMemo(() => {
+    const ids = new Set<string>();
+    processedEvents.forEach((event) => {
+      if (event.type === "DEATH") {
+        ids.add(event.playerId);
+      }
+    });
+    return ids;
+  }, [processedEvents]);
+
+  // 전투 중에는 플레이어가 항시 살아있는 적을 바라보도록 회전각 계산
   const activeRotation = useMemo(() => {
-    if (!characterNickname) return playerRotation;
+    if (!characterNickname || !battleLog) return playerRotation;
 
-    const playerAttack = activeAttacks.find((a) => a.type === "ATTACK" && a.actorId === characterNickname);
+    const firstAliveEnemy = battleLog.initialState.players.find(
+      (p) =>
+        p.teamId !==
+          battleLog.initialState.players.find((player) => player.id === characterNickname)?.teamId &&
+        !deadEnemyIds.has(p.id),
+    );
 
-    if (playerAttack && playerAttack.type === "ATTACK") {
-      const enemyPos = enemyPositions.get(playerAttack.targetId);
+    if (firstAliveEnemy) {
+      const enemyPos = enemyPositions.get(firstAliveEnemy.id);
       if (enemyPos) {
         const safePos = getSafeCoords(enemyPos);
         const dx = safePos.x - width / 2;
@@ -122,17 +137,7 @@ export function BattleCanvas({
     }
 
     return playerRotation;
-  }, [activeAttacks, enemyPositions, characterNickname, width, height, playerRotation, getSafeCoords]);
-
-  const deadEnemyIds = useMemo(() => {
-    const ids = new Set<string>();
-    processedEvents.forEach((event) => {
-      if (event.type === "DEATH") {
-        ids.add(event.playerId);
-      }
-    });
-    return ids;
-  }, [processedEvents]);
+  }, [battleLog, deadEnemyIds, enemyPositions, characterNickname, width, height, playerRotation, getSafeCoords]);
 
   // --- Trigger Camera Shake ---
   const triggerShake = useCallback((intensity: number) => {
