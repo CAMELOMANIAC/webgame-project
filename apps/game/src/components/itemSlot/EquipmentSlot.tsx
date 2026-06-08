@@ -1,16 +1,20 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Item } from "@webgame/types";
+import { useAtomValue } from "jotai";
 import styled from "styled-components";
+
+import { isCombatAtom } from "@/atoms/raidAtom";
 
 interface EquipmentProps {
   item: Item;
 }
 const EquipmentSlot = ({ item }: EquipmentProps) => {
+  const isCombat = useAtomValue(isCombatAtom);
   const isEmpty = item.id.toString().includes("empty");
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
-    disabled: isEmpty ? { draggable: true } : false,
+    disabled: isCombat ? true : (isEmpty ? { draggable: true } : false),
   });
 
   const style = {

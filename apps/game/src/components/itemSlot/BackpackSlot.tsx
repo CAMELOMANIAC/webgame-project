@@ -1,14 +1,19 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { Item } from "@webgame/types";
+import { useAtomValue } from "jotai";
 import { FiPlus } from "react-icons/fi";
 import styled from "styled-components";
+
+import { isCombatAtom } from "@/atoms/raidAtom";
 
 interface BackpackProps {
   item: Item;
 }
 const BackpackSlot = ({ item }: BackpackProps) => {
+  const isCombat = useAtomValue(isCombatAtom);
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: item?.id,
+    disabled: isCombat,
   });
 
   const {
@@ -18,7 +23,7 @@ const BackpackSlot = ({ item }: BackpackProps) => {
     isDragging,
   } = useDraggable({
     id: item?.id,
-    disabled: item?.id.toString().includes("empty"),
+    disabled: isCombat || item?.id.toString().includes("empty"),
   });
 
   const combinedRef = (node: HTMLElement | null) => {
@@ -26,13 +31,15 @@ const BackpackSlot = ({ item }: BackpackProps) => {
     setDragRef(node);
   };
 
+  const isDraggable = !item?.id.toString().includes("empty") && !isCombat;
+
   return (
     <Slot
       ref={combinedRef}
-      draggable={!item?.id.toString().includes("empty")}
+      draggable={isDraggable}
       $isOver={isOver}
       $isDragging={isDragging}
-      $isDraggable={!item?.id.toString().includes("empty")}
+      $isDraggable={isDraggable}
       {...attributes}
       {...listeners}
     >

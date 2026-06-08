@@ -1,19 +1,21 @@
 import { type DragEndEvent, type DragStartEvent, type UniqueIdentifier } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import { useQueryClient } from "@tanstack/react-query";
-import { useSetAtom } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { useRef } from "react";
 
-import { activeDragIdAtom, isInventoryDirtyAtom } from "@/atoms/raidAtom";
+import { activeDragIdAtom, isCombatAtom, isInventoryDirtyAtom } from "@/atoms/raidAtom";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 
 export function useInventoryDrag(characterData: CharacterData | undefined) {
   const queryClient = useQueryClient();
+  const isCombat = useAtomValue(isCombatAtom);
   const setActiveDragId = useSetAtom(activeDragIdAtom);
   const setIsInventoryDirty = useSetAtom(isInventoryDirtyAtom);
   const activeIdRef = useRef<UniqueIdentifier | null>(null);
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (isCombat) return;
     if (event.active.id.toString().includes("empty")) {
       setActiveDragId(null);
       activeIdRef.current = null;
@@ -24,6 +26,7 @@ export function useInventoryDrag(characterData: CharacterData | undefined) {
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (isCombat) return;
     const { active, over } = event;
     setActiveDragId(null);
     activeIdRef.current = null;
@@ -41,7 +44,8 @@ export function useInventoryDrag(characterData: CharacterData | undefined) {
       if (!old) return old;
 
       const newRaw = JSON.parse(JSON.stringify(old.raw)) as typeof old.raw;
-      let { equipment: rawEquipment, inventory: rawInventory } = newRaw;
+      let { equipment: rawEquipment } = newRaw;
+      const { inventory: rawInventory } = newRaw;
 
       const activeEquipIdx = rawEquipment.findIndex((w) => w.id === activeIdStr);
       const overEquipIdx = rawEquipment.findIndex((w) => w.id === overIdStr);
