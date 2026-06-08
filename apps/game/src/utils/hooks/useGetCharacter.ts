@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Item } from "@webgame/types";
 
-const API_BASE_URL = "http://localhost:3001";
+import { API_BASE_URL } from "../api";
 
 // Temporary hardcoded userId for development
 const TEMP_USER_ID = "da30ac6b-e93c-44d9-b344-ab67f99d2f80";
@@ -108,14 +108,14 @@ export const useGetCharacter = (userId: string = TEMP_USER_ID) => {
 
       // 컴포넌트 편의를 위한 단순 Item 배열 추출
       const equipment = normalizedEquipment.map((w) => ({
-        id: w.weaponMaster?.id || w.id,
+        id: w.id,
         name: w.weaponMaster?.name || "",
         weight: w.weaponMaster?.weight || 0,
         value: w.weaponMaster?.value || 0,
       }));
 
       const inventory = normalizedInventory.map((i) => ({
-        id: i.weaponMaster?.id || i.id,
+        id: i.id,
         name: i.weaponMaster?.name || "",
         weight: i.weaponMaster?.weight || 0,
         value: i.weaponMaster?.value || 0,

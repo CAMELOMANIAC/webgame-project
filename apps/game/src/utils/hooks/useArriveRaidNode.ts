@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import type { BattleLog } from "@webgame/types";
 
-const API_BASE_URL = "http://localhost:3001";
+import { API_BASE_URL } from "../api";
 
 interface ArriveRaidNodeParams {
   characterId: string;

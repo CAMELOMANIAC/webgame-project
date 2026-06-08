@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-const API_BASE_URL = "http://localhost:3001";
+import { API_BASE_URL } from "../api";
 const TEMP_USER_ID = "da30ac6b-e93c-44d9-b344-ab67f99d2f80";
 
 interface MoveItemVariables {

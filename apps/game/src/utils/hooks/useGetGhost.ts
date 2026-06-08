@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Item } from "@webgame/types";
 
-const API_BASE_URL = "http://localhost:3001";
+import { API_BASE_URL } from "../api";
 
 export interface GhostWeaponResponse {
   id: string;

@@ -1,8 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { API_BASE_URL } from "../api";
 import type { CharacterData } from "./useGetCharacter";
-
-const API_BASE_URL = "http://localhost:3001";
 
 interface SyncItemsParams {
   characterId: string;
