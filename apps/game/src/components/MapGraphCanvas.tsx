@@ -715,175 +715,279 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
           onWheel={handleWheel}
           onDragEnd={handleDragEnd}
         >
-          {/* Layer 1: Water Backdrop (통합된 물 영역) - 최하단 레이어 (1 DrawCall) */}
-          <Layer listening={false}>
-            {waterPoints.length > 0 && (
-              <Line
-                points={waterPoints}
-                closed
-                fill="rgba(30, 30, 32, 0.35)"
-                stroke="rgba(120, 120, 128, 0.2)"
-                strokeWidth={1.5}
-              />
-            )}
-          </Layer>
+          {/* Layer 1: Static Map Layer (Water, Edges, Buildings, Nodes) */}
+          <Layer listening={!isNavigating}>
+            {/* 1.1 Water Backdrop (통합된 물 영역 - 이벤트 불필요) */}
+            <Group listening={false}>
+              {waterPoints.length > 0 && (
+                <Line
+                  points={waterPoints}
+                  closed
+                  fill="rgba(30, 30, 32, 0.35)"
+                  stroke="rgba(120, 120, 128, 0.2)"
+                  strokeWidth={1.5}
+                />
+              )}
+            </Group>
 
-          {/* Layer 2: Buildings (건물 배치) */}
-          {showBuildings && (
-            <Layer listening={!isNavigating}>
-              {stageTransform.scale >= 3.0 && !isNavigating ? (
-                // 줌인 상태(300% 이상, 이동 중 아님): 개별 인터랙티브 다각형 그리기 (호버 감지 활성화)
-                visibleBuildings.map((b) => {
-                  return (
-                    <Line
-                      key={`building-${b.id}`}
-                      points={b.flatPoints}
-                      closed
-                      fill="rgba(35, 35, 38, 0.45)"
-                      stroke="rgba(120, 120, 128, 0.12)"
-                      strokeWidth={1}
-                      onClick={() => handleTargetSelect(b.roadNodeId)}
-                      onTap={() => handleTargetSelect(b.roadNodeId)}
-                      onMouseEnter={(e) => {
-                        const shape = e.target;
-
-                        // Z-Index 최상단 이동: 겹치는 건물 중 호버된 건물이 위로 올라오도록 처리
-                        shape.moveToTop();
-
-                        // React 리렌더링 방지를 위해 Konva 객체 직접 조작
-                        shape.setAttrs({
-                          fill: "rgba(43, 203, 186, 0.45)",
-                          stroke: "#ffffff",
-                          strokeWidth: 2,
-                          shadowColor: "#2bcbba",
-                          shadowBlur: 12,
-                          shadowOpacity: 0.9,
-                        });
-                        shape.getLayer()?.batchDraw();
-
-                        const container = shape.getStage()?.container();
-                        if (container) container.style.cursor = "pointer";
-
-                        // DOM 직접 조작으로 HUD 업데이트 (React Reconciliation 우회)
-                        const el = document.getElementById("hud-hover-detail");
-                        if (el) {
-                          el.style.display = "block";
-                          el.innerHTML = `
-                            <div style="color: #2bcbba; font-size: 11px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">
-                              BUILDING #${b.id}
-                            </div>
-                            <div style="font-size: 10px; color: #8a8d98; font-family: monospace; line-height: 1.4;">
-                              Height: ${b.height.toFixed(2)}m<br />
-                              Connected Road: Node #${b.roadNodeId}
-                            </div>
-                          `;
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        const shape = e.target;
-                        shape.setAttrs({
-                          fill: "rgba(35, 35, 38, 0.45)",
-                          stroke: "rgba(80, 80, 85, 0.12)",
-                          strokeWidth: 1,
-                          shadowBlur: 0,
-                          shadowOpacity: 0,
-                        });
-                        shape.getLayer()?.batchDraw();
-
-                        const container = shape.getStage()?.container();
-                        if (container) container.style.cursor = "default";
-
-                        resetHoverHud();
-                      }}
-                    />
-                  );
-                })
-              ) : (
-                // 줌아웃 상태(300% 미만): 1 DrawCall 병합 드로잉 (성능 극대화, 이벤트 비활성화)
+            {/* 1.2 Edges (도로망 - 이벤트 불필요) */}
+            {showEdges && (
+              <Group listening={false}>
+                {/* 1. Main 도로 (가장 두껍고 선명한 청백색 형광) */}
                 <Shape
                   sceneFunc={(context, shape) => {
                     context.beginPath();
-                    visibleBuildings.forEach((b) => {
-                      if (b.coordinates.length < 3) return;
-                      const first = b.coordinates[0];
-                      context.moveTo(first.x, first.y);
-                      for (let i = 1; i < b.coordinates.length; i++) {
-                        context.lineTo(b.coordinates[i].x, b.coordinates[i].y);
+                    edges.forEach((edge) => {
+                      if (edge.type !== "main") return;
+                      const start = nodes[edge.source];
+                      const end = nodes[edge.target];
+                      if (start && end) {
+                        context.moveTo(start.x, start.y);
+                        context.lineTo(end.x, end.y);
                       }
-                      context.closePath();
                     });
                     context.fillStrokeShape(shape);
                   }}
-                  fill="rgba(35, 35, 38, 0.45)"
-                  stroke="rgba(80, 80, 85, 0.12)"
-                  strokeWidth={1}
-                  listening={false}
+                  stroke="rgba(180, 180, 185, 0.25)"
+                  strokeWidth={2.8}
                 />
-              )}
-            </Layer>
-          )}
+                {/* 2. Major 도로 (중간 굵기) */}
+                <Shape
+                  sceneFunc={(context, shape) => {
+                    context.beginPath();
+                    edges.forEach((edge) => {
+                      if (edge.type !== "major") return;
+                      const start = nodes[edge.source];
+                      const end = nodes[edge.target];
+                      if (start && end) {
+                        context.moveTo(start.x, start.y);
+                        context.lineTo(end.x, end.y);
+                      }
+                    });
+                    context.fillStrokeShape(shape);
+                  }}
+                  stroke="rgba(100, 100, 105, 0.14)"
+                  strokeWidth={1.8}
+                />
+                {/* 3. Minor 도로 (가장 얇고 희미한 골목망) */}
+                <Shape
+                  sceneFunc={(context, shape) => {
+                    context.beginPath();
+                    edges.forEach((edge) => {
+                      if (edge.type !== "minor") return;
+                      const start = nodes[edge.source];
+                      const end = nodes[edge.target];
+                      if (start && end) {
+                        context.moveTo(start.x, start.y);
+                        context.lineTo(end.x, end.y);
+                      }
+                    });
+                    context.fillStrokeShape(shape);
+                  }}
+                  stroke="rgba(60, 60, 65, 0.05)"
+                  strokeWidth={1}
+                />
+              </Group>
+            )}
 
-          {/* Layer 3: Edges (도로망) - showEdges가 true일 때 3 DrawCalls로 분할하여 최적화 및 타입별 시각화 */}
-          {showEdges && (
-            <Layer listening={false}>
-              {/* 1. Main 도로 (가장 두껍고 선명한 청백색 형광) */}
-              <Shape
-                sceneFunc={(context, shape) => {
-                  context.beginPath();
-                  edges.forEach((edge) => {
-                    if (edge.type !== "main") return;
-                    const start = nodes[edge.source];
-                    const end = nodes[edge.target];
-                    if (start && end) {
-                      context.moveTo(start.x, start.y);
-                      context.lineTo(end.x, end.y);
-                    }
-                  });
-                  context.fillStrokeShape(shape);
-                }}
-                stroke="rgba(180, 180, 185, 0.25)"
-                strokeWidth={2.8}
-              />
-              {/* 2. Major 도로 (중간 굵기) */}
-              <Shape
-                sceneFunc={(context, shape) => {
-                  context.beginPath();
-                  edges.forEach((edge) => {
-                    if (edge.type !== "major") return;
-                    const start = nodes[edge.source];
-                    const end = nodes[edge.target];
-                    if (start && end) {
-                      context.moveTo(start.x, start.y);
-                      context.lineTo(end.x, end.y);
-                    }
-                  });
-                  context.fillStrokeShape(shape);
-                }}
-                stroke="rgba(100, 100, 105, 0.14)"
-                strokeWidth={1.8}
-              />
-              {/* 3. Minor 도로 (가장 얇고 희미한 골목망) */}
-              <Shape
-                sceneFunc={(context, shape) => {
-                  context.beginPath();
-                  edges.forEach((edge) => {
-                    if (edge.type !== "minor") return;
-                    const start = nodes[edge.source];
-                    const end = nodes[edge.target];
-                    if (start && end) {
-                      context.moveTo(start.x, start.y);
-                      context.lineTo(end.x, end.y);
-                    }
-                  });
-                  context.fillStrokeShape(shape);
-                }}
-                stroke="rgba(60, 60, 65, 0.05)"
-                strokeWidth={1}
-              />
-            </Layer>
-          )}
+            {/* 1.3 Buildings (건물 배치) */}
+            {showBuildings && (
+              <Group>
+                {stageTransform.scale >= 3.0 && !isNavigating ? (
+                  // 줌인 상태(300% 이상, 이동 중 아님): 개별 인터랙티브 다각형 그리기 (호버 감지 활성화)
+                  visibleBuildings.map((b) => {
+                    return (
+                      <Line
+                        key={`building-${b.id}`}
+                        points={b.flatPoints}
+                        closed
+                        fill="rgba(35, 35, 38, 0.45)"
+                        stroke="rgba(120, 120, 128, 0.12)"
+                        strokeWidth={1}
+                        onClick={() => handleTargetSelect(b.roadNodeId)}
+                        onTap={() => handleTargetSelect(b.roadNodeId)}
+                        onMouseEnter={(e) => {
+                          const shape = e.target;
 
-          {/* Layer 3.5: Path Visuals (길찾기 가이드 라인 및 타겟 비콘) */}
+                          // Z-Index 최상단 이동: 겹치는 건물 중 호버된 건물이 위로 올라오도록 처리
+                          shape.moveToTop();
+
+                          // React 리렌더링 방지를 위해 Konva 객체 직접 조작
+                          shape.setAttrs({
+                            fill: "rgba(43, 203, 186, 0.45)",
+                            stroke: "#ffffff",
+                            strokeWidth: 2,
+                            shadowColor: "#2bcbba",
+                            shadowBlur: 12,
+                            shadowOpacity: 0.9,
+                          });
+                          shape.getLayer()?.batchDraw();
+
+                          const container = shape.getStage()?.container();
+                          if (container) container.style.cursor = "pointer";
+
+                          // DOM 직접 조작으로 HUD 업데이트 (React Reconciliation 우회)
+                          const el = document.getElementById("hud-hover-detail");
+                          if (el) {
+                            el.style.display = "block";
+                            el.innerHTML = `
+                              <div style="color: #2bcbba; font-size: 11px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">
+                                BUILDING #${b.id}
+                              </div>
+                              <div style="font-size: 10px; color: #8a8d98; font-family: monospace; line-height: 1.4;">
+                                Height: ${b.height.toFixed(2)}m<br />
+                                Connected Road: Node #${b.roadNodeId}
+                              </div>
+                            `;
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          const shape = e.target;
+                          shape.setAttrs({
+                            fill: "rgba(35, 35, 38, 0.45)",
+                            stroke: "rgba(80, 80, 85, 0.12)",
+                            strokeWidth: 1,
+                            shadowBlur: 0,
+                            shadowOpacity: 0,
+                          });
+                          shape.getLayer()?.batchDraw();
+
+                          const container = shape.getStage()?.container();
+                          if (container) container.style.cursor = "default";
+
+                          resetHoverHud();
+                        }}
+                      />
+                    );
+                  })
+                ) : (
+                  // 줌아웃 상태(300% 미만): 1 DrawCall 병합 드로잉 (성능 극대화, 이벤트 비활성화)
+                  <Shape
+                    sceneFunc={(context, shape) => {
+                      context.beginPath();
+                      visibleBuildings.forEach((b) => {
+                        if (b.coordinates.length < 3) return;
+                        const first = b.coordinates[0];
+                        context.moveTo(first.x, first.y);
+                        for (let i = 1; i < b.coordinates.length; i++) {
+                          context.lineTo(b.coordinates[i].x, b.coordinates[i].y);
+                        }
+                        context.closePath();
+                      });
+                      context.fillStrokeShape(shape);
+                    }}
+                    fill="rgba(35, 35, 38, 0.45)"
+                    stroke="rgba(80, 80, 85, 0.12)"
+                    strokeWidth={1}
+                    listening={false}
+                  />
+                )}
+              </Group>
+            )}
+
+            {/* 1.4 Nodes (도로망 교차점 정점) */}
+            {showNodes && (
+              <Group>
+                {stageTransform.scale >= 3.0 && !isNavigating ? (
+                  // 줌인 상태(300% 이상, 이동 중 아님): 개별 인터랙티브 노드 그리기 (호버 감지 활성화)
+                  Array.from(visibleNodeIndices).map((nodeIdx) => {
+                    const node = nodes[nodeIdx];
+                    if (!node) return null;
+                    return (
+                      <Group
+                        key={`node-${nodeIdx}`}
+                        x={node.x}
+                        y={node.y}
+                        onClick={() => handleTargetSelect(nodeIdx)}
+                        onTap={() => handleTargetSelect(nodeIdx)}
+                        onMouseEnter={(e) => {
+                          const shape = e.target;
+
+                          // Z-Index 최상단 이동: 겹치는 노드 중 호버된 노드가 위로 올라오도록 처리
+                          shape.moveToTop();
+
+                          // React 리렌더링 방지를 위해 Konva 객체 속성 직접 조작
+                          shape.setAttrs({
+                            radius: DEFAULT_NODE_RADIUS + 3,
+                            fill: "#ffffff",
+                            stroke: DEFAULT_NODE_COLOR,
+                            strokeWidth: 2.5,
+                            shadowColor: DEFAULT_NODE_COLOR,
+                            shadowBlur: 12,
+                            shadowOpacity: 0.9,
+                          });
+                          shape.getLayer()?.batchDraw();
+
+                          const container = shape.getStage()?.container();
+                          if (container) container.style.cursor = "pointer";
+
+                          // DOM 직접 조작으로 HUD 업데이트
+                          const el = document.getElementById("hud-hover-detail");
+                          if (el) {
+                            el.style.display = "block";
+                            el.innerHTML = `
+                              <div style="color: ${DEFAULT_NODE_COLOR}; font-size: 11px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">
+                                NODE #${nodeIdx}
+                              </div>
+                              <div style="font-size: 10px; color: #8a8d98; font-family: monospace; line-height: 1.4;">
+                                X: ${node.x.toFixed(2)}<br />
+                                Y: ${node.y.toFixed(2)}
+                              </div>
+                            `;
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          const shape = e.target;
+                          shape.setAttrs({
+                            radius: DEFAULT_NODE_RADIUS,
+                            fill: DEFAULT_NODE_COLOR,
+                            stroke: "rgba(10, 10, 12, 0.8)",
+                            strokeWidth: 1,
+                            shadowBlur: 0,
+                            shadowOpacity: 0,
+                          });
+                          shape.getLayer()?.batchDraw();
+
+                          const container = shape.getStage()?.container();
+                          if (container) container.style.cursor = "default";
+
+                          resetHoverHud();
+                        }}
+                      >
+                        <Circle
+                          radius={DEFAULT_NODE_RADIUS}
+                          fill={DEFAULT_NODE_COLOR}
+                          stroke="rgba(10, 10, 12, 0.8)"
+                          strokeWidth={1}
+                        />
+                      </Group>
+                    );
+                  })
+                ) : (
+                  // 줌아웃 상태(300% 미만): 1 DrawCall 병합 드로잉 (성능 극대화, 이벤트 비활성화)
+                  <Shape
+                    sceneFunc={(context, shape) => {
+                      context.beginPath();
+                      visibleNodeIndices.forEach((nodeIdx) => {
+                        const node = nodes[nodeIdx];
+                        if (node) {
+                          context.moveTo(node.x + DEFAULT_NODE_RADIUS, node.y);
+                          context.arc(node.x, node.y, DEFAULT_NODE_RADIUS, 0, Math.PI * 2);
+                        }
+                      });
+                      context.fillStrokeShape(shape);
+                    }}
+                    fill={DEFAULT_NODE_COLOR}
+                    stroke="rgba(10, 10, 12, 0.8)"
+                    strokeWidth={1}
+                    listening={false}
+                  />
+                )}
+              </Group>
+            )}
+          </Layer>
+
+          {/* Layer 2: Navigation & Path Layer (길찾기 가이드 라인 및 타겟 비콘 - 이벤트 불필요) */}
           {(shortestPathPoints.length > 0 || targetNodeId !== null) && (
             <Layer listening={false}>
               {/* 형광 에메랄드 최단 경로선 */}
@@ -918,9 +1022,10 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
             </Layer>
           )}
 
-          {/* Layer 3.7: Vignette / Fog of War (플레이어 시야 외부 어둡게 마스킹) */}
-          {playerCoords && (
-            <Layer listening={false}>
+          {/* Layer 3: Player & Dynamic Overlay Layer (시야 안개 및 플레이어 마커 - 이벤트 불필요) */}
+          <Layer listening={false}>
+            {/* Vignette / Fog of War (플레이어 시야 외부 어둡게 마스킹) */}
+            {playerCoords && (
               <Circle
                 ref={sightMaskRef}
                 x={playerCoords.x}
@@ -941,11 +1046,8 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
                   "rgba(6, 7, 10, 0.5)",
                 ]}
               />
-            </Layer>
-          )}
-
-          {/* Layer 3.8: Player Marker (실시간 위치 Becon - SVG 나침반으로 변경) */}
-          <Layer listening={false}>
+            )}
+            {/* Player Marker (실시간 위치 Becon - SVG 나침반) */}
             {playerCoords && !isCombat && compassImg && (
               <Image
                 ref={playerMarkerRef}
@@ -959,107 +1061,6 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
               />
             )}
           </Layer>
-
-          {/* Layer 4: Nodes (도로망 교차점 정점) */}
-          {showNodes && (
-            <Layer listening={!isNavigating}>
-              {stageTransform.scale >= 3.0 && !isNavigating ? (
-                // 줌인 상태(300% 이상, 이동 중 아님): 개별 인터랙티브 노드 그리기 (호버 감지 활성화)
-                Array.from(visibleNodeIndices).map((nodeIdx) => {
-                  const node = nodes[nodeIdx];
-                  if (!node) return null;
-                  return (
-                    <Group
-                      key={`node-${nodeIdx}`}
-                      x={node.x}
-                      y={node.y}
-                      onClick={() => handleTargetSelect(nodeIdx)}
-                      onTap={() => handleTargetSelect(nodeIdx)}
-                      onMouseEnter={(e) => {
-                        const shape = e.target;
-
-                        // Z-Index 최상단 이동: 겹치는 노드 중 호버된 노드가 위로 올라오도록 처리
-                        shape.moveToTop();
-
-                        // React 리렌더링 방지를 위해 Konva 객체 속성 직접 조작
-                        shape.setAttrs({
-                          radius: DEFAULT_NODE_RADIUS + 3,
-                          fill: "#ffffff",
-                          stroke: DEFAULT_NODE_COLOR,
-                          strokeWidth: 2.5,
-                          shadowColor: DEFAULT_NODE_COLOR,
-                          shadowBlur: 12,
-                          shadowOpacity: 0.9,
-                        });
-                        shape.getLayer()?.batchDraw();
-
-                        const container = shape.getStage()?.container();
-                        if (container) container.style.cursor = "pointer";
-
-                        // DOM 직접 조작으로 HUD 업데이트
-                        const el = document.getElementById("hud-hover-detail");
-                        if (el) {
-                          el.style.display = "block";
-                          el.innerHTML = `
-                            <div style="color: ${DEFAULT_NODE_COLOR}; font-size: 11px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">
-                              NODE #${nodeIdx}
-                            </div>
-                            <div style="font-size: 10px; color: #8a8d98; font-family: monospace; line-height: 1.4;">
-                              X: ${node.x.toFixed(2)}<br />
-                              Y: ${node.y.toFixed(2)}
-                            </div>
-                          `;
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        const shape = e.target;
-                        shape.setAttrs({
-                          radius: DEFAULT_NODE_RADIUS,
-                          fill: DEFAULT_NODE_COLOR,
-                          stroke: "rgba(10, 10, 12, 0.8)",
-                          strokeWidth: 1,
-                          shadowBlur: 0,
-                          shadowOpacity: 0,
-                        });
-                        shape.getLayer()?.batchDraw();
-
-                        const container = shape.getStage()?.container();
-                        if (container) container.style.cursor = "default";
-
-                        resetHoverHud();
-                      }}
-                    >
-                      <Circle
-                        radius={DEFAULT_NODE_RADIUS}
-                        fill={DEFAULT_NODE_COLOR}
-                        stroke="rgba(10, 10, 12, 0.8)"
-                        strokeWidth={1}
-                      />
-                    </Group>
-                  );
-                })
-              ) : (
-                // 줌아웃 상태(300% 미만): 1 DrawCall 병합 드로잉 (성능 극대화, 이벤트 비활성화)
-                <Shape
-                  sceneFunc={(context, shape) => {
-                    context.beginPath();
-                    visibleNodeIndices.forEach((nodeIdx) => {
-                      const node = nodes[nodeIdx];
-                      if (node) {
-                        context.moveTo(node.x + DEFAULT_NODE_RADIUS, node.y);
-                        context.arc(node.x, node.y, DEFAULT_NODE_RADIUS, 0, Math.PI * 2);
-                      }
-                    });
-                    context.fillStrokeShape(shape);
-                  }}
-                  fill={DEFAULT_NODE_COLOR}
-                  stroke="rgba(10, 10, 12, 0.8)"
-                  strokeWidth={1}
-                  listening={false}
-                />
-              )}
-            </Layer>
-          )}
         </Stage>
       )}
     </CanvasContainer>
