@@ -62,9 +62,10 @@ const DEFAULT_NODE_RADIUS = 4;
 
 interface MapGraphCanvasProps {
   isCombat?: boolean;
+  isArrivePending?: boolean;
 }
 
-export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps) {
+export default function MapGraphCanvas({ isCombat = false, isArrivePending = false }: MapGraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const [compassImg] = useImage(compass);
@@ -124,7 +125,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
 
   // 대상 노드 선택 시 네비게이션 트리거 (개발 모드인 경우 승인 단계를 거치고, 일반 모드면 즉시 출발)
   const handleTargetSelect = (targetId: number) => {
-    if (isNavigating) return;
+    if (isNavigating || isArrivePending) return;
     if (showDevPanel) {
       setTargetNodeId(targetId);
     } else {
@@ -692,7 +693,7 @@ export default function MapGraphCanvas({ isCombat = false }: MapGraphCanvasProps
           <NavButtonArea>
             <StyledNavButton
               $primary
-              disabled={shortestPath.length <= 1 || isNavigating}
+              disabled={shortestPath.length <= 1 || isNavigating || isArrivePending}
               onClick={() => setIsNavigating(true)}
             >
               {isNavigating ? "IN TRANSIT..." : "START NAVIGATION"}

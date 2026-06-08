@@ -24,3 +24,6 @@ export const followPlayerAtom = atom<boolean>(true);
 // 플레이어의 현재 방향 회전 각도 (도 단위, 0도 = 북쪽)
 export const playerRotationAtom = atom<number>(0);
 
+// 인벤토리 변경 사항이 서버에 동기화되지 않고 남아있는지 여부
+export const isInventoryDirtyAtom = atom<boolean>(false);
+

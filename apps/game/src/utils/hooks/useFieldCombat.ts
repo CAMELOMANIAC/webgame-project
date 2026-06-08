@@ -141,5 +141,5 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     }
   }, [isCombat, navigate]);
 
-  return { isCombat, setIsCombat, handleArriveNode, battleLog };
+  return { isCombat, setIsCombat, handleArriveNode, battleLog, isArrivePending: arriveRaidNode.isPending };
 }

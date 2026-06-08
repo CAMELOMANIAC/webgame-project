@@ -11,6 +11,7 @@ interface FieldBackgroundProps {
   activeAttacks: BattleEvent[];
   currentTime: number;
   characterNickname: string | undefined;
+  isArrivePending: boolean;
 }
 
 export function FieldBackground({
@@ -20,11 +21,12 @@ export function FieldBackground({
   activeAttacks,
   currentTime,
   characterNickname,
+  isArrivePending,
 }: FieldBackgroundProps) {
   return (
     <Container>
       {/* 맵 그래프 캔버스 (항상 뒤쪽에 렌더링) */}
-      <MapGraphCanvas isCombat={isCombat} />
+      <MapGraphCanvas isCombat={isCombat} isArrivePending={isArrivePending} />
 
       {/* 전투 시뮬레이터 캔버스 (전투 중일 때만 맵 위에 렌더링) */}
       {isCombat && (

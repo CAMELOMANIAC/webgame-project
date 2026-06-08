@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef } from "react";
 import styled from "styled-components";
 
 import { currentTimeAtom, displayEventsAtom } from "@/atoms/globalAtom";
-import { currentNodeIdAtom, isNavigatingAtom } from "@/atoms/raidAtom";
+import { currentNodeIdAtom, isInventoryDirtyAtom, isNavigatingAtom } from "@/atoms/raidAtom";
 import { InheritMotionDiv, Page } from "@/components/Commons";
 import { FieldBackground } from "@/components/FieldBackground";
 import { FieldHeader } from "@/components/FieldHeader";
@@ -18,6 +18,7 @@ import { useEnemyPositions } from "@/utils/hooks/useEnemyPositions";
 import { useFieldCombat } from "@/utils/hooks/useFieldCombat";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useInventoryDrag } from "@/utils/hooks/useInventoryDrag";
+import { useSyncItemsMutation } from "@/utils/hooks/useSyncItemsMutation";
 
 type FieldSearch = {
   tab?: string;
@@ -39,12 +40,14 @@ function RouteComponent() {
   const currentTime = useAtomValue(currentTimeAtom);
   const displayEvents = useAtomValue(displayEventsAtom);
 
-  const { isCombat, setIsCombat, handleArriveNode, battleLog } = useFieldCombat(characterData);
+  const { isCombat, setIsCombat, handleArriveNode, battleLog, isArrivePending } = useFieldCombat(characterData);
   const { activeId, handleDragStart, handleDragEnd } = useInventoryDrag(characterData);
   const enemyPositions = useEnemyPositions(battleLog, characterData?.raw.user.nickname);
 
   const [currentNodeId] = useAtom(currentNodeIdAtom);
   const [isNavigating] = useAtom(isNavigatingAtom);
+  const [isInventoryDirty, setIsInventoryDirty] = useAtom(isInventoryDirtyAtom);
+  const syncMutation = useSyncItemsMutation();
 
   // 중복 요청 및 무한 루프 방지를 위한 마지막 보고 노드 기록 Ref
   const lastReportedNodeRef = useRef<number | null>(null);
@@ -65,11 +68,24 @@ function RouteComponent() {
     handleArriveNode(currentNodeId);
   }, [isNavigating, currentNodeId, isCombat, characterData, handleArriveNode]);
 
+  // 1.1. 네비게이션 시작 시 변경된 인벤토리가 있다면 백그라운드 동기화 요청
+  useEffect(() => {
+    if (isNavigating && isInventoryDirty && characterData?.raw.id) {
+      console.log("[Raid] Navigation started. Syncing dirty inventory with server in background...");
+      setIsInventoryDirty(false); // 플래그 초기화
+      syncMutation.mutate({
+        characterId: characterData.raw.id,
+        data: characterData,
+      });
+    }
+  }, [isNavigating, isInventoryDirty, characterData, syncMutation, setIsInventoryDirty]);
+
   const activeAttacks = useMemo(() => {
     return displayEvents.filter((e: BattleEvent) => e.type === "ATTACK");
   }, [displayEvents]);
 
-  const activeItem = characterData?.inventory.find((item) => item.id === activeId);
+  const activeItem = characterData?.equipment.find((item) => item.id === activeId)
+    || characterData?.inventory.find((item) => item.id === activeId);
 
   return (
     <Page>
@@ -80,6 +96,7 @@ function RouteComponent() {
         activeAttacks={activeAttacks}
         currentTime={currentTime}
         characterNickname={characterData?.raw.user.nickname}
+        isArrivePending={isArrivePending}
       />
       <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <LayoutGroup id="inventory-group">
@@ -111,28 +128,28 @@ function RouteComponent() {
                 layout
               >
                 <Backpack />
-                <DragOverlay dropAnimation={null}>
-                  <AnimatePresence>
-                    {activeId && (
-                      <SlotOverlay
-                        key={String(activeId)}
-                        layoutId={String(activeId)}
-                        transition={{
-                          type: "spring",
-                          stiffness: 500,
-                          damping: 30,
-                          mass: 0.8,
-                        }}
-                      >
-                        {activeItem?.name}
-                      </SlotOverlay>
-                    )}
-                  </AnimatePresence>
-                </DragOverlay>
               </InheritMotionDiv>
             )}
           </AnimatePresence>
         </LayoutGroup>
+        <DragOverlay dropAnimation={null}>
+          <AnimatePresence>
+            {activeId && (
+              <SlotOverlay
+                key={String(activeId)}
+                layoutId={String(activeId)}
+                transition={{
+                  type: "spring",
+                  stiffness: 500,
+                  damping: 30,
+                  mass: 0.8,
+                }}
+              >
+                {activeItem?.name}
+              </SlotOverlay>
+            )}
+          </AnimatePresence>
+        </DragOverlay>
       </DndContext>
     </Page>
   );
