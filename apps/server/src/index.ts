@@ -790,6 +790,50 @@ fastify.post("/character/:characterId/raid/start", async (request, reply) => {
       },
     });
 
+    // 테스트용: 캐릭터 장착 무기가 전혀 없으면 기본 무기들을 자동 장착
+    const currentEquipment = await prisma.characterWeapon.findMany({
+      where: { characterId },
+    });
+
+    if (currentEquipment.length === 0) {
+      const availableWeapons = await prisma.weaponMaster.findMany({
+        take: 2,
+      });
+
+      if (availableWeapons.length > 0) {
+        await prisma.characterWeapon.createMany({
+          data: availableWeapons.map((w, index) => ({
+            characterId,
+            weaponMasterId: w.id,
+            slotIndex: index,
+          })),
+        });
+      }
+    }
+
+    // 테스트용: 가방 인벤토리가 완전히 비어있으면 남은 무기들을 가방에 채워줌
+    const currentInventory = await prisma.raidInventoryItem.findMany({
+      where: { characterId },
+    });
+
+    if (currentInventory.length === 0) {
+      const availableWeapons = await prisma.weaponMaster.findMany({
+        skip: 2,
+        take: 2,
+      });
+
+      if (availableWeapons.length > 0) {
+        await prisma.raidInventoryItem.createMany({
+          data: availableWeapons.map((w, index) => ({
+            characterId,
+            weaponMasterId: w.id,
+            slotIndex: index,
+            quantity: 1,
+          })),
+        });
+      }
+    }
+
     return { status: "success", isRaiding: character.isRaiding };
   } catch (error) {
     fastify.log.error(error);

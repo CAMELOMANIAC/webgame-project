@@ -111,7 +111,7 @@ function RouteComponent() {
             <AvatarCircle>
               <GiBackpack size={48} color="#74a4ff" />
             </AvatarCircle>
-            <Nickname>{character?.user.nickname}</Nickname>
+            <Nickname>{character?.user?.nickname || "Unknown"}</Nickname>
             <SubInfo>Ghost Extractor Class A</SubInfo>
 
             {/* 스탯 그리드 */}

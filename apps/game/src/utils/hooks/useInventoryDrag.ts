@@ -1,12 +1,15 @@
 import { type DragEndEvent, type DragStartEvent, type UniqueIdentifier } from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSetAtom } from "jotai";
 import { useState } from "react";
 
+import { isInventoryDirtyAtom } from "@/atoms/raidAtom";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 
 export function useInventoryDrag(characterData: CharacterData | undefined) {
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
+  const setIsInventoryDirty = useSetAtom(isInventoryDirtyAtom);
 
   const handleDragStart = (event: DragStartEvent) => {
     if (event.active.id.toString().includes("empty")) {
@@ -27,59 +30,121 @@ export function useInventoryDrag(characterData: CharacterData | undefined) {
 
     if (activeIdStr === overIdStr) return;
 
+    let didChange = false;
+
     queryClient.setQueryData(["character", characterData.raw.userId], (old: CharacterData | undefined) => {
       if (!old) return old;
 
-      const newEquipment = [...old.equipment];
-      const newInventory = [...old.inventory];
-      const newRawInventory = [...old.raw.inventory];
+      const newRaw = JSON.parse(JSON.stringify(old.raw)) as typeof old.raw;
+      const { equipment: rawEquipment, inventory: rawInventory } = newRaw;
 
-      const activeEquipIdx = newEquipment.findIndex((i) => i.id === activeIdStr);
-      const overEquipIdx = newEquipment.findIndex((i) => i.id === overIdStr);
-      const activeInvIdx = newInventory.findIndex((i) => i.id === activeIdStr);
-      const overInvIdx = newInventory.findIndex((i) => i.id === overIdStr);
+      const activeEquipIdx = rawEquipment.findIndex((w) => w.id === activeIdStr);
+      const overEquipIdx = rawEquipment.findIndex((w) => w.id === overIdStr);
+      const activeInvIdx = rawInventory.findIndex((i) => i.id === activeIdStr);
+      const overInvIdx = rawInventory.findIndex((i) => i.id === overIdStr);
+
+      let didSwap = false;
 
       // 1. Equipment 내 정렬
       if (activeEquipIdx !== -1 && overEquipIdx !== -1) {
-        [newEquipment[activeEquipIdx], newEquipment[overEquipIdx]] = [
-          newEquipment[overEquipIdx],
-          newEquipment[activeEquipIdx],
+        [rawEquipment[activeEquipIdx], rawEquipment[overEquipIdx]] = [
+          rawEquipment[overEquipIdx],
+          rawEquipment[activeEquipIdx],
         ];
-        return { ...old, equipment: newEquipment };
+        didSwap = true;
       }
-
       // 2. Inventory 내 정렬
-      if (activeInvIdx !== -1 && overInvIdx !== -1) {
-        [newInventory[activeInvIdx], newInventory[overInvIdx]] = [newInventory[overInvIdx], newInventory[activeInvIdx]];
-        [newRawInventory[activeInvIdx], newRawInventory[overInvIdx]] = [
-          newRawInventory[overInvIdx],
-          newRawInventory[activeInvIdx],
+      else if (activeInvIdx !== -1 && overInvIdx !== -1) {
+        [rawInventory[activeInvIdx], rawInventory[overInvIdx]] = [
+          rawInventory[overInvIdx],
+          rawInventory[activeInvIdx],
         ];
-        return { ...old, inventory: newInventory, raw: { ...old.raw, inventory: newRawInventory } };
+        didSwap = true;
       }
-
       // 3. Inventory -> Equipment
-      if (activeInvIdx !== -1 && overEquipIdx !== -1) {
-        const itemToEquip = newInventory[activeInvIdx];
-        const itemToUnequip = newEquipment[overEquipIdx];
+      else if (activeInvIdx !== -1 && overEquipIdx !== -1) {
+        const itemToEquip = rawInventory[activeInvIdx];
+        const itemToUnequip = rawEquipment[overEquipIdx];
 
-        newEquipment[overEquipIdx] = itemToEquip;
-        newInventory[activeInvIdx] = itemToUnequip;
-        return { ...old, equipment: newEquipment, inventory: newInventory };
+        rawEquipment[overEquipIdx] = {
+          id: itemToEquip.id.startsWith("empty-") ? `empty-wpn-${overEquipIdx}` : itemToEquip.id,
+          slotIndex: overEquipIdx,
+          weaponMaster: itemToEquip.weaponMaster,
+        };
+
+        rawInventory[activeInvIdx] = {
+          id: itemToUnequip.id.startsWith("empty-") ? `empty-inv-${activeInvIdx}` : itemToUnequip.id,
+          slotIndex: activeInvIdx,
+          weaponMaster: itemToUnequip.weaponMaster,
+          quantity: itemToUnequip.weaponMaster ? 1 : 0,
+        };
+        didSwap = true;
+      }
+      // 4. Equipment -> Inventory
+      else if (activeEquipIdx !== -1 && overInvIdx !== -1) {
+        const itemToUnequip = rawEquipment[activeEquipIdx];
+        const itemToEquip = rawInventory[overInvIdx];
+
+        rawEquipment[activeEquipIdx] = {
+          id: itemToEquip.id.startsWith("empty-") ? `empty-wpn-${activeEquipIdx}` : itemToEquip.id,
+          slotIndex: activeEquipIdx,
+          weaponMaster: itemToEquip.weaponMaster,
+        };
+
+        rawInventory[overInvIdx] = {
+          id: itemToUnequip.id.startsWith("empty-") ? `empty-inv-${overInvIdx}` : itemToUnequip.id,
+          slotIndex: overInvIdx,
+          weaponMaster: itemToUnequip.weaponMaster,
+          quantity: itemToUnequip.weaponMaster ? 1 : 0,
+        };
+        didSwap = true;
       }
 
-      // 4. Equipment -> Inventory
-      if (activeEquipIdx !== -1 && overInvIdx !== -1) {
-        const itemToUnequip = newEquipment[activeEquipIdx];
-        const itemToEquip = newInventory[overInvIdx];
+      if (didSwap) {
+        rawEquipment.forEach((w, index) => {
+          w.slotIndex = index;
+          if (!w.weaponMaster) {
+            w.id = `empty-wpn-${index}`;
+          }
+        });
+        rawInventory.forEach((i, index) => {
+          i.slotIndex = index;
+          if (!i.weaponMaster) {
+            i.id = `empty-inv-${index}`;
+          }
+        });
 
-        newEquipment[activeEquipIdx] = itemToEquip;
-        newInventory[overInvIdx] = itemToUnequip;
-        return { ...old, equipment: newEquipment, inventory: newInventory };
+        const equipment = rawEquipment.map((w) => ({
+          id: w.id,
+          name: w.weaponMaster?.name || "",
+          weight: w.weaponMaster?.weight || 0,
+          value: w.weaponMaster?.value || 0,
+        }));
+
+        const inventory = rawInventory.map((i) => ({
+          id: i.id,
+          name: i.weaponMaster?.name || "",
+          weight: i.weaponMaster?.weight || 0,
+          value: i.weaponMaster?.value || 0,
+        }));
+
+        didChange = true;
+
+        return {
+          ...old,
+          equipment,
+          inventory,
+          raw: newRaw,
+        };
       }
 
       return old;
     });
+
+    if (didChange) {
+      console.log("[InventoryDrag] Item reordered. Marking inventory dirty for sync.");
+      setIsInventoryDirty(true);
+    }
   };
 
   return { activeId, handleDragStart, handleDragEnd };
