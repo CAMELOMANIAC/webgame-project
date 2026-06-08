@@ -1,6 +1,6 @@
 import { useAtom } from "jotai";
 import Konva from "konva";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, Group, Image, Layer, Line, Shape, Stage } from "react-konva";
 import styled from "styled-components";
 import useImage from "use-image";
@@ -65,7 +65,7 @@ interface MapGraphCanvasProps {
   isArrivePending?: boolean;
 }
 
-export default function MapGraphCanvas({ isCombat = false, isArrivePending = false }: MapGraphCanvasProps) {
+const MapGraphCanvas = memo(({ isCombat = false, isArrivePending = false }: MapGraphCanvasProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const mapLayerRef = useRef<Konva.Layer | null>(null);
@@ -108,6 +108,9 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
   const [playerCoords, setPlayerCoords] = useAtom(playerCoordsAtom);
   const playerCoordsRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  // 캐싱 기준점 추적용 Ref (이동 중 불필요한 캐시 무효화 방지)
+  const lastCacheCoordsRef = useRef<{ x: number; y: number } | null>(null);
+
   // 플레이어 마커 및 경로 라인 Konva 레퍼런스 (애니메이션 떨림 차단용 직접 조작)
   const playerMarkerRef = useRef<Konva.Image | null>(null);
   const pathLineRef = useRef<Konva.Line | null>(null);
@@ -126,38 +129,87 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
     followPlayerRef.current = followPlayer;
   }, [followPlayer]);
 
-  // 전투 중(isCombat)일 때 맵 그래프의 리드로우 연산(드로잉 부하)을 완전히 멈추기 위해 정지형 레이어 캐싱 적용
-  useEffect(() => {
-    if (!mapLayerRef.current || !stageRef.current) return;
+  // 맵 레이어 캐싱을 동적으로 관리하는 헬퍼 함수
+  const updateMapCache = (force = false) => {
+    const layer = mapLayerRef.current;
+    const stage = stageRef.current;
+    if (!layer || !stage || dimensions.width === 0) return;
 
+    const scale = stage.scaleX();
+
+    // 1. 전투 중인 경우: 고정 뷰포트 영역 최초 1회만 타이트하게 캐싱
     if (isCombat) {
-      console.log("[MapGraphCanvas] Freezing map layer drawing via viewport cache.");
-      const stage = stageRef.current;
-      const scale = stage.scaleX();
-      
-      // 스크린의 (0, 0)과 (width, height) 가시 영역을 Stage 로컬 좌표계로 역변환
+      if (!force && layer.isCached()) return;
       const x = -stage.x() / scale;
       const y = -stage.y() / scale;
       const w = dimensions.width / scale;
       const h = dimensions.height / scale;
+      const pad = 50 / scale; // 카메라 쉐이크 마진
 
-      // 카메라 쉐이크 시 경계 밖이 잘리지 않도록 여유 버퍼(50px) 패딩 적용
-      const pad = 50 / scale;
-
-      // 줌(scale) 상태에서 이미지가 깨지지 않도록 devicePixelRatio에 scale 배율을 곱해서 캐싱
-      mapLayerRef.current.cache({
+      layer.clearCache();
+      layer.cache({
         x: x - pad,
         y: y - pad,
         width: w + pad * 2,
         height: h + pad * 2,
         pixelRatio: (window.devicePixelRatio || 1) * scale
       });
-    } else {
-      console.log("[MapGraphCanvas] Unfreezing map layer cache.");
-      mapLayerRef.current.clearCache();
+      return;
     }
-    mapLayerRef.current.batchDraw();
+
+    // 2. 네비게이션 이동 중인 경우: 슬라이딩 윈도우 방식으로 주변 넉넉한 영역 고화질 캐싱
+    if (isNavigating) {
+      const playerPos = playerCoordsRef.current || { x: nodes[currentNodeId]?.x ?? 0, y: nodes[currentNodeId]?.y ?? 0 };
+
+      // 이동 거리가 임계값(200px)을 초과할 때만 점진적으로 캐시 갱신
+      if (!force && lastCacheCoordsRef.current && layer.isCached()) {
+        const dx = playerPos.x - lastCacheCoordsRef.current.x;
+        const dy = playerPos.y - lastCacheCoordsRef.current.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 200) return; // 캐시 범위 내이므로 유지
+      }
+
+      lastCacheCoordsRef.current = { x: playerPos.x, y: playerPos.y };
+
+      const w = dimensions.width / scale;
+      const h = dimensions.height / scale;
+      const x = playerPos.x - w / 2;
+      const y = playerPos.y - h / 2;
+      const pad = 600 / scale; // 주행 시 즉각 화면에서 잘려 보이지 않도록 넉넉한 버퍼 마진 추가
+
+      layer.clearCache();
+      layer.cache({
+        x: x - pad,
+        y: y - pad,
+        width: w + pad * 2,
+        height: h + pad * 2,
+        pixelRatio: (window.devicePixelRatio || 1) * scale
+      });
+      return;
+    }
+
+    // 3. 평상시(대기 중)에는 실시간 인터랙션을 보장하기 위해 캐시를 해제
+    if (layer.isCached()) {
+      layer.clearCache();
+      lastCacheCoordsRef.current = null;
+    }
+  };
+
+  // 전투 중 상태 변경에 대응하는 캐시 라이프사이클 관리
+  useEffect(() => {
+    updateMapCache(true);
+    mapLayerRef.current?.batchDraw();
   }, [isCombat, dimensions.width, dimensions.height]);
+
+  // 네비게이션 이동 시작/종료에 대응하는 캐시 라이프사이클 관리
+  useEffect(() => {
+    if (isNavigating) {
+      updateMapCache(true); // 최초 1회 이동용 대형 고화질 캐싱 생성
+    } else {
+      updateMapCache(false); // 이동 완료 시 캐시를 제거하여 자유 탐색 복원
+      mapLayerRef.current?.batchDraw();
+    }
+  }, [isNavigating]);
 
   // 대상 노드 선택 시 네비게이션 트리거 (개발 모드인 경우 승인 단계를 거치고, 일반 모드면 즉시 출발)
   const handleTargetSelect = (targetId: number) => {
@@ -342,7 +394,7 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
       setPlayerCoords(initPos);
       playerCoordsRef.current = initPos;
     }
-  }, [currentNodeId, isNavigating]);
+  }, [currentNodeId, isNavigating, setPlayerCoords]);
 
   // 5.5. requestAnimationFrame 기반 등속(Constant Speed) 부드러운 네비게이션 보간 루프 (단일 세션 유지)
   useEffect(() => {
@@ -365,9 +417,23 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
       setPlayerRotation(angleDeg);
     }
 
+    // 총 주행 물리 거리 미리 연산 (속도 가감속 Easing 정규화용)
+    let totalDistance = 0;
+    for (let i = 0; i < shortestPath.length - 1; i++) {
+      const n1 = nodes[shortestPath[i]];
+      const n2 = nodes[shortestPath[i + 1]];
+      if (n1 && n2) {
+        const dx = n2.x - n1.x;
+        const dy = n2.y - n1.y;
+        totalDistance += Math.sqrt(dx * dx + dy * dy);
+      }
+    }
+
+    let accumulatedDistance = 0;
     let animId: number;
     let lastTime = performance.now();
-    const speed = 180; // 일정한 속도로 이동 (초당 180 픽셀)
+    const minSpeed = 35;   // 출발 및 도달 부근 최소 속도
+    const maxSpeed = 240;  // 중간 구간 최고 속도
 
     // 실시간 카메라 중심 카메라 트래킹 헬퍼
     const updateCameraFollow = (px: number, py: number) => {
@@ -392,6 +458,20 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
         const finalNodeId = path[path.length - 1];
         if (finalNodeId !== undefined) {
           setCurrentNodeId(finalNodeId);
+          const finalNode = nodes[finalNodeId];
+          if (finalNode) {
+            const finalPos = { x: finalNode.x, y: finalNode.y };
+            setPlayerCoords(finalPos);
+            // 최종 도착 후 각도 상태 갱신
+            if (path.length > 1) {
+              const prevNode = nodes[path[path.length - 2]];
+              if (prevNode) {
+                const dx = finalNode.x - prevNode.x;
+                const dy = finalNode.y - prevNode.y;
+                setPlayerRotation((Math.atan2(dy, dx) * 180) / Math.PI + 90);
+              }
+            }
+          }
         }
         setIsNavigating(false);
         setTargetNodeId(null);
@@ -441,13 +521,18 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
       const angleRad = Math.atan2(dy, dx);
       const angleDeg = (angleRad * 180) / Math.PI + 90;
 
-      const step = speed * deltaTime;
+      // 주행 진행률(0.0 ~ 1.0) 계산 및 사인파 Easing 보간 속도 설정
+      const progress = totalDistance > 0 ? Math.min(1.0, Math.max(0.0, accumulatedDistance / totalDistance)) : 1.0;
+      const speedFactor = Math.sin(progress * Math.PI);
+      const currentSpeed = minSpeed + (maxSpeed - minSpeed) * speedFactor;
+
+      const step = currentSpeed * deltaTime;
 
       if (distance <= step) {
         // 목표 다음 노드에 근접하여 도착 완료
         const arrivedPos = { x: nextNode.x, y: nextNode.y };
         playerCoordsRef.current = arrivedPos;
-        setPlayerCoords(arrivedPos);
+        accumulatedDistance += distance; // 실제로 이동 완료한 물리적 거리 누적
 
         if (playerMarkerRef.current) {
           playerMarkerRef.current.x(arrivedPos.x);
@@ -464,6 +549,9 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
         // 카메라 추적 활성화 시 즉시 카메라 중앙 정렬
         updateCameraFollow(arrivedPos.x, arrivedPos.y);
 
+        // 이동 거리에 따른 동적 슬라이딩 캐시 리프레시 체크
+        updateMapCache(false);
+
         // 실시간 경로선 꼬리 깎기 (에메랄드 라인 시작점을 다음 목표 노드로 단축)
         if (pathLineRef.current) {
           const remainingPoints = path.slice(stepIdx).flatMap((idx) => {
@@ -476,20 +564,6 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
 
         // 다음 스텝 인덱스로 진행 (리액트 리렌더링 없이 즉시 연속 이동)
         currentPathStepRef.current += 1;
-
-        const nextStepIdx = currentPathStepRef.current;
-        if (nextStepIdx < path.length) {
-          const nextNextNode = nodes[path[nextStepIdx]];
-          const currNode = nodes[path[nextStepIdx - 1]];
-          if (currNode && nextNextNode) {
-            const nextDx = nextNextNode.x - currNode.x;
-            const nextDy = nextNextNode.y - currNode.y;
-            const nextAngleRad = Math.atan2(nextDy, nextDx);
-            const nextAngleDeg = (nextAngleRad * 180) / Math.PI + 90;
-            setPlayerRotation(nextAngleDeg);
-          }
-        }
-
         animId = requestAnimationFrame(tick);
       } else {
         // 등속 선형 보간 전진 (나누기 0에 의한 NaN 방지)
@@ -500,6 +574,7 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
         };
 
         playerCoordsRef.current = newPos;
+        accumulatedDistance += step; // 전진한 프레임 스텝만큼 물리적 거리 누적
 
         // 리액트 State 리렌더링 우회: Konva 노드를 직접 위치 변경
         if (playerMarkerRef.current) {
@@ -516,6 +591,9 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
 
         // 실시간 카메라 트래킹 적용
         updateCameraFollow(newPos.x, newPos.y);
+
+        // 이동 거리에 따른 동적 슬라이딩 캐시 리프레시 체크
+        updateMapCache(false);
 
         // 실시간 경로선 꼬리 깎기 (에메랄드 라인 시작점을 플레이어의 현재 실시간 좌표에 고정)
         if (pathLineRef.current) {
@@ -784,7 +862,7 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
                     });
                     context.fillStrokeShape(shape);
                   }}
-                  stroke="rgba(180, 180, 185, 0.25)"
+                  stroke="rgba(200, 200, 210, 0.35)"
                   strokeWidth={2.8}
                 />
                 {/* 2. Major 도로 (중간 굵기) */}
@@ -802,7 +880,7 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
                     });
                     context.fillStrokeShape(shape);
                   }}
-                  stroke="rgba(100, 100, 105, 0.14)"
+                  stroke="rgba(150, 150, 160, 0.22)"
                   strokeWidth={1.8}
                 />
                 {/* 3. Minor 도로 (가장 얇고 희미한 골목망) */}
@@ -820,7 +898,7 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
                     });
                     context.fillStrokeShape(shape);
                   }}
-                  stroke="rgba(60, 60, 65, 0.05)"
+                  stroke="rgba(110, 110, 120, 0.15)"
                   strokeWidth={1}
                 />
               </Group>
@@ -1101,7 +1179,7 @@ export default function MapGraphCanvas({ isCombat = false, isArrivePending = fal
       )}
     </CanvasContainer>
   );
-}
+});
 
 const CanvasContainer = styled.div`
   width: 100%;
@@ -1289,3 +1367,5 @@ const StyledNavButton = styled.button<{ $primary?: boolean }>`
     cursor: not-allowed;
   }
 `;
+
+export default MapGraphCanvas;
