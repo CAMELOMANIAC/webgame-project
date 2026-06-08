@@ -9,9 +9,10 @@ interface CanvasEnemyUnitProps {
   spawnX: number;
   spawnY: number;
   isAttacking: boolean;
+  isDamaged: boolean;
 }
 
-const CanvasEnemyUnit = ({ name, x, y, spawnX, spawnY, isAttacking }: CanvasEnemyUnitProps) => {
+const CanvasEnemyUnit = ({ name, x, y, spawnX, spawnY, isAttacking, isDamaged }: CanvasEnemyUnitProps) => {
   const groupRef = useRef<Konva.Group>(null);
   const labelRef = useRef<Konva.Label>(null);
   const [isIntroFinished, setIsIntroFinished] = useState(false);
@@ -91,22 +92,20 @@ const CanvasEnemyUnit = ({ name, x, y, spawnX, spawnY, isAttacking }: CanvasEnem
         currentGroup.y(y);
       }
     };
-  }, [isIntroFinished, isAttacking, x, y]);
-
-  useEffect(() => {
-    if (isAttacking && groupRef.current) {
-      // 플레이어 방향으로 다가오는 대신 제자리에서 흔들리는 효과로 변경
+  }, [isIntroFinished, isAttacking, x, y]);  useEffect(() => {
+    if (isDamaged && groupRef.current) {
+      const currentX = groupRef.current.x();
       groupRef.current.to({
-        x: x - 2,
-        duration: 0.05,
+        x: currentX - 4,
+        duration: 0.04,
         onFinish: () => {
           groupRef.current?.to({
-            x: x + 4,
-            duration: 0.05,
+            x: currentX + 6,
+            duration: 0.04,
             onFinish: () => {
               groupRef.current?.to({
-                x: x,
-                duration: 0.05,
+                x: currentX,
+                duration: 0.04,
                 easing: Konva.Easings.ElasticEaseOut,
               });
             },
@@ -114,8 +113,7 @@ const CanvasEnemyUnit = ({ name, x, y, spawnX, spawnY, isAttacking }: CanvasEnem
         },
       });
     }
-  }, [isAttacking, x, y]);
-
+  }, [isDamaged, x, y]);
   return (
     <Group x={renderState.x} y={renderState.y} opacity={renderState.opacity} ref={groupRef}>
       <Circle radius={5} fill="#ff716c" shadowColor="#ff716c" shadowBlur={8} shadowOpacity={0.9} />
