@@ -10,6 +10,8 @@ import { useArriveRaidNode } from "@/utils/hooks/useArriveRaidNode";
 import { useBattleData } from "@/utils/hooks/useBattleData";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 
+const DEBUG_COMBAT = false; // Set to true if you need verbose battle timeline logs
+
 export function useFieldCombat(characterData: CharacterData | undefined) {
   const navigate = useNavigate();
   const [isCombat, setIsCombat] = useAtom(isCombatAtom);
@@ -63,7 +65,9 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       const currentTickEvents = timeline.filter((e: BattleEvent) => e.timestamp === time);
       
       if (currentTickEvents.length > 0) {
-        console.log(`[Battle] Processing ${currentTickEvents.length} events at tick ${time}`);
+        if (DEBUG_COMBAT) {
+          console.log(`[Battle] Processing ${currentTickEvents.length} events at tick ${time}`);
+        }
         pendingEventsRef.current = [...currentTickEvents];
         setIsProcessing(true);
       } else {
@@ -82,7 +86,9 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       if (pendingEventsRef.current.length > 0) {
         const nextEvent = pendingEventsRef.current.shift();
         if (nextEvent) {
-          console.log(`[Battle] Displaying event: ${nextEvent.type} (${nextEvent.id})`);
+          if (DEBUG_COMBAT) {
+            console.log(`[Battle] Displaying event: ${nextEvent.type} (${nextEvent.id})`);
+          }
           setDisplayEvents([nextEvent]);
           
           // 시각적으로 처리된 이벤트 리스트에 추가 (체력바 등 동기화용)
@@ -91,12 +97,14 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
           // 사망(DEATH) 이벤트는 연출 딜레이 없이 즉시 다음으로 진행
           const nextPeek = pendingEventsRef.current[0];
           const isImmediate = nextEvent.type === "DEATH" || nextPeek?.type === "DEATH";
-          const delay = isImmediate ? 0 : 500;
+          const delay = isImmediate ? 0 : 250;
           
           timeoutRef.current = setTimeout(processNextEvent, delay);
         }
       } else {
-        console.log(`[Battle] All events processed for tick ${time}. Moving to next tick.`);
+        if (DEBUG_COMBAT) {
+          console.log(`[Battle] All events processed for tick ${time}. Moving to next tick.`);
+        }
         setIsProcessing(false);
         setDisplayEvents([]);
         setTime((prev) => prev + 1);
@@ -117,7 +125,9 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       {
         onSuccess: (res) => {
           if (res.combatTriggered && res.battleLog) {
-            console.log(`[Raid] Encounter triggered at node #${nodeId}! Starting battle...`);
+            if (DEBUG_COMBAT) {
+              console.log(`[Raid] Encounter triggered at node #${nodeId}! Starting battle...`);
+            }
             setBattleLog(res.battleLog);
             setTime(0);
             setDisplayEvents([]);
@@ -125,7 +135,9 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
             setIsProcessing(false);
             setIsCombat(true);
           } else {
-            console.log(`[Raid] Arrived safely at node #${nodeId}`);
+            if (DEBUG_COMBAT) {
+              console.log(`[Raid] Arrived safely at node #${nodeId}`);
+            }
           }
         },
         onError: (err) => {
