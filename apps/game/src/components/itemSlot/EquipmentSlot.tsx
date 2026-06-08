@@ -17,7 +17,7 @@ const EquipmentSlot = ({ item }: EquipmentProps) => {
     transform: CSS.Transform.toString(transform),
     transition,
     zIndex: isDragging ? 1 : undefined,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0 : 1,
   };
 
   return (

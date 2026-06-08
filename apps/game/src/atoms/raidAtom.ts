@@ -27,3 +27,6 @@ export const playerRotationAtom = atom<number>(0);
 // 인벤토리 변경 사항이 서버에 동기화되지 않고 남아있는지 여부
 export const isInventoryDirtyAtom = atom<boolean>(false);
 
+// 현재 드래그 중인 아이템 ID (DragOverlay와 SlotManager 간 layoutId 충돌 방지용)
+export const activeDragIdAtom = atom<string | number | null>(null);
+

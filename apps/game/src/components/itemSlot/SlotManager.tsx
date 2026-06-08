@@ -1,6 +1,9 @@
 import { horizontalListSortingStrategy, SortableContext } from "@dnd-kit/sortable";
+import { useAtomValue } from "jotai";
 import { motion } from "motion/react";
 import React from "react";
+
+import { activeDragIdAtom } from "@/atoms/raidAtom";
 
 interface SlotManagerProps<T> {
   items: T[];
@@ -8,21 +11,28 @@ interface SlotManagerProps<T> {
   children: (item: T, index: number) => React.ReactNode;
 }
 const SlotManager = <T extends { id: string | number }>({ items, sortable, children }: SlotManagerProps<T>) => {
-  const content = items.map((item, index) => (
-    <motion.div
-      key={item.id}
-      layout="position"
-      layoutId={String(item.id)}
-      transition={{
-        type: "spring",
-        stiffness: 500,
-        damping: 30,
-        mass: 1,
-      }}
-    >
-      {children(item, index)}
-    </motion.div>
-  ));
+  const activeDragId = useAtomValue(activeDragIdAtom);
+
+  const content = items.map((item, index) => {
+    // 드래그 중인 아이템은 layoutId를 제거하여 DragOverlay의 layoutId와 충돌 방지
+    const isBeingDragged = activeDragId != null && String(item.id) === String(activeDragId);
+
+    return (
+      <motion.div
+        key={item.id}
+        layout="position"
+        layoutId={isBeingDragged ? undefined : String(item.id)}
+        transition={{
+          type: "spring",
+          stiffness: 500,
+          damping: 30,
+          mass: 1,
+        }}
+      >
+        {children(item, index)}
+      </motion.div>
+    );
+  });
 
   if (sortable) {
     return (

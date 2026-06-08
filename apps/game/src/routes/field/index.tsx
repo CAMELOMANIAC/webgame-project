@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef } from "react";
 import styled from "styled-components";
 
 import { currentTimeAtom, displayEventsAtom } from "@/atoms/globalAtom";
-import { currentNodeIdAtom, isInventoryDirtyAtom, isNavigatingAtom } from "@/atoms/raidAtom";
+import { activeDragIdAtom, currentNodeIdAtom, isInventoryDirtyAtom, isNavigatingAtom } from "@/atoms/raidAtom";
 import { InheritMotionDiv, Page } from "@/components/Commons";
 import { FieldBackground } from "@/components/FieldBackground";
 import { FieldHeader } from "@/components/FieldHeader";
@@ -41,7 +41,8 @@ function RouteComponent() {
   const displayEvents = useAtomValue(displayEventsAtom);
 
   const { isCombat, setIsCombat, handleArriveNode, battleLog, isArrivePending } = useFieldCombat(characterData);
-  const { activeId, handleDragStart, handleDragEnd } = useInventoryDrag(characterData);
+  const { handleDragStart, handleDragEnd } = useInventoryDrag(characterData);
+  const activeId = useAtomValue(activeDragIdAtom);
   const enemyPositions = useEnemyPositions(battleLog, characterData?.raw.user.nickname);
 
   const [currentNodeId] = useAtom(currentNodeIdAtom);
@@ -131,9 +132,7 @@ function RouteComponent() {
               </InheritMotionDiv>
             )}
           </AnimatePresence>
-        </LayoutGroup>
-        <DragOverlay dropAnimation={null}>
-          <AnimatePresence>
+          <DragOverlay dropAnimation={null}>
             {activeId && (
               <SlotOverlay
                 key={String(activeId)}
@@ -148,8 +147,8 @@ function RouteComponent() {
                 {activeItem?.name}
               </SlotOverlay>
             )}
-          </AnimatePresence>
-        </DragOverlay>
+          </DragOverlay>
+        </LayoutGroup>
       </DndContext>
     </Page>
   );

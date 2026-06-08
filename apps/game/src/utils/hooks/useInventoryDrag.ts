@@ -2,27 +2,31 @@ import { type DragEndEvent, type DragStartEvent, type UniqueIdentifier } from "@
 import { arrayMove } from "@dnd-kit/sortable";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSetAtom } from "jotai";
-import { useState } from "react";
+import { useRef } from "react";
 
-import { isInventoryDirtyAtom } from "@/atoms/raidAtom";
+import { activeDragIdAtom, isInventoryDirtyAtom } from "@/atoms/raidAtom";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 
 export function useInventoryDrag(characterData: CharacterData | undefined) {
   const queryClient = useQueryClient();
-  const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
+  const setActiveDragId = useSetAtom(activeDragIdAtom);
   const setIsInventoryDirty = useSetAtom(isInventoryDirtyAtom);
+  const activeIdRef = useRef<UniqueIdentifier | null>(null);
 
   const handleDragStart = (event: DragStartEvent) => {
     if (event.active.id.toString().includes("empty")) {
-      setActiveId(null);
+      setActiveDragId(null);
+      activeIdRef.current = null;
       return;
     }
-    setActiveId(event.active.id);
+    setActiveDragId(event.active.id);
+    activeIdRef.current = event.active.id;
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    setActiveId(null);
+    setActiveDragId(null);
+    activeIdRef.current = null;
 
     if (!over || !characterData) return;
 
@@ -146,5 +150,5 @@ export function useInventoryDrag(characterData: CharacterData | undefined) {
     }
   };
 
-  return { activeId, handleDragStart, handleDragEnd };
+  return { handleDragStart, handleDragEnd };
 }
