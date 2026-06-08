@@ -332,28 +332,67 @@ interface CanvasDamagePopupProps {
 
 function CanvasDamagePopup({ id, x, y, amount, isCritical, onComplete }: CanvasDamagePopupProps) {
   const textRef = useRef<Konva.Text>(null);
+  const onCompleteRef = useRef(onComplete);
+
+  // onComplete 참조 변화에 안전하도록 ref 업데이트
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   useEffect(() => {
     if (!textRef.current) return;
     const node = textRef.current;
 
-    const tween = new Konva.Tween({
+    // 텍스트 정중앙을 기준으로 scale과 트랙 애니메이션이 늘어나도록 offset 설정
+    node.offsetX(node.width() / 2);
+    node.offsetY(node.height() / 2);
+
+    // 초기 상태 설정 (작은 상태에서 시작)
+    node.scale({ x: 0.1, y: 0.1 });
+    node.opacity(1);
+    node.y(0); // 상대 Y좌표 초기화
+
+    let tweenDown: Konva.Tween | null = null;
+
+    // 1단계 트윈: 경쾌하게 위로 높이 솟구치며 확대
+    const tweenUp = new Konva.Tween({
       node: node,
-      duration: 1.0,
-      y: y - 45,
-      opacity: 0,
+      duration: 0.2,         // 상승 속도를 더 스냅 있게 단축
+      y: -40,                // 조금 더 높게 솟구침 (-40)
+      scaleX: isCritical ? 1.6 : 1.2,
+      scaleY: isCritical ? 1.6 : 1.2,
       easing: Konva.Easings.EaseOut,
       onFinish: () => {
-        onComplete(id);
+        // [중요 최적화]: tweenDown을 1단계가 완료된 시점에 동적으로 생성하여 플레이합니다.
+        // Konva.Tween은 생성되는 시점의 노드 상태를 '시작값'으로 고정 캐싱하므로,
+        // 이 시점에 생성해야 확대된 크기(1.2~1.6)와 Y좌표(-40)가 정상적으로 2단계의 시작점으로 인식됩니다.
+        if (!node) return;
+        tweenDown = new Konva.Tween({
+          node: node,
+          duration: 0.6,
+          y: -20,                // 고점(-40)에서 아래로 살짝 낙하 (-20)
+          scaleX: 0.2,           // 확대된 상태에서 0.2로 자연스럽게 축소
+          scaleY: 0.2,
+          opacity: 0,
+          easing: Konva.Easings.EaseIn,
+          onFinish: () => {
+            onCompleteRef.current(id);
+          },
+        });
+        tweenDown.play();
       },
     });
 
-    tween.play();
+    tweenUp.play();
 
     return () => {
-      tween.destroy();
+      tweenUp.destroy();
+      if (tweenDown) {
+        tweenDown.destroy();
+      }
     };
-  }, [id, y, onComplete]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   return (
     <Group x={x} y={y}>
