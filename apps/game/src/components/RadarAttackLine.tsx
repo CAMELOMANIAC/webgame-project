@@ -12,6 +12,8 @@ const RadarAttackLine = ({ points }: RadarAttackLineProps) => {
   const bulletRefs = useRef<(Konva.Circle | null)[]>([]);
 
   useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
     bulletRefs.current.forEach((bullet, index) => {
       if (bullet) {
         // 투사체 초기 위치 설정
@@ -19,7 +21,10 @@ const RadarAttackLine = ({ points }: RadarAttackLineProps) => {
         bullet.opacity(0);
 
         // 시차를 두고 발사 (staggered delay)
-        setTimeout(() => {
+        const timer = setTimeout(() => {
+          // 노드가 여전히 유효하고 레이어에 정상 마운트되어 있는 경우에만 애니메이션 실행
+          if (!bullet || !bullet.getLayer()) return;
+
           bullet.opacity(1);
           bullet.to({
             x: x2,
@@ -27,12 +32,20 @@ const RadarAttackLine = ({ points }: RadarAttackLineProps) => {
             duration: 0.15, // 날아가는 속도
             easing: Konva.Easings.Linear,
             onFinish: () => {
-              bullet.opacity(0);
+              if (bullet && bullet.getLayer()) {
+                bullet.opacity(0);
+              }
             },
           });
         }, index * 60); // 각 발사체 사이의 간격 (60ms)
+
+        timers.push(timer);
       }
     });
+
+    return () => {
+      timers.forEach(clearTimeout);
+    };
   }, [x1, y1, x2, y2]);
 
   return (
