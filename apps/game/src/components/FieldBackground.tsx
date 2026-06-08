@@ -1,9 +1,11 @@
+import type { UseMutationResult } from "@tanstack/react-query";
 import type { BattleLog } from "@webgame/types";
 import { useEffect, useRef } from "react";
 import styled from "styled-components";
 
 import { BattleCanvas } from "@/components/BattleCanvas";
 import MapGraphCanvas from "@/components/MapGraphCanvas";
+import type { NavigateRaidResponse } from "@/utils/hooks/useNavigateRaid";
 
 interface FieldBackgroundProps {
   isCombat: boolean;
@@ -11,6 +13,12 @@ interface FieldBackgroundProps {
   enemyPositions: Map<string, { x: number; y: number }>;
   characterNickname: string | undefined;
   isArrivePending: boolean;
+  navigateRaid: UseMutationResult<
+    NavigateRaidResponse,
+    Error,
+    { characterId: string; path: number[] }
+  >;
+  triggerCombat: (log: BattleLog) => void;
 }
 
 export function FieldBackground({
@@ -19,6 +27,8 @@ export function FieldBackground({
   enemyPositions,
   characterNickname,
   isArrivePending,
+  navigateRaid,
+  triggerCombat,
 }: FieldBackgroundProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -68,7 +78,12 @@ export function FieldBackground({
   return (
     <Container ref={containerRef}>
       {/* 맵 그래프 캔버스 (전투 시 캐시 동결 처리로 최적화됨) */}
-      <MapGraphCanvas isCombat={isCombat} isArrivePending={isArrivePending} />
+      <MapGraphCanvas
+        isCombat={isCombat}
+        isArrivePending={isArrivePending}
+        navigateRaid={navigateRaid}
+        triggerCombat={triggerCombat}
+      />
 
       {/* 전투 시뮬레이터 캔버스 (전투 중일 때만 맵 위에 렌더링) */}
       {isCombat && (

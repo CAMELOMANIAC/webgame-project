@@ -1,9 +1,14 @@
+import type { UseMutationResult } from "@tanstack/react-query";
+import type { BattleLog } from "@webgame/types";
 import { useAtom } from "jotai";
 import Konva from "konva";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, Group, Image, Layer, Line, Shape, Stage } from "react-konva";
 import styled from "styled-components";
 import useImage from "use-image";
+
+import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
+import type { NavigateRaidResponse } from "@/utils/hooks/useNavigateRaid";
 
 import compass from "../assets/compass.svg";
 import mapData from "../assets/map_graph.json";
@@ -63,13 +68,29 @@ const DEFAULT_NODE_RADIUS = 4;
 interface MapGraphCanvasProps {
   isCombat?: boolean;
   isArrivePending?: boolean;
+  navigateRaid: UseMutationResult<
+    NavigateRaidResponse,
+    Error,
+    { characterId: string; path: number[] }
+  >;
+  triggerCombat: (log: BattleLog) => void;
 }
 
-const MapGraphCanvas = memo(({ isCombat = false, isArrivePending = false }: MapGraphCanvasProps) => {
+const MapGraphCanvas = memo(({
+  isCombat = false,
+  isArrivePending = false,
+  navigateRaid,
+  triggerCombat,
+}: MapGraphCanvasProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const mapLayerRef = useRef<Konva.Layer | null>(null);
   const [compassImg] = useImage(compass);
+
+  const { data: characterData } = useGetCharacter();
+
+  // 1-Hop Gate 를 위한 서버 응답 저장 Ref
+  const navigateRaidResponseRef = useRef<NavigateRaidResponse | null>(null);
 
 
 
@@ -211,9 +232,34 @@ const MapGraphCanvas = memo(({ isCombat = false, isArrivePending = false }: MapG
     }
   }, [isNavigating]);
 
+  const startNavigation = (path: number[]) => {
+    if (path.length <= 1) return;
+
+    // 1-Hop Gate 초기화
+    navigateRaidResponseRef.current = null;
+
+    if (characterData?.raw.id) {
+      navigateRaid.mutate(
+        { characterId: characterData.raw.id, path },
+        {
+          onSuccess: (res) => {
+            navigateRaidResponseRef.current = res;
+          },
+          onError: (err) => {
+            console.error("Failed to pre-roll encounters:", err);
+            // 네트워크 에러 발생 시 안전하게 1번 노드까지만 가고 멈춤 처리
+            navigateRaidResponseRef.current = { encounterTriggered: false };
+          }
+        }
+      );
+    }
+
+    setIsNavigating(true);
+  };
+
   // 대상 노드 선택 시 네비게이션 트리거 (개발 모드인 경우 승인 단계를 거치고, 일반 모드면 즉시 출발)
   const handleTargetSelect = (targetId: number) => {
-    if (isNavigating || isArrivePending) return;
+    if (isNavigating || isArrivePending || navigateRaid.isPending) return;
     if (showDevPanel) {
       setTargetNodeId(targetId);
     } else {
@@ -221,7 +267,7 @@ const MapGraphCanvas = memo(({ isCombat = false, isArrivePending = false }: MapG
       if (path.length > 1) {
         setTargetNodeId(targetId);
         setShortestPath(path);
-        setIsNavigating(true);
+        startNavigation(path);
       }
     }
   };
@@ -259,6 +305,19 @@ const MapGraphCanvas = memo(({ isCombat = false, isArrivePending = false }: MapG
 
     const newX = dimensions.width / 2 - playerNode.x * scale;
     const newY = dimensions.height / 2 - playerNode.y * scale;
+
+    // 이미 최종 위치 및 줌 배율에 충분히 근접해 있다면 불필요한 카메라 튐(Jump) 방지
+    const currentScale = stage.scaleX();
+    const currentX = stage.x();
+    const currentY = stage.y();
+    const isAlreadyAligned =
+      Math.abs(currentScale - scale) < 0.05 &&
+      Math.abs(currentX - newX) < 5 &&
+      Math.abs(currentY - newY) < 5;
+
+    if (isAlreadyAligned) {
+      return;
+    }
 
     stage.position({ x: newX, y: newY });
     stage.scale({ x: scale, y: scale });
@@ -435,13 +494,30 @@ const MapGraphCanvas = memo(({ isCombat = false, isArrivePending = false }: MapG
     const minSpeed = 35;   // 출발 및 도달 부근 최소 속도
     const maxSpeed = 240;  // 중간 구간 최고 속도
 
-    // 실시간 카메라 중심 카메라 트래킹 헬퍼
-    const updateCameraFollow = (px: number, py: number) => {
+    // 실시간 카메라 중심 카메라 트래킹 헬퍼 (Lerp 기반 부드러운 전환 추가)
+    const updateCameraFollow = (px: number, py: number, deltaTime: number) => {
       if (!followPlayerRef.current || !stageRef.current) return;
       const stage = stageRef.current;
-      const scale = stage.scaleX();
-      const newStageX = dimensions.width / 2 - px * scale;
-      const newStageY = dimensions.height / 2 - py * scale;
+      
+      const currentScale = stage.scaleX();
+      const targetScale = 3.0; // 이동 중 3배율 고정
+      
+      // 프레임 레이트 독립적인 Lerp 보간 계수 계산
+      const scaleLerpFactor = 1 - Math.exp(-5 * deltaTime);
+      const posLerpFactor = 1 - Math.exp(-5 * deltaTime);
+      
+      const newScale = currentScale + (targetScale - currentScale) * scaleLerpFactor;
+      
+      const targetStageX = dimensions.width / 2 - px * newScale;
+      const targetStageY = dimensions.height / 2 - py * newScale;
+      
+      const currentX = stage.x();
+      const currentY = stage.y();
+      
+      const newStageX = currentX + (targetStageX - currentX) * posLerpFactor;
+      const newStageY = currentY + (targetStageY - currentY) * posLerpFactor;
+      
+      stage.scale({ x: newScale, y: newScale });
       stage.position({ x: newStageX, y: newStageY });
       stage.batchDraw();
     };
@@ -485,6 +561,12 @@ const MapGraphCanvas = memo(({ isCombat = false, isArrivePending = false }: MapG
             scale: stage.scaleX(),
           });
         }
+
+        // 최종 도착한 목적지가 사전 예약된 인카운터(전투) 노드였다면 즉시 전투 트리거
+        const res = navigateRaidResponseRef.current;
+        if (res && res.encounterTriggered && res.stopNodeId === finalNodeId && res.battleLog) {
+          triggerCombat(res.battleLog);
+        }
         return;
       }
 
@@ -526,9 +608,109 @@ const MapGraphCanvas = memo(({ isCombat = false, isArrivePending = false }: MapG
       const speedFactor = Math.sin(progress * Math.PI);
       const currentSpeed = minSpeed + (maxSpeed - minSpeed) * speedFactor;
 
-      const step = currentSpeed * deltaTime;
+      // 1-Hop Gate: 첫 번째 경유지(nextNodeId가 path[1])로 향하고 있고 아직 서버 응답이 없다면 도착하기 전에 부드럽게 감속
+      let finalSpeed = currentSpeed;
+      if (stepIdx === 1 && navigateRaidResponseRef.current === null) {
+        const prevNodeId = path[0] ?? currentNodeId;
+        const prevNode = nodes[prevNodeId];
+        if (prevNode) {
+          const hdx = nextNode.x - prevNode.x;
+          const hdy = nextNode.y - prevNode.y;
+          const hopTotalDistance = Math.sqrt(hdx * hdx + hdy * hdy);
+
+          if (hopTotalDistance > 0) {
+            const ratio = distance / hopTotalDistance; // 1.0 (출발지) -> 0.0 (첫 번째 노드)
+            // 첫 번째 노드까지 거리의 70% 미만이 되면 부드럽게 감속하기 시작
+            if (ratio < 0.7) {
+              const slowDownFactor = ratio / 0.7; // 1.0 -> 0.0
+              const easedFactor = Math.sin((slowDownFactor * Math.PI) / 2); // 1.0 -> 0.0
+              // 최종적으로 3px/s의 미세한 속도까지 서서히 감속
+              finalSpeed = 3 + (currentSpeed - 3) * easedFactor;
+            }
+          }
+        }
+      }
+
+      const step = finalSpeed * deltaTime;
 
       if (distance <= step) {
+        // 1-Hop Gate: 첫 번째 경유지(nextNodeId가 path[1])에 도달했을 때 서버 응답 확인
+        if (stepIdx === 1) {
+          if (navigateRaidResponseRef.current === null) {
+            // 서버 응답이 올 때까지 1번 노드 위에 마커를 고정하고 대기시킵니다.
+            const holdPos = { x: nextNode.x, y: nextNode.y };
+            playerCoordsRef.current = holdPos;
+
+            if (playerMarkerRef.current) {
+              playerMarkerRef.current.x(holdPos.x);
+              playerMarkerRef.current.y(holdPos.y);
+              playerMarkerRef.current.rotation(angleDeg);
+              playerMarkerRef.current.getLayer()?.batchDraw();
+            }
+            if (sightMaskRef.current) {
+              sightMaskRef.current.x(holdPos.x);
+              sightMaskRef.current.y(holdPos.y);
+            }
+            updateCameraFollow(holdPos.x, holdPos.y, deltaTime);
+
+            animId = requestAnimationFrame(tick);
+            return;
+          }
+
+          // 응답이 도착했다면 가로채기 판정 진행
+          const res = navigateRaidResponseRef.current;
+
+          if (res.encounterTriggered && res.stopNodeId !== undefined) {
+            const stopNodeId = res.stopNodeId;
+
+            // 만약 1번 노드에서 바로 인카운터가 걸렸다면 여기서 즉각 중단하고 전투 켬
+            if (stopNodeId === nextNodeId) {
+              const arrivedPos = { x: nextNode.x, y: nextNode.y };
+              playerCoordsRef.current = arrivedPos;
+
+              if (playerMarkerRef.current) {
+                playerMarkerRef.current.x(arrivedPos.x);
+                playerMarkerRef.current.y(arrivedPos.y);
+                playerMarkerRef.current.rotation(angleDeg);
+                playerMarkerRef.current.getLayer()?.batchDraw();
+              }
+              if (sightMaskRef.current) {
+                sightMaskRef.current.x(arrivedPos.x);
+                sightMaskRef.current.y(arrivedPos.y);
+              }
+              updateCameraFollow(arrivedPos.x, arrivedPos.y, deltaTime);
+
+              setIsNavigating(false);
+              setTargetNodeId(null);
+              setCurrentNodeId(nextNodeId);
+              setPlayerCoords(arrivedPos);
+
+              if (stageRef.current) {
+                const stage = stageRef.current;
+                setStageTransform({
+                  x: stage.x(),
+                  y: stage.y(),
+                  scale: stage.scaleX(),
+                });
+              }
+
+              if (res.battleLog) {
+                triggerCombat(res.battleLog);
+              }
+              return;
+            } else {
+              // 1번 노드 이후의 노드에서 인카운터가 발생했다면, 경로를 해당 stopNodeId 까지만 깎아내고 통과시킴
+              const stopIdx = path.indexOf(stopNodeId);
+              if (stopIdx !== -1) {
+                // stopNodeId 까지만으로 경로 깎음
+                const truncatedPath = path.slice(0, stopIdx + 1);
+                navigationPathRef.current = truncatedPath;
+              }
+            }
+          }
+        }
+
+        // 1번 노드를 안전하게 통과하거나, 1번 노드 이후로 깎여진 경로대로 진행하는 경우
         // 목표 다음 노드에 근접하여 도착 완료
         const arrivedPos = { x: nextNode.x, y: nextNode.y };
         playerCoordsRef.current = arrivedPos;
@@ -547,7 +729,7 @@ const MapGraphCanvas = memo(({ isCombat = false, isArrivePending = false }: MapG
         }
 
         // 카메라 추적 활성화 시 즉시 카메라 중앙 정렬
-        updateCameraFollow(arrivedPos.x, arrivedPos.y);
+        updateCameraFollow(arrivedPos.x, arrivedPos.y, deltaTime);
 
         // 이동 거리에 따른 동적 슬라이딩 캐시 리프레시 체크
         updateMapCache(false);
@@ -590,7 +772,7 @@ const MapGraphCanvas = memo(({ isCombat = false, isArrivePending = false }: MapG
         }
 
         // 실시간 카메라 트래킹 적용
-        updateCameraFollow(newPos.x, newPos.y);
+        updateCameraFollow(newPos.x, newPos.y, deltaTime);
 
         // 이동 거리에 따른 동적 슬라이딩 캐시 리프레시 체크
         updateMapCache(false);
@@ -681,6 +863,7 @@ const MapGraphCanvas = memo(({ isCombat = false, isArrivePending = false }: MapG
 
   return (
     <CanvasContainer ref={containerRef}>
+
       {/* 하이테크 스타일 정보 패널 오버레이 (개발 모드일 때만 렌더링) */}
       {!isCombat && showDevPanel && (
         <InfoPanel onMouseDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
@@ -807,8 +990,8 @@ const MapGraphCanvas = memo(({ isCombat = false, isArrivePending = false }: MapG
           <NavButtonArea>
             <StyledNavButton
               $primary
-              disabled={shortestPath.length <= 1 || isNavigating || isArrivePending}
-              onClick={() => setIsNavigating(true)}
+              disabled={shortestPath.length <= 1 || isNavigating || isArrivePending || navigateRaid.isPending}
+              onClick={() => startNavigation(shortestPath)}
             >
               {isNavigating ? "IN TRANSIT..." : "START NAVIGATION"}
             </StyledNavButton>
@@ -1367,5 +1550,7 @@ const StyledNavButton = styled.button<{ $primary?: boolean }>`
     cursor: not-allowed;
   }
 `;
+
+
 
 export default MapGraphCanvas;

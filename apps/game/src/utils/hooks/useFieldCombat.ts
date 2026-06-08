@@ -9,6 +9,7 @@ import { isCombatAtom } from "@/atoms/raidAtom";
 import { useArriveRaidNode } from "@/utils/hooks/useArriveRaidNode";
 import { useBattleData } from "@/utils/hooks/useBattleData";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
+import { useNavigateRaid } from "@/utils/hooks/useNavigateRaid";
 
 export function useFieldCombat(characterData: CharacterData | undefined) {
   const navigate = useNavigate();
@@ -135,11 +136,30 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     );
   }, [isCombat, characterData, arriveRaidNode, setBattleLog, setTime, setDisplayEvents, setProcessedEvents, setIsCombat]);
 
+  const triggerCombat = useCallback((log: BattleLog) => {
+    setBattleLog(log);
+    setTime(0);
+    setDisplayEvents([]);
+    setProcessedEvents([]);
+    setIsProcessing(false);
+    setIsCombat(true);
+  }, [setBattleLog, setTime, setDisplayEvents, setProcessedEvents, setIsCombat]);
+
+  const navigateRaid = useNavigateRaid();
+
   useEffect(() => {
     if (isCombat) {
       navigate({ to: "/field" });
     }
   }, [isCombat, navigate]);
 
-  return { isCombat, setIsCombat, handleArriveNode, battleLog, isArrivePending: arriveRaidNode.isPending };
+  return {
+    isCombat,
+    setIsCombat,
+    handleArriveNode,
+    battleLog,
+    isArrivePending: arriveRaidNode.isPending,
+    navigateRaid,
+    triggerCombat,
+  };
 }

@@ -624,26 +624,10 @@ fastify.post("/character/:characterId/raid/arrive", async (request, reply) => {
     const { characterId } = request.params as { characterId: string };
     const { nodeId } = z.object({ nodeId: z.number() }).parse(request.body);
 
-    // 1. 해당 노드가 건물에 진입하는 노드인지 검사
-    const buildings = (mapData.buildings || []) as Array<{ roadNodeId: number }>;
-    const isAtBuilding = buildings.some((b) => b.roadNodeId === nodeId);
-
-    if (isAtBuilding) {
-      // 2. 70% 확률로 전투 인카운터 발생
-      const roll = Math.random();
-      const TRIGGER_CHANCE = 0.7; // 70% 확률
-
-      if (roll < TRIGGER_CHANCE) {
-        fastify.log.info(`[Raid] Encounter triggered at building node #${nodeId} (roll: ${roll.toFixed(3)})`);
-        const battleLog = await executeMonsterBattle(characterId, 1);
-        return { combatTriggered: true, battleLog };
-      } else {
-        fastify.log.info(`[Raid] No encounter triggered at building node #${nodeId} (roll: ${roll.toFixed(3)})`);
-        return { combatTriggered: false };
-      }
-    }
-
-    // 건물 노드가 아니면 전투 없음
+    // 1-Hop Gate / navigate 전체 경로 사전 검증 도입으로 인해,
+    // 이동 도중 및 도착지 인카운터는 /raid/navigate 에서 이미 처리/결정됩니다.
+    // 중복 전투 방지를 위해 arrive 에서는 더 이상 인카운터를 생성하지 않고 안전하게 완료 처리합니다.
+    fastify.log.info(`[Raid] Arrived at node #${nodeId} for character ${characterId} (checked via pre-roll)`);
     return { combatTriggered: false };
   } catch (error: any) {
     fastify.log.error(error);
@@ -935,6 +919,75 @@ fastify.post("/character/:characterId/raid/die", async (request, reply) => {
   } catch (error) {
     fastify.log.error(error);
     return reply.status(500).send({ error: "Failed to process character death" });
+  }
+});
+
+// 탐사 중 이동 경로 사전 검증 및 인카운터(전투) 판정 API
+fastify.post("/character/:characterId/raid/navigate", async (request, reply) => {
+  try {
+    const { characterId } = request.params as { characterId: string };
+    const { path } = z.object({ path: z.array(z.number()) }).parse(request.body);
+
+    const character = await prisma.character.findUnique({
+      where: { id: characterId },
+    });
+    if (!character) {
+      return reply.status(404).send({ error: "Character not found" });
+    }
+
+    // 1. 경로 보안 검증 (노드 간 연결 상태 확인)
+    const edgesList = mapData.edges as unknown as Array<{ source: number; target: number }>;
+    for (let i = 0; i < path.length - 1; i++) {
+      const u = path[i];
+      const v = path[i + 1];
+      const isConnected = edgesList.some(
+        (e) => (e.source === u && e.target === v) || (e.source === v && e.target === u)
+      );
+      if (!isConnected) {
+        return reply.status(400).send({ error: `Invalid transition between node ${u} and ${v}` });
+      }
+    }
+
+    // 2. 각 노드 이동 중 인카운터 판정 (균등 분포 기반의 중도 인카운터 지정)
+    const buildings = (mapData.buildings || []) as Array<{ roadNodeId: number }>;
+    
+    // 출발지(path[0])를 제외한 경로 상의 모든 건물 노드 수집
+    const buildingNodesInPath = path.slice(1).filter((nodeId) =>
+      buildings.some((b) => b.roadNodeId === nodeId)
+    );
+
+    if (buildingNodesInPath.length > 0) {
+      const roll = Math.random();
+      const TRIGGER_CHANCE = 0.7; // 전체 경로 중 인카운터가 발생할 확률 (70%)
+
+      if (roll < TRIGGER_CHANCE) {
+        // 발생 시, 경로 상의 건물 노드 중 하나를 균등한 확률로 무작위 선택하여 인카운터 지점으로 지정
+        const randomIndex = Math.floor(Math.random() * buildingNodesInPath.length);
+        const stopNodeId = buildingNodesInPath[randomIndex];
+
+        fastify.log.info(
+          `[Raid] Encounter triggered mid-route for character ${characterId}. Path buildings: ${buildingNodesInPath.join(
+            ", "
+          )} -> selected stopNodeId: #${stopNodeId} (roll: ${roll.toFixed(3)})`
+        );
+
+        const battleLog = await executeMonsterBattle(characterId, 1);
+        
+        return {
+          encounterTriggered: true,
+          stopNodeId,
+          battleLog,
+        };
+      }
+    }
+
+    // 전투 없이 안전하게 전체 경로 도달 완료 가능
+    return {
+      encounterTriggered: false,
+    };
+  } catch (error: any) {
+    fastify.log.error(error);
+    return reply.status(500).send({ error: error.message || "Failed to process raid navigation" });
   }
 });
 
