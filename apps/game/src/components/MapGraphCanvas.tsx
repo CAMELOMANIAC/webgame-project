@@ -131,6 +131,7 @@ const MapGraphCanvas = ({
   // 플레이어의 실제 화면 드로잉 좌표 상태 및 최신 값 동기화용 Ref (부드러운 보간용)
   const [playerCoords, setPlayerCoords] = useAtom(playerCoordsAtom);
   const playerCoordsRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const isInitializedRef = useRef(false);
 
   // 캐싱 기준점 추적용 Ref (이동 중 불필요한 캐시 무효화 방지)
   const lastCacheCoordsRef = useRef<{ x: number; y: number } | null>(null);
@@ -491,6 +492,21 @@ const MapGraphCanvas = ({
       playerCoordsRef.current = playerCoords;
     }
   }, [playerCoords]);
+
+  // 5.3.5. 최초 로드 시 서버 DB의 currentNodeId 값을 읽어와 클라이언트 상태(currentNodeId, playerCoords)를 동기화
+  useEffect(() => {
+    if (characterData && !isInitializedRef.current) {
+      const serverNodeId = characterData.raw.currentNodeId;
+      if (typeof serverNodeId === "number" && nodes[serverNodeId]) {
+        setCurrentNodeId(serverNodeId);
+        const initPos = { x: nodes[serverNodeId].x, y: nodes[serverNodeId].y };
+        setPlayerCoords(initPos);
+        playerCoordsRef.current = initPos;
+        isInitializedRef.current = true;
+        console.log(`[Init] Restored character node ID to #${serverNodeId} from DB.`);
+      }
+    }
+  }, [characterData, setCurrentNodeId, setPlayerCoords]);
 
   // 5.4. 대기 중(네비게이션 정지) 상태 시 플레이어 좌표를 현재 currentNodeId에 즉시 강제 고정
   useEffect(() => {

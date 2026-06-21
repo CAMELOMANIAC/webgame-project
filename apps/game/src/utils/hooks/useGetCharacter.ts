@@ -18,6 +18,7 @@ export interface CharacterResponse {
   maxWeight: number;
   time: number;
   isRaiding: boolean;
+  currentNodeId: number;
   user: {
     nickname: string;
   };

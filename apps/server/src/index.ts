@@ -535,6 +535,7 @@ async function executeMonsterBattle(characterId: string, level: number = 1) {
           hp: 100,
           stamina: 100,
           time: 0,
+          currentNodeId: 0,
         },
       });
     });
@@ -623,6 +624,11 @@ fastify.post("/character/:characterId/raid/arrive", async (request, reply) => {
   try {
     const { characterId } = request.params as { characterId: string };
     const { nodeId } = z.object({ nodeId: z.number() }).parse(request.body);
+
+    await prisma.character.update({
+      where: { id: characterId },
+      data: { currentNodeId: nodeId },
+    });
 
     // 1-Hop Gate / navigate 전체 경로 사전 검증 도입으로 인해,
     // 이동 도중 및 도착지 인카운터는 /raid/navigate 에서 이미 처리/결정됩니다.
@@ -771,6 +777,7 @@ fastify.post("/character/:characterId/raid/start", async (request, reply) => {
         hp: 100,
         stamina: 100,
         time: 0,
+        currentNodeId: 0,
       },
     });
 
@@ -876,6 +883,7 @@ fastify.post("/character/:characterId/raid/extract", async (request, reply) => {
         data: {
           isRaiding: false,
           time: 0,
+          currentNodeId: 0,
         },
       });
     });
@@ -911,6 +919,7 @@ fastify.post("/character/:characterId/raid/die", async (request, reply) => {
           hp: 100,
           stamina: 100,
           time: 0,
+          currentNodeId: 0,
         },
       });
     });
@@ -972,6 +981,13 @@ fastify.post("/character/:characterId/raid/navigate", async (request, reply) => 
         );
 
         const battleLog = await executeMonsterBattle(characterId, 1);
+        
+        if (!(battleLog as any).playerDied) {
+          await prisma.character.update({
+            where: { id: characterId },
+            data: { currentNodeId: stopNodeId },
+          });
+        }
         
         return {
           encounterTriggered: true,

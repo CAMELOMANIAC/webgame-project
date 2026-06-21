@@ -35,6 +35,7 @@ model Character {
   maxWeight Int      @default(50)
   time      Int      @default(0)
   isRaiding Boolean  @default(false)
+  currentNodeId Int  @default(0)
   
   user      User     @relation(fields: [userId], references: [id])
   weapons   CharacterWeapon[]
