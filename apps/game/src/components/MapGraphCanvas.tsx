@@ -67,7 +67,6 @@ const DEFAULT_NODE_RADIUS = 4;
 
 interface MapGraphCanvasProps {
   isCombat?: boolean;
-  isArrivePending?: boolean;
   navigateRaid: UseMutationResult<
     NavigateRaidResponse,
     Error,
@@ -78,7 +77,6 @@ interface MapGraphCanvasProps {
 
 const MapGraphCanvas = ({
   isCombat = false,
-  isArrivePending = false,
   navigateRaid,
   triggerCombat,
 }: MapGraphCanvasProps) => {
@@ -292,7 +290,6 @@ const MapGraphCanvas = ({
       targetId,
       isCombat,
       isNavigating,
-      isArrivePending,
       navigateRaidIsPending: navigateRaid.isPending,
       navigateRaidStatus: navigateRaid.status,
       currentNodeId,
@@ -1183,7 +1180,7 @@ const MapGraphCanvas = ({
           <NavButtonArea>
             <StyledNavButton
               $primary
-              disabled={shortestPath.length <= 1 || isNavigating || isArrivePending || navigateRaid.isPending}
+              disabled={shortestPath.length <= 1 || isNavigating}
               onClick={() => startNavigation(shortestPath)}
             >
               {isNavigating ? "IN TRANSIT..." : "START NAVIGATION"}
@@ -1748,8 +1745,5 @@ const StyledNavButton = styled.button<{ $primary?: boolean }>`
 
 
 export default memo(MapGraphCanvas, (prevProps, nextProps) => {
-  return (
-    prevProps.isCombat === nextProps.isCombat &&
-    prevProps.isArrivePending === nextProps.isArrivePending
-  );
+  return prevProps.isCombat === nextProps.isCombat;
 });

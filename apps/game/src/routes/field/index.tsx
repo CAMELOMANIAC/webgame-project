@@ -42,7 +42,7 @@ function RouteComponent() {
   const { tab } = useSearch({ from: "/field/" });
   const { data: characterData } = useGetCharacter();
 
-  const { isCombat, setIsCombat, handleArriveNode, battleLog, isArrivePending, navigateRaid, triggerCombat } = useFieldCombat(characterData);
+  const { isCombat, setIsCombat, handleArriveNode, battleLog, navigateRaid, triggerCombat } = useFieldCombat(characterData);
   const { handleDragStart, handleDragEnd } = useInventoryDrag(characterData);
   const activeId = useAtomValue(activeDragIdAtom);
   const enemyPositions = useEnemyPositions(battleLog, characterData?.raw.user.nickname);
@@ -101,7 +101,6 @@ function RouteComponent() {
         battleLog={battleLog}
         enemyPositions={enemyPositions}
         characterNickname={characterData?.raw.user.nickname}
-        isArrivePending={isArrivePending}
         navigateRaid={navigateRaid}
         triggerCombat={triggerCombat}
       />

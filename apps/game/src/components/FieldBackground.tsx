@@ -12,7 +12,6 @@ interface FieldBackgroundProps {
   battleLog: BattleLog | null | undefined;
   enemyPositions: Map<string, { x: number; y: number }>;
   characterNickname: string | undefined;
-  isArrivePending: boolean;
   navigateRaid: UseMutationResult<
     NavigateRaidResponse,
     Error,
@@ -26,7 +25,6 @@ export function FieldBackground({
   battleLog,
   enemyPositions,
   characterNickname,
-  isArrivePending,
   navigateRaid,
   triggerCombat,
 }: FieldBackgroundProps) {
@@ -39,22 +37,23 @@ export function FieldBackground({
     let activeInterval: ReturnType<typeof setInterval> | null = null;
 
     const handleShake = (e: Event) => {
-      const customEvent = e as CustomEvent<{ intensity: number }>;
-      const intensity = customEvent.detail.intensity;
+      const customEvent = e as CustomEvent;
+      const intensity = customEvent.detail?.intensity ?? 8;
+      const duration = customEvent.detail?.duration ?? 500;
+
+      const start = performance.now();
+      const maxCount = Math.floor(duration / 50);
+      let count = 0;
 
       if (activeInterval) {
         clearInterval(activeInterval);
       }
 
-      let count = 0;
-      const maxCount = 8;
       activeInterval = setInterval(() => {
-        if (count >= maxCount) {
-          container.style.transform = "translate3d(0, 0, 0)";
-          if (activeInterval) {
-            clearInterval(activeInterval);
-            activeInterval = null;
-          }
+        if (performance.now() - start > duration) {
+          container.style.transform = "";
+          clearInterval(activeInterval!);
+          activeInterval = null;
           return;
         }
         const angle = Math.random() * Math.PI * 2;
@@ -80,7 +79,6 @@ export function FieldBackground({
       {/* 맵 그래프 캔버스 (전투 시 캐시 동결 처리로 최적화됨) */}
       <MapGraphCanvas
         isCombat={isCombat}
-        isArrivePending={isArrivePending}
         navigateRaid={navigateRaid}
         triggerCombat={triggerCombat}
       />

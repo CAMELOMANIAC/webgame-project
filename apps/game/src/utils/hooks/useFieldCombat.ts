@@ -212,7 +212,6 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     setIsCombat,
     handleArriveNode,
     battleLog,
-    isArrivePending: arriveRaidNode.isPending,
     navigateRaid,
     triggerCombat,
   };
