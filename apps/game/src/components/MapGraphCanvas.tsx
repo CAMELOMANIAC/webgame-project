@@ -540,8 +540,8 @@ const MapGraphCanvas = ({
     let lastTime = performance.now();
     let hopGateWaitStart: number | null = null; // 1홉 게이트 대기 시작 시각 기록 (타임아웃 안전장치)
     let cameraCatchUpStart: number | null = null; // 카메라 정렬 대기 시작 시각 기록 (타임아웃 안전장치)
-    const minSpeed = 35;   // 출발 및 도달 부근 최소 속도
-    const maxSpeed = 240;  // 중간 구간 최고 속도
+    const minSpeed = 20;   // 출발 및 도달 부근 최소 속도
+    const maxSpeed = 120;  // 중간 구간 최고 속도 (전반적으로 천천히 이동하도록 조정)
 
     // 실시간 카메라 중심 카메라 트래킹 헬퍼 (Lerp 기반 부드러운 전환 추가)
     const updateCameraFollow = (px: number, py: number, deltaTime: number) => {
@@ -702,24 +702,29 @@ const MapGraphCanvas = ({
       const speedFactor = Math.sin(progress * Math.PI);
       const currentSpeed = minSpeed + (maxSpeed - minSpeed) * speedFactor;
 
-      // 1-Hop Gate: 첫 번째 경유지(nextNodeId가 path[1])로 향하고 있고 아직 서버 응답이 없다면 도착하기 전에 부드럽게 감속
+      // 1-Hop Gate: 첫 번째 경유지(nextNodeId가 path[1])로 향할 때는 기본 주행 속도를 크게 낮춤 (기어가듯 이동)
       let finalSpeed = currentSpeed;
-      if (stepIdx === 1 && navigateRaidResponseRef.current === null) {
-        const prevNodeId = path[0] ?? currentNodeId;
-        const prevNode = nodes[prevNodeId];
-        if (prevNode) {
-          const hdx = nextNode.x - prevNode.x;
-          const hdy = nextNode.y - prevNode.y;
-          const hopTotalDistance = Math.sqrt(hdx * hdx + hdy * hdy);
+      if (stepIdx === 1) {
+        finalSpeed = currentSpeed * 0.3; // 1홉 이동 속도를 기본 속도의 30% 수준으로 하향
 
-          if (hopTotalDistance > 0) {
-            const ratio = distance / hopTotalDistance; // 1.0 (출발지) -> 0.0 (첫 번째 노드)
-            // 첫 번째 노드까지 거리의 70% 미만이 되면 부드럽게 감속하기 시작
-            if (ratio < 0.7) {
-              const slowDownFactor = ratio / 0.7; // 1.0 -> 0.0
-              const easedFactor = Math.sin((slowDownFactor * Math.PI) / 2); // 1.0 -> 0.0
-              // 최종적으로 3px/s의 미세한 속도까지 서서히 감속
-              finalSpeed = 3 + (currentSpeed - 3) * easedFactor;
+        // 아직 서버 응답이 없다면 도착하기 전에 추가로 부드럽게 감속하여 거의 멈춤
+        if (navigateRaidResponseRef.current === null) {
+          const prevNodeId = path[0] ?? currentNodeId;
+          const prevNode = nodes[prevNodeId];
+          if (prevNode) {
+            const hdx = nextNode.x - prevNode.x;
+            const hdy = nextNode.y - prevNode.y;
+            const hopTotalDistance = Math.sqrt(hdx * hdx + hdy * hdy);
+
+            if (hopTotalDistance > 0) {
+              const ratio = distance / hopTotalDistance; // 1.0 (출발지) -> 0.0 (첫 번째 노드)
+              // 첫 번째 노드까지 거리의 70% 미만이 되면 부드럽게 감속하기 시작
+              if (ratio < 0.7) {
+                const slowDownFactor = ratio / 0.7; // 1.0 -> 0.0
+                const easedFactor = Math.sin((slowDownFactor * Math.PI) / 2); // 1.0 -> 0.0
+                // 최종적으로 2px/s의 극도로 미세한 속도까지 서서히 감속
+                finalSpeed = 2 + (finalSpeed - 2) * easedFactor;
+              }
             }
           }
         }
