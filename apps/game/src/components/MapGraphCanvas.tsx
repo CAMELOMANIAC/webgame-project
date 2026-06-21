@@ -297,8 +297,8 @@ const MapGraphCanvas = ({
       currentNodeId,
       characterDataId: characterData?.raw.id,
     });
-    if (isNavigating || isArrivePending || navigateRaid.isPending) {
-      console.warn('[handleTargetSelect] BLOCKED by:', { isNavigating, isArrivePending, navigateRaidIsPending: navigateRaid.isPending });
+    if (isNavigating) {
+      console.warn('[handleTargetSelect] BLOCKED: Character is already navigating.');
       return;
     }
     if (showDevPanel) {
