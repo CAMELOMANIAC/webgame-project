@@ -76,7 +76,7 @@ interface MapGraphCanvasProps {
   triggerCombat: (log: BattleLog) => void;
 }
 
-const MapGraphCanvas = memo(({
+const MapGraphCanvas = ({
   isCombat = false,
   isArrivePending = false,
   navigateRaid,
@@ -135,6 +135,10 @@ const MapGraphCanvas = memo(({
   // 캐싱 기준점 추적용 Ref (이동 중 불필요한 캐시 무효화 방지)
   const lastCacheCoordsRef = useRef<{ x: number; y: number } | null>(null);
 
+  // 줌 조작 감지 및 디바운스용 Ref
+  const isZoomingRef = useRef(false);
+  const zoomTimeoutRef = useRef<number | null>(null);
+
   // 플레이어 마커 및 경로 라인 Konva 레퍼런스 (애니메이션 떨림 차단용 직접 조작)
   const playerMarkerRef = useRef<Konva.Image | null>(null);
   const pathLineRef = useRef<Konva.Line | null>(null);
@@ -153,6 +157,15 @@ const MapGraphCanvas = memo(({
     followPlayerRef.current = followPlayer;
   }, [followPlayer]);
 
+  // 컴포넌트 언마운트 시 디바운스 타이머 클린업
+  useEffect(() => {
+    return () => {
+      if (zoomTimeoutRef.current) {
+        clearTimeout(zoomTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // 맵 레이어 캐싱을 동적으로 관리하는 헬퍼 함수
   const updateMapCache = (force = false) => {
     const layer = mapLayerRef.current;
@@ -160,6 +173,9 @@ const MapGraphCanvas = memo(({
     if (!layer || !stage || dimensions.width === 0) return;
 
     const scale = stage.scaleX();
+    // 픽셀 비율(pixelRatio) 계산 시 줌 배율(scale) 곱연산에 상한선(Max 2.0)을 적용하여 기하급수적 캔버스 할당 방지
+    const rawPixelRatio = (window.devicePixelRatio || 1) * scale;
+    const pixelRatio = Math.min(2.0, rawPixelRatio);
 
     // 1. 전투 중인 경우: 고정 뷰포트 영역 최초 1회만 타이트하게 캐싱
     if (isCombat) {
@@ -177,7 +193,7 @@ const MapGraphCanvas = memo(({
         y: y - pad,
         width: w + pad * 2,
         height: h + pad * 2,
-        pixelRatio: (window.devicePixelRatio || 1) * scale
+        pixelRatio
       });
       return;
     }
@@ -208,7 +224,7 @@ const MapGraphCanvas = memo(({
         y: y - pad,
         width: w + pad * 2,
         height: h + pad * 2,
-        pixelRatio: (window.devicePixelRatio || 1) * scale
+        pixelRatio
       });
       return;
     }
@@ -222,8 +238,12 @@ const MapGraphCanvas = memo(({
 
   // 전투 중 상태 변경에 대응하는 캐시 라이프사이클 관리
   useEffect(() => {
+    // 줌 조작 중(isZoomingRef.current === true)일 때는 이 훅에서 캐싱을 트리거하지 않고 디바운스 타이머가 담당하도록 함
+    if (isZoomingRef.current) return;
+
     updateMapCache(true);
     mapLayerRef.current?.batchDraw();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCombat, dimensions.width, dimensions.height, stageTransform]);
 
   // 네비게이션 이동 시작/종료에 대응하는 캐시 라이프사이클 관리
@@ -234,6 +254,7 @@ const MapGraphCanvas = memo(({
       updateMapCache(false); // 이동 완료 시 캐시를 제거하여 자유 탐색 복원
       mapLayerRef.current?.batchDraw();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNavigating]);
 
   const startNavigation = (path: number[]) => {
@@ -926,7 +947,18 @@ const MapGraphCanvas = memo(({
     e.evt.preventDefault();
     if (isCombat) return;
     const stage = stageRef.current;
+    const layer = mapLayerRef.current;
     if (!stage) return;
+
+    // 휠 줌 시작됨: 캐싱 일시 정지용 플래그 On
+    isZoomingRef.current = true;
+
+    // 휠 줌을 시작하면 줌 조작 부하를 낮추고 원본 드로잉을 부드럽게 유지하기 위해 기존 캐시를 즉시 해제
+    if (layer && layer.isCached()) {
+      layer.clearCache();
+      lastCacheCoordsRef.current = null;
+      layer.batchDraw();
+    }
 
     const oldScale = stage.scaleX();
     const pointer = stage.getPointerPosition();
@@ -952,11 +984,33 @@ const MapGraphCanvas = memo(({
     stage.position(newPos);
     stage.batchDraw();
 
-    setStageTransform({
-      x: newPos.x,
-      y: newPos.y,
-      scale: clampedScale,
-    });
+    // 플레이어 마커 크기 보정 (React State 갱신 없이 즉시 반영하여 프레임 드랍 방지)
+    if (playerMarkerRef.current) {
+      const invScale = 1 / clampedScale;
+      playerMarkerRef.current.width(50 * invScale);
+      playerMarkerRef.current.height(50 * invScale);
+      playerMarkerRef.current.offsetX(25 * invScale);
+      playerMarkerRef.current.offsetY(25 * invScale);
+    }
+
+    // 디바운스 타이머 설정: 마우스 휠 입력이 멈춘 후 150ms 뒤에 캐싱 재개 및 React State 동기화
+    if (zoomTimeoutRef.current) {
+      clearTimeout(zoomTimeoutRef.current);
+    }
+    zoomTimeoutRef.current = setTimeout(() => {
+      isZoomingRef.current = false;
+      const currentStage = stageRef.current;
+      if (currentStage) {
+        setStageTransform({
+          x: currentStage.x(),
+          y: currentStage.y(),
+          scale: currentStage.scaleX(),
+        });
+      }
+      // 최종 줌 팩터에 도달했으므로 캐시 재생성
+      updateMapCache(true);
+      mapLayerRef.current?.batchDraw();
+    }, 150);
   };
 
   // 7. 드래그(팬)가 완전히 끝났을 때만 뷰포트 상태를 업데이트하여 컬링 연산 재계산
@@ -1481,7 +1535,7 @@ const MapGraphCanvas = memo(({
       )}
     </CanvasContainer>
   );
-});
+};
 
 const CanvasContainer = styled.div`
   width: 100%;
@@ -1672,4 +1726,9 @@ const StyledNavButton = styled.button<{ $primary?: boolean }>`
 
 
 
-export default MapGraphCanvas;
+export default memo(MapGraphCanvas, (prevProps, nextProps) => {
+  return (
+    prevProps.isCombat === nextProps.isCombat &&
+    prevProps.isArrivePending === nextProps.isArrivePending
+  );
+});
