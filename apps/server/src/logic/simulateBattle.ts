@@ -237,7 +237,12 @@ function processWeaponSequence(
 
     if (!weapon) continue;
 
-    if (weapon.currentCooldown <= 0 && actor.stamina >= weapon.staminaCost) {
+    if (weapon.currentCooldown > 0) {
+      // 쿨다운 중인 무기는 건너뜀
+      continue;
+    }
+
+    if (actor.stamina >= weapon.staminaCost) {
       const target = findTarget(actor, weapon, allPlayers);
       if (!target) return [];
 
@@ -294,6 +299,7 @@ function processWeaponSequence(
         return events;
       }
     } else {
+      // 스태미너가 부족한 경우: 대기
       actor.currentWeaponIndex = checkIndex;
       return [];
     }

@@ -15,7 +15,7 @@ const Equipment = memo(() => {
   return (
     <Container>
       <SlotManager items={characterData?.equipment || []} sortable>
-        {(item) => <EquipmentSlot item={item} />}
+        {(item, index) => <EquipmentSlot item={item} index={index} />}
       </SlotManager>
     </Container>
   );
