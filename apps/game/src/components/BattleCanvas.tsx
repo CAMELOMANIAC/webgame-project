@@ -87,7 +87,10 @@ export function BattleCanvas({
   }, []);
 
   // UI 영역(헤더/푸터)과 겹치지 않게 안전 픽셀 영역(Safe Zone)으로 좌표 변환하는 헬퍼 함수
+  // 변환 후 플레이어 마커 중심(width/2, height/2)으로부터 최소 100px 거리를 픽셀 레벨에서 보장
   const getSafeCoords = useMemo(() => {
+    const MIN_PIXEL_DIST = 100;
+
     return (pos: { x: number; y: number }) => {
       const safeLeft = 50;
       const safeRight = width - 50;
@@ -102,10 +105,28 @@ export function BattleCanvas({
         };
       }
 
-      return {
-        x: safeLeft + (pos.x / 100) * (safeRight - safeLeft),
-        y: safeTop + (pos.y / 100) * (safeBottom - safeTop),
-      };
+      // Step 1: Safe Zone 픽셀 좌표로 변환
+      let x = safeLeft + (pos.x / 100) * (safeRight - safeLeft);
+      let y = safeTop + (pos.y / 100) * (safeBottom - safeTop);
+
+      // Step 2: 플레이어 마커 중심(픽셀)으로부터 최소 100px 보장
+      const cx = width / 2;
+      const cy = height / 2;
+      const dx = x - cx;
+      const dy = y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > 0 && dist < MIN_PIXEL_DIST) {
+        const scale = MIN_PIXEL_DIST / dist;
+        x = cx + dx * scale;
+        y = cy + dy * scale;
+
+        // Step 3: 밀어낸 결과가 Safe Zone 밖으로 나가면 Safe Zone 경계로 재클램핑
+        x = Math.max(safeLeft, Math.min(safeRight, x));
+        y = Math.max(safeTop, Math.min(safeBottom, y));
+      }
+
+      return { x, y };
     };
   }, [width, height]);
 
