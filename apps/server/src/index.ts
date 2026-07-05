@@ -188,78 +188,87 @@ const SyncSlotsSchema = z.object({
   }))
 });
 
+// 헬퍼 함수: 인벤토리 및 무기 슬롯 상태 동기화 처리
+async function syncSlotsInternal(
+  characterId: string,
+  equipment: { weaponMasterId: string; slotIndex: number }[],
+  inventory: { weaponMasterId: string; slotIndex: number; quantity?: number }[]
+) {
+  // 1. 현재 DB에 저장된 실제 아이템 목록 조회 (검증용)
+  const [currentWeapons, currentInventory] = await Promise.all([
+    prisma.characterWeapon.findMany({ where: { characterId } }),
+    prisma.raidInventoryItem.findMany({ where: { characterId } })
+  ]);
+
+  // 2. 보유 아이템 ID 및 개수 맵 생성
+  const actualItemCounts = new Map<string, number>();
+  [...currentWeapons, ...currentInventory].forEach((item: { weaponMasterId: string }) => {
+    const count = actualItemCounts.get(item.weaponMasterId) || 0;
+    actualItemCounts.set(item.weaponMasterId, count + 1);
+  });
+
+  // 3. 클라이언트가 보낸 아이템 목록의 합계 계산
+  const requestItemCounts = new Map<string, number>();
+  [...equipment, ...inventory].forEach((item: { weaponMasterId: string }) => {
+    const count = requestItemCounts.get(item.weaponMasterId) || 0;
+    requestItemCounts.set(item.weaponMasterId, count + 1);
+  });
+
+  // 4. 대조 검증 (아이템 위변조 방지)
+  if (actualItemCounts.size !== requestItemCounts.size) {
+    throw new Error("Item set mismatch: distinct items count differs");
+  }
+
+  for (const [id, count] of actualItemCounts) {
+    if (requestItemCounts.get(id) !== count) {
+      throw new Error(`Item mismatch for ${id}: count differs`);
+    }
+  }
+
+  // 5. 비즈니스 로직 제약 조건 확인 (장착 슬롯 개수 등)
+  if (equipment.length > 6) {
+    throw new Error("Too many weapons equipped (max 6)");
+  }
+
+  // 6. 모든 검증 통과 시 트랜잭션 실행
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.characterWeapon.deleteMany({ where: { characterId } });
+    await tx.raidInventoryItem.deleteMany({ where: { characterId } });
+
+    if (equipment.length > 0) {
+      await tx.characterWeapon.createMany({
+        data: equipment.map((w: { weaponMasterId: string; slotIndex: number }) => ({
+          characterId,
+          weaponMasterId: w.weaponMasterId,
+          slotIndex: w.slotIndex
+        }))
+      });
+    }
+
+    if (inventory.length > 0) {
+      await tx.raidInventoryItem.createMany({
+        data: inventory.map((i: { weaponMasterId: string; slotIndex: number; quantity?: number }) => ({
+          characterId,
+          weaponMasterId: i.weaponMasterId,
+          slotIndex: i.slotIndex,
+          quantity: i.quantity || 1
+        }))
+      });
+    }
+  });
+}
+
 fastify.post("/character/:characterId/slots/sync", async (request, reply) => {
   try {
     const { characterId } = request.params as { characterId: string };
     const { equipment, inventory } = SyncSlotsSchema.parse(request.body);
 
-    // 1. 현재 DB에 저장된 실제 아이템 목록 조회 (검증용)
-    const [currentWeapons, currentInventory] = await Promise.all([
-      prisma.characterWeapon.findMany({ where: { characterId } }),
-      prisma.raidInventoryItem.findMany({ where: { characterId } })
-    ]);
-
-    // 2. 보유 아이템 ID 및 개수 맵 생성
-    const actualItemCounts = new Map<string, number>();
-    [...currentWeapons, ...currentInventory].forEach((item: { weaponMasterId: string }) => {
-      const count = actualItemCounts.get(item.weaponMasterId) || 0;
-      actualItemCounts.set(item.weaponMasterId, count + 1);
-    });
-
-    // 3. 클라이언트가 보낸 아이템 목록의 합계 계산
-    const requestItemCounts = new Map<string, number>();
-    [...equipment, ...inventory].forEach((item: { weaponMasterId: string }) => {
-      const count = requestItemCounts.get(item.weaponMasterId) || 0;
-      requestItemCounts.set(item.weaponMasterId, count + 1);
-    });
-
-    // 4. 대조 검증 (아이템 위변조 방지)
-    if (actualItemCounts.size !== requestItemCounts.size) {
-      return reply.status(400).send({ error: "Item set mismatch: distinct items count differs" });
-    }
-
-    for (const [id, count] of actualItemCounts) {
-      if (requestItemCounts.get(id) !== count) {
-        return reply.status(400).send({ error: `Item mismatch for ${id}: count differs` });
-      }
-    }
-
-    // 5. 비즈니스 로직 제약 조건 확인 (장착 슬롯 개수 등)
-    if (equipment.length > 6) {
-      return reply.status(400).send({ error: "Too many weapons equipped (max 6)" });
-    }
-
-    // 6. 모든 검증 통과 시 트랜잭션 실행
-    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await tx.characterWeapon.deleteMany({ where: { characterId } });
-      await tx.raidInventoryItem.deleteMany({ where: { characterId } });
-
-      if (equipment.length > 0) {
-        await tx.characterWeapon.createMany({
-          data: equipment.map((w: { weaponMasterId: string; slotIndex: number }) => ({
-            characterId,
-            weaponMasterId: w.weaponMasterId,
-            slotIndex: w.slotIndex
-          }))
-        });
-      }
-
-      if (inventory.length > 0) {
-        await tx.raidInventoryItem.createMany({
-          data: inventory.map((i: { weaponMasterId: string; slotIndex: number; quantity?: number }) => ({
-            characterId,
-            weaponMasterId: i.weaponMasterId,
-            slotIndex: i.slotIndex,
-            quantity: i.quantity || 1
-          }))
-        });
-      }
-    });
+    await syncSlotsInternal(characterId, equipment, inventory);
 
     return { status: "success" };
-  } catch (error) {
+  } catch (error: any) {
     fastify.log.error(error);
-    return reply.status(500).send({ error: "Failed to sync slots" });
+    return reply.status(500).send({ error: error.message || "Failed to sync slots" });
   }
 });
 
@@ -496,41 +505,55 @@ async function executeMonsterBattle(characterId: string, level: number = 1) {
       };
   });
 
-  const monsterUser: User = {
-    id: `${match.name} (Lv.${match.level})`,
-    teamId: "TeamB",
-    hp: match.hp,
-    maxHp: match.maxHp,
-    stamina: match.stamina,
-    maxStamina: match.maxStamina,
-    staminaRegen: match.staminaRegen,
-    weight: 0,
-    maxWeight: 100,
-    time: 0,
-    currentWeaponIndex: 0,
-    weapons: [null, null, null, null, null, null],
-  };
+  // 5마리 약한 몬스터 생성 테스트 모드
+  const monsterCount = 5;
+  const monsterUsers: User[] = [];
+  const suffix = ["A", "B", "C", "D", "E", "F"];
 
-  type MonsterWeaponWithMaster = Prisma.MonsterWeaponGetPayload<{
-    include: { weaponMaster: true };
-  }>;
-  match.weapons.forEach((w: MonsterWeaponWithMaster) => {
-    if (w.slotIndex < 6)
-      monsterUser.weapons[w.slotIndex] = { 
-        ...w.weaponMaster, 
-        currentCooldown: 0, 
-        use: () => [],
-        attackType: getWeaponAttackType(w.weaponMaster.name)
-      };
-  });
+  for (let i = 0; i < monsterCount; i++) {
+    const mHp = Math.max(10, Math.floor(match.hp / 4)); // 기존 몬스터보다 약한 체력
+    const monsterUser: User = {
+      id: `${match.name} ${suffix[i] || i} (Lv.1)`,
+      teamId: "TeamB",
+      hp: mHp,
+      maxHp: mHp,
+      stamina: match.stamina,
+      maxStamina: match.maxStamina,
+      staminaRegen: match.staminaRegen,
+      weight: 0,
+      maxWeight: 100,
+      time: 0,
+      currentWeaponIndex: 0,
+      weapons: [null, null, null, null, null, null],
+    };
+
+    type MonsterWeaponWithMaster = Prisma.MonsterWeaponGetPayload<{
+      include: { weaponMaster: true };
+    }>;
+    match.weapons.forEach((w: MonsterWeaponWithMaster) => {
+      if (w.slotIndex < 6) {
+        const weakDamage = Math.max(1, Math.floor(w.weaponMaster.damage / 4)); // 약한 대미지
+        monsterUser.weapons[w.slotIndex] = { 
+          ...w.weaponMaster, 
+          damage: weakDamage,
+          currentCooldown: 0, 
+          use: () => [],
+          attackType: getWeaponAttackType(w.weaponMaster.name)
+        };
+      }
+    });
+    monsterUsers.push(monsterUser);
+  }
 
   // 4) 시뮬레이션 실행
-  const result = simulateBattle([playerUser, monsterUser]);
+  const result = simulateBattle([playerUser, ...monsterUsers]);
 
   // 전투 결과 분석 및 DB 자동 반영
   let playerWon = false;
   let playerDied = false;
   let remainingPlayerHp = playerUser.hp;
+
+  const aliveMonsterIds = new Set(monsterUsers.map(m => m.id));
 
   for (const entry of result.timeline) {
     for (const event of entry.events) {
@@ -540,8 +563,11 @@ async function executeMonsterBattle(characterId: string, level: number = 1) {
       if (event.type === "DEATH") {
         if (event.playerId === playerUser.id) {
           playerDied = true;
-        } else if (event.playerId === monsterUser.id) {
-          playerWon = true;
+        } else if (aliveMonsterIds.has(event.playerId)) {
+          aliveMonsterIds.delete(event.playerId);
+          if (aliveMonsterIds.size === 0) {
+            playerWon = true;
+          }
         }
       }
     }
@@ -959,7 +985,24 @@ fastify.post("/character/:characterId/raid/die", async (request, reply) => {
 fastify.post("/character/:characterId/raid/navigate", async (request, reply) => {
   try {
     const { characterId } = request.params as { characterId: string };
-    const { path } = z.object({ path: z.array(z.number()) }).parse(request.body);
+    const { path, equipment, inventory } = z.object({
+      path: z.array(z.number()),
+      equipment: z.array(z.object({
+        weaponMasterId: z.string(),
+        slotIndex: z.number()
+      })).optional(),
+      inventory: z.array(z.object({
+        weaponMasterId: z.string(),
+        slotIndex: z.number(),
+        quantity: z.number().optional()
+      })).optional()
+    }).parse(request.body);
+
+    // 이동 시작 시 장착/인벤토리 변경 사항이 같이 전송되었다면 전투 여부 판단 전에 먼저 처리
+    if (equipment && inventory) {
+      fastify.log.info(`[Raid] Syncing slots before navigating for character ${characterId}`);
+      await syncSlotsInternal(characterId, equipment, inventory);
+    }
 
     const character = await prisma.character.findUnique({
       where: { id: characterId },

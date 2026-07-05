@@ -8,7 +8,6 @@ import styled from "styled-components";
 import {
   activeDragIdAtom,
   currentNodeIdAtom,
-  isInventoryDirtyAtom,
   isNavigatingAtom,
   shortestPathAtom,
   targetNodeIdAtom,
@@ -23,7 +22,6 @@ import { useEnemyPositions } from "@/utils/hooks/useEnemyPositions";
 import { useFieldCombat } from "@/utils/hooks/useFieldCombat";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useInventoryDrag } from "@/utils/hooks/useInventoryDrag";
-import { useSyncItemsMutation } from "@/utils/hooks/useSyncItemsMutation";
 
 type FieldSearch = {
   tab?: string;
@@ -51,8 +49,6 @@ function RouteComponent() {
   const [isNavigating, setIsNavigating] = useAtom(isNavigatingAtom);
   const [, setTargetNodeId] = useAtom(targetNodeIdAtom);
   const [, setShortestPath] = useAtom(shortestPathAtom);
-  const [isInventoryDirty, setIsInventoryDirty] = useAtom(isInventoryDirtyAtom);
-  const syncMutation = useSyncItemsMutation();
 
   // 중복 요청 및 무한 루프 방지를 위한 마지막 보고 노드 기록 Ref
   const lastReportedNodeRef = useRef<number | null>(null);
@@ -80,16 +76,7 @@ function RouteComponent() {
     handleArriveNode(currentNodeId);
   }, [isNavigating, currentNodeId, isCombat, characterData, handleArriveNode]);
 
-  // 1.1. 네비게이션 시작 시 변경된 인벤토리가 있다면 백그라운드 동기화 요청
-  useEffect(() => {
-    if (isNavigating && isInventoryDirty && characterData?.raw.id) {
-      setIsInventoryDirty(false); // 플래그 초기화
-      syncMutation.mutate({
-        characterId: characterData.raw.id,
-        data: characterData,
-      });
-    }
-  }, [isNavigating, isInventoryDirty, characterData, syncMutation, setIsInventoryDirty]);
+
 
   const activeItem = characterData?.equipment.find((item) => item.id === activeId)
     || characterData?.inventory.find((item) => item.id === activeId);

@@ -3,9 +3,11 @@ import type { BattleLog } from "@webgame/types";
 
 import { API_BASE_URL } from "../api";
 
-interface NavigateRaidParams {
+export interface NavigateRaidParams {
   characterId: string;
   path: number[];
+  equipment?: { weaponMasterId: string; slotIndex: number }[];
+  inventory?: { weaponMasterId: string; slotIndex: number; quantity: number }[];
 }
 
 export interface NavigateRaidResponse {
@@ -16,13 +18,13 @@ export interface NavigateRaidResponse {
 
 export const useNavigateRaid = () => {
   return useMutation<NavigateRaidResponse, Error, NavigateRaidParams>({
-    mutationFn: async ({ characterId, path }) => {
+    mutationFn: async ({ characterId, path, equipment, inventory }) => {
       const response = await fetch(`${API_BASE_URL}/character/${characterId}/raid/navigate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ path }),
+        body: JSON.stringify({ path, equipment, inventory }),
       });
 
       if (!response.ok) {

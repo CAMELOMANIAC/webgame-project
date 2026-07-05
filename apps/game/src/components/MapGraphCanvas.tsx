@@ -8,13 +8,14 @@ import styled from "styled-components";
 import useImage from "use-image";
 
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
-import type { NavigateRaidResponse } from "@/utils/hooks/useNavigateRaid";
+import type { NavigateRaidParams, NavigateRaidResponse } from "@/utils/hooks/useNavigateRaid";
 
 import compass from "../assets/compass.svg";
 import mapData from "../assets/map_graph.json";
 import {
   currentNodeIdAtom,
   followPlayerAtom,
+  isInventoryDirtyAtom,
   isNavigatingAtom,
   playerCoordsAtom,
   playerRotationAtom,
@@ -70,7 +71,7 @@ interface MapGraphCanvasProps {
   navigateRaid: UseMutationResult<
     NavigateRaidResponse,
     Error,
-    { characterId: string; path: number[] }
+    NavigateRaidParams
   >;
   triggerCombat: (log: BattleLog) => void;
 }
@@ -86,7 +87,8 @@ const MapGraphCanvas = ({
   const [compassImg] = useImage(compass);
 
   const { data: characterData } = useGetCharacter();
-
+  const [isInventoryDirty, setIsInventoryDirty] = useAtom(isInventoryDirtyAtom);
+ 
   // 1-Hop Gate 를 위한 서버 응답 저장 Ref 및 비주얼 상 경로 단절 스포일러 방지용 원본 경로 Ref
   const navigateRaidResponseRef = useRef<NavigateRaidResponse | null>(null);
   const originalPathRef = useRef<number[]>([]);
@@ -263,11 +265,41 @@ const MapGraphCanvas = ({
       return; // characterData 없으면 이동 자체를 차단 (1홉 무한 대기 방지)
     }
 
+    let reqEquipment: { weaponMasterId: string; slotIndex: number }[] | undefined = undefined;
+    let reqInventory: { weaponMasterId: string; slotIndex: number; quantity: number }[] | undefined = undefined;
+
+    // 장착 변경 사항이 있다면 이동 API 요청 시 페이로드로 동봉
+    if (isInventoryDirty) {
+      console.log('[Navigation] Inventory is dirty. Packing slot data to sync with navigate.');
+      
+      reqEquipment = characterData.raw.equipment
+        .filter((w) => w.weaponMaster !== null)
+        .map((w) => ({
+          weaponMasterId: w.weaponMaster!.id,
+          slotIndex: w.slotIndex,
+        }));
+
+      reqInventory = characterData.raw.inventory
+        .filter((i) => i.weaponMaster !== null)
+        .map((i) => ({
+          weaponMasterId: i.weaponMaster!.id,
+          slotIndex: i.slotIndex,
+          quantity: i.quantity,
+        }));
+
+      setIsInventoryDirty(false); // 플래그 리셋
+    }
+
     // 1-Hop Gate 초기화
     navigateRaidResponseRef.current = null;
 
     navigateRaid.mutate(
-      { characterId: characterData.raw.id, path },
+      { 
+        characterId: characterData.raw.id, 
+        path,
+        equipment: reqEquipment,
+        inventory: reqInventory
+      },
       {
         onSuccess: (res) => {
           console.log('[startNavigation SUCCESS] navigate response:', res);
