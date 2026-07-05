@@ -10,15 +10,33 @@ interface CanvasEnemyUnitProps {
   spawnY: number;
   isAttacking: boolean;
   isDamaged: boolean;
+  targetX?: number;
+  targetY?: number;
+  activeAttackId?: string;
 }
 
-const CanvasEnemyUnit = ({ name, x, y, spawnX, spawnY, isAttacking, isDamaged }: CanvasEnemyUnitProps) => {
+const CanvasEnemyUnit = ({ 
+  name, 
+  x, 
+  y, 
+  spawnX, 
+  spawnY, 
+  isAttacking, 
+  isDamaged,
+  targetX,
+  targetY,
+  activeAttackId,
+}: CanvasEnemyUnitProps) => {
   const groupRef = useRef<Konva.Group>(null);
   const labelRef = useRef<Konva.Label>(null);
   const [isIntroFinished, setIsIntroFinished] = useState(false);
+  const lastAttackIdRef = useRef<string | null>(null);
+  const animFrameIdRef = useRef<number | null>(null);
+
+  // 리액트 상태로 돌격 오프셋을 관리하여 컴파일 및 렌더링 동기화 버그 원천 해결
+  const [dashOffset, setDashOffset] = useState({ x: 0, y: 0 });
 
   // 로컬 상태로 현재 리액트-콘바에 바인딩할 포지션과 투명도를 관리
-  // 최초 렌더링 시에는 캔버스 바깥(spawnX, spawnY) 및 투명(opacity: 0) 상태로 시작합니다.
   const [renderState, setRenderState] = useState({
     x: spawnX,
     y: spawnY,
@@ -27,20 +45,16 @@ const CanvasEnemyUnit = ({ name, x, y, spawnX, spawnY, isAttacking, isDamaged }:
 
   useEffect(() => {
     if (labelRef.current) {
-      // 1. 라벨의 실제 렌더링된 너비를 가져옵니다.
       const width = labelRef.current.width();
-      // 2. 너비의 절반만큼 offsetX를 주어 기준점을 가로 중앙으로 바꿉니다.
       labelRef.current.offsetX(width / 2);
     }
-  }, [name]); // 이름이 바뀔 때마다 너비를 재계산합니다.
+  }, [name]);
 
   useLayoutEffect(() => {
     if (groupRef.current) {
-      // 첫 프레임 페인팅 전, 메모리 상의 Konva 객체 위치와 투명도를 초기화
       groupRef.current.position({ x: spawnX, y: spawnY });
       groupRef.current.opacity(0);
 
-      // 원래 목적지 (x, y)와 투명도 1로 활공 트윈을 실행합니다.
       groupRef.current.to({
         x: x,
         y: y,
@@ -48,9 +62,8 @@ const CanvasEnemyUnit = ({ name, x, y, spawnX, spawnY, isAttacking, isDamaged }:
         duration: 1.2,
         easing: Konva.Easings.EaseOut,
         onFinish: () => {
-          // 애니메이션이 완벽하게 끝난 시점에만 리액트 상태를 원래의 목적지 좌표로 동기화합니다.
           setRenderState({ x, y, opacity: 1 });
-          setIsIntroFinished(true); // 등장 애니메이션 종료 기록
+          setIsIntroFinished(true);
         },
       });
     }
@@ -63,11 +76,10 @@ const CanvasEnemyUnit = ({ name, x, y, spawnX, spawnY, isAttacking, isDamaged }:
       return;
     }
 
-    // 적 개체마다 다 다른 움직임 주기를 가지도록 난수화된 위상(Phase)과 반경 설정
     const randomPhaseX = Math.random() * 100;
     const randomPhaseY = Math.random() * 100;
-    const speed = 1.0 + Math.random() * 1.5; // 느리고 자연스러운 진동 주기
-    const amplitude = 3 + Math.random() * 3; // 3px ~ 6px 흔들림 반경
+    const speed = 1.0 + Math.random() * 1.5;
+    const amplitude = 3 + Math.random() * 3;
 
     const anim = new Konva.Animation((frame) => {
       if (!frame || !groupRef.current) return;
@@ -86,13 +98,119 @@ const CanvasEnemyUnit = ({ name, x, y, spawnX, spawnY, isAttacking, isDamaged }:
 
     return () => {
       anim.stop();
-      // 배회가 종료되거나 공격 모드로 전환될 때 노드 좌표를 원래 (x, y) 정 위치로 되돌림
       if (currentGroup) {
         currentGroup.x(x);
         currentGroup.y(y);
       }
     };
-  }, [isIntroFinished, isAttacking, x, y]);  useEffect(() => {
+  }, [isIntroFinished, isAttacking, x, y]);
+
+  // 컴포넌트 언마운트 시에만 애니메이션 프레임 및 타이머 취소
+  const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (animFrameIdRef.current) {
+        cancelAnimationFrame(animFrameIdRef.current);
+      }
+      if (pauseTimerRef.current) {
+        clearTimeout(pauseTimerRef.current);
+      }
+    };
+  }, []);
+
+  // isAttacking 이 true가 되는 순간 Konva 내부 위치를 (x, y)로 명시 리셋
+  // → Idle 애니메이션이 남긴 groupRef 내부 좌표 드리프트를 방지
+  useEffect(() => {
+    if (isAttacking && groupRef.current) {
+      groupRef.current.x(x);
+      groupRef.current.y(y);
+    }
+  }, [isAttacking, x, y]);
+
+  // RAF(Phase1·3) + setTimeout(Phase2) 기반의 결정론적 돌진-멈춤-복귀 애니메이션
+  useEffect(() => {
+    if (!activeAttackId || activeAttackId === lastAttackIdRef.current || targetX === undefined || targetY === undefined) {
+      return;
+    }
+    lastAttackIdRef.current = activeAttackId;
+
+    // 이전 진행 중인 애니메이션 강제 중단
+    if (animFrameIdRef.current) {
+      cancelAnimationFrame(animFrameIdRef.current);
+    }
+    if (pauseTimerRef.current) {
+      clearTimeout(pauseTimerRef.current);
+    }
+
+    const dx = targetX - x;
+    const dy = targetY - y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance === 0) return;
+
+    const ux = dx / distance;
+    const uy = dy / distance;
+
+    // 대상을 덮지 않도록 45px 앞에 도달
+    const dashX = dx - ux * 45;
+    const dashY = dy - uy * 45;
+
+    const dashDuration = 250;  // 돌격 시간 (0.25초)
+    const pauseDuration = 300; // 타격 접점 대기 시간 (0.3초)
+    const returnDuration = 350; // 제자리 복귀 시간 (0.35초)
+
+    // Phase 3: 제자리 슬라이딩 복귀 (Ease-Out) — RAF 루프
+    const startReturn = () => {
+      const returnStart = performance.now();
+      const tickReturn = (now: number) => {
+        const t = Math.min((now - returnStart) / returnDuration, 1);
+        // Cubic Ease-Out: 빠르게 시작해서 부드럽게 정지
+        const ease = 1 - Math.pow(1 - t, 3);
+        setDashOffset({
+          x: dashX * (1 - ease),
+          y: dashY * (1 - ease),
+        });
+        if (t < 1) {
+          animFrameIdRef.current = requestAnimationFrame(tickReturn);
+        } else {
+          setDashOffset({ x: 0, y: 0 });
+          animFrameIdRef.current = null;
+        }
+      };
+      animFrameIdRef.current = requestAnimationFrame(tickReturn);
+    };
+
+    // Phase 2: 타격 지점 대기 — setTimeout으로 RAF 루프 없이 처리
+    const startPause = () => {
+      setDashOffset({ x: dashX, y: dashY });
+      pauseTimerRef.current = setTimeout(() => {
+        pauseTimerRef.current = null;
+        startReturn();
+      }, pauseDuration);
+    };
+
+    // Phase 1: 돌격 (Quintic Ease-In: 느리게 시작 → 급가속) — RAF 루프
+    const dashStart = performance.now();
+    const tickDash = (now: number) => {
+      const t = Math.min((now - dashStart) / dashDuration, 1);
+      // Quintic Ease-In: t^5 → 처음엔 거의 움직이지 않다가 마지막에 급가속
+      const ease = Math.pow(t, 5);
+      setDashOffset({
+        x: dashX * ease,
+        y: dashY * ease,
+      });
+      if (t < 1) {
+        animFrameIdRef.current = requestAnimationFrame(tickDash);
+      } else {
+        animFrameIdRef.current = null;
+        startPause();
+      }
+    };
+
+    animFrameIdRef.current = requestAnimationFrame(tickDash);
+  }, [activeAttackId, x, y, targetX, targetY]);
+
+  // 피격 시 미세한 피격 쉐이크
+  useEffect(() => {
     if (isDamaged && groupRef.current) {
       const currentX = groupRef.current.x();
       groupRef.current.to({
@@ -114,13 +232,16 @@ const CanvasEnemyUnit = ({ name, x, y, spawnX, spawnY, isAttacking, isDamaged }:
       });
     }
   }, [isDamaged, x, y]);
+
   return (
     <Group x={renderState.x} y={renderState.y} opacity={renderState.opacity} ref={groupRef}>
-      <Circle radius={5} fill="#ff716c" shadowColor="#ff716c" shadowBlur={8} shadowOpacity={0.9} />
-      <Label y={15} ref={labelRef}>
-        <Tag fill="#000000" padding={4} />
-        <Text text={name} fontSize={8} fill="#ff716c" align="center" verticalAlign="middle" fontStyle="300" />
-      </Label>
+      <Group x={dashOffset.x} y={dashOffset.y}>
+        <Circle radius={5} fill="#ff716c" shadowColor="#ff716c" shadowBlur={8} shadowOpacity={0.9} />
+        <Label y={15} ref={labelRef}>
+          <Tag fill="#000000" padding={4} />
+          <Text text={name} fontSize={8} fill="#ff716c" align="center" verticalAlign="middle" fontStyle="300" />
+        </Label>
+      </Group>
     </Group>
   );
 };

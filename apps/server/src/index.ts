@@ -469,12 +469,31 @@ async function executeMonsterBattle(characterId: string, level: number = 1) {
     weapons: [null, null, null, null, null, null],
   };
 
+  const getWeaponAttackType = (name: string): "MELEE" | "RANGED" => {
+    const lower = name.toLowerCase();
+    if (
+      lower.includes("sniper") ||
+      lower.includes("staff") ||
+      lower.includes("bow") ||
+      lower.includes("rifle") ||
+      lower.includes("gun")
+    ) {
+      return "RANGED";
+    }
+    return "MELEE";
+  };
+
   type CharacterWeaponWithMaster = Prisma.CharacterWeaponGetPayload<{
     include: { weaponMaster: true };
   }>;
   character.weapons.forEach((w: CharacterWeaponWithMaster) => {
     if (w.slotIndex < 6)
-      playerUser.weapons[w.slotIndex] = { ...w.weaponMaster, currentCooldown: 0, use: () => [] };
+      playerUser.weapons[w.slotIndex] = { 
+        ...w.weaponMaster, 
+        currentCooldown: 0, 
+        use: () => [],
+        attackType: getWeaponAttackType(w.weaponMaster.name)
+      };
   });
 
   const monsterUser: User = {
@@ -497,7 +516,12 @@ async function executeMonsterBattle(characterId: string, level: number = 1) {
   }>;
   match.weapons.forEach((w: MonsterWeaponWithMaster) => {
     if (w.slotIndex < 6)
-      monsterUser.weapons[w.slotIndex] = { ...w.weaponMaster, currentCooldown: 0, use: () => [] };
+      monsterUser.weapons[w.slotIndex] = { 
+        ...w.weaponMaster, 
+        currentCooldown: 0, 
+        use: () => [],
+        attackType: getWeaponAttackType(w.weaponMaster.name)
+      };
   });
 
   // 4) 시뮬레이션 실행

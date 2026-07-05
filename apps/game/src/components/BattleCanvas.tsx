@@ -8,6 +8,7 @@ import useImage from "use-image";
 
 import { displayEventsAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import CanvasEnemyUnit from "@/components/CanvasEnemyUnit";
+import MeleeSlashEffect from "@/components/MeleeSlashEffect";
 import RadarAttackLine from "@/components/RadarAttackLine";
 
 import compass from "../assets/compass.svg";
@@ -36,6 +37,10 @@ export function BattleCanvas({
   characterNickname,
 }: BattleCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const lastAttackIdRef = useRef<string | null>(null);
+  const playerAnimFrameIdRef = useRef<number | null>(null);
+  const playerPauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [playerDashOffset, setPlayerDashOffset] = useState({ x: 0, y: 0 });
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
@@ -213,6 +218,116 @@ export function BattleCanvas({
     }
   }, [displayEvents, characterNickname, enemyPositions, getSafeCoords, width, height, triggerShake]);
 
+  // 컴포넌트 언마운트 시에만 애니메이션 프레임 및 타이머 취소
+  useEffect(() => {
+    return () => {
+      if (playerAnimFrameIdRef.current) {
+        cancelAnimationFrame(playerAnimFrameIdRef.current);
+      }
+      if (playerPauseTimerRef.current) {
+        clearTimeout(playerPauseTimerRef.current);
+      }
+    };
+  }, []);
+
+  // 플레이어 근접 공격 시 가속 돌진 및 슬라이딩 복귀 애니메이션 (requestAnimationFrame 기반)
+  useEffect(() => {
+    if (!isCombat || !characterNickname || width === 0 || height === 0) return;
+
+    // 플레이어의 현재 프레임 근접 공격 이벤트 조회
+    const activePlayerMeleeAttack = activeAttacks.find((attack) => {
+      if (attack.actorId !== characterNickname) return false;
+      const attacker = battleLog?.initialState.players.find((p) => p.id === characterNickname);
+      const weapon = attacker?.weapons[attack.weaponIndex];
+      return weapon?.attackType !== "RANGED";
+    });
+
+    if (activePlayerMeleeAttack && activePlayerMeleeAttack.id !== lastAttackIdRef.current) {
+      lastAttackIdRef.current = activePlayerMeleeAttack.id;
+
+      // 이전 진행 중인 루프/타이머가 있다면 먼저 취소
+      if (playerAnimFrameIdRef.current) {
+        cancelAnimationFrame(playerAnimFrameIdRef.current);
+      }
+      if (playerPauseTimerRef.current) {
+        clearTimeout(playerPauseTimerRef.current);
+      }
+
+      const targetPos = enemyPositions.get(activePlayerMeleeAttack.targetId);
+      if (targetPos) {
+        const safePos = getSafeCoords(targetPos);
+        const targetX = safePos.x;
+        const targetY = safePos.y;
+
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const dx = targetX - centerX;
+        const dy = targetY - centerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > 0) {
+          const ux = dx / distance;
+          const uy = dy / distance;
+
+          // 로컬 좌표계 기준으로 돌진 타겟 위치 계산 (45px 앞)
+          const dashX = dx - ux * 45;
+          const dashY = dy - uy * 45;
+
+          const dashDuration = 250;  // 돌격 시간 (0.25초)
+          const pauseDuration = 300; // 타격 지점 대기 시간 (0.3초)
+          const returnDuration = 350; // 제자리 복귀 시간 (0.35초)
+
+          // Phase 3: 슬라이딩 복귀 (Cubic Ease-Out) — RAF 루프
+          const startReturn = () => {
+            const returnStart = performance.now();
+            const tickReturn = (now: number) => {
+              const t = Math.min((now - returnStart) / returnDuration, 1);
+              const ease = 1 - Math.pow(1 - t, 3);
+              setPlayerDashOffset({
+                x: dashX * (1 - ease),
+                y: dashY * (1 - ease),
+              });
+              if (t < 1) {
+                playerAnimFrameIdRef.current = requestAnimationFrame(tickReturn);
+              } else {
+                setPlayerDashOffset({ x: 0, y: 0 });
+                playerAnimFrameIdRef.current = null;
+              }
+            };
+            playerAnimFrameIdRef.current = requestAnimationFrame(tickReturn);
+          };
+
+          // Phase 2: 타격 지점 대기 — setTimeout으로 RAF 루프 없이 처리
+          const startPause = () => {
+            setPlayerDashOffset({ x: dashX, y: dashY });
+            playerPauseTimerRef.current = setTimeout(() => {
+              playerPauseTimerRef.current = null;
+              startReturn();
+            }, pauseDuration);
+          };
+
+          // Phase 1: 돌격 (Quintic Ease-In: 느리게 시작 → 급가속) — RAF 루프
+          const dashStart = performance.now();
+          const tickDash = (now: number) => {
+            const t = Math.min((now - dashStart) / dashDuration, 1);
+            const ease = Math.pow(t, 5);
+            setPlayerDashOffset({
+              x: dashX * ease,
+              y: dashY * ease,
+            });
+            if (t < 1) {
+              playerAnimFrameIdRef.current = requestAnimationFrame(tickDash);
+            } else {
+              playerAnimFrameIdRef.current = null;
+              startPause();
+            }
+          };
+
+          playerAnimFrameIdRef.current = requestAnimationFrame(tickDash);
+        }
+      }
+    }
+  }, [activeAttacks, characterNickname, enemyPositions, getSafeCoords, width, height, isCombat, battleLog]);
 
   return (
     <Container ref={containerRef}>
@@ -222,9 +337,14 @@ export function BattleCanvas({
           {/* Layer 1: Player Marker (MapGraphCanvas와 동일한 디자인으로 중앙에 고정 렌더링) */}
           <Layer listening={false}>
             <Group x={width / 2} y={height / 2}>
-              {compassImg && (
-                <Image image={compassImg} width={50} height={50} offsetX={25} offsetY={25} rotation={activeRotation} />
-              )}
+              <Group 
+                x={playerDashOffset.x}
+                y={playerDashOffset.y}
+              >
+                {compassImg && (
+                  <Image image={compassImg} width={50} height={50} offsetX={25} offsetY={25} rotation={activeRotation} />
+                )}
+              </Group>
             </Group>
           </Layer>
 
@@ -241,7 +361,9 @@ export function BattleCanvas({
                 .map((enemy) => {
                   const pos = enemyPositions.get(enemy.id);
                   if (!pos) return null;
-                  const isAttacking = activeAttacks.some((a) => a.type === "ATTACK" && a.actorId === enemy.id);
+                  const activeAttack = activeAttacks.find((a) => a.type === "ATTACK" && a.actorId === enemy.id);
+                  const isAttacking = !!activeAttack;
+                  const activeAttackId = activeAttack?.id;
                   const isEnemyDamaged = displayEvents.some((e) => e.type === "DAMAGE" && e.targetId === enemy.id);
 
                   // 안전지대 매핑 좌표 적용
@@ -276,11 +398,14 @@ export function BattleCanvas({
                       spawnY={spawnY}
                       isAttacking={isAttacking}
                       isDamaged={isEnemyDamaged}
+                      targetX={width / 2}
+                      targetY={height / 2}
+                      activeAttackId={activeAttackId}
                     />
                   );
                 })}
 
-            {/* Attack Lines (Radar Pulse Style) */}
+            {/* Attack Lines (Radar Pulse Style for Ranged, Slice Effect for Melee) */}
             {activeAttacks.map((attack) => {
               if (attack.type !== "ATTACK") return null;
 
@@ -300,7 +425,16 @@ export function BattleCanvas({
                     ? getSafeCoords(targetPos).y
                     : height / 2;
 
-              return <RadarAttackLine key={attack.id} points={[x1, y1, x2, y2]} />;
+              // 무기 정보 조회 및 근접/원거리 타입 분류
+              const attacker = battleLog?.initialState.players.find((p) => p.id === attack.actorId);
+              const weapon = attacker?.weapons[attack.weaponIndex];
+              const isRanged = weapon?.attackType === "RANGED";
+
+              if (isRanged) {
+                return <RadarAttackLine key={attack.id} points={[x1, y1, x2, y2]} />;
+              } else {
+                return <MeleeSlashEffect key={attack.id} x={x2} y={y2} />;
+              }
             })}
           </Layer>
 

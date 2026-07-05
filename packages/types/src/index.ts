@@ -17,6 +17,7 @@ export interface Weapon extends Item {
   strategy?: TargetingStrategy;
   isTriggered?: boolean;
   use: (actor: User, target: User, weapon: Weapon, timestamp: number) => BattleEvent[];
+  attackType?: "MELEE" | "RANGED";
 }
 
 export interface PlayerState {
@@ -38,6 +39,7 @@ export interface PlayerState {
     cooldownTicks: number;
     castTicks: number;
     weight: number;
+    attackType?: "MELEE" | "RANGED";
   } | null>;
 }
 

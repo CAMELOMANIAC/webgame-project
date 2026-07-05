@@ -45,6 +45,7 @@ export const defaultWeapon: Weapon = {
   weight: 5,
   value: 100,
   use: defaultUseWeapon,
+  attackType: "MELEE",
 };
 
 export const defaultWeapon2: Weapon = {
@@ -58,6 +59,7 @@ export const defaultWeapon2: Weapon = {
   weight: 3,
   value: 50,
   use: defaultUseWeapon,
+  attackType: "MELEE",
 };
 
 export const healingWeapon: Weapon = {
@@ -71,6 +73,7 @@ export const healingWeapon: Weapon = {
   weight: 2,
   value: 150,
   isTriggered: false,
+  attackType: "MELEE",
   use: (actor, _target, thisWeapon, timestamp) => {
     if (actor.hp < actor.maxHp * 0.5 && !thisWeapon.isTriggered) {
       thisWeapon.isTriggered = true;
@@ -103,6 +106,7 @@ export const sniperRifle: Weapon = {
   value: 300,
   strategy: "WEAKEST",
   use: defaultUseWeapon,
+  attackType: "RANGED",
 };
 
 export const giantSlayer: Weapon = {
@@ -117,6 +121,7 @@ export const giantSlayer: Weapon = {
   value: 200,
   strategy: "STRONGEST",
   use: defaultUseWeapon,
+  attackType: "MELEE",
 };
 
 export const dagger: Weapon = {
@@ -130,6 +135,7 @@ export const dagger: Weapon = {
   weight: 2,
   value: 40,
   use: defaultUseWeapon,
+  attackType: "MELEE",
 };
 
 export const greatsword: Weapon = {
@@ -143,6 +149,7 @@ export const greatsword: Weapon = {
   weight: 20,
   value: 350,
   use: defaultUseWeapon,
+  attackType: "MELEE",
 };
 
 export const staff: Weapon = {
@@ -156,4 +163,5 @@ export const staff: Weapon = {
   weight: 8,
   value: 250,
   use: defaultUseWeapon,
+  attackType: "RANGED",
 };

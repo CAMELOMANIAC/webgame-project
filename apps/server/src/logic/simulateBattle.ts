@@ -45,9 +45,10 @@ export function simulateBattle(players: User[]): BattleLog {
               castTicks: w.castTicks,
               staminaCost: w.staminaCost,
               weight: w.weight,
+              attackType: w.attackType,
             }
           : null,
-      ) as [Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null],
+      ) as any,
     })),
   };
 
