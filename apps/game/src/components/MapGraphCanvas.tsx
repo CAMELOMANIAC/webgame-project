@@ -1,4 +1,5 @@
 import type { UseMutationResult } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import type { BattleLog } from "@webgame/types";
 import { useAtom } from "jotai";
 import Konva from "konva";
@@ -63,6 +64,52 @@ const water = (mapData.water || []) as unknown as Water;
 // Konva Line 렌더링에 적합하도록 통합된 물 좌표 배열을 1차원 플랫 구조로 변환
 const waterPoints = water.flatMap((p) => [p.x, p.y]);
 
+const getBuildingCenter = (building: Building) => {
+  if (!building.coordinates || building.coordinates.length === 0) return { x: 0, y: 0 };
+  let sumX = 0;
+  let sumY = 0;
+  building.coordinates.forEach((p) => {
+    sumX += p.x;
+    sumY += p.y;
+  });
+  return {
+    x: sumX / building.coordinates.length,
+    y: sumY / building.coordinates.length,
+  };
+};
+
+const buildCoordPath = (
+  path: number[],
+  startPos: { x: number; y: number },
+  targetB: Building | null
+) => {
+  const coordPath: { x: number; y: number }[] = [];
+  if (path.length === 0) return coordPath;
+
+  const startNode = nodes[path[0]];
+  if (startNode) {
+    const dx = startPos.x - startNode.x;
+    const dy = startPos.y - startNode.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > 2) {
+      coordPath.push({ x: startPos.x, y: startPos.y });
+    }
+  }
+
+  path.forEach((idx) => {
+    const node = nodes[idx];
+    if (node) {
+      coordPath.push({ x: node.x, y: node.y });
+    }
+  });
+
+  if (targetB) {
+    coordPath.push(getBuildingCenter(targetB));
+  }
+
+  return coordPath;
+};
+
 const DEFAULT_NODE_COLOR = "#8e95a5";
 const DEFAULT_NODE_RADIUS = 4;
 
@@ -87,6 +134,7 @@ const MapGraphCanvas = ({
   const [compassImg] = useImage(compass);
 
   const { data: characterData } = useGetCharacter();
+  const queryClient = useQueryClient();
   const [isInventoryDirty, setIsInventoryDirty] = useAtom(isInventoryDirtyAtom);
  
   // 1-Hop Gate 를 위한 서버 응답 저장 Ref 및 비주얼 상 경로 단절 스포일러 방지용 원본 경로 Ref
@@ -148,6 +196,10 @@ const MapGraphCanvas = ({
   // 네비게이션 경로 및 현재 도달 스텝을 추적하는 Ref (단일 requestAnimationFrame 유지용)
   const navigationPathRef = useRef<number[]>([]);
   const currentPathStepRef = useRef<number>(1);
+
+  const [targetBuilding, setTargetBuilding] = useState<Building | null>(null);
+  const navigationPathCoordsRef = useRef<{ x: number; y: number }[]>([]);
+  const originalCoordsRef = useRef<{ x: number; y: number }[]>([]);
 
   // 카메라 자동 화면 따라가기 상태 및 Ref
   const [followPlayer, setFollowPlayer] = useAtom(followPlayerAtom);
@@ -258,12 +310,14 @@ const MapGraphCanvas = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNavigating]);
 
-  const startNavigation = (path: number[]) => {
+  const startNavigation = (path: number[], targetB?: Building | null) => {
     if (path.length <= 1) return;
     if (!characterData?.raw.id) {
       console.warn('[Navigation] characterData not ready, skipping navigation start.');
       return; // characterData 없으면 이동 자체를 차단 (1홉 무한 대기 방지)
     }
+
+    const tBuilding = targetB !== undefined ? targetB : targetBuilding;
 
     let reqEquipment: { weaponMasterId: string; slotIndex: number }[] | undefined = undefined;
     let reqInventory: { weaponMasterId: string; slotIndex: number; quantity: number }[] | undefined = undefined;
@@ -313,13 +367,19 @@ const MapGraphCanvas = ({
       }
     );
 
+    const startPos = playerCoordsRef.current || { x: nodes[path[0]]?.x ?? 0, y: nodes[path[0]]?.y ?? 0 };
+    const coords = buildCoordPath(path, startPos, tBuilding);
+    navigationPathCoordsRef.current = coords;
+    originalCoordsRef.current = coords;
+
     setIsNavigating(true);
   };
 
   // 대상 노드 선택 시 네비게이션 트리거 (개발 모드인 경우 승인 단계를 거치고, 일반 모드면 즉시 출발)
-  const handleTargetSelect = (targetId: number) => {
+  const handleTargetSelect = (targetId: number, targetBuilding?: Building) => {
     console.log('[handleTargetSelect] called', {
       targetId,
+      targetBuildingId: targetBuilding?.id,
       isCombat,
       isNavigating,
       navigateRaidIsPending: navigateRaid.isPending,
@@ -331,6 +391,7 @@ const MapGraphCanvas = ({
       console.warn('[handleTargetSelect] BLOCKED: Character is already navigating.');
       return;
     }
+    setTargetBuilding(targetBuilding || null);
     if (showDevPanel) {
       setTargetNodeId(targetId);
     } else {
@@ -339,7 +400,7 @@ const MapGraphCanvas = ({
       if (path.length > 1) {
         setTargetNodeId(targetId);
         setShortestPath(path);
-        startNavigation(path);
+        startNavigation(path, targetBuilding);
       }
     }
   };
@@ -373,11 +434,11 @@ const MapGraphCanvas = ({
 
     const stage = stageRef.current;
     const scale = 3.0;
-    const playerNode = nodes[currentNodeId];
-    if (!playerNode) return;
+    const playerPos = playerCoordsRef.current || (nodes[currentNodeId] ? { x: nodes[currentNodeId].x, y: nodes[currentNodeId].y } : null);
+    if (!playerPos) return;
 
-    const newX = dimensions.width / 2 - playerNode.x * scale;
-    const newY = dimensions.height / 2 - playerNode.y * scale;
+    const newX = dimensions.width / 2 - playerPos.x * scale;
+    const newY = dimensions.height / 2 - playerPos.y * scale;
 
     // 이미 최종 위치 및 줌 배율에 충분히 근접해 있다면 불필요한 카메라 튐(Jump) 방지
     const currentScale = stage.scaleX();
@@ -401,7 +462,7 @@ const MapGraphCanvas = ({
       y: newY,
       scale: scale,
     });
-  }, [dimensions.width, dimensions.height, currentNodeId, isNavigating, isCombat]);
+  }, [dimensions.width, dimensions.height, currentNodeId, playerCoords, isNavigating, isCombat]);
 
   // 2.1. 전투 시작 시 플레이어 중심 3.0배율 카메라 줌인 트랜지션 (Konva Tween 활용)
   useEffect(() => {
@@ -455,7 +516,7 @@ const MapGraphCanvas = ({
     return () => {
       tween.destroy();
     };
-  }, [isCombat, dimensions.width, dimensions.height, currentNodeId, setStageTransform]);
+  }, [isCombat, dimensions.width, dimensions.height, currentNodeId, playerCoords, setStageTransform]);
 
   // 3. 뷰포트 기준 경계 상자(Bounding Box) 계산
   const visibleBounds = useMemo(() => {
@@ -504,16 +565,22 @@ const MapGraphCanvas = ({
       setShortestPath(path);
     } else {
       setShortestPath([]);
+      setTargetBuilding(null);
     }
-  }, [currentNodeId, targetNodeId]);
+  }, [currentNodeId, targetNodeId, setShortestPath, setTargetBuilding]);
 
   // 5.2. 드로잉을 위한 최단 경로 플랫 좌표 배열
   const shortestPathPoints = useMemo(() => {
-    return shortestPath.flatMap((nodeIdx) => {
+    const pts = shortestPath.flatMap((nodeIdx) => {
       const node = nodes[nodeIdx];
       return node ? [node.x, node.y] : [];
     });
-  }, [shortestPath]);
+    if (targetBuilding && pts.length > 0) {
+      const center = getBuildingCenter(targetBuilding);
+      pts.push(center.x, center.y);
+    }
+    return pts;
+  }, [shortestPath, targetBuilding]);
 
   // 5.3. playerCoords 상태값에 맞춰 ref를 항시 최신화
   useEffect(() => {
@@ -522,33 +589,41 @@ const MapGraphCanvas = ({
     }
   }, [playerCoords]);
 
-  // 5.3.5. 최초 로드 시 서버 DB의 currentNodeId 값을 읽어와 클라이언트 상태(currentNodeId, playerCoords)를 동기화
+  // 5.3.5. 최초 로드 및 서버 DB의 currentNodeId 값이 변경될 때 클라이언트 상태(currentNodeId, playerCoords)를 동기화
   useEffect(() => {
-    if (characterData && !isInitializedRef.current) {
+    if (characterData && !isNavigating && !isCombat) {
       const serverNodeId = characterData.raw.currentNodeId;
       if (typeof serverNodeId === "number" && nodes[serverNodeId]) {
-        setCurrentNodeId(serverNodeId);
-        const initPos = { x: nodes[serverNodeId].x, y: nodes[serverNodeId].y };
-        setPlayerCoords(initPos);
-        playerCoordsRef.current = initPos;
-        isInitializedRef.current = true;
-        console.log(`[Init] Restored character node ID to #${serverNodeId} from DB.`);
+        // 로컬 상태와 서버 상태가 다르거나 최초 동기화 전인 경우 동기화 수행
+        if (serverNodeId !== currentNodeId || !isInitializedRef.current) {
+          setCurrentNodeId(serverNodeId);
+          
+          // 해당 노드에 연결된 건물이 있으면 건물 중심으로, 없으면 노드 좌표로 초기화
+          const buildings = (mapData.buildings || []) as Building[];
+          const targetBuilding = buildings.find((b) => b.roadNodeId === serverNodeId);
+          const initPos = targetBuilding 
+            ? getBuildingCenter(targetBuilding) 
+            : { x: nodes[serverNodeId].x, y: nodes[serverNodeId].y };
+
+          setPlayerCoords(initPos);
+          playerCoordsRef.current = initPos;
+          isInitializedRef.current = true;
+          console.log(`[Sync] Synced character node ID to #${serverNodeId} from DB (Position: ${targetBuilding ? 'Building Center' : 'Road Node'}).`);
+        }
       }
     }
-  }, [characterData, setCurrentNodeId, setPlayerCoords]);
+  }, [characterData, isNavigating, isCombat, currentNodeId, setCurrentNodeId, setPlayerCoords]);
 
-  // 5.4. 대기 중(네비게이션 정지) 상태 시 플레이어 좌표를 현재 currentNodeId에 즉시 강제 고정
-  useEffect(() => {
-    if (!isNavigating && nodes[currentNodeId]) {
-      const initPos = { x: nodes[currentNodeId].x, y: nodes[currentNodeId].y };
-      setPlayerCoords(initPos);
-      playerCoordsRef.current = initPos;
-    }
-  }, [currentNodeId, isNavigating, setPlayerCoords]);
+
 
   // 5.5. requestAnimationFrame 기반 등속(Constant Speed) 부드러운 네비게이션 보간 루프 (단일 세션 유지)
   useEffect(() => {
-    if (!isNavigating || targetNodeId === null || shortestPath.length <= 1) {
+    if (!isNavigating || targetNodeId === null || shortestPath.length <= 1 || isCombat) {
+      return;
+    }
+
+    const coords = navigationPathCoordsRef.current;
+    if (coords.length <= 1) {
       return;
     }
 
@@ -558,11 +633,11 @@ const MapGraphCanvas = ({
     currentPathStepRef.current = 1;
 
     // 첫 스텝 각도 계산 및 상태 동기화
-    const startNode = nodes[shortestPath[0]];
-    const nextNode = nodes[shortestPath[1]];
-    if (startNode && nextNode) {
-      const dx = nextNode.x - startNode.x;
-      const dy = nextNode.y - startNode.y;
+    const startC = coords[0];
+    const nextC = coords[1];
+    if (startC && nextC) {
+      const dx = nextC.x - startC.x;
+      const dy = nextC.y - startC.y;
       const angleRad = Math.atan2(dy, dx);
       const angleDeg = (angleRad * 180) / Math.PI + 90;
       setPlayerRotation(angleDeg);
@@ -570,12 +645,12 @@ const MapGraphCanvas = ({
 
     // 총 주행 물리 거리 미리 연산 (속도 가감속 Easing 정규화용)
     let totalDistance = 0;
-    for (let i = 0; i < shortestPath.length - 1; i++) {
-      const n1 = nodes[shortestPath[i]];
-      const n2 = nodes[shortestPath[i + 1]];
-      if (n1 && n2) {
-        const dx = n2.x - n1.x;
-        const dy = n2.y - n1.y;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const c1 = coords[i];
+      const c2 = coords[i + 1];
+      if (c1 && c2) {
+        const dx = c2.x - c1.x;
+        const dy = c2.y - c1.y;
         totalDistance += Math.sqrt(dx * dx + dy * dy);
       }
     }
@@ -634,53 +709,58 @@ const MapGraphCanvas = ({
       const path = navigationPathRef.current;
       const stepIdx = currentPathStepRef.current;
 
-      if (stepIdx >= path.length) {
+      const hasStartPos = coords.length > 0 && path.length > 0 && 
+        (Math.abs(coords[0].x - (nodes[path[0]]?.x ?? 0)) > 0.1 || 
+         Math.abs(coords[0].y - (nodes[path[0]]?.y ?? 0)) > 0.1);
+
+      if (stepIdx >= coords.length) {
         // 경로의 끝에 도달 완료
-        const finalNodeId = path[path.length - 1];
-        if (finalNodeId !== undefined) {
-          const finalNode = nodes[finalNodeId];
-          if (finalNode) {
-            if (cameraCatchUpStart === null) {
-              cameraCatchUpStart = performance.now();
-            }
-            const waitedMs = performance.now() - cameraCatchUpStart;
-            const forceArrived = waitedMs > 1500;
+        const finalPos = coords[coords.length - 1];
+        if (finalPos !== undefined) {
+          if (cameraCatchUpStart === null) {
+            cameraCatchUpStart = performance.now();
+          }
+          const waitedMs = performance.now() - cameraCatchUpStart;
+          const forceArrived = waitedMs > 1500;
 
-            // 카메라가 플레이어 위치에 부드럽게 도달할 때까지 대기
-            if (!hasCameraArrived(finalNode.x, finalNode.y) && !forceArrived) {
-              const finalPos = { x: finalNode.x, y: finalNode.y };
-              playerCoordsRef.current = finalPos;
-              if (playerMarkerRef.current) {
-                playerMarkerRef.current.x(finalPos.x);
-                playerMarkerRef.current.y(finalPos.y);
-                playerMarkerRef.current.getLayer()?.batchDraw();
-              }
-              if (sightMaskRef.current) {
-                sightMaskRef.current.x(finalPos.x);
-                sightMaskRef.current.y(finalPos.y);
-              }
-              updateCameraFollow(finalPos.x, finalPos.y, deltaTime);
-              animId = requestAnimationFrame(tick);
-              return;
+          // 카메라가 플레이어 위치에 부드럽게 도달할 때까지 대기
+          if (!hasCameraArrived(finalPos.x, finalPos.y) && !forceArrived) {
+            playerCoordsRef.current = finalPos;
+            if (playerMarkerRef.current) {
+              playerMarkerRef.current.x(finalPos.x);
+              playerMarkerRef.current.y(finalPos.y);
+              playerMarkerRef.current.getLayer()?.batchDraw();
             }
+            if (sightMaskRef.current) {
+              sightMaskRef.current.x(finalPos.x);
+              sightMaskRef.current.y(finalPos.y);
+            }
+            updateCameraFollow(finalPos.x, finalPos.y, deltaTime);
+            animId = requestAnimationFrame(tick);
+            return;
+          }
 
-            cameraCatchUpStart = null; // 대기 완료 시 리셋
+          cameraCatchUpStart = null; // 대기 완료 시 리셋
+          
+          const finalNodeId = path[path.length - 1];
+          if (finalNodeId !== undefined) {
             setCurrentNodeId(finalNodeId);
-            const finalPos = { x: finalNode.x, y: finalNode.y };
-            setPlayerCoords(finalPos);
-            // 최종 도착 후 각도 상태 갱신
-            if (path.length > 1) {
-              const prevNode = nodes[path[path.length - 2]];
-              if (prevNode) {
-                const dx = finalNode.x - prevNode.x;
-                const dy = finalNode.y - prevNode.y;
-                setPlayerRotation((Math.atan2(dy, dx) * 180) / Math.PI + 90);
-              }
+          }
+          setPlayerCoords(finalPos);
+          // 최종 도착 후 각도 상태 갱신
+          if (coords.length > 1) {
+            const prevPos = coords[coords.length - 2];
+            if (prevPos) {
+              const dx = finalPos.x - prevPos.x;
+              const dy = finalPos.y - prevPos.y;
+              setPlayerRotation((Math.atan2(dy, dx) * 180) / Math.PI + 90);
             }
           }
         }
         setIsNavigating(false);
         setTargetNodeId(null);
+        setTargetBuilding(null);
+        queryClient.invalidateQueries({ queryKey: ["character"] });
 
         // 최종 목적지 도달 시에만 카메라 트랜스폼 상태를 리액트에 단 1회 갱신 (컬링 영역 최종 싱크)
         if (stageRef.current) {
@@ -694,6 +774,7 @@ const MapGraphCanvas = ({
 
         // 최종 도착한 목적지가 사전 예약된 인카운터(전투) 노드였다면 즉시 전투 트리거
         const res = navigateRaidResponseRef.current;
+        const finalNodeId = path[path.length - 1];
         console.log('[Arrival Check] path finished:', {
           resExists: !!res,
           encounterTriggered: res?.encounterTriggered,
@@ -709,13 +790,8 @@ const MapGraphCanvas = ({
         return;
       }
 
-      const nextNodeId = path[stepIdx];
-      if (nextNodeId === undefined) {
-        setIsNavigating(false);
-        return;
-      }
-      const nextNode = nodes[nextNodeId];
-      if (!nextNode) {
+      const nextPos = coords[stepIdx];
+      if (nextPos === undefined) {
         setIsNavigating(false);
         return;
       }
@@ -723,10 +799,9 @@ const MapGraphCanvas = ({
       let currentPos = playerCoordsRef.current;
       // 방어 코드: currentPos가 0,0이거나 없으면 이전 노드의 좌표로 복구
       if (!currentPos || (currentPos.x === 0 && currentPos.y === 0)) {
-        const prevNodeId = path[stepIdx - 1] ?? currentNodeId;
-        const prevNode = nodes[prevNodeId];
-        if (prevNode) {
-          currentPos = { x: prevNode.x, y: prevNode.y };
+        const prevPos = coords[stepIdx - 1];
+        if (prevPos) {
+          currentPos = { x: prevPos.x, y: prevPos.y };
           playerCoordsRef.current = currentPos;
         } else {
           setIsNavigating(false);
@@ -734,8 +809,8 @@ const MapGraphCanvas = ({
         }
       }
 
-      const dx = nextNode.x - currentPos.x;
-      const dy = nextNode.y - currentPos.y;
+      const dx = nextPos.x - currentPos.x;
+      const dy = nextPos.y - currentPos.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
       // 이동 방향 각도 계산 (도 단위 변환 및 나침반 기본 방향 북쪽 상쇄 90도)
@@ -748,15 +823,19 @@ const MapGraphCanvas = ({
       const currentSpeed = minSpeed + (maxSpeed - minSpeed) * speedFactor;
 
       // 1-Hop Gate: 첫 번째 경유지(nextNodeId가 path[1])로 향할 때는 기본 주행 속도를 크게 낮춤 (기어가듯 이동)
+      const firstRoadHopStepIdx = hasStartPos ? 2 : 1;
+      const nextNodeId = path[hasStartPos ? stepIdx - 1 : stepIdx];
+
       let finalSpeed = currentSpeed;
-      if (stepIdx === 1) {
+      if (stepIdx === firstRoadHopStepIdx) {
         finalSpeed = currentSpeed * 0.3; // 1홉 이동 속도를 기본 속도의 30% 수준으로 하향
 
         // 아직 서버 응답이 없다면 도착하기 전에 추가로 부드럽게 감속하여 거의 멈춤
         if (navigateRaidResponseRef.current === null) {
           const prevNodeId = path[0] ?? currentNodeId;
           const prevNode = nodes[prevNodeId];
-          if (prevNode) {
+          const nextNode = nodes[path[1]];
+          if (prevNode && nextNode) {
             const hdx = nextNode.x - prevNode.x;
             const hdy = nextNode.y - prevNode.y;
             const hopTotalDistance = Math.sqrt(hdx * hdx + hdy * hdy);
@@ -779,7 +858,7 @@ const MapGraphCanvas = ({
 
       if (distance <= step) {
         // 1-Hop Gate: 첫 번째 경유지(nextNodeId가 path[1])에 도달했을 때 서버 응답 확인
-        if (stepIdx === 1) {
+        if (stepIdx === firstRoadHopStepIdx) {
           if (navigateRaidResponseRef.current === null) {
             // 대기 시작 시각 기록 (최초 진입 시에만)
             if (hopGateWaitStart === null) {
@@ -794,7 +873,7 @@ const MapGraphCanvas = ({
               // fall-through to response handling below
             } else {
               // 서버 응답이 올 때까지 1번 노드 위에 마커를 고정하고 대기시킵니다.
-              const holdPos = { x: nextNode.x, y: nextNode.y };
+              const holdPos = { x: nextPos.x, y: nextPos.y };
               playerCoordsRef.current = holdPos;
 
               if (playerMarkerRef.current) {
@@ -824,7 +903,7 @@ const MapGraphCanvas = ({
 
             // 만약 1번 노드에서 바로 인카운터가 걸렸다면 여기서 즉각 중단하고 전투 켬 (카메라 정렬 후 진입)
             if (stopNodeId === nextNodeId) {
-              const arrivedPos = { x: nextNode.x, y: nextNode.y };
+              const arrivedPos = { x: nextPos.x, y: nextPos.y };
 
               if (cameraCatchUpStart === null) {
                 cameraCatchUpStart = performance.now();
@@ -832,7 +911,7 @@ const MapGraphCanvas = ({
               const waitedMs = performance.now() - cameraCatchUpStart;
               const forceArrived = waitedMs > 1500;
 
-              if (!hasCameraArrived(nextNode.x, nextNode.y) && !forceArrived) {
+              if (!hasCameraArrived(nextPos.x, nextPos.y) && !forceArrived) {
                 playerCoordsRef.current = arrivedPos;
                 if (playerMarkerRef.current) {
                   playerMarkerRef.current.x(arrivedPos.x);
@@ -866,6 +945,7 @@ const MapGraphCanvas = ({
 
               setIsNavigating(false);
               setTargetNodeId(null);
+              setTargetBuilding(null);
               setCurrentNodeId(nextNodeId);
               setPlayerCoords(arrivedPos);
 
@@ -891,9 +971,12 @@ const MapGraphCanvas = ({
               // 1번 노드 이후의 노드에서 인카운터가 발생했다면, 경로를 해당 stopNodeId 까지만 깎아내고 통과시킴
               const stopIdx = path.indexOf(stopNodeId);
               if (stopIdx !== -1) {
-                // stopNodeId 까지만으로 경로 깎음
                 const truncatedPath = path.slice(0, stopIdx + 1);
                 navigationPathRef.current = truncatedPath;
+                
+                // Truncate coordinate path
+                const stopCoordIdx = hasStartPos ? stopIdx + 1 : stopIdx;
+                navigationPathCoordsRef.current = navigationPathCoordsRef.current.slice(0, stopCoordIdx + 1);
               }
             }
           }
@@ -901,7 +984,7 @@ const MapGraphCanvas = ({
 
         // 1번 노드를 안전하게 통과하거나, 1번 노드 이후로 깎여진 경로대로 진행하는 경우
         // 목표 다음 노드에 근접하여 도착 완료
-        const arrivedPos = { x: nextNode.x, y: nextNode.y };
+        const arrivedPos = { x: nextPos.x, y: nextPos.y };
         playerCoordsRef.current = arrivedPos;
         accumulatedDistance += distance; // 실제로 이동 완료한 물리적 거리 누적
 
@@ -923,12 +1006,9 @@ const MapGraphCanvas = ({
         // 이동 거리에 따른 동적 슬라이딩 캐시 리프레시 체크
         updateMapCache(false);
 
-        // 실시간 경로선 꼬리 깎기 (에메랄드 라인 시작점을 다음 목표 노드로 단축)
+        // 실시간 경로선 꼬리 깎기 (에메랄드 라인 시작점을 다음 목표 좌표로 단축)
         if (pathLineRef.current) {
-          const remainingPoints = originalPathRef.current.slice(stepIdx).flatMap((idx) => {
-            const node = nodes[idx];
-            return node ? [node.x, node.y] : [];
-          });
+          const remainingPoints = originalCoordsRef.current.slice(stepIdx).flatMap((c) => [c.x, c.y]);
           pathLineRef.current.points(remainingPoints);
           pathLineRef.current.getLayer()?.batchDraw();
         }
@@ -971,10 +1051,7 @@ const MapGraphCanvas = ({
           const remainingPoints = [
             newPos.x,
             newPos.y,
-            ...originalPathRef.current.slice(stepIdx).flatMap((idx) => {
-              const node = nodes[idx];
-              return node ? [node.x, node.y] : [];
-            }),
+            ...originalCoordsRef.current.slice(stepIdx).flatMap((c) => [c.x, c.y]),
           ];
           pathLineRef.current.points(remainingPoints);
           pathLineRef.current.getLayer()?.batchDraw();
@@ -990,7 +1067,7 @@ const MapGraphCanvas = ({
       cancelAnimationFrame(animId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNavigating]);
+  }, [isNavigating, isCombat]);
 
   // 6. 마우스 휠 이벤트로 줌 처리 (커서 좌표 기준 줌)
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
@@ -1213,11 +1290,11 @@ const MapGraphCanvas = ({
             <StyledNavButton
               $primary
               disabled={shortestPath.length <= 1 || isNavigating}
-              onClick={() => startNavigation(shortestPath)}
+              onClick={() => startNavigation(shortestPath, targetBuilding)}
             >
               {isNavigating ? "IN TRANSIT..." : "START NAVIGATION"}
             </StyledNavButton>
-            <StyledNavButton disabled={isNavigating} onClick={() => setTargetNodeId(null)}>
+            <StyledNavButton disabled={isNavigating} onClick={() => { setTargetNodeId(null); setTargetBuilding(null); }}>
               CANCEL
             </StyledNavButton>
           </NavButtonArea>
@@ -1324,8 +1401,8 @@ const MapGraphCanvas = ({
                         fill="rgba(35, 35, 38, 0.45)"
                         stroke="rgba(120, 120, 128, 0.12)"
                         strokeWidth={1}
-                        onClick={() => handleTargetSelect(b.roadNodeId)}
-                        onTap={() => handleTargetSelect(b.roadNodeId)}
+                        onClick={() => handleTargetSelect(b.roadNodeId, b)}
+                        onTap={() => handleTargetSelect(b.roadNodeId, b)}
                         onMouseEnter={(e) => {
                           const shape = e.target;
 
@@ -1526,8 +1603,11 @@ const MapGraphCanvas = ({
                 />
               )}
               {/* 타겟 목적지 마커 */}
-              {targetNodeId !== null && nodes[targetNodeId] && (
-                <Group x={nodes[targetNodeId].x} y={nodes[targetNodeId].y}>
+              {targetNodeId !== null && (
+                <Group
+                  x={targetBuilding ? getBuildingCenter(targetBuilding).x : (nodes[targetNodeId]?.x ?? 0)}
+                  y={targetBuilding ? getBuildingCenter(targetBuilding).y : (nodes[targetNodeId]?.y ?? 0)}
+                >
                   <Circle
                     radius={10}
                     stroke="#ffffff"

@@ -13,7 +13,6 @@ import {
   shortestPathAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
-import { useArriveRaidNode } from "@/utils/hooks/useArriveRaidNode";
 import { useBattleData } from "@/utils/hooks/useBattleData";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 import { useNavigateRaid } from "@/utils/hooks/useNavigateRaid";
@@ -22,7 +21,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
   const navigate = useNavigate();
   const [isCombat, setIsCombat] = useAtom(isCombatAtom);
   const { setBattleLog } = useBattleData();
-  const arriveRaidNode = useArriveRaidNode();
+
   const [time, setTime] = useAtom(currentTimeAtom);
   const [battleLog] = useAtom(battleLogAtom);
   const timeline = useAtomValue(flattenedTimelineAtom);
@@ -168,27 +167,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     };
   }, [isProcessing, setTime, setDisplayEvents, time, setProcessedEvents]);
 
-  const handleArriveNode = useCallback((nodeId: number) => {
-    if (isCombat || !characterData?.raw.id) return;
-    arriveRaidNode.mutate(
-      { characterId: characterData.raw.id, nodeId },
-      {
-        onSuccess: (res) => {
-          if (res.combatTriggered && res.battleLog) {
-            setBattleLog(res.battleLog);
-            setTime(0);
-            setDisplayEvents([]);
-            setProcessedEvents([]);
-            setIsProcessing(false);
-            setIsCombat(true);
-          }
-        },
-        onError: (err) => {
-          console.error("Failed to arrive at node:", err);
-        }
-      },
-    );
-  }, [isCombat, characterData, arriveRaidNode, setBattleLog, setTime, setDisplayEvents, setProcessedEvents, setIsCombat]);
+
 
   const triggerCombat = useCallback((log: BattleLog) => {
     setBattleLog(log);
@@ -210,7 +189,6 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
   return {
     isCombat,
     setIsCombat,
-    handleArriveNode,
     battleLog,
     navigateRaid,
     triggerCombat,

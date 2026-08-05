@@ -2,12 +2,11 @@ import { DndContext, DragOverlay } from "@dnd-kit/core";
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useAtom, useAtomValue } from "jotai";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import styled from "styled-components";
 
 import {
   activeDragIdAtom,
-  currentNodeIdAtom,
   isNavigatingAtom,
   shortestPathAtom,
   targetNodeIdAtom,
@@ -40,18 +39,14 @@ function RouteComponent() {
   const { tab } = useSearch({ from: "/field/" });
   const { data: characterData } = useGetCharacter();
 
-  const { isCombat, setIsCombat, handleArriveNode, battleLog, navigateRaid, triggerCombat } = useFieldCombat(characterData);
+  const { isCombat, setIsCombat, battleLog, navigateRaid, triggerCombat } = useFieldCombat(characterData);
   const { handleDragStart, handleDragEnd } = useInventoryDrag(characterData);
   const activeId = useAtomValue(activeDragIdAtom);
   const enemyPositions = useEnemyPositions(battleLog, characterData?.raw.user.nickname);
 
-  const [currentNodeId] = useAtom(currentNodeIdAtom);
-  const [isNavigating, setIsNavigating] = useAtom(isNavigatingAtom);
+  const [, setIsNavigating] = useAtom(isNavigatingAtom);
   const [, setTargetNodeId] = useAtom(targetNodeIdAtom);
   const [, setShortestPath] = useAtom(shortestPathAtom);
-
-  // 중복 요청 및 무한 루프 방지를 위한 마지막 보고 노드 기록 Ref
-  const lastReportedNodeRef = useRef<number | null>(null);
 
   // 마운트 시 이전 탐사 세션의 연출/이동 상태가 꼬여있다면 강제 리셋 (사망 후 복귀 시 안전장치)
   useEffect(() => {
@@ -60,21 +55,6 @@ function RouteComponent() {
     setTargetNodeId(null);
     setShortestPath([]);
   }, [setIsNavigating, setIsCombat, setTargetNodeId, setShortestPath]);
-
-  // 1. 노드 이동 완료 시 서버에 도착 알림 및 인카운터 트리거 판정 요청
-  useEffect(() => {
-    if (isNavigating) {
-      // 주행 중일 때 기록 초기화 (도착 시 1회 발송 보장)
-      lastReportedNodeRef.current = null;
-      return;
-    }
-    if (isCombat) return;
-    if (!characterData?.raw.id) return;
-    if (lastReportedNodeRef.current === currentNodeId) return;
-
-    lastReportedNodeRef.current = currentNodeId;
-    handleArriveNode(currentNodeId);
-  }, [isNavigating, currentNodeId, isCombat, characterData, handleArriveNode]);
 
 
 

@@ -669,27 +669,7 @@ fastify.post("/battle/monster", async (request, reply) => {
   }
 });
 
-// 탐사 중 특정 노드 도착 시 인카운터(전투) 판정 및 처리 API
-fastify.post("/character/:characterId/raid/arrive", async (request, reply) => {
-  try {
-    const { characterId } = request.params as { characterId: string };
-    const { nodeId } = z.object({ nodeId: z.number() }).parse(request.body);
 
-    await prisma.character.update({
-      where: { id: characterId },
-      data: { currentNodeId: nodeId },
-    });
-
-    // 1-Hop Gate / navigate 전체 경로 사전 검증 도입으로 인해,
-    // 이동 도중 및 도착지 인카운터는 /raid/navigate 에서 이미 처리/결정됩니다.
-    // 중복 전투 방지를 위해 arrive 에서는 더 이상 인카운터를 생성하지 않고 안전하게 완료 처리합니다.
-    fastify.log.info(`[Raid] Arrived at node #${nodeId} for character ${characterId} (checked via pre-roll)`);
-    return { combatTriggered: false };
-  } catch (error: any) {
-    fastify.log.error(error);
-    return reply.status(500).send({ error: error.message || "Failed to process raid arrival" });
-  }
-});
 
 
 
@@ -1065,6 +1045,12 @@ fastify.post("/character/:characterId/raid/navigate", async (request, reply) => 
     }
 
     // 전투 없이 안전하게 전체 경로 도달 완료 가능
+    const finalNodeId = path[path.length - 1];
+    await prisma.character.update({
+      where: { id: characterId },
+      data: { currentNodeId: finalNodeId },
+    });
+
     return {
       encounterTriggered: false,
     };
