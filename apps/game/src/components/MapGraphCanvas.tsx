@@ -24,6 +24,10 @@ import {
   targetNodeIdAtom,
 } from "../atoms/raidAtom";
 import { findShortestPath } from "../utils/pathfinding";
+import {
+  createOneDimIndex,
+  performOneDimIntersectionCulling,
+} from "../utils/binarySearchCulling";
 
 interface Node {
   x: number;
@@ -64,6 +68,10 @@ const water = (mapData.water || []) as unknown as Water;
 // Konva Line 렌더링에 적합하도록 통합된 물 좌표 배열을 1차원 플랫 구조로 변환
 const waterPoints = water.flatMap((p) => [p.x, p.y]);
 
+// [Step 2] 1D TypedArray 정렬 인덱스 구축 (모듈 스코프 1회 사전 생성)
+const indexedNodes = nodes.map((n, idx) => ({ id: idx, x: n.x, y: n.y }));
+const nodesOneDimIndex = createOneDimIndex(indexedNodes);
+
 const getBuildingCenter = (building: Building) => {
   if (!building.coordinates || building.coordinates.length === 0) return { x: 0, y: 0 };
   let sumX = 0;
@@ -77,6 +85,16 @@ const getBuildingCenter = (building: Building) => {
     y: sumY / building.coordinates.length,
   };
 };
+
+const indexedBuildings = buildings.map((b) => {
+  const center = getBuildingCenter(b);
+  return {
+    ...b,
+    x: center.x,
+    y: center.y,
+  };
+});
+const buildingsOneDimIndex = createOneDimIndex(indexedBuildings);
 
 const buildCoordPath = (path: number[], startPos: { x: number; y: number }, targetB: Building | null) => {
   const coordPath: { x: number; y: number }[] = [];
@@ -187,15 +205,21 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const navigationPathCoordsRef = useRef<{ x: number; y: number }[]>([]);
   const originalCoordsRef = useRef<{ x: number; y: number }[]>([]);
 
-  // [Step 1 Baseline] 벤치마크 수치 자동 기록용 Ref
+  // [Step 2] 1D Binary Search + Intersection 벤치마크 수치 자동 기록용 Ref
   const benchmarkStatsRef = useRef<{
-    cullingTimes: number[];
+    binarySearchTimes: number[];
+    intersectionTimes: number[];
     frameDeltas: number[];
     lastFrameTime: number;
+    xCandidates: number[];
+    yCandidates: number[];
   }>({
-    cullingTimes: [],
+    binarySearchTimes: [],
+    intersectionTimes: [],
     frameDeltas: [],
     lastFrameTime: 0,
+    xCandidates: [],
+    yCandidates: [],
   });
 
   // 카메라 자동 화면 따라가기 상태 및 Ref
@@ -460,46 +484,46 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     return { minX, minY, maxX, maxY };
   }, [stageTransform, dimensions]);
 
-  // 4. 뷰포트 내부에 위치하는 노드의 인덱스들 필터링 (컬링) & 연산 시간 측정
+  // 4. [Step 2] 1D TypedArray 이진 탐색 + 2차 교집합 (Intersection) 연산 컬링 (노드)
   const visibleNodeData = useMemo(() => {
-    performance.mark("culling-node-start");
-    const indices = new Set<number>();
-    const { minX, minY, maxX, maxY } = visibleBounds;
-
-    nodes.forEach((node, idx) => {
-      if (node.x >= minX && node.x <= maxX && node.y >= minY && node.y <= maxY) {
-        indices.add(idx);
-      }
-    });
-
-    performance.mark("culling-node-end");
-    const measure = performance.measure("culling-node-duration", "culling-node-start", "culling-node-end");
-    return { indices, time: measure.duration };
+    const res = performOneDimIntersectionCulling(nodesOneDimIndex, visibleBounds);
+    const indices = new Set<number>(res.results.map((item) => item.id));
+    return {
+      indices,
+      binarySearchTimeMs: res.binarySearchTimeMs,
+      intersectionTimeMs: res.intersectionTimeMs,
+      totalTime: res.binarySearchTimeMs + res.intersectionTimeMs,
+      xCandidates: res.xCandidateCount,
+      yCandidates: res.yCandidateCount,
+    };
   }, [visibleBounds]);
 
-  // 5. 뷰포트 내부에 위치하는 빌딩 필터링 (컬링) & 연산 시간 측정
+  // 5. [Step 2] 1D TypedArray 이진 탐색 + 2차 교집합 (Intersection) 연산 컬링 (빌딩)
   const visibleBuildingData = useMemo(() => {
-    performance.mark("culling-building-start");
-    const { minX, minY, maxX, maxY } = visibleBounds;
-
-    const res = buildings.filter((b) => {
-      const first = b.coordinates[0];
-      if (!first) return false;
-      return first.x >= minX && first.x <= maxX && first.y >= minY && first.y <= maxY;
-    });
-
-    performance.mark("culling-building-end");
-    const measure = performance.measure("culling-building-duration", "culling-building-start", "culling-building-end");
-    return { buildings: res, time: measure.duration };
+    const res = performOneDimIntersectionCulling(buildingsOneDimIndex, visibleBounds);
+    return {
+      buildings: res.results,
+      binarySearchTimeMs: res.binarySearchTimeMs,
+      intersectionTimeMs: res.intersectionTimeMs,
+      totalTime: res.binarySearchTimeMs + res.intersectionTimeMs,
+      xCandidates: res.xCandidateCount,
+      yCandidates: res.yCandidateCount,
+    };
   }, [visibleBounds]);
 
   const visibleNodeIndices = visibleNodeData.indices;
   const visibleBuildings = visibleBuildingData.buildings;
 
   useEffect(() => {
-    const totalMs = visibleNodeData.time + visibleBuildingData.time;
+    const totalMs = visibleNodeData.totalTime + visibleBuildingData.totalTime;
+    const bsTime = visibleNodeData.binarySearchTimeMs + visibleBuildingData.binarySearchTimeMs;
+    const interTime = visibleNodeData.intersectionTimeMs + visibleBuildingData.intersectionTimeMs;
+
     setCullingTimeMs(totalMs);
-    benchmarkStatsRef.current.cullingTimes.push(totalMs);
+    benchmarkStatsRef.current.binarySearchTimes.push(bsTime);
+    benchmarkStatsRef.current.intersectionTimes.push(interTime);
+    benchmarkStatsRef.current.xCandidates.push(visibleNodeData.xCandidates + visibleBuildingData.xCandidates);
+    benchmarkStatsRef.current.yCandidates.push(visibleNodeData.yCandidates + visibleBuildingData.yCandidates);
   }, [visibleNodeData, visibleBuildingData]);
 
   // 5.1. 실시간 최단 경로 연산 (A* 알고리즘 연동)
@@ -1114,10 +1138,15 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       });
     }
 
-    const { cullingTimes, frameDeltas } = benchmarkStatsRef.current;
-    if (cullingTimes.length > 0) {
-      const avgCullingMs = cullingTimes.reduce((a, b) => a + b, 0) / cullingTimes.length;
-      const maxCullingMs = Math.max(...cullingTimes);
+    const { binarySearchTimes, intersectionTimes, frameDeltas, xCandidates } = benchmarkStatsRef.current;
+    if (binarySearchTimes.length > 0) {
+      const totalTimes = binarySearchTimes.map((t, idx) => t + (intersectionTimes[idx] || 0));
+      const avgTotalMs = totalTimes.reduce((a, b) => a + b, 0) / totalTimes.length;
+      const maxTotalMs = Math.max(...totalTimes);
+
+      const avgBsMs = binarySearchTimes.reduce((a, b) => a + b, 0) / binarySearchTimes.length;
+      const avgInterMs = intersectionTimes.reduce((a, b) => a + b, 0) / intersectionTimes.length;
+      const avgXCandidates = Math.round(xCandidates.reduce((a, b) => a + b, 0) / xCandidates.length);
 
       let avgFps = 60;
       let minFps = 60;
@@ -1132,17 +1161,23 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       }
 
       console.log(
-        `%c================ [Step 1 Baseline Benchmark Summary] ================`,
-        "color: #ff4757; font-weight: bold; font-size: 13px;"
+        `%c================ [Step 2 (1D Binary Search + Intersection) Benchmark Summary] ================`,
+        "color: #4d7cff; font-weight: bold; font-size: 13px;"
       );
-      console.log(`⏱️ 평균 컬링 연산 시간 (Culling Avg): %c${avgCullingMs.toFixed(3)} ms`, "color: #ff4757; font-weight: bold;");
-      console.log(`⚠️ 최대 컬링 연산 시간 (Culling Max): %c${maxCullingMs.toFixed(3)} ms`, "color: #ff4757; font-weight: bold;");
+      console.log(`⏱️ 평균 총 컬링 연산 시간 (Total Culling Avg): %c${avgTotalMs.toFixed(3)} ms`, "color: #ff4757; font-weight: bold;");
+      console.log(`⚠️ 최대 총 컬링 연산 시간 (Total Culling Max): %c${maxTotalMs.toFixed(3)} ms`, "color: #ff4757; font-weight: bold;");
+      console.log(`  ├─ 🔍 1D 이진 탐색 시간 (1D Binary Search Avg): %c${avgBsMs.toFixed(3)} ms`, "color: #2bcbba;");
+      console.log(`  └─ ⚠️ 2차 교집합 연산 시간 (Intersection Avg): %c${avgInterMs.toFixed(3)} ms (전체의 ${Math.round((avgInterMs / (avgTotalMs || 1)) * 100)}%)`, "color: #ff4757;");
+      console.log(`📊 1D 슬라이싱으로 추출된 불필요 후보군 평균 (X-Candidates Avg): %c${avgXCandidates} 개 (화면 밖 띠 포함 낭비)`, "color: #ffa502; font-weight: bold;");
       console.log(`🎮 드래그 중 평균 프레임 (Avg FPS): %c${avgFps.toFixed(1)} FPS`, "color: #2bcbba; font-weight: bold;");
       console.log(`📉 드래그 중 최저 프레임 (Min FPS): %c${minFps.toFixed(1)} FPS`, "color: #ffa502; font-weight: bold;");
-      console.log(`====================================================================`);
+      console.log(`=======================================================================================`);
 
-      benchmarkStatsRef.current.cullingTimes = [];
+      benchmarkStatsRef.current.binarySearchTimes = [];
+      benchmarkStatsRef.current.intersectionTimes = [];
       benchmarkStatsRef.current.frameDeltas = [];
+      benchmarkStatsRef.current.xCandidates = [];
+      benchmarkStatsRef.current.yCandidates = [];
       benchmarkStatsRef.current.lastFrameTime = 0;
     }
   };
