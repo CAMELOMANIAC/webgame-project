@@ -187,6 +187,17 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const navigationPathCoordsRef = useRef<{ x: number; y: number }[]>([]);
   const originalCoordsRef = useRef<{ x: number; y: number }[]>([]);
 
+  // [Step 1 Baseline] 벤치마크 수치 자동 기록용 Ref
+  const benchmarkStatsRef = useRef<{
+    cullingTimes: number[];
+    frameDeltas: number[];
+    lastFrameTime: number;
+  }>({
+    cullingTimes: [],
+    frameDeltas: [],
+    lastFrameTime: 0,
+  });
+
   // 카메라 자동 화면 따라가기 상태 및 Ref
   const [followPlayer, setFollowPlayer] = useAtom(followPlayerAtom);
   const followPlayerRef = useRef(true);
@@ -488,6 +499,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   useEffect(() => {
     const totalMs = visibleNodeData.time + visibleBuildingData.time;
     setCullingTimeMs(totalMs);
+    benchmarkStatsRef.current.cullingTimes.push(totalMs);
   }, [visibleNodeData, visibleBuildingData]);
 
   // 5.1. 실시간 최단 경로 연산 (A* 알고리즘 연동)
@@ -1074,10 +1086,17 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     }, 150);
   };
 
-  // 7. BENCHMARK BRANCH: 드래그 중 및 드래그 종료 시 실시간으로 뷰포트 상태를 업데이트하여 매 프레임 컬링 연산 측정
+  // 7. BENCHMARK BRANCH: 드래그 중 및 드래그 종료 시 실시간으로 뷰포트 상태를 업데이트하고 벤치마크 요약 출력
   const handleDragMove = () => {
     const stage = stageRef.current;
     if (!stage) return;
+    const now = performance.now();
+    if (benchmarkStatsRef.current.lastFrameTime > 0) {
+      const delta = now - benchmarkStatsRef.current.lastFrameTime;
+      benchmarkStatsRef.current.frameDeltas.push(delta);
+    }
+    benchmarkStatsRef.current.lastFrameTime = now;
+
     setStageTransform({
       x: stage.x(),
       y: stage.y(),
@@ -1087,12 +1106,45 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
   const handleDragEnd = () => {
     const stage = stageRef.current;
-    if (!stage) return;
-    setStageTransform({
-      x: stage.x(),
-      y: stage.y(),
-      scale: stage.scaleX(),
-    });
+    if (stage) {
+      setStageTransform({
+        x: stage.x(),
+        y: stage.y(),
+        scale: stage.scaleX(),
+      });
+    }
+
+    const { cullingTimes, frameDeltas } = benchmarkStatsRef.current;
+    if (cullingTimes.length > 0) {
+      const avgCullingMs = cullingTimes.reduce((a, b) => a + b, 0) / cullingTimes.length;
+      const maxCullingMs = Math.max(...cullingTimes);
+
+      let avgFps = 60;
+      let minFps = 60;
+      if (frameDeltas.length > 0) {
+        const validDeltas = frameDeltas.filter((d) => d > 0);
+        if (validDeltas.length > 0) {
+          const avgDelta = validDeltas.reduce((a, b) => a + b, 0) / validDeltas.length;
+          const maxDelta = Math.max(...validDeltas);
+          avgFps = 1000 / avgDelta;
+          minFps = 1000 / maxDelta;
+        }
+      }
+
+      console.log(
+        `%c================ [Step 1 Baseline Benchmark Summary] ================`,
+        "color: #ff4757; font-weight: bold; font-size: 13px;"
+      );
+      console.log(`⏱️ 평균 컬링 연산 시간 (Culling Avg): %c${avgCullingMs.toFixed(3)} ms`, "color: #ff4757; font-weight: bold;");
+      console.log(`⚠️ 최대 컬링 연산 시간 (Culling Max): %c${maxCullingMs.toFixed(3)} ms`, "color: #ff4757; font-weight: bold;");
+      console.log(`🎮 드래그 중 평균 프레임 (Avg FPS): %c${avgFps.toFixed(1)} FPS`, "color: #2bcbba; font-weight: bold;");
+      console.log(`📉 드래그 중 최저 프레임 (Min FPS): %c${minFps.toFixed(1)} FPS`, "color: #ffa502; font-weight: bold;");
+      console.log(`====================================================================`);
+
+      benchmarkStatsRef.current.cullingTimes = [];
+      benchmarkStatsRef.current.frameDeltas = [];
+      benchmarkStatsRef.current.lastFrameTime = 0;
+    }
   };
 
   // 8. 노드/건물 호버 해제 안전 헬퍼 (Display 토글 조작 시 HUD 잔상 초기화)
