@@ -78,11 +78,7 @@ const getBuildingCenter = (building: Building) => {
   };
 };
 
-const buildCoordPath = (
-  path: number[],
-  startPos: { x: number; y: number },
-  targetB: Building | null
-) => {
+const buildCoordPath = (path: number[], startPos: { x: number; y: number }, targetB: Building | null) => {
   const coordPath: { x: number; y: number }[] = [];
   if (path.length === 0) return coordPath;
 
@@ -115,19 +111,11 @@ const DEFAULT_NODE_RADIUS = 4;
 
 interface MapGraphCanvasProps {
   isCombat?: boolean;
-  navigateRaid: UseMutationResult<
-    NavigateRaidResponse,
-    Error,
-    NavigateRaidParams
-  >;
+  navigateRaid: UseMutationResult<NavigateRaidResponse, Error, NavigateRaidParams>;
   triggerCombat: (log: BattleLog) => void;
 }
 
-const MapGraphCanvas = ({
-  isCombat = false,
-  navigateRaid,
-  triggerCombat,
-}: MapGraphCanvasProps) => {
+const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGraphCanvasProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const mapLayerRef = useRef<Konva.Layer | null>(null);
@@ -136,14 +124,12 @@ const MapGraphCanvas = ({
   const { data: characterData } = useGetCharacter();
   const queryClient = useQueryClient();
   const [isInventoryDirty, setIsInventoryDirty] = useAtom(isInventoryDirtyAtom);
- 
+
   // 1-Hop Gate 를 위한 서버 응답 저장 Ref 및 비주얼 상 경로 단절 스포일러 방지용 원본 경로 Ref
   const navigateRaidResponseRef = useRef<NavigateRaidResponse | null>(null);
   const originalPathRef = useRef<number[]>([]);
   // 카메라 연출(Tween) 중 맵 캐싱 꼬임 방지를 위한 Ref
   const isCameraTweeningRef = useRef(false);
-
-
 
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [stageTransform, setStageTransform] = useState({
@@ -219,70 +205,11 @@ const MapGraphCanvas = ({
     };
   }, []);
 
-  // 맵 레이어 캐싱을 동적으로 관리하는 헬퍼 함수
-  const updateMapCache = (force = false) => {
+  // 맵 레이어 캐싱을 동적으로 관리하는 헬퍼 함수 (BENCHMARK BRANCH: 오프스크린 캔버스 캐싱 비활성화)
+  const updateMapCache = (_force = false) => {
     const layer = mapLayerRef.current;
-    const stage = stageRef.current;
-    if (!layer || !stage || dimensions.width === 0) return;
-
-    const scale = stage.scaleX();
-    // 픽셀 비율(pixelRatio) 계산 시 줌 배율(scale) 곱연산에 상한선(Max 2.0)을 적용하여 기하급수적 캔버스 할당 방지
-    const rawPixelRatio = (window.devicePixelRatio || 1) * scale;
-    const pixelRatio = Math.min(2.0, rawPixelRatio);
-
-    // 1. 전투 중인 경우: 고정 뷰포트 영역 최초 1회만 타이트하게 캐싱
-    if (isCombat) {
-      if (isCameraTweeningRef.current) return; // 카메라 트윈 중에는 캐싱 유보
-      if (!force && layer.isCached()) return;
-      const x = -stage.x() / scale;
-      const y = -stage.y() / scale;
-      const w = dimensions.width / scale;
-      const h = dimensions.height / scale;
-      const pad = 50 / scale; // 카메라 쉐이크 마진
-
-      layer.clearCache();
-      layer.cache({
-        x: x - pad,
-        y: y - pad,
-        width: w + pad * 2,
-        height: h + pad * 2,
-        pixelRatio
-      });
-      return;
-    }
-
-    // 2. 네비게이션 이동 중인 경우: 슬라이딩 윈도우 방식으로 주변 넉넉한 영역 고화질 캐싱
-    if (isNavigating) {
-      const playerPos = playerCoordsRef.current || { x: nodes[currentNodeId]?.x ?? 0, y: nodes[currentNodeId]?.y ?? 0 };
-
-      // 이동 거리가 임계값(200px)을 초과할 때만 점진적으로 캐시 갱신
-      if (!force && lastCacheCoordsRef.current && layer.isCached()) {
-        const dx = playerPos.x - lastCacheCoordsRef.current.x;
-        const dy = playerPos.y - lastCacheCoordsRef.current.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 200) return; // 캐시 범위 내이므로 유지
-      }
-
-      lastCacheCoordsRef.current = { x: playerPos.x, y: playerPos.y };
-
-      const w = dimensions.width / scale;
-      const h = dimensions.height / scale;
-      const x = playerPos.x - w / 2;
-      const y = playerPos.y - h / 2;
-      const pad = 600 / scale; // 주행 시 즉각 화면에서 잘려 보이지 않도록 넉넉한 버퍼 마진 추가
-
-      layer.clearCache();
-      layer.cache({
-        x: x - pad,
-        y: y - pad,
-        width: w + pad * 2,
-        height: h + pad * 2,
-        pixelRatio
-      });
-      return;
-    }
-
-    // 3. 평상시(대기 중)에는 실시간 인터랙션을 보장하기 위해 캐시를 해제
+    if (!layer) return;
+    // R-Tree 벤치마킹을 위해 layer.cache()를 비활성화하고 기존 캐시를 항시 해제합니다.
     if (layer.isCached()) {
       layer.clearCache();
       lastCacheCoordsRef.current = null;
@@ -296,7 +223,6 @@ const MapGraphCanvas = ({
 
     updateMapCache(true);
     mapLayerRef.current?.batchDraw();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCombat, dimensions.width, dimensions.height, stageTransform]);
 
   // 네비게이션 이동 시작/종료에 대응하는 캐시 라이프사이클 관리
@@ -307,13 +233,12 @@ const MapGraphCanvas = ({
       updateMapCache(false); // 이동 완료 시 캐시를 제거하여 자유 탐색 복원
       mapLayerRef.current?.batchDraw();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNavigating]);
 
   const startNavigation = (path: number[], targetB?: Building | null) => {
     if (path.length <= 1) return;
     if (!characterData?.raw.id) {
-      console.warn('[Navigation] characterData not ready, skipping navigation start.');
+      console.warn("[Navigation] characterData not ready, skipping navigation start.");
       return; // characterData 없으면 이동 자체를 차단 (1홉 무한 대기 방지)
     }
 
@@ -324,8 +249,8 @@ const MapGraphCanvas = ({
 
     // 장착 변경 사항이 있다면 이동 API 요청 시 페이로드로 동봉
     if (isInventoryDirty) {
-      console.log('[Navigation] Inventory is dirty. Packing slot data to sync with navigate.');
-      
+      console.log("[Navigation] Inventory is dirty. Packing slot data to sync with navigate.");
+
       reqEquipment = characterData.raw.equipment
         .filter((w) => w.weaponMaster !== null)
         .map((w) => ({
@@ -348,23 +273,23 @@ const MapGraphCanvas = ({
     navigateRaidResponseRef.current = null;
 
     navigateRaid.mutate(
-      { 
-        characterId: characterData.raw.id, 
+      {
+        characterId: characterData.raw.id,
         path,
         equipment: reqEquipment,
-        inventory: reqInventory
+        inventory: reqInventory,
       },
       {
         onSuccess: (res) => {
-          console.log('[startNavigation SUCCESS] navigate response:', res);
+          console.log("[startNavigation SUCCESS] navigate response:", res);
           navigateRaidResponseRef.current = res;
         },
         onError: (err) => {
           console.error("Failed to pre-roll encounters:", err);
           // 네트워크 에러 발생 시 안전하게 1번 노드까지만 가고 멈춤 처리
           navigateRaidResponseRef.current = { encounterTriggered: false };
-        }
-      }
+        },
+      },
     );
 
     const startPos = playerCoordsRef.current || { x: nodes[path[0]]?.x ?? 0, y: nodes[path[0]]?.y ?? 0 };
@@ -377,18 +302,7 @@ const MapGraphCanvas = ({
 
   // 대상 노드 선택 시 네비게이션 트리거 (개발 모드인 경우 승인 단계를 거치고, 일반 모드면 즉시 출발)
   const handleTargetSelect = (targetId: number, targetBuilding?: Building) => {
-    console.log('[handleTargetSelect] called', {
-      targetId,
-      targetBuildingId: targetBuilding?.id,
-      isCombat,
-      isNavigating,
-      navigateRaidIsPending: navigateRaid.isPending,
-      navigateRaidStatus: navigateRaid.status,
-      currentNodeId,
-      characterDataId: characterData?.raw.id,
-    });
     if (isNavigating) {
-      console.warn('[handleTargetSelect] BLOCKED: Character is already navigating.');
       return;
     }
     setTargetBuilding(targetBuilding || null);
@@ -396,7 +310,6 @@ const MapGraphCanvas = ({
       setTargetNodeId(targetId);
     } else {
       const path = findShortestPath(currentNodeId, targetId);
-      console.log('[handleTargetSelect] path found:', path);
       if (path.length > 1) {
         setTargetNodeId(targetId);
         setShortestPath(path);
@@ -434,7 +347,9 @@ const MapGraphCanvas = ({
 
     const stage = stageRef.current;
     const scale = 3.0;
-    const playerPos = playerCoordsRef.current || (nodes[currentNodeId] ? { x: nodes[currentNodeId].x, y: nodes[currentNodeId].y } : null);
+    const playerPos =
+      playerCoordsRef.current ||
+      (nodes[currentNodeId] ? { x: nodes[currentNodeId].x, y: nodes[currentNodeId].y } : null);
     if (!playerPos) return;
 
     const newX = dimensions.width / 2 - playerPos.x * scale;
@@ -445,9 +360,7 @@ const MapGraphCanvas = ({
     const currentX = stage.x();
     const currentY = stage.y();
     const isAlreadyAligned =
-      Math.abs(currentScale - scale) < 0.05 &&
-      Math.abs(currentX - newX) < 5 &&
-      Math.abs(currentY - newY) < 5;
+      Math.abs(currentScale - scale) < 0.05 && Math.abs(currentX - newX) < 5 && Math.abs(currentY - newY) < 5;
 
     if (isAlreadyAligned) {
       return;
@@ -518,23 +431,27 @@ const MapGraphCanvas = ({
     };
   }, [isCombat, dimensions.width, dimensions.height, currentNodeId, playerCoords, setStageTransform]);
 
+  // [BENCHMARK] 컬링 연산 시간(ms) 상태
+  const [cullingTimeMs, setCullingTimeMs] = useState<number>(0);
+
   // 3. 뷰포트 기준 경계 상자(Bounding Box) 계산
   const visibleBounds = useMemo(() => {
     const { width, height } = dimensions;
     const { x, y, scale } = stageTransform;
 
-    // 네비게이션 주행 중에는 카메라 스크롤에 따른 리액트 리렌더링(컬링 갱신)을 원천 차단하기 위해 마진을 6000px로 대폭 확장
-    const margin = isNavigating ? 6000 : 400;
+    // BENCHMARK BRANCH: 실시간 컬링 측정을 위해 마진을 100px 고정으로 설정
+    const margin = 100;
     const minX = -x / scale - margin;
     const minY = -y / scale - margin;
     const maxX = minX + width / scale + margin * 2;
     const maxY = minY + height / scale + margin * 2;
 
     return { minX, minY, maxX, maxY };
-  }, [stageTransform, dimensions, isNavigating]);
+  }, [stageTransform, dimensions]);
 
-  // 4. 뷰포트 내부에 위치하는 노드의 인덱스들 필터링 (컬링)
-  const visibleNodeIndices = useMemo(() => {
+  // 4. 뷰포트 내부에 위치하는 노드의 인덱스들 필터링 (컬링) & 연산 시간 측정
+  const visibleNodeData = useMemo(() => {
+    performance.mark("culling-node-start");
     const indices = new Set<number>();
     const { minX, minY, maxX, maxY } = visibleBounds;
 
@@ -544,19 +461,34 @@ const MapGraphCanvas = ({
       }
     });
 
-    return indices;
+    performance.mark("culling-node-end");
+    const measure = performance.measure("culling-node-duration", "culling-node-start", "culling-node-end");
+    return { indices, time: measure.duration };
   }, [visibleBounds]);
 
-  // 5. 뷰포트 내부에 위치하는 빌딩 필터링 (컬링)
-  const visibleBuildings = useMemo(() => {
+  // 5. 뷰포트 내부에 위치하는 빌딩 필터링 (컬링) & 연산 시간 측정
+  const visibleBuildingData = useMemo(() => {
+    performance.mark("culling-building-start");
     const { minX, minY, maxX, maxY } = visibleBounds;
 
-    return buildings.filter((b) => {
+    const res = buildings.filter((b) => {
       const first = b.coordinates[0];
       if (!first) return false;
       return first.x >= minX && first.x <= maxX && first.y >= minY && first.y <= maxY;
     });
+
+    performance.mark("culling-building-end");
+    const measure = performance.measure("culling-building-duration", "culling-building-start", "culling-building-end");
+    return { buildings: res, time: measure.duration };
   }, [visibleBounds]);
+
+  const visibleNodeIndices = visibleNodeData.indices;
+  const visibleBuildings = visibleBuildingData.buildings;
+
+  useEffect(() => {
+    const totalMs = visibleNodeData.time + visibleBuildingData.time;
+    setCullingTimeMs(totalMs);
+  }, [visibleNodeData, visibleBuildingData]);
 
   // 5.1. 실시간 최단 경로 연산 (A* 알고리즘 연동)
   useEffect(() => {
@@ -597,24 +529,24 @@ const MapGraphCanvas = ({
         // 로컬 상태와 서버 상태가 다르거나 최초 동기화 전인 경우 동기화 수행
         if (serverNodeId !== currentNodeId || !isInitializedRef.current) {
           setCurrentNodeId(serverNodeId);
-          
+
           // 해당 노드에 연결된 건물이 있으면 건물 중심으로, 없으면 노드 좌표로 초기화
           const buildings = (mapData.buildings || []) as Building[];
           const targetBuilding = buildings.find((b) => b.roadNodeId === serverNodeId);
-          const initPos = targetBuilding 
-            ? getBuildingCenter(targetBuilding) 
+          const initPos = targetBuilding
+            ? getBuildingCenter(targetBuilding)
             : { x: nodes[serverNodeId].x, y: nodes[serverNodeId].y };
 
           setPlayerCoords(initPos);
           playerCoordsRef.current = initPos;
           isInitializedRef.current = true;
-          console.log(`[Sync] Synced character node ID to #${serverNodeId} from DB (Position: ${targetBuilding ? 'Building Center' : 'Road Node'}).`);
+          console.log(
+            `[Sync] Synced character node ID to #${serverNodeId} from DB (Position: ${targetBuilding ? "Building Center" : "Road Node"}).`,
+          );
         }
       }
     }
   }, [characterData, isNavigating, isCombat, currentNodeId, setCurrentNodeId, setPlayerCoords]);
-
-
 
   // 5.5. requestAnimationFrame 기반 등속(Constant Speed) 부드러운 네비게이션 보간 루프 (단일 세션 유지)
   useEffect(() => {
@@ -660,32 +592,32 @@ const MapGraphCanvas = ({
     let lastTime = performance.now();
     let hopGateWaitStart: number | null = null; // 1홉 게이트 대기 시작 시각 기록 (타임아웃 안전장치)
     let cameraCatchUpStart: number | null = null; // 카메라 정렬 대기 시작 시각 기록 (타임아웃 안전장치)
-    const minSpeed = 20;   // 출발 및 도달 부근 최소 속도
-    const maxSpeed = 120;  // 중간 구간 최고 속도 (전반적으로 천천히 이동하도록 조정)
+    const minSpeed = 20; // 출발 및 도달 부근 최소 속도
+    const maxSpeed = 120; // 중간 구간 최고 속도 (전반적으로 천천히 이동하도록 조정)
 
     // 실시간 카메라 중심 카메라 트래킹 헬퍼 (Lerp 기반 부드러운 전환 추가)
     const updateCameraFollow = (px: number, py: number, deltaTime: number) => {
       if (!followPlayerRef.current || !stageRef.current) return;
       const stage = stageRef.current;
-      
+
       const currentScale = stage.scaleX();
       const targetScale = 3.0; // 이동 중 3배율 고정
-      
+
       // 프레임 레이트 독립적인 Lerp 보간 계수 계산
       const scaleLerpFactor = 1 - Math.exp(-5 * deltaTime);
       const posLerpFactor = 1 - Math.exp(-5 * deltaTime);
-      
+
       const newScale = currentScale + (targetScale - currentScale) * scaleLerpFactor;
-      
+
       const targetStageX = dimensions.width / 2 - px * newScale;
       const targetStageY = dimensions.height / 2 - py * newScale;
-      
+
       const currentX = stage.x();
       const currentY = stage.y();
-      
+
       const newStageX = currentX + (targetStageX - currentX) * posLerpFactor;
       const newStageY = currentY + (targetStageY - currentY) * posLerpFactor;
-      
+
       stage.scale({ x: newScale, y: newScale });
       stage.position({ x: newStageX, y: newStageY });
       stage.batchDraw();
@@ -709,9 +641,11 @@ const MapGraphCanvas = ({
       const path = navigationPathRef.current;
       const stepIdx = currentPathStepRef.current;
 
-      const hasStartPos = coords.length > 0 && path.length > 0 && 
-        (Math.abs(coords[0].x - (nodes[path[0]]?.x ?? 0)) > 0.1 || 
-         Math.abs(coords[0].y - (nodes[path[0]]?.y ?? 0)) > 0.1);
+      const hasStartPos =
+        coords.length > 0 &&
+        path.length > 0 &&
+        (Math.abs(coords[0].x - (nodes[path[0]]?.x ?? 0)) > 0.1 ||
+          Math.abs(coords[0].y - (nodes[path[0]]?.y ?? 0)) > 0.1);
 
       if (stepIdx >= coords.length) {
         // 경로의 끝에 도달 완료
@@ -741,7 +675,7 @@ const MapGraphCanvas = ({
           }
 
           cameraCatchUpStart = null; // 대기 완료 시 리셋
-          
+
           const finalNodeId = path[path.length - 1];
           if (finalNodeId !== undefined) {
             setCurrentNodeId(finalNodeId);
@@ -775,16 +709,16 @@ const MapGraphCanvas = ({
         // 최종 도착한 목적지가 사전 예약된 인카운터(전투) 노드였다면 즉시 전투 트리거
         const res = navigateRaidResponseRef.current;
         const finalNodeId = path[path.length - 1];
-        console.log('[Arrival Check] path finished:', {
+        console.log("[Arrival Check] path finished:", {
           resExists: !!res,
           encounterTriggered: res?.encounterTriggered,
           stopNodeId: res?.stopNodeId,
           finalNodeId,
           match: res ? res.stopNodeId === finalNodeId : false,
-          hasBattleLog: res ? !!res.battleLog : false
+          hasBattleLog: res ? !!res.battleLog : false,
         });
         if (res && res.encounterTriggered && res.stopNodeId === finalNodeId && res.battleLog) {
-          console.log('[Arrival Check] Triggering combat now!');
+          console.log("[Arrival Check] Triggering combat now!");
           triggerCombat(res.battleLog);
         }
         return;
@@ -867,7 +801,7 @@ const MapGraphCanvas = ({
             // 안전장치: 5초 이상 응답 없으면 강제로 안전 통과 처리 (무한 대기 방지)
             const waitedMs = performance.now() - hopGateWaitStart;
             if (waitedMs > 5000) {
-              console.warn('[1-Hop Gate] Server response timed out after 5s, forcing safe pass-through.');
+              console.warn("[1-Hop Gate] Server response timed out after 5s, forcing safe pass-through.");
               navigateRaidResponseRef.current = { encounterTriggered: false };
               hopGateWaitStart = null;
               // fall-through to response handling below
@@ -958,10 +892,10 @@ const MapGraphCanvas = ({
                 });
               }
 
-              console.log('[1st Node Encounter Check] Triggering combat now at first node:', {
+              console.log("[1st Node Encounter Check] Triggering combat now at first node:", {
                 stopNodeId,
                 nextNodeId,
-                hasBattleLog: !!res.battleLog
+                hasBattleLog: !!res.battleLog,
               });
               if (res.battleLog) {
                 triggerCombat(res.battleLog);
@@ -973,7 +907,7 @@ const MapGraphCanvas = ({
               if (stopIdx !== -1) {
                 const truncatedPath = path.slice(0, stopIdx + 1);
                 navigationPathRef.current = truncatedPath;
-                
+
                 // Truncate coordinate path
                 const stopCoordIdx = hasStartPos ? stopIdx + 1 : stopIdx;
                 navigationPathCoordsRef.current = navigationPathCoordsRef.current.slice(0, stopCoordIdx + 1);
@@ -1140,7 +1074,17 @@ const MapGraphCanvas = ({
     }, 150);
   };
 
-  // 7. 드래그(팬)가 완전히 끝났을 때만 뷰포트 상태를 업데이트하여 컬링 연산 재계산
+  // 7. BENCHMARK BRANCH: 드래그 중 및 드래그 종료 시 실시간으로 뷰포트 상태를 업데이트하여 매 프레임 컬링 연산 측정
+  const handleDragMove = () => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    setStageTransform({
+      x: stage.x(),
+      y: stage.y(),
+      scale: stage.scaleX(),
+    });
+  };
+
   const handleDragEnd = () => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -1162,7 +1106,6 @@ const MapGraphCanvas = ({
 
   return (
     <CanvasContainer ref={containerRef}>
-
       {/* 하이테크 스타일 정보 패널 오버레이 (개발 모드일 때만 렌더링) */}
       {!isCombat && showDevPanel && (
         <InfoPanel onMouseDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
@@ -1184,6 +1127,17 @@ const MapGraphCanvas = ({
             <MetricRow>
               <MetricLabel>Total Buildings</MetricLabel>
               <MetricValue>{buildings.length}</MetricValue>
+            </MetricRow>
+            <MetricRow
+              style={{
+                background: "rgba(255, 71, 87, 0.15)",
+                padding: "4px 6px",
+                borderRadius: "6px",
+                margin: "6px 0",
+              }}
+            >
+              <MetricLabel style={{ color: "#ff4757", fontWeight: 700 }}>Culling CPU Time</MetricLabel>
+              <MetricValue style={{ color: "#ff4757", fontWeight: 800 }}>{cullingTimeMs.toFixed(3)} ms</MetricValue>
             </MetricRow>
             <MetricRow>
               <MetricLabel>Rendered Nodes (Culled)</MetricLabel>
@@ -1294,7 +1248,13 @@ const MapGraphCanvas = ({
             >
               {isNavigating ? "IN TRANSIT..." : "START NAVIGATION"}
             </StyledNavButton>
-            <StyledNavButton disabled={isNavigating} onClick={() => { setTargetNodeId(null); setTargetBuilding(null); }}>
+            <StyledNavButton
+              disabled={isNavigating}
+              onClick={() => {
+                setTargetNodeId(null);
+                setTargetBuilding(null);
+              }}
+            >
               CANCEL
             </StyledNavButton>
           </NavButtonArea>
@@ -1309,8 +1269,9 @@ const MapGraphCanvas = ({
           draggable={!isCombat}
           listening={!isCombat}
           onWheel={handleWheel}
+          onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
-          onClick={() => console.log('[Stage] clicked, isCombat:', isCombat, 'isNavigating:', isNavigating)}
+          onClick={() => {}}
         >
           {/* Layer 1: Static Map Layer (Water, Edges, Buildings, Nodes) */}
           <Layer ref={mapLayerRef} listening={!isNavigating}>
@@ -1390,196 +1351,140 @@ const MapGraphCanvas = ({
             {/* 1.3 Buildings (건물 배치) */}
             {showBuildings && (
               <Group>
-                {stageTransform.scale >= 3.0 && !isNavigating ? (
-                  // 줌인 상태(300% 이상, 이동 중 아님): 개별 인터랙티브 다각형 그리기 (호버 감지 활성화)
-                  visibleBuildings.map((b) => {
-                    return (
-                      <Line
-                        key={`building-${b.id}`}
-                        points={b.flatPoints}
-                        closed
-                        fill="rgba(35, 35, 38, 0.45)"
-                        stroke="rgba(120, 120, 128, 0.12)"
-                        strokeWidth={1}
-                        onClick={() => handleTargetSelect(b.roadNodeId, b)}
-                        onTap={() => handleTargetSelect(b.roadNodeId, b)}
-                        onMouseEnter={(e) => {
-                          const shape = e.target;
+                {visibleBuildings.map((b) => {
+                  return (
+                    <Line
+                      key={`building-${b.id}`}
+                      points={b.flatPoints}
+                      closed
+                      fill="rgba(35, 35, 38, 0.45)"
+                      stroke="rgba(120, 120, 128, 0.12)"
+                      strokeWidth={1}
+                      onClick={() => handleTargetSelect(b.roadNodeId, b)}
+                      onTap={() => handleTargetSelect(b.roadNodeId, b)}
+                      onMouseEnter={(e) => {
+                        const shape = e.target;
+                        shape.moveToTop();
+                        shape.setAttrs({
+                          fill: "rgba(43, 203, 186, 0.45)",
+                          stroke: "#ffffff",
+                          strokeWidth: 2,
+                          shadowColor: "#2bcbba",
+                          shadowBlur: 12,
+                          shadowOpacity: 0.9,
+                        });
+                        shape.getLayer()?.batchDraw();
 
-                          // Z-Index 최상단 이동: 겹치는 건물 중 호버된 건물이 위로 올라오도록 처리
-                          shape.moveToTop();
+                        const container = shape.getStage()?.container();
+                        if (container) container.style.cursor = "pointer";
 
-                          // React 리렌더링 방지를 위해 Konva 객체 직접 조작
-                          shape.setAttrs({
-                            fill: "rgba(43, 203, 186, 0.45)",
-                            stroke: "#ffffff",
-                            strokeWidth: 2,
-                            shadowColor: "#2bcbba",
-                            shadowBlur: 12,
-                            shadowOpacity: 0.9,
-                          });
-                          shape.getLayer()?.batchDraw();
-
-                          const container = shape.getStage()?.container();
-                          if (container) container.style.cursor = "pointer";
-
-                          // DOM 직접 조작으로 HUD 업데이트 (React Reconciliation 우회)
-                          const el = document.getElementById("hud-hover-detail");
-                          if (el) {
-                            el.style.display = "block";
-                            el.innerHTML = `
-                              <div style="color: #2bcbba; font-size: 11px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">
-                                BUILDING #${b.id}
-                              </div>
-                              <div style="font-size: 10px; color: #8a8d98; font-family: monospace; line-height: 1.4;">
-                                Height: ${b.height.toFixed(2)}m<br />
-                                Connected Road: Node #${b.roadNodeId}
-                              </div>
-                            `;
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          const shape = e.target;
-                          shape.setAttrs({
-                            fill: "rgba(35, 35, 38, 0.45)",
-                            stroke: "rgba(80, 80, 85, 0.12)",
-                            strokeWidth: 1,
-                            shadowBlur: 0,
-                            shadowOpacity: 0,
-                          });
-                          shape.getLayer()?.batchDraw();
-
-                          const container = shape.getStage()?.container();
-                          if (container) container.style.cursor = "default";
-
-                          resetHoverHud();
-                        }}
-                      />
-                    );
-                  })
-                ) : (
-                  // 줌아웃 상태(300% 미만): 1 DrawCall 병합 드로잉 (성능 극대화, 이벤트 비활성화)
-                  <Shape
-                    sceneFunc={(context, shape) => {
-                      context.beginPath();
-                      visibleBuildings.forEach((b) => {
-                        if (b.coordinates.length < 3) return;
-                        const first = b.coordinates[0];
-                        context.moveTo(first.x, first.y);
-                        for (let i = 1; i < b.coordinates.length; i++) {
-                          context.lineTo(b.coordinates[i].x, b.coordinates[i].y);
+                        const el = document.getElementById("hud-hover-detail");
+                        if (el) {
+                          el.style.display = "block";
+                          el.innerHTML = `
+                            <div style="color: #2bcbba; font-size: 11px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">
+                              BUILDING #${b.id}
+                            </div>
+                            <div style="font-size: 10px; color: #8a8d98; font-family: monospace; line-height: 1.4;">
+                              Height: ${b.height.toFixed(2)}m<br />
+                              Connected Road: Node #${b.roadNodeId}
+                            </div>
+                          `;
                         }
-                        context.closePath();
-                      });
-                      context.fillStrokeShape(shape);
-                    }}
-                    fill="rgba(35, 35, 38, 0.45)"
-                    stroke="rgba(80, 80, 85, 0.12)"
-                    strokeWidth={1}
-                    listening={false}
-                  />
-                )}
+                      }}
+                      onMouseLeave={(e) => {
+                        const shape = e.target;
+                        shape.setAttrs({
+                          fill: "rgba(35, 35, 38, 0.45)",
+                          stroke: "rgba(80, 80, 85, 0.12)",
+                          strokeWidth: 1,
+                          shadowBlur: 0,
+                          shadowOpacity: 0,
+                        });
+                        shape.getLayer()?.batchDraw();
+
+                        const container = shape.getStage()?.container();
+                        if (container) container.style.cursor = "default";
+
+                        resetHoverHud();
+                      }}
+                    />
+                  );
+                })}
               </Group>
             )}
 
             {/* 1.4 Nodes (도로망 교차점 정점) */}
             {showNodes && (
               <Group>
-                {stageTransform.scale >= 3.0 && !isNavigating ? (
-                  // 줌인 상태(300% 이상, 이동 중 아님): 개별 인터랙티브 노드 그리기 (호버 감지 활성화)
-                  Array.from(visibleNodeIndices).map((nodeIdx) => {
-                    const node = nodes[nodeIdx];
-                    if (!node) return null;
-                    return (
-                      <Group
-                        key={`node-${nodeIdx}`}
-                        x={node.x}
-                        y={node.y}
-                        onClick={() => handleTargetSelect(nodeIdx)}
-                        onTap={() => handleTargetSelect(nodeIdx)}
-                        onMouseEnter={(e) => {
-                          const shape = e.target;
+                {Array.from(visibleNodeIndices).map((nodeIdx) => {
+                  const node = nodes[nodeIdx];
+                  if (!node) return null;
+                  return (
+                    <Group
+                      key={`node-${nodeIdx}`}
+                      x={node.x}
+                      y={node.y}
+                      onClick={() => handleTargetSelect(nodeIdx)}
+                      onTap={() => handleTargetSelect(nodeIdx)}
+                      onMouseEnter={(e) => {
+                        const shape = e.target;
+                        shape.moveToTop();
+                        shape.setAttrs({
+                          radius: DEFAULT_NODE_RADIUS + 3,
+                          fill: "#ffffff",
+                          stroke: DEFAULT_NODE_COLOR,
+                          strokeWidth: 2.5,
+                          shadowColor: DEFAULT_NODE_COLOR,
+                          shadowBlur: 12,
+                          shadowOpacity: 0.9,
+                        });
+                        shape.getLayer()?.batchDraw();
 
-                          // Z-Index 최상단 이동: 겹치는 노드 중 호버된 노드가 위로 올라오도록 처리
-                          shape.moveToTop();
+                        const container = shape.getStage()?.container();
+                        if (container) container.style.cursor = "pointer";
 
-                          // React 리렌더링 방지를 위해 Konva 객체 속성 직접 조작
-                          shape.setAttrs({
-                            radius: DEFAULT_NODE_RADIUS + 3,
-                            fill: "#ffffff",
-                            stroke: DEFAULT_NODE_COLOR,
-                            strokeWidth: 2.5,
-                            shadowColor: DEFAULT_NODE_COLOR,
-                            shadowBlur: 12,
-                            shadowOpacity: 0.9,
-                          });
-                          shape.getLayer()?.batchDraw();
-
-                          const container = shape.getStage()?.container();
-                          if (container) container.style.cursor = "pointer";
-
-                          // DOM 직접 조작으로 HUD 업데이트
-                          const el = document.getElementById("hud-hover-detail");
-                          if (el) {
-                            el.style.display = "block";
-                            el.innerHTML = `
-                              <div style="color: ${DEFAULT_NODE_COLOR}; font-size: 11px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">
-                                NODE #${nodeIdx}
-                              </div>
-                              <div style="font-size: 10px; color: #8a8d98; font-family: monospace; line-height: 1.4;">
-                                X: ${node.x.toFixed(2)}<br />
-                                Y: ${node.y.toFixed(2)}
-                              </div>
-                            `;
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          const shape = e.target;
-                          shape.setAttrs({
-                            radius: DEFAULT_NODE_RADIUS,
-                            fill: DEFAULT_NODE_COLOR,
-                            stroke: "rgba(10, 10, 12, 0.8)",
-                            strokeWidth: 1,
-                            shadowBlur: 0,
-                            shadowOpacity: 0,
-                          });
-                          shape.getLayer()?.batchDraw();
-
-                          const container = shape.getStage()?.container();
-                          if (container) container.style.cursor = "default";
-
-                          resetHoverHud();
-                        }}
-                      >
-                        <Circle
-                          radius={DEFAULT_NODE_RADIUS}
-                          fill={DEFAULT_NODE_COLOR}
-                          stroke="rgba(10, 10, 12, 0.8)"
-                          strokeWidth={1}
-                        />
-                      </Group>
-                    );
-                  })
-                ) : (
-                  // 줌아웃 상태(300% 미만): 1 DrawCall 병합 드로잉 (성능 극대화, 이벤트 비활성화)
-                  <Shape
-                    sceneFunc={(context, shape) => {
-                      context.beginPath();
-                      visibleNodeIndices.forEach((nodeIdx) => {
-                        const node = nodes[nodeIdx];
-                        if (node) {
-                          context.moveTo(node.x + DEFAULT_NODE_RADIUS, node.y);
-                          context.arc(node.x, node.y, DEFAULT_NODE_RADIUS, 0, Math.PI * 2);
+                        const el = document.getElementById("hud-hover-detail");
+                        if (el) {
+                          el.style.display = "block";
+                          el.innerHTML = `
+                            <div style="color: ${DEFAULT_NODE_COLOR}; font-size: 11px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">
+                              NODE #${nodeIdx}
+                            </div>
+                            <div style="font-size: 10px; color: #8a8d98; font-family: monospace; line-height: 1.4;">
+                              X: ${node.x.toFixed(2)}<br />
+                              Y: ${node.y.toFixed(2)}
+                            </div>
+                          `;
                         }
-                      });
-                      context.fillStrokeShape(shape);
-                    }}
-                    fill={DEFAULT_NODE_COLOR}
-                    stroke="rgba(10, 10, 12, 0.8)"
-                    strokeWidth={1}
-                    listening={false}
-                  />
-                )}
+                      }}
+                      onMouseLeave={(e) => {
+                        const shape = e.target;
+                        shape.setAttrs({
+                          radius: DEFAULT_NODE_RADIUS,
+                          fill: DEFAULT_NODE_COLOR,
+                          stroke: "rgba(10, 10, 12, 0.8)",
+                          strokeWidth: 1,
+                          shadowBlur: 0,
+                          shadowOpacity: 0,
+                        });
+                        shape.getLayer()?.batchDraw();
+
+                        const container = shape.getStage()?.container();
+                        if (container) container.style.cursor = "default";
+
+                        resetHoverHud();
+                      }}
+                    >
+                      <Circle
+                        radius={DEFAULT_NODE_RADIUS}
+                        fill={DEFAULT_NODE_COLOR}
+                        stroke="rgba(10, 10, 12, 0.8)"
+                        strokeWidth={1}
+                      />
+                    </Group>
+                  );
+                })}
               </Group>
             )}
           </Layer>
@@ -1853,8 +1758,6 @@ const StyledNavButton = styled.button<{ $primary?: boolean }>`
     cursor: not-allowed;
   }
 `;
-
-
 
 export default memo(MapGraphCanvas, (prevProps, nextProps) => {
   return prevProps.isCombat === nextProps.isCombat;
