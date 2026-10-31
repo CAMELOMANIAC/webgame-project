@@ -24,6 +24,7 @@ import {
   shortestPathAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
+import { cornerBracketsMixin } from "@/components/Commons";
 import { API_BASE_URL, apiFetch } from "@/utils/api";
 
 interface DevelopmentUser {
@@ -82,11 +83,16 @@ export default function DevelopmentAccountGate({
     return (
       <>
         <StyledAccountBar>
-          <span>
-            개발용 계정 ·{" "}
-            {users.data?.find((user) => user.id === userId)?.nickname ??
-              userId.slice(0, 8)}
-          </span>
+          <StyledAccountIdentity>
+            <StyledStatusDot />
+            <span>
+              개발용 계정 ·{" "}
+              <StyledMonoCode>
+                {users.data?.find((user) => user.id === userId)?.nickname ??
+                  userId.slice(0, 8)}
+              </StyledMonoCode>
+            </span>
+          </StyledAccountIdentity>
           <button
             type="button"
             disabled={isCombat || isNavigating}
@@ -101,26 +107,33 @@ export default function DevelopmentAccountGate({
 
   return (
     <StyledAccountPanel>
-      <h1>생존자 선택</h1>
-      <p>플레이할 개발용 계정을 선택하세요.</p>
+      <StyledHeaderBlock>
+        <StyledTelemetryLabel>HL-LAB // AUTH-GATE</StyledTelemetryLabel>
+        <h1>생존자 선택</h1>
+        <p>플레이할 개발용 계정을 선택하세요.</p>
+      </StyledHeaderBlock>
       {users.isPending && <p>계정을 불러오는 중입니다.</p>}
-      {users.isError && <p role="alert">{users.error.message}</p>}
+      {users.isError && <StyledErrorText role="alert">{users.error.message}</StyledErrorText>}
       {users.data?.length === 0 && (
         <p>준비된 계정이 없습니다. 개발용 데이터를 먼저 준비하세요.</p>
       )}
-      {users.data?.map((user) => (
-        <button
-          key={user.id}
-          type="button"
-          onClick={() => void selectUser(user.id)}
-        >
-          {user.nickname} · {user.id.slice(0, 8)}
-        </button>
-      ))}
+      <StyledUserList>
+        {users.data?.map((user) => (
+          <StyledUserButton
+            key={user.id}
+            type="button"
+            $bracketTone="positive"
+            onClick={() => void selectUser(user.id)}
+          >
+            <span>{user.nickname}</span>
+            <StyledMonoCode>#{user.id.slice(0, 8)}</StyledMonoCode>
+          </StyledUserButton>
+        ))}
+      </StyledUserList>
       {users.isError && (
-        <button type="button" onClick={() => void users.refetch()}>
+        <StyledRetryButton type="button" onClick={() => void users.refetch()}>
           다시 불러오기
-        </button>
+        </StyledRetryButton>
       )}
     </StyledAccountPanel>
   );
@@ -131,20 +144,45 @@ const StyledAccountBar = styled.div`
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 8px 24px;
-  color: #adaaaa;
-  font-size: 11px;
-  background: #131313;
+  padding: 8px 16px;
+  color: #a1a1aa;
+  font-size: 12px;
+  background: #0c0c0f;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  font-variant-numeric: tabular-nums;
+
   button {
     color: #85adff;
     background: transparent;
     border: 0;
+    font-size: 12px;
+    font-weight: 500;
     cursor: pointer;
   }
+
   button:disabled {
     opacity: 0.4;
     cursor: default;
   }
+`;
+
+const StyledAccountIdentity = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const StyledStatusDot = styled.span`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #85adff;
+`;
+
+const StyledMonoCode = styled.span`
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: #fafafa;
 `;
 
 const StyledAccountPanel = styled.section`
@@ -152,15 +190,79 @@ const StyledAccountPanel = styled.section`
   flex-direction: column;
   gap: 16px;
   width: min(100%, 480px);
-  padding: 48px 24px;
+  padding: 40px 20px;
   margin: auto;
-  color: #ecf0f1;
-  button {
-    padding: 16px;
-    border: 0;
-    border-radius: 16px;
-    background: #262626;
-    color: #85adff;
-    cursor: pointer;
+  color: #fafafa;
+
+  h1 {
+    margin: 4px 0 6px;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
+
+  p {
+    font-size: 13px;
+    color: #a1a1aa;
+    line-height: 1.5;
+  }
+`;
+
+const StyledHeaderBlock = styled.div`
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+`;
+
+const StyledTelemetryLabel = styled.span`
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #71717a;
+  letter-spacing: 0.05em;
+`;
+
+const StyledUserList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const StyledUserButton = styled.button<{ $bracketTone?: "default" | "positive" | "negative" }>`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: #101013;
+  color: #fafafa;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  ${cornerBracketsMixin}
+
+  &:hover {
+    background: #141418;
+    border-color: rgba(133, 173, 255, 0.35);
+  }
+`;
+
+const StyledErrorText = styled.p`
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 113, 98, 0.3);
+  background: rgba(255, 113, 98, 0.1);
+  color: #ff7162 !important;
+  font-size: 12px;
+`;
+
+const StyledRetryButton = styled.button`
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: #fafafa;
+  color: #09090b;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 `;

@@ -5,26 +5,27 @@ import styled from "styled-components";
 import { battleLogAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { FieldWidget } from "@/components/Commons";
 
-import portrait from "../assets/portrait.png";
-
 const CombatLog = () => {
   const processedEvents = useAtomValue(processedEventsAtom);
   const battle = useAtomValue(battleLogAtom);
 
-  // actorId가 있는 유의미한 이벤트만 필터링하여 최근 10개 표시
   const logHistory = processedEvents.filter((e) => "actorId" in e).slice(-10);
 
   return (
-    <FieldWidget>
-      <Row $justifyContent={"space-between"} $padding="0 0 16px">
-        <SubTitle>
-          {battle?.encounter?.kind === "GHOST" ? "고스트 조우" : "BATTLE LOG"}
-        </SubTitle>
-        <ResumeButton>전투 재생 중</ResumeButton>
-      </Row>
+    <StyledCombatWidget $bracketTone="negative">
+      <StyledHeaderRow>
+        <StyledTitleGroup>
+          <StyledHostileDot />
+          <StyledSubTitle>
+            {battle?.encounter?.kind === "GHOST" ? "고스트 조우" : "교전 기록"}
+          </StyledSubTitle>
+        </StyledTitleGroup>
+        <StyledStatusBadge>HOSTILE · 전투 재생 중</StyledStatusBadge>
+      </StyledHeaderRow>
+
       {battle?.encounter && (
         <StyledEncounter>
-          {battle.encounter.name}
+          <strong>{battle.encounter.name}</strong>
           {battle.encounter.kind === "NPC" && (
             <span>
               {battle.encounter.faction} · {battle.encounter.role} ·{" "}
@@ -43,172 +44,141 @@ const CombatLog = () => {
           )}
         </StyledEncounter>
       )}
-      <Row>
-        <ActionLogList>
-          <AnimatePresence initial={false} mode="popLayout">
-            {[...logHistory].reverse().map((event) => (
-              <ActionLogItem
-                key={`${event.id}-${event.timestamp}`}
-                as={motion.li}
-                layout
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-              >
-                <BackgroundImgDiv></BackgroundImgDiv>
-                <ActionLogItemTextContainer>
-                  <ActionLogUnitName>{event.type}</ActionLogUnitName>
-                  <ActionLogUnitAction>
-                    {"actorId" in event
-                      ? (battle?.initialState.players.find(
-                          (player) => player.id === event.actorId,
-                        )?.name ?? event.actorId)
-                      : "system"}
-                  </ActionLogUnitAction>
-                </ActionLogItemTextContainer>
-              </ActionLogItem>
-            ))}
-          </AnimatePresence>
-        </ActionLogList>
-      </Row>
-    </FieldWidget>
+
+      <StyledActionLogList>
+        <AnimatePresence initial={false} mode="popLayout">
+          {[...logHistory].reverse().map((event) => (
+            <StyledActionLogItem
+              key={`${event.id}-${event.timestamp}`}
+              as={motion.li}
+              layout
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 12 }}
+            >
+              <StyledActionLogType>{event.type}</StyledActionLogType>
+              <StyledActionLogActor>
+                {"actorId" in event
+                  ? (battle?.initialState.players.find(
+                      (player) => player.id === event.actorId,
+                    )?.name ?? event.actorId)
+                  : "SYSTEM"}
+              </StyledActionLogActor>
+            </StyledActionLogItem>
+          ))}
+        </AnimatePresence>
+      </StyledActionLogList>
+    </StyledCombatWidget>
   );
 };
 
 export default CombatLog;
 
-const StyledEncounter = styled.p`
-  color: #85adff;
-  font-size: 12px;
-  margin: 0 0 12px;
-  span {
-    display: block;
-    font-size: 10px;
-    line-height: 1.5;
-    margin-top: 4px;
-  }
+const StyledCombatWidget = styled(FieldWidget)`
+  gap: 10px;
+  padding: 14px;
 `;
 
-const SubTitle = styled.h3`
-  font-size: 12px;
-  font-weight: 600;
-  color: white;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+const StyledHeaderRow = styled.div`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+`;
+
+const StyledTitleGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`;
+
+const StyledHostileDot = styled.span`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff7162;
+`;
+
+const StyledSubTitle = styled.h3`
+  font-size: 13px;
+  font-weight: 700;
+  color: #fafafa;
   margin: 0;
 `;
 
-type RowProps = {
-  $justifyContent?: string;
-  $padding?: string;
-};
-const Row = styled.div<RowProps>`
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: ${(props) => props.$justifyContent || "flex-start"};
-  padding: ${(props) => props.$padding || "0"};
-`;
-
-const ResumeButton = styled.span`
-  box-sizing: border-box;
-
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
+const StyledStatusBadge = styled.span`
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
   padding: 2px 6px;
-  gap: 4px;
-
-  width: auto;
-  height: auto;
-
-  background: rgba(255, 113, 108, 0.1);
-  border: 1px solid rgba(255, 113, 108, 0.3);
   border-radius: 4px;
-
-  font-size: 8px;
-  font-weight: 300;
-  color: #ff716c;
+  background: rgba(255, 113, 98, 0.14);
+  border: 1px solid rgba(255, 113, 98, 0.3);
+  color: #ff7162;
 `;
 
-const ActionLogList = styled.ul`
+const StyledEncounter = styled.p`
+  color: #fafafa;
+  font-size: 12px;
+  margin: 0;
+
+  strong {
+    font-weight: 600;
+    color: #85adff;
+  }
+
+  span {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #a1a1aa;
+    line-height: 1.45;
+    margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+`;
+
+const StyledActionLogList = styled.ul`
   list-style: none;
   padding: 0;
   margin: 0;
   display: flex;
   flex-direction: row;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  overflow-y: auto;
+  overflow-x: auto;
 `;
 
-const ActionLogItem = styled.li`
+const StyledActionLogItem = styled.li`
   display: flex;
   flex-direction: column;
-  position: relative;
-  gap: 0.4rem;
-  width: 80px;
-  height: 40px;
-
-  display: flex;
-  flex-direction: column;
+  justify-content: center;
   align-items: flex-start;
-  gap: 1px;
+  min-width: 84px;
+  padding: 6px 8px;
+  gap: 2px;
   flex: none;
-
-  background: #111111;
-  border-left: 2px solid #ff716c;
-  border-radius: 8px;
-  overflow: hidden;
+  background: #0c0c0f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 2px solid #ff7162;
+  border-radius: 4px;
 `;
 
-const BackgroundImgDiv = styled.div`
-  width: 46px;
-  height: 46px;
-  background: url(${portrait});
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  position: relative;
-  left: -10px;
-  &::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: -10px;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-      to right,
-      rgba(0, 0, 0, 0) 0%,
-      rgba(17, 17, 17, 1) 110%
-    );
-  }
+const StyledActionLogType = styled.p`
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: #fafafa;
 `;
 
-const ActionLogItemTextContainer = styled.div`
-  position: absolute;
-  flex-direction: column;
+const StyledActionLogActor = styled.p`
+  font-size: 11px;
+  font-weight: 500;
+  color: #a1a1aa;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  padding-right: 8px;
-  gap: 2px;
-`;
-
-const ActionLogUnitName = styled.p`
-  font-size: 10px;
-  font-weight: 300;
-  color: white;
-`;
-
-const ActionLogUnitAction = styled.p`
-  font-size: 8px;
-  font-weight: 300;
-  color: #ff716c;
+  white-space: nowrap;
 `;

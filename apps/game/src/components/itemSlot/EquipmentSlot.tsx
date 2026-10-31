@@ -4,19 +4,21 @@ import type { Item } from "@webgame/types";
 import { useAtomValue } from "jotai";
 import { motion } from "motion/react";
 import React from "react";
-import { 
-  GiBattleAxe, 
-  GiBowieKnife, 
-  GiBroadsword, 
-  GiRegeneration, 
-  GiRifle, 
-  GiShardSword, 
-  GiTargetArrows, 
-  GiWizardStaff} from "react-icons/gi";
-import styled from "styled-components";
+import {
+  GiBattleAxe,
+  GiBowieKnife,
+  GiBroadsword,
+  GiRegeneration,
+  GiRifle,
+  GiShardSword,
+  GiTargetArrows,
+  GiWizardStaff,
+} from "react-icons/gi";
+import styled, { css } from "styled-components";
 
 import { currentTimeAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { isCombatAtom } from "@/atoms/raidAtom";
+import { cornerBracketsMixin } from "@/components/Commons";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 
 interface EquipmentSlotProps {
@@ -25,9 +27,17 @@ interface EquipmentSlotProps {
 }
 
 const getWeaponIcon = (iconKey = "WEAPON") => {
-  const icons = { DAGGER: GiBowieKnife, SWORD: GiBroadsword, RIFLE: GiRifle, AXE: GiBattleAxe, STAFF: GiWizardStaff, HEAL: GiRegeneration, TARGET: GiTargetArrows };
+  const icons = {
+    DAGGER: GiBowieKnife,
+    SWORD: GiBroadsword,
+    RIFLE: GiRifle,
+    AXE: GiBattleAxe,
+    STAFF: GiWizardStaff,
+    HEAL: GiRegeneration,
+    TARGET: GiTargetArrows,
+  };
   const Icon = icons[iconKey as keyof typeof icons] ?? GiShardSword;
-  return <Icon size={24} color="#d4e2ff" />;
+  return <Icon size={20} color="#fafafa" />;
 };
 
 const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
@@ -40,9 +50,16 @@ const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
   const rawEquipmentItem = characterData?.raw.equipment[index];
   const weapon = rawEquipmentItem?.weaponMaster;
 
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: item.id,
-    disabled: isCombat ? true : (isEmpty ? { draggable: true } : false),
+    disabled: isCombat ? true : isEmpty ? { draggable: true } : false,
   });
 
   const style = {
@@ -52,7 +69,6 @@ const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
     opacity: isDragging ? 0 : 1,
   };
 
-  // Calculate combat states
   let isCasting = false;
   let castProgress = 0;
   let isOnCooldown = false;
@@ -63,13 +79,22 @@ const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
   if (isCombat && weapon && characterData?.raw.id) {
     const actorId = characterData.raw.id;
 
-    // 1. Casting state
-    const lastCastStart = [...processedEvents].reverse().find(
-      (e) => e.type === "CAST_START" && e.actorId === actorId && e.weaponIndex === index
-    );
-    const lastCastEnd = [...processedEvents].reverse().find(
-      (e) => (e.type === "CAST_COMPLETE" || e.type === "CAST_CANCEL") && e.actorId === actorId && e.weaponIndex === index
-    );
+    const lastCastStart = [...processedEvents]
+      .reverse()
+      .find(
+        (e) =>
+          e.type === "CAST_START" &&
+          e.actorId === actorId &&
+          e.weaponIndex === index,
+      );
+    const lastCastEnd = [...processedEvents]
+      .reverse()
+      .find(
+        (e) =>
+          (e.type === "CAST_COMPLETE" || e.type === "CAST_CANCEL") &&
+          e.actorId === actorId &&
+          e.weaponIndex === index,
+      );
 
     if (lastCastStart && lastCastStart.type === "CAST_START") {
       if (!lastCastEnd || lastCastEnd.timestamp < lastCastStart.timestamp) {
@@ -82,10 +107,14 @@ const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
       }
     }
 
-    // 2. Cooldown state
-    const lastAttack = [...processedEvents].reverse().find(
-      (e) => e.type === "ATTACK" && e.actorId === actorId && e.weaponIndex === index
-    );
+    const lastAttack = [...processedEvents]
+      .reverse()
+      .find(
+        (e) =>
+          e.type === "ATTACK" &&
+          e.actorId === actorId &&
+          e.weaponIndex === index,
+      );
 
     if (lastAttack) {
       const elapsed = currentTime - lastAttack.timestamp;
@@ -93,10 +122,9 @@ const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
       if (elapsed < cooldownDuration) {
         isOnCooldown = true;
         remainingCooldown = cooldownDuration - elapsed;
-        cooldownProgress = 1 - (elapsed / cooldownDuration);
+        cooldownProgress = 1 - elapsed / cooldownDuration;
       }
 
-      // 3. Attack pulse check
       if (currentTime === lastAttack.timestamp) {
         isAttacking = true;
       }
@@ -104,99 +132,144 @@ const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
   }
 
   return (
-    <Slot
+    <StyledSlot
       ref={setNodeRef}
       style={style}
       $isEmpty={isEmpty}
       $isCasting={isCasting}
       $isAttacking={isAttacking}
-      animate={isAttacking ? { scale: [1, 1.25, 1], borderColor: ["#ffffff", "#ff716c", "rgb(33,33,33)"] } : {}}
-      transition={{ duration: 0.3, ease: "easeOut" }}
+      $bracketTone={isAttacking ? "negative" : isCasting ? "positive" : "default"}
+      animate={
+        isAttacking
+          ? {
+              scale: [1, 1.12, 1],
+              borderColor: [
+                "#fafafa",
+                "#ff7162",
+                "rgba(255, 255, 255, 0.16)",
+              ],
+            }
+          : {}
+      }
+      transition={{ duration: 0.25, ease: "easeOut" }}
       {...attributes}
       {...listeners}
     >
+      <StyledSlotIndex>0{index + 1}</StyledSlotIndex>
       {!isEmpty && (
         <>
           {getWeaponIcon(weapon?.iconKey)}
-          <WeaponNameLabel>{item.name}</WeaponNameLabel>
-          <TooltipLabel>
+          <StyledWeaponNameLabel>{item.name}</StyledWeaponNameLabel>
+          <StyledTooltipLabel>
             <strong>{item.name}</strong>
             {weapon && (
-              <TooltipStats>
-                <span>Dmg: {weapon.damage}</span>
-                <span>Cd: {weapon.cooldownTicks}s</span>
-                {weapon.castTicks > 0 && <span>Cast: {weapon.castTicks}s</span>}
-              </TooltipStats>
+              <StyledTooltipStats>
+                <span>DMG {weapon.damage}</span>
+                <span>CD {weapon.cooldownTicks}s</span>
+                {weapon.castTicks > 0 && <span>CAST {weapon.castTicks}s</span>}
+              </StyledTooltipStats>
             )}
-          </TooltipLabel>
+          </StyledTooltipLabel>
 
-          {/* Cooldown Overlay (Framer Motion Smooth Transition) */}
           {isOnCooldown && (
-            <CooldownOverlay
-              animate={{ "--cooldown-percent": cooldownProgress } as Record<string, number>}
+            <StyledCooldownOverlay
+              animate={
+                { "--cooldown-percent": cooldownProgress } as Record<
+                  string,
+                  number
+                >
+              }
               transition={{ duration: 0.95, ease: "linear" }}
-              style={{
-                "--cooldown-percent": cooldownProgress,
-              } as React.CSSProperties}
+              style={
+                {
+                  "--cooldown-percent": cooldownProgress,
+                } as React.CSSProperties
+              }
             >
-              <CooldownText>{Math.ceil(remainingCooldown)}</CooldownText>
-            </CooldownOverlay>
+              <StyledCooldownText>
+                {Math.ceil(remainingCooldown)}
+              </StyledCooldownText>
+            </StyledCooldownOverlay>
           )}
 
-          {/* Cast Bar (Framer Motion Smooth Transition) */}
           {isCasting && (
-            <CastBar>
-              <CastProgress
+            <StyledCastBar>
+              <StyledCastProgress
                 animate={{ width: `${castProgress * 100}%` }}
                 transition={{ duration: 0.95, ease: "linear" }}
                 style={{ width: `${castProgress * 100}%` }}
               />
-            </CastBar>
+            </StyledCastBar>
           )}
         </>
       )}
-    </Slot>
+    </StyledSlot>
   );
 };
 
 export default EquipmentSlot;
 
-const Slot = styled(motion.div)<{ $isCasting?: boolean; $isEmpty?: boolean; $isAttacking?: boolean }>`
+const StyledSlot = styled(motion.div)<{
+  $isCasting?: boolean;
+  $isEmpty?: boolean;
+  $isAttacking?: boolean;
+  $bracketTone?: "default" | "positive" | "negative";
+}>`
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
-  width: 50px;
+  width: 52px;
   aspect-ratio: 1/1;
-  border: 1px solid ${(props) => (props.$isCasting ? "#00f0ff" : "rgb(33, 33, 33)")};
-  background-color: ${(props) => (props.$isEmpty ? "rgba(15, 15, 15, 0.4)" : "rgb(22, 22, 22)")};
-  border-radius: 16px;
-  color: #ecf0f1;
+  border: 1px solid
+    ${(props) =>
+      props.$isCasting
+        ? "rgba(133, 173, 255, 0.55)"
+        : props.$isEmpty
+          ? "rgba(255, 255, 255, 0.07)"
+          : "rgba(255, 255, 255, 0.16)"};
+  background-color: ${(props) =>
+    props.$isEmpty ? "rgba(12, 12, 15, 0.78)" : "rgba(20, 20, 24, 0.92)"};
+  backdrop-filter: blur(8px);
+  border-radius: 6px;
+  color: #fafafa;
   touch-action: none;
   overflow: visible;
-  box-shadow: ${(props) =>
-    props.$isCasting
-      ? "0 0 12px rgba(0, 240, 255, 0.5), inset 0 0 6px rgba(0, 240, 255, 0.3)"
-      : "none"};
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
   cursor: grab;
+
+  ${(props) => (!props.$isEmpty ? cornerBracketsMixin : css``)}
 
   &:active {
     cursor: grabbing;
   }
 
   &:hover {
-    border-color: ${(props) => (props.$isEmpty ? "rgb(33, 33, 33)" : "#ff716c")};
-    box-shadow: ${(props) => (props.$isEmpty ? "none" : "0 0 8px rgba(255, 113, 108, 0.3)")};
+    border-color: ${(props) =>
+      props.$isEmpty
+        ? "rgba(255, 255, 255, 0.12)"
+        : "rgba(133, 173, 255, 0.45)"};
   }
 `;
 
-const WeaponNameLabel = styled.span`
+const StyledSlotIndex = styled.span`
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: #52525b;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+`;
+
+const StyledWeaponNameLabel = styled.span`
   position: absolute;
   bottom: 3px;
-  font-size: 7px;
-  color: #85adff;
+  font-size: 10px;
+  font-weight: 500;
+  color: #a1a1aa;
   max-width: 90%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -204,16 +277,13 @@ const WeaponNameLabel = styled.span`
   pointer-events: none;
 `;
 
-const CooldownOverlay = styled(motion.div)`
+const StyledCooldownOverlay = styled(motion.div)`
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  border-radius: 15px;
+  inset: 0;
+  border-radius: 5px;
   background: conic-gradient(
-    rgba(0, 0, 0, 0.75) calc(var(--cooldown-percent, 0) * 360deg), 
-    rgba(0, 0, 0, 0.3) 0deg
+    rgba(9, 9, 11, 0.84) calc(var(--cooldown-percent, 0) * 360deg),
+    rgba(9, 9, 11, 0.35) 0deg
   );
   pointer-events: none;
   display: flex;
@@ -222,59 +292,61 @@ const CooldownOverlay = styled(motion.div)`
   z-index: 2;
 `;
 
-const CooldownText = styled.span`
-  color: #ff716c;
-  font-size: 14px;
-  font-weight: 800;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+const StyledCooldownText = styled.span`
+  font-family: var(--font-mono);
+  color: #ff7162;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 `;
 
-const CastBar = styled.div`
+const StyledCastBar = styled.div`
   position: absolute;
-  bottom: 4px;
-  left: 6px;
-  right: 6px;
+  bottom: 3px;
+  left: 5px;
+  right: 5px;
   height: 3px;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 1.5px;
+  background: #27272a;
+  border-radius: 1px;
   overflow: hidden;
   z-index: 3;
 `;
 
-const CastProgress = styled(motion.div)`
+const StyledCastProgress = styled(motion.div)`
   height: 100%;
-  background: linear-gradient(to right, #00f0ff, #0077ff);
-  box-shadow: 0 0 4px #00f0ff;
+  background: #85adff;
 `;
 
-const TooltipLabel = styled.div`
+const StyledTooltipLabel = styled.div`
   display: none;
   position: absolute;
-  bottom: 105%;
+  bottom: 108%;
   left: 50%;
   transform: translateX(-50%);
-  background-color: rgba(10, 10, 10, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
+  background-color: #101013;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
   padding: 6px 10px;
-  font-size: 10px;
+  font-size: 11px;
   white-space: nowrap;
   pointer-events: none;
   z-index: 100;
-  color: white;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+  color: #fafafa;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.45);
 
-  ${Slot}:hover & {
+  ${StyledSlot}:hover & {
     display: flex;
     flex-direction: column;
     gap: 2px;
   }
 `;
 
-const TooltipStats = styled.div`
+const StyledTooltipStats = styled.div`
   display: flex;
   gap: 8px;
-  color: #adaaaa;
-  font-size: 8px;
+  font-family: var(--font-mono);
+  color: #a1a1aa;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
   margin-top: 2px;
 `;

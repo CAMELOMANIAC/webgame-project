@@ -1,16 +1,19 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { Item } from "@webgame/types";
 import { useAtomValue } from "jotai";
-import { FiPlus } from "react-icons/fi";
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 
 import { isCombatAtom } from "@/atoms/raidAtom";
+import { cornerBracketsMixin } from "@/components/Commons";
 
 interface BackpackProps {
   item: Item;
 }
+
 const BackpackSlot = ({ item }: BackpackProps) => {
   const isCombat = useAtomValue(isCombatAtom);
+  const isEmpty = item?.id.toString().includes("empty");
+
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: item?.id,
     disabled: isCombat,
@@ -23,7 +26,7 @@ const BackpackSlot = ({ item }: BackpackProps) => {
     isDragging,
   } = useDraggable({
     id: item?.id,
-    disabled: isCombat || item?.id.toString().includes("empty"),
+    disabled: isCombat || isEmpty,
   });
 
   const combinedRef = (node: HTMLElement | null) => {
@@ -31,24 +34,31 @@ const BackpackSlot = ({ item }: BackpackProps) => {
     setDragRef(node);
   };
 
-  const isDraggable = !item?.id.toString().includes("empty") && !isCombat;
+  const isDraggable = !isEmpty && !isCombat;
 
   return (
-    <Slot
+    <StyledSlot
       ref={combinedRef}
       draggable={isDraggable}
       $isOver={isOver}
       $isDragging={isDragging}
       $isDraggable={isDraggable}
+      $isEmpty={isEmpty}
+      $bracketTone={isOver ? "positive" : "default"}
       {...attributes}
       {...listeners}
     >
-      {item.name}
-      {(item.quantity ?? 0) > 1 && (
-        <QuantityBadge>×{item.quantity}</QuantityBadge>
+      {isEmpty ? (
+        <StyledEmptyLabel>EMPTY</StyledEmptyLabel>
+      ) : (
+        <>
+          <StyledItemName>{item.name}</StyledItemName>
+          {(item.quantity ?? 0) > 1 && (
+            <StyledQuantityBadge>×{item.quantity}</StyledQuantityBadge>
+          )}
+        </>
       )}
-      <PlusIcon />
-    </Slot>
+    </StyledSlot>
   );
 };
 
@@ -58,42 +68,70 @@ type SlotProps = {
   $isOver: boolean;
   $isDragging: boolean;
   $isDraggable: boolean;
+  $isEmpty: boolean;
+  $bracketTone?: "default" | "positive" | "negative";
 };
 
-const Slot = styled.div<SlotProps>`
+const StyledSlot = styled.div<SlotProps>`
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
   position: relative;
-  width: 76.5px;
+  width: 100%;
   aspect-ratio: 1/1;
-  border: 1px solid rgb(33, 33, 33);
-  border-radius: 16px;
-  color: #ecf0f1;
-  touch-action: none;
+  padding: 8px;
+  border: 1px solid
+    ${(props) =>
+      props.$isOver
+        ? "rgba(133, 173, 255, 0.5)"
+        : props.$isEmpty
+          ? "rgba(255, 255, 255, 0.06)"
+          : "rgba(255, 255, 255, 0.16)"};
+  border-radius: 6px;
+  color: #fafafa;
   cursor: ${(props) =>
-    props.$isDraggable ? (props.$isDragging ? "grabbing" : "grab") : ""};
+    props.$isDraggable ? (props.$isDragging ? "grabbing" : "grab") : "default"};
   touch-action: ${(props) => (props.$isDraggable ? "none" : "pan-y")};
-
   background-color: ${(props) =>
-    props.$isOver ? "rgba(255, 255, 255, 0.1)" : "rgba(19, 19, 19, 0.4)"};
-  opacity: ${(props) => (props.$isDragging ? 0.2 : 1)};
+    props.$isOver
+      ? "rgba(133, 173, 255, 0.12)"
+      : props.$isEmpty
+        ? "#0c0c0f"
+        : "#141418"};
+  opacity: ${(props) => (props.$isDragging ? 0.25 : 1)};
   transition:
-    background-color 0.2s ease-in-out,
-    opacity 0.2s ease-in-out;
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
+
+  ${(props) => (!props.$isEmpty ? cornerBracketsMixin : css``)}
 `;
 
-const PlusIcon = styled(FiPlus)`
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+const StyledItemName = styled.span`
   font-size: 12px;
-  color: rgb(33, 33, 33);
+  font-weight: 600;
+  color: #fafafa;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 `;
 
-const QuantityBadge = styled.span`
-  position: absolute;
-  right: 8px;
-  bottom: 6px;
+const StyledEmptyLabel = styled.span`
+  margin: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #52525b;
+`;
+
+const StyledQuantityBadge = styled.span`
+  align-self: flex-end;
+  font-family: var(--font-mono);
   font-size: 11px;
-  color: #b8ffb9;
+  font-weight: 600;
+  color: #85adff;
+  font-variant-numeric: tabular-nums;
 `;

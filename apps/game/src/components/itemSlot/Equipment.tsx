@@ -9,26 +9,26 @@ const Equipment = memo(() => {
   const { data: characterData, isLoading } = useGetCharacter();
 
   if (isLoading) {
-    return <Container></Container>;
+    return <StyledContainer />;
   }
 
   return (
-    <Container>
+    <StyledContainer>
       <SlotManager items={characterData?.equipment || []} sortable>
         {(item, index) => <EquipmentSlot item={item} index={index} />}
       </SlotManager>
-    </Container>
+    </StyledContainer>
   );
 });
 
-const Container = styled.div`
+const StyledContainer = styled.div`
   width: 100%;
   display: flex;
   flex-wrap: nowrap;
   flex-direction: row;
   justify-content: space-between;
-  padding: 16px 24px 33px;
-  /* background-color: rgba(14, 14, 14, 0.6); */
+  gap: 6px;
+  padding: 10px 16px 16px;
 `;
 
 export default Equipment;
