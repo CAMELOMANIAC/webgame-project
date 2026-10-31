@@ -1,11 +1,12 @@
 import type { UseMutationResult } from "@tanstack/react-query";
 import type { BattleLog } from "@webgame/types";
 import { useEffect, useRef } from "react";
-import styled from "styled-components";
 
-import { BattleCanvas } from "@/components/BattleCanvas";
-import MapGraphCanvas from "@/components/MapGraphCanvas";
+import { BattleCanvas } from "@/components/combat/BattleCanvas";
+import MapGraphCanvas from "@/components/field/MapGraphCanvas";
 import type { NavigateRaidResponse } from "@/utils/hooks/useNavigateRaid";
+
+import * as styles from "./FieldBackground.css";
 
 interface FieldBackgroundProps {
   isCombat: boolean;
@@ -75,15 +76,13 @@ export function FieldBackground({
   }, []);
 
   return (
-    <Container ref={containerRef}>
-      {/* 맵 그래프 캔버스 (전투 시 캐시 동결 처리로 최적화됨) */}
+    <div className={styles.container} ref={containerRef}>
       <MapGraphCanvas
         isCombat={isCombat}
         navigateRaid={navigateRaid}
         triggerCombat={triggerCombat}
       />
 
-      {/* 전투 시뮬레이터 캔버스 (전투 중일 때만 맵 위에 렌더링) */}
       {isCombat && (
         <BattleCanvas
           isCombat={isCombat}
@@ -92,15 +91,6 @@ export function FieldBackground({
           characterId={characterId}
         />
       )}
-    </Container>
+    </div>
   );
 }
-
-const Container = styled.div`
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  will-change: transform;
-`;

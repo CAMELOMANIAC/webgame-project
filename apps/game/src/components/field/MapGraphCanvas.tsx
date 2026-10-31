@@ -5,17 +5,11 @@ import { getDefaultStore, useAtom } from "jotai";
 import Konva from "konva";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, Group, Image, Layer, Line, Shape, Stage, Text } from "react-konva";
-import styled from "styled-components";
 import useImage from "use-image";
 
+import compass from "@/assets/compass.svg";
 import { selectedUserIdAtom } from "@/atoms/authAtom";
 import { pendingNavigationAtom, pendingNavigationKey } from "@/atoms/pendingNavigationAtom";
-import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
-import type { NavigateRaidParams, NavigateRaidResponse } from "@/utils/hooks/useNavigateRaid";
-import { useRaidRules } from "@/utils/hooks/useRaidRules";
-
-import mapData from "../../../../packages/types/src/assets/map_graph.json";
-import compass from "../assets/compass.svg";
 import {
   currentNodeIdAtom,
   followPlayerAtom,
@@ -26,9 +20,15 @@ import {
   requestedNodeIdAtom,
   shortestPathAtom,
   targetNodeIdAtom,
-} from "../atoms/raidAtom";
-import { findShortestPath } from "../utils/pathfinding";
-import { createRTreeIndex, searchRTreeIndex } from "../utils/rtreeCulling";
+} from "@/atoms/raidAtom";
+import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
+import type { NavigateRaidParams, NavigateRaidResponse } from "@/utils/hooks/useNavigateRaid";
+import { useRaidRules } from "@/utils/hooks/useRaidRules";
+import { findShortestPath } from "@/utils/pathfinding";
+import { createRTreeIndex, searchRTreeIndex } from "@/utils/rtreeCulling";
+
+import mapData from "../../../../../packages/types/src/assets/map_graph.json";
+import * as styles from "./MapGraphCanvas.css";
 
 interface Node {
   x: number;
@@ -1207,30 +1207,38 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   };
 
   return (
-    <CanvasContainer ref={containerRef}>
+    <div className={styles.canvasContainer} ref={containerRef}>
       {/* 하이테크 스타일 정보 패널 오버레이 (개발 모드일 때만 렌더링) */}
       {!isCombat && showDevPanel && (
-        <InfoPanel onMouseDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
-          <ExpandableHeader
+        <div
+          className={styles.infoPanel}
+          onMouseDown={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+        >
+          <div
+            className={styles.expandableHeader}
             onClick={() => setIsStatusExpanded(!isStatusExpanded)}
             style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}
           >
-            <SectionLabel style={{ color: "#4d7cff", letterSpacing: "1.5px" }}>NETWORK MATRIX STATUS</SectionLabel>
-            <ExpandIcon $expanded={isStatusExpanded}>▼</ExpandIcon>
-          </ExpandableHeader>
+            <span className={styles.sectionLabel} style={{ color: "#4d7cff", letterSpacing: "1.5px" }}>
+              NETWORK MATRIX STATUS
+            </span>
+            <span className={styles.expandIcon({ expanded: isStatusExpanded })}>▼</span>
+          </div>
 
-          <ExpandableContent $expanded={isStatusExpanded}>
-            <MetricRow style={{ marginTop: "12px" }}>
-              <MetricLabel>Total Nodes / Edges</MetricLabel>
-              <MetricValue>
+          <div className={styles.expandableContent({ expanded: isStatusExpanded })}>
+            <div className={styles.metricRow} style={{ marginTop: "12px" }}>
+              <span className={styles.metricLabel}>Total Nodes / Edges</span>
+              <span className={styles.metricValue}>
                 {nodes.length} / {edges.length}
-              </MetricValue>
-            </MetricRow>
-            <MetricRow>
-              <MetricLabel>Total Buildings</MetricLabel>
-              <MetricValue>{buildings.length}</MetricValue>
-            </MetricRow>
-            <MetricRow
+              </span>
+            </div>
+            <div className={styles.metricRow}>
+              <span className={styles.metricLabel}>Total Buildings</span>
+              <span className={styles.metricValue}>{buildings.length}</span>
+            </div>
+            <div
+              className={styles.metricRow}
               style={{
                 background: "rgba(255, 71, 87, 0.15)",
                 padding: "4px 6px",
@@ -1238,119 +1246,142 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
                 margin: "6px 0",
               }}
             >
-              <MetricLabel style={{ color: "#ff4757", fontWeight: 700 }}>Culling CPU Time</MetricLabel>
-              <MetricValue style={{ color: "#ff4757", fontWeight: 800 }}>{cullingTimeMs.toFixed(3)} ms</MetricValue>
-            </MetricRow>
-            <MetricRow>
-              <MetricLabel>Rendered Nodes (Culled)</MetricLabel>
-              <MetricValue>
+              <span className={styles.metricLabel} style={{ color: "#ff4757", fontWeight: 700 }}>
+                Culling CPU Time
+              </span>
+              <span className={styles.metricValue} style={{ color: "#ff4757", fontWeight: 800 }}>
+                {cullingTimeMs.toFixed(3)} ms
+              </span>
+            </div>
+            <div className={styles.metricRow}>
+              <span className={styles.metricLabel}>Rendered Nodes (Culled)</span>
+              <span className={styles.metricValue}>
                 {showNodes ? visibleNodeIndices.size : 0} (
                 {showNodes ? Math.round((visibleNodeIndices.size / nodes.length) * 100) : 0}%)
-              </MetricValue>
-            </MetricRow>
-            <MetricRow>
-              <MetricLabel>Rendered Buildings (Culled)</MetricLabel>
-              <MetricValue>
+              </span>
+            </div>
+            <div className={styles.metricRow}>
+              <span className={styles.metricLabel}>Rendered Buildings (Culled)</span>
+              <span className={styles.metricValue}>
                 {showBuildings ? visibleBuildings.length : 0} (
                 {showBuildings ? Math.round((visibleBuildings.length / buildings.length) * 100) : 0}%)
-              </MetricValue>
-            </MetricRow>
-            <MetricRow>
-              <MetricLabel>Zoom Factor</MetricLabel>
-              <MetricValue>{Math.round(stageTransform.scale * 100)}%</MetricValue>
-            </MetricRow>
-            <MetricRow>
-              <MetricLabel>Viewport Area</MetricLabel>
-              <MetricValue>
+              </span>
+            </div>
+            <div className={styles.metricRow}>
+              <span className={styles.metricLabel}>Zoom Factor</span>
+              <span className={styles.metricValue}>{Math.round(stageTransform.scale * 100)}%</span>
+            </div>
+            <div className={styles.metricRow}>
+              <span className={styles.metricLabel}>Viewport Area</span>
+              <span className={styles.metricValue}>
                 {dimensions.width}x{dimensions.height}
-              </MetricValue>
-            </MetricRow>
-          </ExpandableContent>
+              </span>
+            </div>
+          </div>
 
           {/* 접이식(Expandable) 렌더링 옵션 아코디언 */}
-          <ExpandableHeader onClick={() => setIsOptionsExpanded(!isOptionsExpanded)}>
-            <SectionLabel>Rendering Config</SectionLabel>
-            <ExpandIcon $expanded={isOptionsExpanded}>▼</ExpandIcon>
-          </ExpandableHeader>
+          <div className={styles.expandableHeader} onClick={() => setIsOptionsExpanded(!isOptionsExpanded)}>
+            <span className={styles.sectionLabel}>Rendering Config</span>
+            <span className={styles.expandIcon({ expanded: isOptionsExpanded })}>▼</span>
+          </div>
 
-          <ExpandableContent $expanded={isOptionsExpanded}>
-            <MetricRow>
-              <MetricLabel>Display Nodes</MetricLabel>
-              <ToggleButton
-                $active={showNodes}
+          <div className={styles.expandableContent({ expanded: isOptionsExpanded })}>
+            <div className={styles.metricRow}>
+              <span className={styles.metricLabel}>Display Nodes</span>
+              <button
+                type="button"
+                className={styles.toggleButton({ active: showNodes })}
                 onClick={() => {
                   setShowNodes(!showNodes);
                   resetHoverHud();
                 }}
               >
                 {showNodes ? "ON" : "OFF"}
-              </ToggleButton>
-            </MetricRow>
-            <MetricRow>
-              <MetricLabel>Display Edges</MetricLabel>
-              <ToggleButton $active={showEdges} onClick={() => setShowEdges(!showEdges)}>
+              </button>
+            </div>
+            <div className={styles.metricRow}>
+              <span className={styles.metricLabel}>Display Edges</span>
+              <button
+                type="button"
+                className={styles.toggleButton({ active: showEdges })}
+                onClick={() => setShowEdges(!showEdges)}
+              >
                 {showEdges ? "ON" : "OFF"}
-              </ToggleButton>
-            </MetricRow>
-            <MetricRow>
-              <MetricLabel>Display Buildings</MetricLabel>
-              <ToggleButton
-                $active={showBuildings}
+              </button>
+            </div>
+            <div className={styles.metricRow}>
+              <span className={styles.metricLabel}>Display Buildings</span>
+              <button
+                type="button"
+                className={styles.toggleButton({ active: showBuildings })}
                 onClick={() => {
                   setShowBuildings(!showBuildings);
                   resetHoverHud();
                 }}
               >
                 {showBuildings ? "ON" : "OFF"}
-              </ToggleButton>
-            </MetricRow>
-            <MetricRow>
-              <MetricLabel>Track Player</MetricLabel>
-              <ToggleButton $active={followPlayer} onClick={() => setFollowPlayer(!followPlayer)}>
+              </button>
+            </div>
+            <div className={styles.metricRow}>
+              <span className={styles.metricLabel}>Track Player</span>
+              <button
+                type="button"
+                className={styles.toggleButton({ active: followPlayer })}
+                onClick={() => setFollowPlayer(!followPlayer)}
+              >
                 {followPlayer ? "ON" : "OFF"}
-              </ToggleButton>
-            </MetricRow>
-          </ExpandableContent>
+              </button>
+            </div>
+          </div>
 
           {/* 호버 정보 상세 표시창 (React 리렌더링 차단을 위해 DOM 명령형 주입) */}
-          <HoverDetail id="hud-hover-detail" style={{ display: "none" }} />
+          <div className={styles.hoverDetail} id="hud-hover-detail" style={{ display: "none" }} />
 
-          <ControlHint>Drag to Pan / Scroll to Zoom</ControlHint>
-        </InfoPanel>
+          <div className={styles.controlHint}>Drag to Pan / Scroll to Zoom</div>
+        </div>
       )}
 
       {/* 하단 플로팅 네비게이션 HUD (개발 모드일 때만 렌더링) */}
       {!isCombat && showDevPanel && targetNodeId !== null && (
-        <NavigationPanel onMouseDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
-          <NavInfoArea>
-            <SectionLabel style={{ color: "#2bcbba", display: "block", marginBottom: "4px" }}>
+        <div
+          className={styles.navigationPanel}
+          onMouseDown={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+        >
+          <div className={styles.navInfoArea}>
+            <span className={styles.sectionLabel} style={{ color: "#2bcbba", display: "block", marginBottom: "4px" }}>
               Navigation Matrix
-            </SectionLabel>
-            <MetricRow style={{ margin: 0, display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            </span>
+            <div className={styles.metricRow} style={{ margin: 0, display: "flex", gap: "12px", flexWrap: "wrap" }}>
               <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                <MetricLabel>Current:</MetricLabel>
-                <MetricValue>Node #{currentNodeId}</MetricValue>
+                <span className={styles.metricLabel}>Current:</span>
+                <span className={styles.metricValue}>Node #{currentNodeId}</span>
               </div>
               <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                <MetricLabel>Target:</MetricLabel>
-                <MetricValue>Node #{targetNodeId}</MetricValue>
+                <span className={styles.metricLabel}>Target:</span>
+                <span className={styles.metricValue}>Node #{targetNodeId}</span>
               </div>
               <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                <MetricLabel>Cost:</MetricLabel>
-                <MetricValue>{shortestPath.length > 0 ? `${shortestPath.length - 1} hops` : "UNREACHABLE"}</MetricValue>
+                <span className={styles.metricLabel}>Cost:</span>
+                <span className={styles.metricValue}>
+                  {shortestPath.length > 0 ? `${shortestPath.length - 1} hops` : "UNREACHABLE"}
+                </span>
               </div>
-            </MetricRow>
-          </NavInfoArea>
+            </div>
+          </div>
 
-          <NavButtonArea>
-            <StyledNavButton
-              $primary
+          <div className={styles.navButtonArea}>
+            <button
+              type="button"
+              className={styles.navButton({ primary: true })}
               disabled={shortestPath.length <= 1 || isNavigating}
               onClick={() => startNavigation(shortestPath, targetBuilding)}
             >
               {isNavigating ? "IN TRANSIT..." : "START NAVIGATION"}
-            </StyledNavButton>
-            <StyledNavButton
+            </button>
+            <button
+              type="button"
+              className={styles.navButton({ primary: false })}
               disabled={isNavigating}
               onClick={() => {
                 setTargetNodeId(null);
@@ -1358,9 +1389,9 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
               }}
             >
               CANCEL
-            </StyledNavButton>
-          </NavButtonArea>
-        </NavigationPanel>
+            </button>
+          </div>
+        </div>
       )}
 
       {dimensions.width > 0 && dimensions.height > 0 && (
@@ -1676,192 +1707,9 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
           </Layer>
         </Stage>
       )}
-    </CanvasContainer>
+    </div>
   );
 };
-
-const CanvasContainer = styled.div`
-  width: 100%;
-  height: 100%;
-  position: relative;
-  background-color: #09090b;
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-  background-size: 24px 24px;
-  overflow: hidden;
-`;
-
-const InfoPanel = styled.div`
-  position: absolute;
-  top: 24px;
-  left: 24px;
-  z-index: 10;
-  width: 250px;
-  padding: 14px;
-  background: rgba(16, 16, 19, 0.9);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
-  font-family: var(--font-sans);
-  color: #fafafa;
-  pointer-events: auto;
-`;
-
-const MetricRow = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-  font-size: 11px;
-`;
-
-const MetricLabel = styled.span`
-  color: #71717a;
-`;
-
-const MetricValue = styled.span`
-  font-weight: 600;
-  color: #fafafa;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-`;
-
-const ExpandableHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 10px;
-  cursor: pointer;
-  user-select: none;
-`;
-
-const SectionLabel = styled.span`
-  color: #fafafa;
-  font-weight: 600;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-`;
-
-const ExpandIcon = styled.span<{ $expanded: boolean }>`
-  font-size: 10px;
-  color: #85adff;
-  transition: transform 0.2s ease;
-  transform: rotate(${(props) => (props.$expanded ? "180deg" : "0deg")});
-`;
-
-const ExpandableContent = styled.div<{ $expanded: boolean }>`
-  max-height: ${(props) => (props.$expanded ? "200px" : "0px")};
-  overflow: hidden;
-  transition: max-height 0.25s ease-out;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: ${(props) => (props.$expanded ? "10px" : "0px")};
-`;
-
-const ToggleButton = styled.button<{ $active: boolean }>`
-  background: ${(props) => (props.$active ? "rgba(133, 173, 255, 0.14)" : "rgba(255, 255, 255, 0.04)")};
-  border: 1px solid ${(props) => (props.$active ? "rgba(133, 173, 255, 0.35)" : "rgba(255, 255, 255, 0.1)")};
-  color: ${(props) => (props.$active ? "#85adff" : "#a1a1aa")};
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-family: var(--font-mono);
-
-  &:hover {
-    background: ${(props) => (props.$active ? "rgba(133, 173, 255, 0.2)" : "rgba(255, 255, 255, 0.08)")};
-  }
-`;
-
-const HoverDetail = styled.div`
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-`;
-
-const ControlHint = styled.div`
-  margin-top: 10px;
-  font-size: 11px;
-  color: #85adff;
-  text-align: center;
-`;
-
-const NavigationPanel = styled.div`
-  position: absolute;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
-  width: calc(100% - 32px);
-  max-width: 500px;
-  padding: 12px 16px;
-  background: rgba(16, 16, 19, 0.92);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 6px;
-  font-family: var(--font-sans);
-  color: #fafafa;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  pointer-events: auto;
-
-  @media (min-width: 600px) {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-  }
-`;
-
-const NavInfoArea = styled.div`
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-`;
-
-const NavButtonArea = styled.div`
-  display: flex;
-  gap: 8px;
-  width: 100%;
-
-  @media (min-width: 600px) {
-    width: auto;
-    min-width: 220px;
-  }
-`;
-
-const StyledNavButton = styled.button<{ $primary?: boolean }>`
-  flex: 1;
-  background: ${(props) => (props.$primary ? "#fafafa" : "rgba(255, 113, 98, 0.14)")};
-  border: 1px solid ${(props) => (props.$primary ? "transparent" : "rgba(255, 113, 98, 0.35)")};
-  color: ${(props) => (props.$primary ? "#09090b" : "#ff7162")};
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  font-variant-numeric: tabular-nums;
-
-  &:hover:not(:disabled) {
-    background: ${(props) => (props.$primary ? "#e4e4e7" : "rgba(255, 113, 98, 0.22)")};
-  }
-
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-`;
 
 export default memo(MapGraphCanvas, (prevProps, nextProps) => {
   return prevProps.isCombat === nextProps.isCombat;

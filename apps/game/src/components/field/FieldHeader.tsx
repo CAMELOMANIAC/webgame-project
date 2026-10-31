@@ -1,9 +1,10 @@
-import { AnimatePresence } from "motion/react";
-import styled from "styled-components";
+import { AnimatePresence, motion } from "motion/react";
 
-import CombatLog from "@/components/CombatLog";
-import { InheritMotionDiv } from "@/components/Commons";
-import FieldNavTargetSection from "@/components/FieldNavTargetSection";
+import CombatLog from "@/components/combat/CombatLog";
+import FieldNavTargetSection from "@/components/field/FieldNavTargetSection";
+import { inheritMotionDiv } from "@/styles/theme.css";
+
+import * as styles from "./FieldHeader.css";
 
 interface FieldHeaderProps {
   isCombat: boolean;
@@ -13,7 +14,8 @@ export function FieldHeader({ isCombat }: FieldHeaderProps) {
   return (
     <AnimatePresence initial={false}>
       {isCombat ? (
-        <InheritMotionDiv
+        <motion.div
+          className={inheritMotionDiv}
           initial={{ x: "100%", opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: "-100%", opacity: 0 }}
@@ -21,12 +23,13 @@ export function FieldHeader({ isCombat }: FieldHeaderProps) {
           style={{ overflow: "hidden", position: "absolute" }}
           key="combatInfo"
         >
-          <StyledTopLayout>
+          <div className={styles.topLayout}>
             <CombatLog />
-          </StyledTopLayout>
-        </InheritMotionDiv>
+          </div>
+        </motion.div>
       ) : (
-        <InheritMotionDiv
+        <motion.div
+          className={inheritMotionDiv}
           initial={{ x: "-100%", opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: "100%", opacity: 0 }}
@@ -34,21 +37,11 @@ export function FieldHeader({ isCombat }: FieldHeaderProps) {
           style={{ overflow: "hidden", position: "absolute" }}
           key="fieldNavTargetSection"
         >
-          <StyledTopLayout>
+          <div className={styles.topLayout}>
             <FieldNavTargetSection />
-          </StyledTopLayout>
-        </InheritMotionDiv>
+          </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );
 }
-
-const StyledTopLayout = styled.div`
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  flex: 1;
-  width: 100%;
-  gap: 12px;
-  padding: 16px 16px 0;
-`;
