@@ -1,23 +1,31 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useAtom } from "jotai";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useAtom, useAtomValue } from "jotai";
 import { motion } from "motion/react";
 import { GiBackpack, GiChest } from "react-icons/gi";
 import styled from "styled-components";
 
 import { battleLogAtom } from "@/atoms/globalAtom";
 import {
+  pendingNavigationAtom,
+  pendingNavigationKey,
+} from "@/atoms/pendingNavigationAtom";
+import {
   currentNodeIdAtom,
   isCombatAtom,
   isNavigatingAtom,
   playerCoordsAtom,
+  raidNoticeAtom,
   shortestPathAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
 import { CharacterCard } from "@/components/CharacterCard";
+import CharacterCollection from "@/components/CharacterCollection";
 import { Page } from "@/components/Commons";
+import { useGearActions } from "@/utils/hooks/useGearActions";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useGetStash } from "@/utils/hooks/useGetStash";
 import { useMoveStashItem } from "@/utils/hooks/useMoveStashItem";
+import { useRaidRules } from "@/utils/hooks/useRaidRules";
 import { useRaidSession } from "@/utils/hooks/useRaidSession";
 
 export const Route = createFileRoute("/field/user/")({
@@ -26,9 +34,21 @@ export const Route = createFileRoute("/field/user/")({
 
 function RouteComponent() {
   const navigate = useNavigate();
-  const { data: characterData, isLoading: charLoading } = useGetCharacter();
-  const { data: stashData, isLoading: stashLoading } = useGetStash();
-  
+  const {
+    data: characterData,
+    isLoading: charLoading,
+    error: characterError,
+    refetch: refetchCharacter,
+  } = useGetCharacter();
+  const {
+    data: stashData,
+    isLoading: stashLoading,
+    error: stashError,
+    refetch: refetchStash,
+  } = useGetStash();
+  const { equip, supplies } = useGearActions();
+  const { data: rules } = useRaidRules();
+
   const moveItemMutation = useMoveStashItem();
   const { startRaid } = useRaidSession();
 
@@ -39,6 +59,8 @@ function RouteComponent() {
   const [, setShortestPath] = useAtom(shortestPathAtom);
   const [, setPlayerCoords] = useAtom(playerCoordsAtom);
   const [, setBattleLog] = useAtom(battleLogAtom);
+  const [notice, setNotice] = useAtom(raidNoticeAtom);
+  const pendingResults = useAtomValue(pendingNavigationAtom);
 
   if (charLoading || stashLoading) {
     return (
@@ -54,17 +76,64 @@ function RouteComponent() {
   const character = characterData?.raw;
   const stash = stashData || [];
   const backpack = character?.inventory || [];
+  const busy =
+    startRaid.isPending ||
+    moveItemMutation.isPending ||
+    equip.isPending ||
+    supplies.isPending;
+  const hasPendingResult =
+    !!pendingResults[pendingNavigationKey(character?.userId, character?.id)];
+  const gearLocked = busy || !!character?.isRaiding || hasPendingResult;
+  const error =
+    characterError ??
+    stashError ??
+    startRaid.error ??
+    moveItemMutation.error ??
+    equip.error ??
+    supplies.error;
+  if (characterError || stashError)
+    return (
+      <Page>
+        <LobbyContainer>
+          <p role="alert">생존자 정보를 불러오지 못했습니다.</p>
+          <button
+            type="button"
+            onClick={() => {
+              void refetchCharacter();
+              void refetchStash();
+            }}
+          >
+            다시 불러오기
+          </button>
+        </LobbyContainer>
+      </Page>
+    );
+
+  const handleEquip = (weaponMasterId: string) => {
+    if (!character || gearLocked) return;
+    const slot = character.equipment.find((item) => !item.weaponMaster);
+    if (!slot) {
+      alert("출격 장비 슬롯이 가득 찼습니다.");
+      return;
+    }
+    equip.mutate({
+      characterId: character.id,
+      weaponMasterId,
+      slotIndex: slot.slotIndex,
+    });
+  };
 
   // 탐사 진입/시작 처리
   const handleRaidAction = () => {
     if (!character) return;
-    if (character.isRaiding) {
+    if (character.isRaiding || hasPendingResult) {
       // 이미 탐사 중이면 바로 필드 화면으로 이동
       navigate({ to: "/field" });
     } else {
       // 탐사 새로 시작
       startRaid.mutate(character.id, {
         onSuccess: () => {
+          setNotice(null);
           // 탐사 상태 초기화
           setCurrentNodeId(0);
           setIsCombat(false);
@@ -82,7 +151,7 @@ function RouteComponent() {
   // 창고 -> 가방 이동
   const handleMoveToBackpack = (weaponMasterId: string) => {
     if (!character) return;
-    
+
     // 가방에서 비어있는 첫 슬롯 찾기
     const emptySlot = backpack.find((slot) => !slot.weaponMaster);
     if (!emptySlot) {
@@ -117,18 +186,81 @@ function RouteComponent() {
         <HeaderArea>
           <SubTitle>OPERATIONS CENTER</SubTitle>
           <MainTitle>STAGING LOBBY</MainTitle>
+          <p>한림 복귀 실험실 · 정비와 신체 검사를 마치고 서포시로 출격합니다.</p>
+          <Link to="/field/quest">한림그룹 임무 통신 확인</Link>
         </HeaderArea>
+        {error && <p role="alert">{error.message}</p>}
+        {notice && <p role="status">{notice}</p>}
+        <CharacterCollection disabled={gearLocked} />
+        {character?.isRaiding && (
+          <p>
+            탐사 중에는 창고와 장비를 변경할 수 없습니다. 탐사를 마치고
+            복귀하세요.
+          </p>
+        )}
+        {character &&
+          !gearLocked &&
+          rules?.basicSuppliesEnabled &&
+          stash.length === 0 &&
+          !backpack.some((item) => item.weaponMaster) &&
+          !character.equipment.some((item) => item.weaponMaster) && (
+            <StyledSmallAction
+              type="button"
+              onClick={() => supplies.mutate(character.id)}
+            >
+              한림그룹 기본 장비 지원 받기
+            </StyledSmallAction>
+          )}
 
         {/* 메인 정보 레이아웃 */}
         <MainGrid>
-          <CharacterCard character={character} onRaidAction={handleRaidAction} />
+          <CharacterCard
+            character={character}
+            onRaidAction={handleRaidAction}
+            disabled={busy || !character}
+            pendingResult={hasPendingResult}
+          />
 
           {/* 창고 <-> 가방 아이템 정비 영역 */}
           <InventoryStashArea>
+            <SectionPanel>
+              <SectionHeader>출격 장비</SectionHeader>
+              <ItemGrid>
+                {character?.equipment.map((slot) =>
+                  slot.weaponMaster ? (
+                    <ItemSlotButton
+                      key={slot.id}
+                      disabled={gearLocked}
+                      onClick={() =>
+                        character &&
+                        equip.mutate({
+                          characterId: character.id,
+                          weaponMasterId: null,
+                          slotIndex: slot.slotIndex,
+                        })
+                      }
+                    >
+                      <ItemName>{slot.weaponMaster.name}</ItemName>
+                      <ItemDetails>
+                        장비 {slot.slotIndex + 1} · 해제
+                      </ItemDetails>
+                    </ItemSlotButton>
+                  ) : (
+                    <EmptySlot key={slot.id}>
+                      <EmptySlotIndex>장비 {slot.slotIndex + 1}</EmptySlotIndex>
+                    </EmptySlot>
+                  ),
+                )}
+              </ItemGrid>
+            </SectionPanel>
             {/* 1. 창고 (Stash) */}
             <SectionPanel>
               <SectionHeader>
-                <GiChest size={20} color="#74a4ff" style={{ marginRight: "8px" }} />
+                <GiChest
+                  size={20}
+                  color="#74a4ff"
+                  style={{ marginRight: "8px" }}
+                />
                 Stash Warehouse ({stash.length} Items)
               </SectionHeader>
               <ItemGrid>
@@ -137,13 +269,15 @@ function RouteComponent() {
                 ) : (
                   stash.map((item) => (
                     <ItemSlotButton
+                      disabled={gearLocked}
                       key={item.id}
                       onClick={() => handleMoveToBackpack(item.weaponMasterId)}
                       whileHover={{ y: -4, borderColor: "#74a4ff" }}
                     >
                       <ItemName>{item.weaponMaster.name}</ItemName>
                       <ItemDetails>
-                        Dmg: {item.weaponMaster.damage} | Wt: {item.weaponMaster.weight}kg
+                        Dmg: {item.weaponMaster.damage} | Wt:{" "}
+                        {item.weaponMaster.weight}kg
                       </ItemDetails>
                       <QuantityBadge>x{item.quantity}</QuantityBadge>
                     </ItemSlotButton>
@@ -155,24 +289,48 @@ function RouteComponent() {
             {/* 2. 가방 (Backpack) */}
             <SectionPanel>
               <SectionHeader>
-                <GiBackpack size={20} color="#b8ffb9" style={{ marginRight: "8px" }} />
-                Raid Backpack ({backpack.filter(b => b.weaponMaster).length} / 32 Slots)
+                <GiBackpack
+                  size={20}
+                  color="#b8ffb9"
+                  style={{ marginRight: "8px" }}
+                />
+                Raid Backpack ({backpack.filter((b) => b.weaponMaster).length} /
+                32 Slots)
               </SectionHeader>
               <ItemGrid>
                 {backpack.map((slot, index) => {
                   if (slot.weaponMaster) {
                     return (
-                      <ItemSlotButton
-                        key={slot.id}
-                        onClick={() => handleMoveToStash(slot.weaponMaster!.id, slot.slotIndex)}
-                        style={{ borderColor: "rgba(184, 255, 185, 0.2)" }}
-                        whileHover={{ y: -4, borderColor: "#b8ffb9" }}
-                      >
-                        <ItemName $color="#b8ffb9">{slot.weaponMaster.name}</ItemName>
-                        <ItemDetails>
-                          Dmg: {slot.weaponMaster.damage} | Slot: {slot.slotIndex + 1}
-                        </ItemDetails>
-                      </ItemSlotButton>
+                      <StyledSlotActions key={slot.id}>
+                        <ItemSlotButton
+                          disabled={gearLocked}
+                          key={slot.id}
+                          onClick={() =>
+                            handleMoveToStash(
+                              slot.weaponMaster!.id,
+                              slot.slotIndex,
+                            )
+                          }
+                          style={{ borderColor: "rgba(184, 255, 185, 0.2)" }}
+                          whileHover={{ y: -4, borderColor: "#b8ffb9" }}
+                        >
+                          <ItemName $color="#b8ffb9">
+                            {slot.weaponMaster.name}
+                          </ItemName>
+                          <ItemDetails>
+                            Dmg: {slot.weaponMaster.damage} | Slot:{" "}
+                            {slot.slotIndex + 1}
+                          </ItemDetails>
+                          <QuantityBadge>×{slot.quantity}</QuantityBadge>
+                        </ItemSlotButton>
+                        <StyledSmallAction
+                          type="button"
+                          disabled={gearLocked}
+                          onClick={() => handleEquip(slot.weaponMaster!.id)}
+                        >
+                          하나 장착
+                        </StyledSmallAction>
+                      </StyledSlotActions>
                     );
                   } else {
                     return (
@@ -197,8 +355,11 @@ const LobbyContainer = styled.div`
   flex-direction: column;
   width: 100%;
   max-width: 1200px;
+  min-width: 0;
+  container-type: inline-size;
+  color: #ecf0f1;
   margin: 0 auto;
-  padding: 40px 24px;
+  padding: 24px 16px;
 `;
 
 const HeaderArea = styled.div`
@@ -224,21 +385,20 @@ const MainTitle = styled.h1`
 
 const MainGrid = styled.div`
   display: grid;
-  grid-template-columns: 340px 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 32px;
   align-items: start;
 
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
+  @container (min-width: 760px) {
+    grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
   }
 `;
-
-
 
 const InventoryStashArea = styled.div`
   display: flex;
   flex-direction: column;
   gap: 32px;
+  min-width: 0;
 `;
 
 const SectionPanel = styled.div`
@@ -260,7 +420,7 @@ const SectionHeader = styled.h3`
 
 const ItemGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 120px), 1fr));
   gap: 12px;
 `;
 
@@ -278,6 +438,29 @@ const ItemSlotButton = styled(motion.button)`
   position: relative;
   aspect-ratio: 1/1;
   width: 100%;
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+`;
+
+const StyledSlotActions = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`;
+
+const StyledSmallAction = styled.button`
+  padding: 10px;
+  border: 0;
+  border-radius: 12px;
+  background: #262626;
+  color: #b8ffb9;
+  cursor: pointer;
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
 `;
 
 type ItemNameProps = {
@@ -364,6 +547,8 @@ const LoadingSpinner = styled.div`
   animation: spin 1s linear infinite;
 
   @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
 `;

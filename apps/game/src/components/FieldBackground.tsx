@@ -11,7 +11,7 @@ interface FieldBackgroundProps {
   isCombat: boolean;
   battleLog: BattleLog | null | undefined;
   enemyPositions: Map<string, { x: number; y: number }>;
-  characterNickname: string | undefined;
+  characterId: string | undefined;
   navigateRaid: UseMutationResult<
     NavigateRaidResponse,
     Error,
@@ -24,7 +24,7 @@ export function FieldBackground({
   isCombat,
   battleLog,
   enemyPositions,
-  characterNickname,
+  characterId,
   navigateRaid,
   triggerCombat,
 }: FieldBackgroundProps) {
@@ -89,7 +89,7 @@ export function FieldBackground({
           isCombat={isCombat}
           battleLog={battleLog}
           enemyPositions={enemyPositions}
-          characterNickname={characterNickname}
+          characterId={characterId}
         />
       )}
     </Container>

@@ -1,13 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
-import type { Item } from "@webgame/types";
+import type { Item, RaidView } from "@webgame/types";
+import { useAtomValue } from "jotai";
 
-import { API_BASE_URL } from "../api";
+import { selectedUserIdAtom } from "@/atoms/authAtom";
 
-// Temporary hardcoded userId for development
-const TEMP_USER_ID = "da30ac6b-e93c-44d9-b344-ab67f99d2f80";
+import { API_BASE_URL, apiFetch } from "../api";
+import {
+  characterKey,
+  type CharacterVariant,
+  useCharacterRoster,
+} from "./useCharacterCollection";
 
 export interface CharacterResponse {
   id: string;
+  displayName: string;
+  variant: CharacterVariant;
   userId: string;
   hp: number;
   maxHp: number;
@@ -19,6 +26,8 @@ export interface CharacterResponse {
   time: number;
   isRaiding: boolean;
   currentNodeId: number;
+  activeRaidId: string | null;
+  activeRaid: RaidView | null;
   user: {
     nickname: string;
   };
@@ -28,6 +37,8 @@ export interface CharacterResponse {
     weaponMaster: {
       id: string;
       name: string;
+      iconKey: string;
+      attackType: "MELEE" | "RANGED";
       weight: number;
       value: number;
       damage: number;
@@ -43,6 +54,8 @@ export interface CharacterResponse {
     weaponMaster: {
       id: string;
       name: string;
+      iconKey: string;
+      attackType: "MELEE" | "RANGED";
       weight: number;
       value: number;
       damage: number;
@@ -61,11 +74,18 @@ export interface CharacterData {
   raw: CharacterResponse;
 }
 
-export const useGetCharacter = (userId: string = TEMP_USER_ID) => {
-  return useQuery<CharacterData>({
-    queryKey: ["character", userId],
+export const useGetCharacter = (requestedUserId?: string) => {
+  const selectedUserId = useAtomValue(selectedUserIdAtom);
+  const userId = requestedUserId ?? selectedUserId;
+  const roster = useCharacterRoster(userId ?? undefined);
+  const characterId = roster.data?.selectedCharacterId;
+  const characterQuery = useQuery<CharacterData>({
+    enabled: !!userId && !!characterId,
+    queryKey: characterKey(userId, characterId),
     queryFn: async (): Promise<CharacterData> => {
-      const response = await fetch(`${API_BASE_URL}/user/${userId}/character`);
+      const response = await apiFetch(
+        `${API_BASE_URL}/character/${characterId}`,
+      );
       if (!response.ok) {
         throw new Error("Failed to fetch character data");
       }
@@ -75,13 +95,15 @@ export const useGetCharacter = (userId: string = TEMP_USER_ID) => {
       const createEmptyWeapon = (index: number) => ({
         id: `empty-wpn-${index}`,
         slotIndex: index,
-        weaponMaster: null as CharacterResponse["equipment"][number]["weaponMaster"],
+        weaponMaster:
+          null as CharacterResponse["equipment"][number]["weaponMaster"],
       });
 
       const createEmptyInventory = (index: number) => ({
         id: `empty-inv-${index}`,
         slotIndex: index,
-        weaponMaster: null as CharacterResponse["inventory"][number]["weaponMaster"],
+        weaponMaster:
+          null as CharacterResponse["inventory"][number]["weaponMaster"],
         quantity: 0,
       });
 
@@ -111,6 +133,7 @@ export const useGetCharacter = (userId: string = TEMP_USER_ID) => {
       const equipment = normalizedEquipment.map((w) => ({
         id: w.id,
         name: w.weaponMaster?.name || "",
+        iconKey: w.weaponMaster?.iconKey,
         weight: w.weaponMaster?.weight || 0,
         value: w.weaponMaster?.value || 0,
       }));
@@ -118,8 +141,10 @@ export const useGetCharacter = (userId: string = TEMP_USER_ID) => {
       const inventory = normalizedInventory.map((i) => ({
         id: i.id,
         name: i.weaponMaster?.name || "",
+        iconKey: i.weaponMaster?.iconKey,
         weight: i.weaponMaster?.weight || 0,
         value: i.weaponMaster?.value || 0,
+        quantity: i.quantity,
       }));
 
       return {
@@ -130,4 +155,13 @@ export const useGetCharacter = (userId: string = TEMP_USER_ID) => {
     },
     staleTime: Infinity,
   });
+  return {
+    ...characterQuery,
+    isLoading: roster.isPending || characterQuery.isLoading,
+    error: roster.error ?? characterQuery.error,
+    refetch: async () => {
+      await roster.refetch();
+      return characterQuery.refetch();
+    },
+  };
 };

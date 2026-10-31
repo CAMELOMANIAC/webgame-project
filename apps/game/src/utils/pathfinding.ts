@@ -1,4 +1,4 @@
-import mapData from "../assets/map_graph.json";
+import mapData from "../../../../packages/types/src/assets/map_graph.json";
 
 interface Node {
   x: number;

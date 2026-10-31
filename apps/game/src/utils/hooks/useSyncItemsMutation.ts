@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { API_BASE_URL } from "../api";
+import { API_BASE_URL,apiFetch } from "../api";
 import type { CharacterData } from "./useGetCharacter";
 
 interface SyncItemsParams {
@@ -32,13 +32,16 @@ export const useSyncItemsMutation = () => {
           quantity: i.quantity,
         }));
 
-      const response = await fetch(`${API_BASE_URL}/character/${characterId}/slots/sync`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await apiFetch(
+        `${API_BASE_URL}/character/${characterId}/slots/sync`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ equipment, inventory }),
         },
-        body: JSON.stringify({ equipment, inventory }),
-      });
+      );
 
       if (!response.ok) {
         throw new Error("Failed to sync items with server");
@@ -49,6 +52,7 @@ export const useSyncItemsMutation = () => {
     onSuccess: () => {
       // 동기화 성공 후 캐릭터 데이터 무효화하여 최신 상태 유지
       queryClient.invalidateQueries({ queryKey: ["character"] });
+      queryClient.invalidateQueries({ queryKey: ["characters"] });
     },
   });
 };

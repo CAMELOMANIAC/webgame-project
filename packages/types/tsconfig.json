@@ -5,8 +5,8 @@
     "rootDir": "src",
     "declaration": true,
     "declarationMap": true,
-    "module": "ESNext",
-    "moduleResolution": "Node",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "target": "ESNext"
   },
   "include": ["src"],

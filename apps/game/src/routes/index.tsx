@@ -1,19 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-import styled from "styled-components";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/")({
   component: () => <RouteComponent />,
 });
 
 function RouteComponent() {
-  return <PageContainer></PageContainer>;
+  return <Navigate to="/field/user" />;
 }
-
-const PageContainer = styled.div`
-  display: flex;
-  flex-direction: row;
-  height: 100vh;
-  width: 100%;
-  background-color: #0f141a;
-  overflow: hidden;
-`;

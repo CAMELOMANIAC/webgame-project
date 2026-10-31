@@ -1,6 +1,11 @@
 import type { BattleEvent, User, Weapon } from ".";
 
-export const defaultUseWeapon = (actor: User, target: User, thisWeapon: Weapon, timestamp: number): BattleEvent[] => {
+export const defaultUseWeapon = (
+  actor: User,
+  target: User,
+  thisWeapon: Weapon,
+  timestamp: number,
+): BattleEvent[] => {
   const weaponIndex = actor.weapons.indexOf(thisWeapon);
   const damage = thisWeapon.damage;
   target.hp = Math.max(0, target.hp - damage);
@@ -73,6 +78,7 @@ export const healingWeapon: Weapon = {
   weight: 2,
   value: 150,
   isTriggered: false,
+  effect: { type: "HEAL", amount: 50, hpThreshold: 0.5, oncePerBattle: true },
   attackType: "MELEE",
   use: (actor, _target, thisWeapon, timestamp) => {
     if (actor.hp < actor.maxHp * 0.5 && !thisWeapon.isTriggered) {

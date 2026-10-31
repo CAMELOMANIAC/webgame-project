@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
+import { useAtomValue } from "jotai";
 
-import { API_BASE_URL } from "../api";
-const TEMP_USER_ID = "da30ac6b-e93c-44d9-b344-ab67f99d2f80";
+import { selectedUserIdAtom } from "@/atoms/authAtom";
+
+import { API_BASE_URL,apiFetch } from "../api";
 
 export interface StashItemResponse {
   id: string;
@@ -21,11 +23,14 @@ export interface StashItemResponse {
   };
 }
 
-export const useGetStash = (userId: string = TEMP_USER_ID) => {
+export const useGetStash = (requestedUserId?: string) => {
+  const selectedUserId = useAtomValue(selectedUserIdAtom);
+  const userId = requestedUserId ?? selectedUserId;
   return useQuery<StashItemResponse[]>({
+    enabled: !!userId,
     queryKey: ["stash", userId],
     queryFn: async (): Promise<StashItemResponse[]> => {
-      const response = await fetch(`${API_BASE_URL}/user/${userId}/stash`);
+      const response = await apiFetch(`${API_BASE_URL}/user/${userId}/stash`);
       if (!response.ok) {
         throw new Error("Failed to fetch stash data");
       }

@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
+import { characterKey } from "./useCharacterCollection";
 import { type CharacterData, useGetCharacter } from "./useGetCharacter";
 import { useSyncItemsMutation } from "./useSyncItemsMutation";
 
@@ -66,7 +67,7 @@ export const useInventorySync = (currentTab: string | undefined) => {
     };
 
     // 3. React Query 캐시 강제 업데이트 (UI 즉시 반영)
-    queryClient.setQueryData(["character", characterData.raw.userId], newData);
+    queryClient.setQueryData(characterKey(characterData.raw.userId, characterData.raw.id), newData);
   };
 
   return {

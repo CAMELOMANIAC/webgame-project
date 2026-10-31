@@ -44,6 +44,9 @@ const BackpackSlot = ({ item }: BackpackProps) => {
       {...listeners}
     >
       {item.name}
+      {(item.quantity ?? 0) > 1 && (
+        <QuantityBadge>×{item.quantity}</QuantityBadge>
+      )}
       <PlusIcon />
     </Slot>
   );
@@ -66,10 +69,12 @@ const Slot = styled.div<SlotProps>`
   border-radius: 16px;
   color: #ecf0f1;
   touch-action: none;
-  cursor: ${(props) => (props.$isDraggable ? (props.$isDragging ? "grabbing" : "grab") : "")};
+  cursor: ${(props) =>
+    props.$isDraggable ? (props.$isDragging ? "grabbing" : "grab") : ""};
   touch-action: ${(props) => (props.$isDraggable ? "none" : "pan-y")};
 
-  background-color: ${(props) => (props.$isOver ? "rgba(255, 255, 255, 0.1)" : "rgba(19, 19, 19, 0.4)")};
+  background-color: ${(props) =>
+    props.$isOver ? "rgba(255, 255, 255, 0.1)" : "rgba(19, 19, 19, 0.4)"};
   opacity: ${(props) => (props.$isDragging ? 0.2 : 1)};
   transition:
     background-color 0.2s ease-in-out,
@@ -83,4 +88,12 @@ const PlusIcon = styled(FiPlus)`
   transform: translate(-50%, -50%);
   font-size: 12px;
   color: rgb(33, 33, 33);
+`;
+
+const QuantityBadge = styled.span`
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  font-size: 11px;
+  color: #b8ffb9;
 `;

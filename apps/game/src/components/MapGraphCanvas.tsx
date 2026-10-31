@@ -1,18 +1,21 @@
 import type { UseMutationResult } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import type { BattleLog } from "@webgame/types";
-import { useAtom } from "jotai";
+import { getDefaultStore, useAtom } from "jotai";
 import Konva from "konva";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Circle, Group, Image, Layer, Line, Shape, Stage } from "react-konva";
+import { Circle, Group, Image, Layer, Line, Shape, Stage, Text } from "react-konva";
 import styled from "styled-components";
 import useImage from "use-image";
 
+import { selectedUserIdAtom } from "@/atoms/authAtom";
+import { pendingNavigationAtom, pendingNavigationKey } from "@/atoms/pendingNavigationAtom";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import type { NavigateRaidParams, NavigateRaidResponse } from "@/utils/hooks/useNavigateRaid";
+import { useRaidRules } from "@/utils/hooks/useRaidRules";
 
+import mapData from "../../../../packages/types/src/assets/map_graph.json";
 import compass from "../assets/compass.svg";
-import mapData from "../assets/map_graph.json";
 import {
   currentNodeIdAtom,
   followPlayerAtom,
@@ -20,16 +23,20 @@ import {
   isNavigatingAtom,
   playerCoordsAtom,
   playerRotationAtom,
+  requestedNodeIdAtom,
   shortestPathAtom,
   targetNodeIdAtom,
 } from "../atoms/raidAtom";
 import { findShortestPath } from "../utils/pathfinding";
-import {
-  createOneDimIndex,
-  performOneDimIntersectionCulling,
-} from "../utils/binarySearchCulling";
+import { createRTreeIndex, searchRTreeIndex } from "../utils/rtreeCulling";
 
 interface Node {
+  x: number;
+  y: number;
+}
+
+interface IndexedNode {
+  id: number;
   x: number;
   y: number;
 }
@@ -68,10 +75,6 @@ const water = (mapData.water || []) as unknown as Water;
 // Konva Line 렌더링에 적합하도록 통합된 물 좌표 배열을 1차원 플랫 구조로 변환
 const waterPoints = water.flatMap((p) => [p.x, p.y]);
 
-// [Step 2] 1D TypedArray 정렬 인덱스 구축 (모듈 스코프 1회 사전 생성)
-const indexedNodes = nodes.map((n, idx) => ({ id: idx, x: n.x, y: n.y }));
-const nodesOneDimIndex = createOneDimIndex(indexedNodes);
-
 const getBuildingCenter = (building: Building) => {
   if (!building.coordinates || building.coordinates.length === 0) return { x: 0, y: 0 };
   let sumX = 0;
@@ -86,15 +89,35 @@ const getBuildingCenter = (building: Building) => {
   };
 };
 
-const indexedBuildings = buildings.map((b) => {
-  const center = getBuildingCenter(b);
-  return {
-    ...b,
-    x: center.x,
-    y: center.y,
-  };
+// [Step 3] 2D R-tree (rbush) 인덱스 구축 (STR Bulk-loading 1회 사전 생성)
+const indexedNodes: IndexedNode[] = nodes.map((n, idx) => ({ id: idx, x: n.x, y: n.y }));
+
+// [Step 3] 2D R-tree (rbush) 인덱스 구축 (STR Bulk-loading 1회 사전 생성)
+const nodesRTreeResult = createRTreeIndex(indexedNodes, (item) => ({
+  minX: item.x,
+  minY: item.y,
+  maxX: item.x,
+  maxY: item.y,
+}));
+
+const buildingsRTreeResult = createRTreeIndex(buildings, (b) => {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  b.coordinates.forEach((p) => {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  });
+  return { minX, minY, maxX, maxY };
 });
-const buildingsOneDimIndex = createOneDimIndex(indexedBuildings);
+
+const nodeTreeBuildTimeMs = nodesRTreeResult.buildTimeMs;
+const buildingTreeBuildTimeMs = buildingsRTreeResult.buildTimeMs;
+const nodesRTree = nodesRTreeResult.tree;
+const buildingsRTree = buildingsRTreeResult.tree;
 
 const buildCoordPath = (path: number[], startPos: { x: number; y: number }, targetB: Building | null) => {
   const coordPath: { x: number; y: number }[] = [];
@@ -175,7 +198,11 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
   // 네비게이션/길찾기 상태 변수 (Jotai Atom 연동)
   const [currentNodeId, setCurrentNodeId] = useAtom(currentNodeIdAtom);
+  const [pendingNavigations] = useAtom(pendingNavigationAtom);
   const [targetNodeId, setTargetNodeId] = useAtom(targetNodeIdAtom);
+  const [requestedNodeId, setRequestedNodeId] = useAtom(requestedNodeIdAtom);
+  const { data: raidRules } = useRaidRules();
+  const selectTargetRef = useRef<(nodeId: number) => void>(() => {});
   const [shortestPath, setShortestPath] = useAtom(shortestPathAtom);
   const [isNavigating, setIsNavigating] = useAtom(isNavigatingAtom);
   const [, setPlayerRotation] = useAtom(playerRotationAtom);
@@ -205,21 +232,15 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const navigationPathCoordsRef = useRef<{ x: number; y: number }[]>([]);
   const originalCoordsRef = useRef<{ x: number; y: number }[]>([]);
 
-  // [Step 2] 1D Binary Search + Intersection 벤치마크 수치 자동 기록용 Ref
+  // [Step 3] 2D R-Tree (rbush) 벤치마크 수치 자동 기록용 Ref
   const benchmarkStatsRef = useRef<{
-    binarySearchTimes: number[];
-    intersectionTimes: number[];
+    rTreeSearchTimes: number[];
     frameDeltas: number[];
     lastFrameTime: number;
-    xCandidates: number[];
-    yCandidates: number[];
   }>({
-    binarySearchTimes: [],
-    intersectionTimes: [],
+    rTreeSearchTimes: [],
     frameDeltas: [],
     lastFrameTime: 0,
-    xCandidates: [],
-    yCandidates: [],
   });
 
   // 카메라 자동 화면 따라가기 상태 및 Ref
@@ -241,7 +262,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   }, []);
 
   // 맵 레이어 캐싱을 동적으로 관리하는 헬퍼 함수 (BENCHMARK BRANCH: 오프스크린 캔버스 캐싱 비활성화)
-  const updateMapCache = (_force = false) => {
+  const updateMapCache = () => {
     const layer = mapLayerRef.current;
     if (!layer) return;
     // R-Tree 벤치마킹을 위해 layer.cache()를 비활성화하고 기존 캐시를 항시 해제합니다.
@@ -256,21 +277,23 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     // 줌 조작 중(isZoomingRef.current === true)일 때는 이 훅에서 캐싱을 트리거하지 않고 디바운스 타이머가 담당하도록 함
     if (isZoomingRef.current) return;
 
-    updateMapCache(true);
+    updateMapCache();
     mapLayerRef.current?.batchDraw();
   }, [isCombat, dimensions.width, dimensions.height, stageTransform]);
 
   // 네비게이션 이동 시작/종료에 대응하는 캐시 라이프사이클 관리
   useEffect(() => {
     if (isNavigating) {
-      updateMapCache(true); // 최초 1회 이동용 대형 고화질 캐싱 생성
+      updateMapCache();
     } else {
-      updateMapCache(false); // 이동 완료 시 캐시를 제거하여 자유 탐색 복원
+      updateMapCache(); // 이동 완료 시 캐시를 제거하여 자유 탐색 복원
       mapLayerRef.current?.batchDraw();
     }
   }, [isNavigating]);
 
   const startNavigation = (path: number[], targetB?: Building | null) => {
+    if (!characterData?.raw.isRaiding) return;
+    if (characterData && pendingNavigations[pendingNavigationKey(characterData.raw.userId, characterData.raw.id)]) return;
     if (path.length <= 1) return;
     if (!characterData?.raw.id) {
       console.warn("[Navigation] characterData not ready, skipping navigation start.");
@@ -301,7 +324,6 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
           quantity: i.quantity,
         }));
 
-      setIsInventoryDirty(false); // 플래그 리셋
     }
 
     // 1-Hop Gate 초기화
@@ -316,13 +338,17 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       },
       {
         onSuccess: (res) => {
+          if (getDefaultStore().get(selectedUserIdAtom) !== characterData.raw.userId) return;
           console.log("[startNavigation SUCCESS] navigate response:", res);
           navigateRaidResponseRef.current = res;
+          setIsInventoryDirty(false);
         },
         onError: (err) => {
+          if (getDefaultStore().get(selectedUserIdAtom) !== characterData.raw.userId) return;
           console.error("Failed to pre-roll encounters:", err);
-          // 네트워크 에러 발생 시 안전하게 1번 노드까지만 가고 멈춤 처리
-          navigateRaidResponseRef.current = { encounterTriggered: false };
+          setIsNavigating(false);
+          setTargetNodeId(null);
+          void queryClient.invalidateQueries({ queryKey: ["character"] });
         },
       },
     );
@@ -337,7 +363,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
   // 대상 노드 선택 시 네비게이션 트리거 (개발 모드인 경우 승인 단계를 거치고, 일반 모드면 즉시 출발)
   const handleTargetSelect = (targetId: number, targetBuilding?: Building) => {
-    if (isNavigating) {
+    if (isNavigating || isCombat || !characterData?.raw.isRaiding) {
       return;
     }
     setTargetBuilding(targetBuilding || null);
@@ -352,6 +378,13 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       }
     }
   };
+
+  selectTargetRef.current = handleTargetSelect;
+  useEffect(() => {
+    if (requestedNodeId === null || isNavigating || isCombat) return;
+    setRequestedNodeId(null);
+    selectTargetRef.current(requestedNodeId);
+  }, [requestedNodeId, isNavigating, isCombat, setRequestedNodeId]);
 
   // 1. ResizeObserver를 사용하여 부모 컨테이너 크기 추적 (모바일 뷰포트 대응)
   useEffect(() => {
@@ -484,30 +517,24 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     return { minX, minY, maxX, maxY };
   }, [stageTransform, dimensions]);
 
-  // 4. [Step 2] 1D TypedArray 이진 탐색 + 2차 교집합 (Intersection) 연산 컬링 (노드)
+  // 4. [Step 3] 2D R-tree (rbush) 공간 탐색 컬링 (노드)
   const visibleNodeData = useMemo(() => {
-    const res = performOneDimIntersectionCulling(nodesOneDimIndex, visibleBounds);
+    const res = searchRTreeIndex<IndexedNode>(nodesRTree, visibleBounds);
     const indices = new Set<number>(res.results.map((item) => item.id));
     return {
       indices,
-      binarySearchTimeMs: res.binarySearchTimeMs,
-      intersectionTimeMs: res.intersectionTimeMs,
-      totalTime: res.binarySearchTimeMs + res.intersectionTimeMs,
-      xCandidates: res.xCandidateCount,
-      yCandidates: res.yCandidateCount,
+      searchTimeMs: res.searchTimeMs,
+      foundCount: res.foundCount,
     };
   }, [visibleBounds]);
 
-  // 5. [Step 2] 1D TypedArray 이진 탐색 + 2차 교집합 (Intersection) 연산 컬링 (빌딩)
+  // 5. [Step 3] 2D R-tree (rbush) 공간 탐색 컬링 (빌딩)
   const visibleBuildingData = useMemo(() => {
-    const res = performOneDimIntersectionCulling(buildingsOneDimIndex, visibleBounds);
+    const res = searchRTreeIndex<Building>(buildingsRTree, visibleBounds);
     return {
       buildings: res.results,
-      binarySearchTimeMs: res.binarySearchTimeMs,
-      intersectionTimeMs: res.intersectionTimeMs,
-      totalTime: res.binarySearchTimeMs + res.intersectionTimeMs,
-      xCandidates: res.xCandidateCount,
-      yCandidates: res.yCandidateCount,
+      searchTimeMs: res.searchTimeMs,
+      foundCount: res.foundCount,
     };
   }, [visibleBounds]);
 
@@ -515,15 +542,9 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const visibleBuildings = visibleBuildingData.buildings;
 
   useEffect(() => {
-    const totalMs = visibleNodeData.totalTime + visibleBuildingData.totalTime;
-    const bsTime = visibleNodeData.binarySearchTimeMs + visibleBuildingData.binarySearchTimeMs;
-    const interTime = visibleNodeData.intersectionTimeMs + visibleBuildingData.intersectionTimeMs;
-
+    const totalMs = visibleNodeData.searchTimeMs + visibleBuildingData.searchTimeMs;
     setCullingTimeMs(totalMs);
-    benchmarkStatsRef.current.binarySearchTimes.push(bsTime);
-    benchmarkStatsRef.current.intersectionTimes.push(interTime);
-    benchmarkStatsRef.current.xCandidates.push(visibleNodeData.xCandidates + visibleBuildingData.xCandidates);
-    benchmarkStatsRef.current.yCandidates.push(visibleNodeData.yCandidates + visibleBuildingData.yCandidates);
+    benchmarkStatsRef.current.rTreeSearchTimes.push(totalMs);
   }, [visibleNodeData, visibleBuildingData]);
 
   // 5.1. 실시간 최단 경로 연산 (A* 알고리즘 연동)
@@ -837,10 +858,12 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
             // 안전장치: 5초 이상 응답 없으면 강제로 안전 통과 처리 (무한 대기 방지)
             const waitedMs = performance.now() - hopGateWaitStart;
             if (waitedMs > 5000) {
-              console.warn("[1-Hop Gate] Server response timed out after 5s, forcing safe pass-through.");
-              navigateRaidResponseRef.current = { encounterTriggered: false };
+              console.warn("[1-Hop Gate] Server response timed out; stopping navigation.");
+              setIsNavigating(false);
+              setTargetNodeId(null);
+              void queryClient.invalidateQueries({ queryKey: ["character"] });
               hopGateWaitStart = null;
-              // fall-through to response handling below
+              return;
             } else {
               // 서버 응답이 올 때까지 1번 노드 위에 마커를 고정하고 대기시킵니다.
               const holdPos = { x: nextPos.x, y: nextPos.y };
@@ -868,7 +891,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
           // 응답이 도착했다면 가로채기 판정 진행
           const res = navigateRaidResponseRef.current;
 
-          if (res.encounterTriggered && res.stopNodeId !== undefined) {
+          if (res?.encounterTriggered && res.stopNodeId !== undefined) {
             const stopNodeId = res.stopNodeId;
 
             // 만약 1번 노드에서 바로 인카운터가 걸렸다면 여기서 즉각 중단하고 전투 켬 (카메라 정렬 후 진입)
@@ -974,7 +997,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         updateCameraFollow(arrivedPos.x, arrivedPos.y, deltaTime);
 
         // 이동 거리에 따른 동적 슬라이딩 캐시 리프레시 체크
-        updateMapCache(false);
+        updateMapCache();
 
         // 실시간 경로선 꼬리 깎기 (에메랄드 라인 시작점을 다음 목표 좌표로 단축)
         if (pathLineRef.current) {
@@ -1014,7 +1037,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         updateCameraFollow(newPos.x, newPos.y, deltaTime);
 
         // 이동 거리에 따른 동적 슬라이딩 캐시 리프레시 체크
-        updateMapCache(false);
+        updateMapCache();
 
         // 실시간 경로선 꼬리 깎기 (에메랄드 라인 시작점을 플레이어의 현재 실시간 좌표에 고정)
         if (pathLineRef.current) {
@@ -1105,7 +1128,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         });
       }
       // 최종 줌 팩터에 도달했으므로 캐시 재생성
-      updateMapCache(true);
+      updateMapCache();
       mapLayerRef.current?.batchDraw();
     }, 150);
   };
@@ -1138,15 +1161,10 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       });
     }
 
-    const { binarySearchTimes, intersectionTimes, frameDeltas, xCandidates } = benchmarkStatsRef.current;
-    if (binarySearchTimes.length > 0) {
-      const totalTimes = binarySearchTimes.map((t, idx) => t + (intersectionTimes[idx] || 0));
-      const avgTotalMs = totalTimes.reduce((a, b) => a + b, 0) / totalTimes.length;
-      const maxTotalMs = Math.max(...totalTimes);
-
-      const avgBsMs = binarySearchTimes.reduce((a, b) => a + b, 0) / binarySearchTimes.length;
-      const avgInterMs = intersectionTimes.reduce((a, b) => a + b, 0) / intersectionTimes.length;
-      const avgXCandidates = Math.round(xCandidates.reduce((a, b) => a + b, 0) / xCandidates.length);
+    const { rTreeSearchTimes, frameDeltas } = benchmarkStatsRef.current;
+    if (rTreeSearchTimes.length > 0) {
+      const avgSearchMs = rTreeSearchTimes.reduce((a, b) => a + b, 0) / rTreeSearchTimes.length;
+      const maxSearchMs = Math.max(...rTreeSearchTimes);
 
       let avgFps = 60;
       let minFps = 60;
@@ -1160,24 +1178,21 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         }
       }
 
+      const totalBuildTimeMs = nodeTreeBuildTimeMs + buildingTreeBuildTimeMs;
+
       console.log(
-        `%c================ [Step 2 (1D Binary Search + Intersection) Benchmark Summary] ================`,
-        "color: #4d7cff; font-weight: bold; font-size: 13px;"
+        `%c================ [Step 3 (2D R-Tree rbush + STR Bulk-Loading) Benchmark Summary] ================`,
+        "color: #2bcbba; font-weight: bold; font-size: 13px;"
       );
-      console.log(`⏱️ 평균 총 컬링 연산 시간 (Total Culling Avg): %c${avgTotalMs.toFixed(3)} ms`, "color: #ff4757; font-weight: bold;");
-      console.log(`⚠️ 최대 총 컬링 연산 시간 (Total Culling Max): %c${maxTotalMs.toFixed(3)} ms`, "color: #ff4757; font-weight: bold;");
-      console.log(`  ├─ 🔍 1D 이진 탐색 시간 (1D Binary Search Avg): %c${avgBsMs.toFixed(3)} ms`, "color: #2bcbba;");
-      console.log(`  └─ ⚠️ 2차 교집합 연산 시간 (Intersection Avg): %c${avgInterMs.toFixed(3)} ms (전체의 ${Math.round((avgInterMs / (avgTotalMs || 1)) * 100)}%)`, "color: #ff4757;");
-      console.log(`📊 1D 슬라이싱으로 추출된 불필요 후보군 평균 (X-Candidates Avg): %c${avgXCandidates} 개 (화면 밖 띠 포함 낭비)`, "color: #ffa502; font-weight: bold;");
+      console.log(`🌲 STR Bulk-Loading 1회 트리 구축 시간 (1-Time Tree Build): %c${totalBuildTimeMs.toFixed(3)} ms`, "color: #4d7cff; font-weight: bold;");
+      console.log(`⏱️ 평균 총 컬링 연산 시간 (Total Culling Avg): %c${avgSearchMs.toFixed(3)} ms`, "color: #2bcbba; font-weight: bold;");
+      console.log(`⚠️ 최대 총 컬링 연산 시간 (Total Culling Max): %c${maxSearchMs.toFixed(3)} ms`, "color: #2bcbba; font-weight: bold;");
       console.log(`🎮 드래그 중 평균 프레임 (Avg FPS): %c${avgFps.toFixed(1)} FPS`, "color: #2bcbba; font-weight: bold;");
-      console.log(`📉 드래그 중 최저 프레임 (Min FPS): %c${minFps.toFixed(1)} FPS`, "color: #ffa502; font-weight: bold;");
+      console.log(`📉 드래그 중 최저 프레임 (Min FPS): %c${minFps.toFixed(1)} FPS`, "color: #2bcbba; font-weight: bold;");
       console.log(`=======================================================================================`);
 
-      benchmarkStatsRef.current.binarySearchTimes = [];
-      benchmarkStatsRef.current.intersectionTimes = [];
+      benchmarkStatsRef.current.rTreeSearchTimes = [];
       benchmarkStatsRef.current.frameDeltas = [];
-      benchmarkStatsRef.current.xCandidates = [];
-      benchmarkStatsRef.current.yCandidates = [];
       benchmarkStatsRef.current.lastFrameTime = 0;
     }
   };
@@ -1574,6 +1589,12 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
                 })}
               </Group>
             )}
+            {!isCombat && raidRules?.extractionNodeIds.map((nodeId) => nodes[nodeId] ? <Group key={`exit-${nodeId}`} x={nodes[nodeId].x} y={nodes[nodeId].y}
+              onClick={(event) => { event.cancelBubble = true; handleTargetSelect(nodeId); }}
+              onTap={(event) => { event.cancelBubble = true; handleTargetSelect(nodeId); }}>
+              <Circle radius={9} stroke="#b8ffb9" strokeWidth={2} />
+              <Text text="EXIT" x={-13} y={-21} fontSize={10} fill="#b8ffb9" />
+            </Group> : null)}
           </Layer>
 
           {/* Layer 2: Navigation & Path Layer (길찾기 가이드 라인 및 타겟 비콘 - 이벤트 불필요) */}

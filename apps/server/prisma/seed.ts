@@ -1,10 +1,12 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient, type Prisma, type WeaponMaster } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  const weapons = [
+  const weapons: Prisma.WeaponMasterCreateInput[] = [
     {
       name: "Primary Sword",
+      attackType: "MELEE",
+      iconKey: "SWORD",
       damage: 10,
       cooldownTicks: 10,
       staminaCost: 10,
@@ -15,6 +17,8 @@ async function main() {
     },
     {
       name: "Secondary Dagger",
+      attackType: "MELEE",
+      iconKey: "DAGGER",
       damage: 5,
       cooldownTicks: 8,
       staminaCost: 5,
@@ -25,6 +29,14 @@ async function main() {
     },
     {
       name: "Life-saver",
+      attackType: "MELEE",
+      iconKey: "HEAL",
+      effect: {
+        type: "HEAL",
+        amount: 50,
+        hpThreshold: 0.5,
+        oncePerBattle: true,
+      },
       damage: 0,
       cooldownTicks: 0,
       staminaCost: 20,
@@ -35,6 +47,8 @@ async function main() {
     },
     {
       name: "Sniper Rifle",
+      attackType: "RANGED",
+      iconKey: "RIFLE",
       damage: 25,
       cooldownTicks: 20,
       staminaCost: 30,
@@ -45,6 +59,8 @@ async function main() {
     },
     {
       name: "Giant Slayer",
+      attackType: "MELEE",
+      iconKey: "AXE",
       damage: 15,
       cooldownTicks: 12,
       staminaCost: 15,
@@ -52,6 +68,30 @@ async function main() {
       weight: 10,
       value: 200,
       description: "Strong against tanky enemies.",
+    },
+    {
+      id: "hanlim-relief-carbine",
+      name: "한림 구호용 카빈",
+      damage: 16,
+      staminaCost: 4,
+      cooldownTicks: 2,
+      castTicks: 0,
+      weight: 3,
+      value: 40,
+      attackType: "RANGED",
+      iconKey: "RIFLE",
+    },
+    {
+      id: "hanlim-control-baton",
+      name: "한림 제식 충격봉",
+      damage: 6,
+      staminaCost: 3,
+      cooldownTicks: 3,
+      castTicks: 0,
+      weight: 2,
+      value: 30,
+      attackType: "MELEE",
+      iconKey: "STAFF",
     },
   ];
 
@@ -67,7 +107,7 @@ async function main() {
   await prisma.weaponMaster.deleteMany();
 
   console.log("Seeding weapons...");
-  const weaponData: any[] = []; // Using any here for local storage, but creating with prisma types
+  const weaponData: WeaponMaster[] = [];
   for (const w of weapons) {
     const created = await prisma.weaponMaster.create({
       data: w,
@@ -119,21 +159,37 @@ async function main() {
 
     if (m.name === "Slime" && secondaryDagger) {
       await prisma.monsterWeapon.create({
-        data: { monsterId: createdMonster.id, weaponMasterId: secondaryDagger.id, slotIndex: 0 },
+        data: {
+          monsterId: createdMonster.id,
+          weaponMasterId: secondaryDagger.id,
+          slotIndex: 0,
+        },
       });
     } else if (m.name === "Goblin" && primarySword) {
       await prisma.monsterWeapon.create({
-        data: { monsterId: createdMonster.id, weaponMasterId: primarySword.id, slotIndex: 0 },
+        data: {
+          monsterId: createdMonster.id,
+          weaponMasterId: primarySword.id,
+          slotIndex: 0,
+        },
       });
     } else if (m.name === "Orc Warrior") {
       if (primarySword) {
         await prisma.monsterWeapon.create({
-          data: { monsterId: createdMonster.id, weaponMasterId: primarySword.id, slotIndex: 0 },
+          data: {
+            monsterId: createdMonster.id,
+            weaponMasterId: primarySword.id,
+            slotIndex: 0,
+          },
         });
       }
       if (giantSlayer) {
         await prisma.monsterWeapon.create({
-          data: { monsterId: createdMonster.id, weaponMasterId: giantSlayer.id, slotIndex: 1 },
+          data: {
+            monsterId: createdMonster.id,
+            weaponMasterId: giantSlayer.id,
+            slotIndex: 1,
+          },
         });
       }
     }
@@ -150,7 +206,7 @@ async function main() {
   });
 
   const character = await prisma.character.upsert({
-    where: { userId: user.id },
+    where: { id: user.selectedCharacterId ?? "seed-character" },
     update: {
       hp: 100,
       maxHp: 100,
@@ -179,24 +235,40 @@ async function main() {
   console.log("Equipping character weapons...");
   if (primarySword) {
     await prisma.characterWeapon.create({
-      data: { characterId: character.id, weaponMasterId: primarySword.id, slotIndex: 0 },
+      data: {
+        characterId: character.id,
+        weaponMasterId: primarySword.id,
+        slotIndex: 0,
+      },
     });
   }
   if (secondaryDagger) {
     await prisma.characterWeapon.create({
-      data: { characterId: character.id, weaponMasterId: secondaryDagger.id, slotIndex: 1 },
+      data: {
+        characterId: character.id,
+        weaponMasterId: secondaryDagger.id,
+        slotIndex: 1,
+      },
     });
   }
 
   console.log("Adding items to character inventory (backpack)...");
   if (sniperRifle) {
     await prisma.raidInventoryItem.create({
-      data: { characterId: character.id, weaponMasterId: sniperRifle.id, slotIndex: 0 },
+      data: {
+        characterId: character.id,
+        weaponMasterId: sniperRifle.id,
+        slotIndex: 0,
+      },
     });
   }
   if (lifeSaver) {
     await prisma.raidInventoryItem.create({
-      data: { characterId: character.id, weaponMasterId: lifeSaver.id, slotIndex: 1 },
+      data: {
+        characterId: character.id,
+        weaponMasterId: lifeSaver.id,
+        slotIndex: 1,
+      },
     });
   }
 

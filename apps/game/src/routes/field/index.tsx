@@ -17,6 +17,7 @@ import { FieldHeader } from "@/components/FieldHeader";
 import FieldStatusSection from "@/components/FieldStatusSection";
 import Backpack from "@/components/itemSlot/Backpack";
 import Equipment from "@/components/itemSlot/Equipment";
+import NavigationRecovery from "@/components/NavigationRecovery";
 import { useEnemyPositions } from "@/utils/hooks/useEnemyPositions";
 import { useFieldCombat } from "@/utils/hooks/useFieldCombat";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
@@ -39,10 +40,14 @@ function RouteComponent() {
   const { tab } = useSearch({ from: "/field/" });
   const { data: characterData } = useGetCharacter();
 
-  const { isCombat, setIsCombat, battleLog, navigateRaid, triggerCombat } = useFieldCombat(characterData);
+  const { isCombat, setIsCombat, battleLog, navigateRaid, triggerCombat } =
+    useFieldCombat(characterData);
   const { handleDragStart, handleDragEnd } = useInventoryDrag(characterData);
   const activeId = useAtomValue(activeDragIdAtom);
-  const enemyPositions = useEnemyPositions(battleLog, characterData?.raw.user.nickname);
+  const enemyPositions = useEnemyPositions(
+    battleLog,
+    characterData?.raw.id,
+  );
 
   const [, setIsNavigating] = useAtom(isNavigatingAtom);
   const [, setTargetNodeId] = useAtom(targetNodeIdAtom);
@@ -56,18 +61,22 @@ function RouteComponent() {
     setShortestPath([]);
   }, [setIsNavigating, setIsCombat, setTargetNodeId, setShortestPath]);
 
-
-
-  const activeItem = characterData?.equipment.find((item) => item.id === activeId)
-    || characterData?.inventory.find((item) => item.id === activeId);
+  const activeItem =
+    characterData?.equipment.find((item) => item.id === activeId) ||
+    characterData?.inventory.find((item) => item.id === activeId);
 
   return (
     <Page>
+      <NavigationRecovery
+        character={characterData}
+        navigation={navigateRaid}
+        triggerCombat={triggerCombat}
+      />
       <FieldBackground
         isCombat={isCombat}
         battleLog={battleLog}
         enemyPositions={enemyPositions}
-        characterNickname={characterData?.raw.user.nickname}
+        characterId={characterData?.raw.id}
         navigateRaid={navigateRaid}
         triggerCombat={triggerCombat}
       />
@@ -86,8 +95,11 @@ function RouteComponent() {
                 <FieldHeader isCombat={isCombat} />
               </InheritMotionDiv>
             )}
-            <InheritMotionDiv layout={isCombat ? undefined : true} key="fieldInfo">
-              <FieldStatusSection setIsCombat={setIsCombat} />
+            <InheritMotionDiv
+              layout={isCombat ? undefined : true}
+              key="fieldInfo"
+            >
+              <FieldStatusSection />
               <Equipment />
             </InheritMotionDiv>
             {tab === "backpack" && (

@@ -2,12 +2,14 @@ import { atom } from "jotai";
 
 // 현재 전투(전투 애니메이션 재생) 중인지 여부
 export const isCombatAtom = atom<boolean>(false);
+export const raidNoticeAtom = atom<string | null>(null);
 
 // 플레이어의 현재 노드 ID
 export const currentNodeIdAtom = atom<number>(0);
 
 // 플레이어의 목적지 노드 ID
 export const targetNodeIdAtom = atom<number | null>(null);
+export const requestedNodeIdAtom = atom<number | null>(null);
 
 // 플레이어가 현재 이동 중인지 여부
 export const isNavigatingAtom = atom<boolean>(false);

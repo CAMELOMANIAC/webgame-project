@@ -8,9 +8,16 @@ import type { CharacterResponse } from "@/utils/hooks/useGetCharacter";
 interface CharacterCardProps {
   character: CharacterResponse | undefined;
   onRaidAction: () => void;
+  disabled?: boolean;
+  pendingResult?: boolean;
 }
 
-export function CharacterCard({ character, onRaidAction }: CharacterCardProps) {
+export function CharacterCard({
+  character,
+  onRaidAction,
+  disabled,
+  pendingResult,
+}: CharacterCardProps) {
   return (
     <CardContainer>
       <StatusBadge $raiding={character?.isRaiding}>
@@ -19,7 +26,7 @@ export function CharacterCard({ character, onRaidAction }: CharacterCardProps) {
       <AvatarCircle>
         <GiBackpack size={48} color="#74a4ff" />
       </AvatarCircle>
-      <Nickname>{character?.user?.nickname || "Unknown"}</Nickname>
+      <Nickname>{character?.displayName || "Unknown"}</Nickname>
       <SubInfo>Ghost Extractor Class A</SubInfo>
 
       {/* 스탯 그리드 */}
@@ -61,13 +68,18 @@ export function CharacterCard({ character, onRaidAction }: CharacterCardProps) {
 
       {/* 탐사 시작/복귀 버튼 */}
       <ActionButton
+        disabled={disabled}
         $raiding={character?.isRaiding}
         onClick={onRaidAction}
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
       >
         <FaSignInAlt style={{ marginRight: "8px" }} />
-        {character?.isRaiding ? "RETURN TO ACTIVE RAID" : "LAUNCH EXPEDITION"}
+        {pendingResult
+          ? "탐사 결과 확인"
+          : character?.isRaiding
+            ? "RETURN TO ACTIVE RAID"
+            : "LAUNCH EXPEDITION"}
       </ActionButton>
     </CardContainer>
   );
@@ -104,7 +116,8 @@ const StatusBadge = styled.span<StatusBadgeProps>`
     props.$raiding ? "rgba(255, 113, 98, 0.15)" : "rgba(116, 164, 255, 0.15)"};
   color: ${(props) => (props.$raiding ? "#ff7162" : "#74a4ff")};
   border: 1px solid
-    ${(props) => (props.$raiding ? "rgba(255, 113, 98, 0.3)" : "rgba(116, 164, 255, 0.3)")};
+    ${(props) =>
+      props.$raiding ? "rgba(255, 113, 98, 0.3)" : "rgba(116, 164, 255, 0.3)"};
 `;
 
 const AvatarCircle = styled.div`
@@ -197,7 +210,10 @@ const ActionButton = styled(motion.button)<ActionButtonProps>`
   cursor: pointer;
   border: none;
   background: ${(props) =>
-    props.$raiding ? "linear-gradient(135deg, #ff7b72, #e05c54)" : "linear-gradient(135deg, #6c5ce7, #5345db)"};
+    props.$raiding
+      ? "linear-gradient(135deg, #ff7b72, #e05c54)"
+      : "linear-gradient(135deg, #6c5ce7, #5345db)"};
   box-shadow: 0 10px 20px
-    ${(props) => (props.$raiding ? "rgba(224, 92, 84, 0.25)" : "rgba(108, 92, 231, 0.25)")};
+    ${(props) =>
+      props.$raiding ? "rgba(224, 92, 84, 0.25)" : "rgba(108, 92, 231, 0.25)"};
 `;

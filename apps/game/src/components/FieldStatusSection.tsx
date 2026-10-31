@@ -1,15 +1,32 @@
+import { useAtomValue } from "jotai";
 import { RiWeightLine } from "react-icons/ri";
 import { SlEnergy } from "react-icons/sl";
 import styled from "styled-components";
 
+import { battleLogAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { FieldWidget } from "@/components/Commons";
 import FieldCharacterInfo from "@/components/FieldCharacterInfo";
+import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 
-interface FieldStatusSectionProps {
-  setIsCombat: React.Dispatch<React.SetStateAction<boolean>>;
-}
-
-const FieldStatusSection = ({ setIsCombat }: FieldStatusSectionProps) => {
+const FieldStatusSection = () => {
+  const { data } = useGetCharacter();
+  const log = useAtomValue(battleLogAtom);
+  const events = useAtomValue(processedEventsAtom);
+  const player = log?.initialState.players[0];
+  let stamina = player?.stamina ?? data?.raw.stamina;
+  for (const event of events)
+    if (event.type === "STAMINA_CHANGE" && event.playerId === player?.id)
+      stamina = event.currentStamina;
+  const weight = data
+    ? data.raw.equipment.reduce(
+        (sum, item) => sum + (item.weaponMaster?.weight ?? 0),
+        0,
+      ) +
+      data.raw.inventory.reduce(
+        (sum, item) => sum + (item.weaponMaster?.weight ?? 0) * item.quantity,
+        0,
+      )
+    : undefined;
   return (
     <StatusSection>
       <Row>
@@ -18,9 +35,12 @@ const FieldStatusSection = ({ setIsCombat }: FieldStatusSectionProps) => {
       <Column>
         <FieldWidget>
           <Row>
-            <Column $gap="0px" onClick={() => setIsCombat((prev) => !prev)}>
+            <Column $gap="0px">
               <WidgetLabel>ENERGY</WidgetLabel>
-              <CapacityText>10/12</CapacityText>
+              <CapacityText>
+                {stamina ?? "—"}/
+                {player?.maxStamina ?? data?.raw.maxStamina ?? "—"}
+              </CapacityText>
             </Column>
             <Column $flexGrow={0}>
               <EnergyIcon />
@@ -31,7 +51,10 @@ const FieldStatusSection = ({ setIsCombat }: FieldStatusSectionProps) => {
           <Row>
             <Column $gap="0px">
               <WidgetLabel>WEIGHT</WidgetLabel>
-              <CapacityText>45/60 kg</CapacityText>
+              <CapacityText>
+                {player?.weight ?? weight ?? "—"}/
+                {player?.maxWeight ?? data?.raw.maxWeight ?? "—"} kg
+              </CapacityText>
             </Column>
             <Column $flexGrow={0}>
               <WeightIcon />

@@ -1,55 +1,101 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { RaidActionInput, RaidView } from "@webgame/types";
+import { useAtomValue } from "jotai";
 
-import { API_BASE_URL } from "../api";
-const TEMP_USER_ID = "da30ac6b-e93c-44d9-b344-ab67f99d2f80";
+import { selectedUserIdAtom } from "@/atoms/authAtom";
+
+import { API_BASE_URL, apiFetch } from "../api";
+import { readApiResponse } from "../request";
+import { characterKey } from "./useCharacterCollection";
+import type { CharacterData } from "./useGetCharacter";
+
+export function raidActionInput(
+  character: CharacterData | undefined,
+): RaidActionInput {
+  const raid = character?.raw.activeRaid;
+  if (!raid || raid.status !== "ACTIVE")
+    throw new Error("진행 중인 탐사가 없습니다.");
+  return {
+    raidId: raid.id,
+    expectedVersion: raid.version,
+    requestId: crypto.randomUUID(),
+  };
+}
 
 export const useRaidSession = () => {
   const queryClient = useQueryClient();
-
+  const userId = useAtomValue(selectedUserIdAtom);
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["character", userId] });
+    void queryClient.invalidateQueries({ queryKey: ["stash", userId] });
+    void queryClient.invalidateQueries({ queryKey: ["characters", userId] });
+    void queryClient.invalidateQueries({ queryKey: ["journal", userId] });
+  };
   const startRaidMutation = useMutation({
-    mutationFn: async (characterId: string) => {
-      const response = await fetch(`${API_BASE_URL}/character/${characterId}/raid/start`, {
-        method: "POST",
-      });
-      if (!response.ok) throw new Error("Failed to start raid");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["character", TEMP_USER_ID] });
+    mutationFn: async (characterId: string) =>
+      readApiResponse<{ status: string; isRaiding: boolean; raid: RaidView }>(
+        await apiFetch(`${API_BASE_URL}/character/${characterId}/raid/start`, {
+          method: "POST",
+        }),
+      ),
+    onSuccess: (result, characterId) => {
+      queryClient.setQueryData(
+        characterKey(userId, characterId),
+        (old: CharacterData | undefined) =>
+          old
+            ? {
+                ...old,
+                raw: {
+                  ...old.raw,
+                  isRaiding: true,
+                  activeRaid: result.raid,
+                  activeRaidId: result.raid.id,
+                  currentNodeId: result.raid.currentNodeId,
+                },
+              }
+            : old,
+      );
+      refresh();
     },
   });
-
   const extractRaidMutation = useMutation({
     mutationFn: async (characterId: string) => {
-      const response = await fetch(`${API_BASE_URL}/character/${characterId}/raid/extract`, {
-        method: "POST",
-      });
-      if (!response.ok) throw new Error("Failed to extract from raid");
-      return response.json();
+      const character = queryClient.getQueryData<CharacterData>(
+        characterKey(userId, characterId),
+      );
+      const body = raidActionInput(character);
+      return readApiResponse<{ status: string; raid: RaidView }>(
+        await apiFetch(
+          `${API_BASE_URL}/character/${characterId}/raid/extract`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          },
+        ),
+      );
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["character", TEMP_USER_ID] });
-      queryClient.invalidateQueries({ queryKey: ["stash", TEMP_USER_ID] });
+    onSuccess: (_result, characterId) => {
+      queryClient.setQueryData(
+        characterKey(userId, characterId),
+        (old: CharacterData | undefined) =>
+          old
+            ? {
+                ...old,
+                raw: {
+                  ...old.raw,
+                  isRaiding: false,
+                  activeRaid: null,
+                  activeRaidId: null,
+                  currentNodeId: 0,
+                  time: 0,
+                },
+              }
+            : old,
+      );
+      refresh();
     },
+    onError: refresh,
   });
-
-  const dieRaidMutation = useMutation({
-    mutationFn: async (characterId: string) => {
-      const response = await fetch(`${API_BASE_URL}/character/${characterId}/raid/die`, {
-        method: "POST",
-      });
-      if (!response.ok) throw new Error("Failed to process death");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["character", TEMP_USER_ID] });
-      queryClient.invalidateQueries({ queryKey: ["stash", TEMP_USER_ID] });
-    },
-  });
-
-  return {
-    startRaid: startRaidMutation,
-    extractRaid: extractRaidMutation,
-    dieRaid: dieRaidMutation,
-  };
+  return { startRaid: startRaidMutation, extractRaid: extractRaidMutation };
 };

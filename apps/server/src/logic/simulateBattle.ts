@@ -1,310 +1,308 @@
-import { BattleEvent, BattleLog, BattleLogEntry, User, Weapon } from "@webgame/types";
+import type {
+  BattleCombatant,
+  BattleEvent,
+  BattleLog,
+  BattleLogEntry,
+  PlayerState,
+  WeaponData,
+} from "@webgame/types";
 
-/**
- * 서버 사이드 전투 시뮬레이터
- */
-export function simulateBattle(players: User[]): BattleLog {
+interface SimulationOptions {
+  random?: () => number;
+  maxTicks?: number;
+}
+
+interface SimWeapon extends WeaponData {
+  currentCooldown: number;
+  isTriggered: boolean;
+}
+
+interface SimCombatant extends Omit<BattleCombatant, "weapons"> {
+  weapons: Array<SimWeapon | null>;
+  castingWeaponIndex: number | null;
+  castingTicksRemaining: number;
+}
+
+function capturePlayers(players: SimCombatant[]): PlayerState[] {
+  return players.map((player) => ({
+    id: player.id,
+    teamId: player.teamId,
+    name: player.displayName ?? player.id,
+    hp: player.hp,
+    maxHp: player.maxHp,
+    stamina: player.stamina,
+    maxStamina: player.maxStamina,
+    weight: player.weight,
+    maxWeight: player.maxWeight,
+    time: player.time,
+    weapons: player.weapons.map((weapon) =>
+      weapon
+        ? {
+            id: weapon.id,
+            name: weapon.name,
+            damage: weapon.damage,
+            staminaCost: weapon.staminaCost,
+            cooldownTicks: weapon.cooldownTicks,
+            castTicks: weapon.castTicks,
+            weight: weapon.weight,
+            attackType: weapon.attackType,
+          }
+        : null,
+    ),
+  }));
+}
+
+function aliveTeams(players: SimCombatant[]) {
+  return new Set(
+    players.filter((player) => player.hp > 0).map((player) => player.teamId),
+  );
+}
+
+function canUseEffect(actor: SimCombatant, weapon: SimWeapon) {
+  return (
+    !weapon.effect ||
+    (actor.hp < actor.maxHp * weapon.effect.hpThreshold &&
+      (!weapon.effect.oncePerBattle || !weapon.isTriggered))
+  );
+}
+
+function findTarget(
+  actor: SimCombatant,
+  weapon: SimWeapon,
+  players: SimCombatant[],
+  random: () => number,
+) {
+  const enemies = players.filter(
+    (player) => player.teamId !== actor.teamId && player.hp > 0,
+  );
+  if (weapon.strategy === "RANDOM") {
+    return enemies[Math.floor(random() * enemies.length)];
+  }
+  return enemies
+    .map((enemy) => {
+      let score =
+        100 + (enemy.hp < 20 ? 50 : 0) + (1 - enemy.hp / enemy.maxHp) * 30;
+      if (weapon.strategy === "WEAKEST")
+        score += (1 - enemy.hp / enemy.maxHp) * 50;
+      if (weapon.strategy === "STRONGEST")
+        score += (enemy.hp / enemy.maxHp) * 50;
+      return { enemy, score: score + random() * 15 };
+    })
+    .sort((a, b) => b.score - a.score)[0]?.enemy;
+}
+
+/** 서버가 실행하는 전투 규칙. 입력과 난수 원본을 변경하지 않는다. */
+export function simulateBattle(
+  players: BattleCombatant[],
+  { random = Math.random, maxTicks = 5000 }: SimulationOptions = {},
+): BattleLog {
+  if (!Number.isInteger(maxTicks) || maxTicks < 1)
+    throw new Error("Invalid tick limit");
+  if (new Set(players.map((player) => player.id)).size !== players.length) {
+    throw new Error("Duplicate combatant id");
+  }
+
+  const simPlayers: SimCombatant[] = players.map((player) => ({
+    ...player,
+    weapons: player.weapons.map((weapon) =>
+      weapon
+        ? {
+            ...weapon,
+            effect: weapon.effect ? { ...weapon.effect } : undefined,
+            currentCooldown: 0,
+            isTriggered: false,
+          }
+        : null,
+    ),
+    currentWeaponIndex: player.currentWeaponIndex ?? 0,
+    castingWeaponIndex: null,
+    castingTicksRemaining: 0,
+  }));
+  const initialState = { players: capturePlayers(simPlayers) };
+  const timeline: BattleLogEntry[] = [];
   let eventCounter = 0;
+  let currentTick = 0;
   const generateId = () => `event-${eventCounter++}`;
 
-  // 시뮬레이션을 위한 상태 복사 및 타입 확장
-  const simPlayers = players.map((p) => {
-    const weapons = p.weapons.map((w) => (w ? { ...w, currentCooldown: 0 } : null));
-
-    return {
-      ...p,
-      weapons: weapons as [Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null, Weapon | null],
-      currentWeaponIndex: p.currentWeaponIndex ?? 0,
-      castingWeaponIndex: p.castingWeaponIndex ?? null,
-      castingTicksRemaining: p.castingTicksRemaining ?? 0,
+  while (aliveTeams(simPlayers).size > 1 && currentTick < maxTicks) {
+    currentTick++;
+    const events: BattleEvent[] = [];
+    const emit = (event: BattleEvent) => events.push(event);
+    const changeStamina = (actor: SimCombatant, stamina: number) => {
+      if (actor.stamina === stamina) return;
+      actor.stamina = stamina;
+      emit({
+        id: generateId(),
+        type: "STAMINA_CHANGE",
+        playerId: actor.id,
+        currentStamina: stamina,
+        timestamp: currentTick,
+      });
     };
-  }) as unknown as User[];
 
-  const deadPlayers = new Set<string>();
-
-  // 1. 초기 상태 캡처
-  const initialState: BattleLog["initialState"] = {
-    players: simPlayers.map((u) => ({
-      id: u.id,
-      teamId: u.teamId,
-      name: u.id,
-      hp: u.hp,
-      maxHp: u.maxHp,
-      stamina: u.stamina,
-      maxStamina: u.maxStamina,
-      weight: u.weight,
-      maxWeight: u.maxWeight,
-      time: u.time,
-      weapons: u.weapons.map((w) =>
-        w
-          ? {
-              id: w.id,
-              name: w.name,
-              damage: w.damage,
-              cooldownTicks: w.cooldownTicks,
-              castTicks: w.castTicks,
-              staminaCost: w.staminaCost,
-              weight: w.weight,
-              attackType: w.attackType,
+    const useWeapon = (
+      actor: SimCombatant,
+      weaponIndex: number,
+      weapon: SimWeapon,
+    ) => {
+      if (weapon.effect) {
+        const beforeHp = actor.hp;
+        actor.hp = Math.min(actor.maxHp, actor.hp + weapon.effect.amount);
+        weapon.isTriggered = true;
+        emit({
+          id: generateId(),
+          type: "HEAL",
+          targetId: actor.id,
+          amount: actor.hp - beforeHp,
+          remainingHp: actor.hp,
+          timestamp: currentTick,
+        });
+      } else {
+        const target = findTarget(actor, weapon, simPlayers, random);
+        if (target) {
+          const isCritical = random() < 0.1;
+          const amount = isCritical
+            ? Math.floor(weapon.damage * 1.5)
+            : weapon.damage;
+          target.hp = Math.max(0, target.hp - amount);
+          emit({
+            id: generateId(),
+            type: "ATTACK",
+            actorId: actor.id,
+            targetId: target.id,
+            weaponIndex,
+            timestamp: currentTick,
+          });
+          emit({
+            id: generateId(),
+            type: "DAMAGE",
+            targetId: target.id,
+            amount,
+            remainingHp: target.hp,
+            isCritical,
+            timestamp: currentTick,
+          });
+          if (target.hp <= 0) {
+            emit({
+              id: generateId(),
+              type: "DEATH",
+              playerId: target.id,
+              timestamp: currentTick,
+            });
+            if (target.castingWeaponIndex !== null) {
+              emit({
+                id: generateId(),
+                type: "CAST_CANCEL",
+                actorId: target.id,
+                weaponIndex: target.castingWeaponIndex,
+                reason: "DEATH",
+                timestamp: currentTick,
+              });
+              target.castingWeaponIndex = null;
+              target.castingTicksRemaining = 0;
             }
-          : null,
-      ) as any,
-    })),
-  };
-
-  const timeline: BattleLogEntry[] = [];
-  const tickUnit = 1;
-  let currentTick = 0;
-
-  // 2. 시뮬레이션 루프
-  while (!isBattleOver(simPlayers)) {
-    currentTick += tickUnit;
-    const tickEvents: BattleEvent[] = [];
+          }
+        }
+      }
+      weapon.currentCooldown = weapon.cooldownTicks;
+      actor.currentWeaponIndex = (weaponIndex + 1) % actor.weapons.length;
+      emit({
+        id: generateId(),
+        type: "COOLDOWN",
+        actorId: actor.id,
+        weaponIndex,
+        duration: weapon.cooldownTicks,
+        timestamp: currentTick,
+      });
+    };
 
     for (const actor of simPlayers) {
-      if (actor.hp <= 0) {
-        if (actor.castingWeaponIndex !== null && actor.castingWeaponIndex !== undefined) {
-          tickEvents.push({
+      if (actor.hp <= 0 || aliveTeams(simPlayers).size <= 1) continue;
+      for (const weapon of actor.weapons) {
+        if (weapon)
+          weapon.currentCooldown = Math.max(0, weapon.currentCooldown - 1);
+      }
+      changeStamina(
+        actor,
+        Math.min(actor.maxStamina, actor.stamina + actor.staminaRegen),
+      );
+
+      if (actor.castingWeaponIndex !== null) {
+        actor.castingTicksRemaining--;
+        if (actor.castingTicksRemaining <= 0) {
+          const weaponIndex = actor.castingWeaponIndex;
+          const weapon = actor.weapons[weaponIndex];
+          emit({
             id: generateId(),
-            type: "CAST_CANCEL",
+            type: "CAST_COMPLETE",
             actorId: actor.id,
-            weaponIndex: actor.castingWeaponIndex,
-            reason: "DEATH",
+            weaponIndex,
             timestamp: currentTick,
           });
           actor.castingWeaponIndex = null;
           actor.castingTicksRemaining = 0;
+          if (weapon) useWeapon(actor, weaponIndex, weapon);
         }
         continue;
       }
 
-      // 쿨다운 감소
-      for (const w of actor.weapons) {
-        if (w && w.currentCooldown > 0) {
-          w.currentCooldown -= tickUnit;
+      const startIndex = actor.currentWeaponIndex;
+      for (let offset = 0; offset < actor.weapons.length; offset++) {
+        const weaponIndex = (startIndex + offset) % actor.weapons.length;
+        const weapon = actor.weapons[weaponIndex];
+        if (
+          !weapon ||
+          weapon.currentCooldown > 0 ||
+          !canUseEffect(actor, weapon)
+        )
+          continue;
+        if (actor.stamina < weapon.staminaCost) {
+          actor.currentWeaponIndex = weaponIndex;
+          break;
         }
-      }
-
-      // 스태미너 회복
-      const prevStamina = actor.stamina;
-      actor.stamina = Math.min(actor.maxStamina, actor.stamina + actor.staminaRegen);
-
-      if (Math.floor(actor.stamina) !== Math.floor(prevStamina)) {
-        tickEvents.push({
-          id: generateId(),
-          type: "STAMINA_CHANGE",
-          playerId: actor.id,
-          currentStamina: actor.stamina,
-          timestamp: currentTick,
-        });
-      }
-
-      if (actor.castingWeaponIndex !== null && actor.castingWeaponIndex !== undefined) {
-        const remaining = actor.castingTicksRemaining ?? 0;
-        const newRemaining = remaining - tickUnit;
-        actor.castingTicksRemaining = newRemaining;
-
-        if (newRemaining <= 0) {
-          const weaponIndex = actor.castingWeaponIndex;
-          const weapon = actor.weapons[weaponIndex];
-
-          if (weapon) {
-            tickEvents.push({
-              id: generateId(),
-              type: "CAST_COMPLETE",
-              actorId: actor.id,
-              weaponIndex: weaponIndex,
-              timestamp: currentTick,
-            });
-
-            const target = findTarget(actor, weapon, simPlayers);
-            if (target) {
-              const weaponEvents = processWeaponUse(actor, target, weapon, generateId, currentTick);
-
-              weaponEvents.forEach((e) => {
-                tickEvents.push(e);
-                if (e.type === "ATTACK" && e.weaponIndex === undefined) {
-                  e.weaponIndex = weaponIndex;
-                }
-              });
-
-              if (target.hp <= 0 && !deadPlayers.has(target.id)) {
-                deadPlayers.add(target.id);
-                tickEvents.push({ id: generateId(), type: "DEATH", playerId: target.id, timestamp: currentTick });
-              }
-            }
-
-            weapon.currentCooldown = weapon.cooldownTicks;
-            actor.currentWeaponIndex = (weaponIndex + 1) % 6;
-          }
-
-          actor.castingWeaponIndex = null;
-          actor.castingTicksRemaining = 0;
-        }
-      } else {
-        const actions = processWeaponSequence(actor, simPlayers, generateId, deadPlayers, currentTick);
-        tickEvents.push(...actions);
-      }
-    }
-
-    if (tickEvents.length > 0) {
-      timeline.push({
-        timestamp: currentTick,
-        events: tickEvents,
-      });
-    }
-
-    if (currentTick > 5000) break;
-  }
-
-  const remainingTeams = new Set(simPlayers.filter((p) => p.hp > 0).map((p) => p.teamId));
-  const teamArray = Array.from(remainingTeams);
-  const winnerTeamId = remainingTeams.size === 1 && teamArray[0] !== undefined ? teamArray[0] : null;
-  return {
-    initialState,
-    timeline,
-  };
-}
-
-function isBattleOver(players: User[]): boolean {
-  const aliveTeams = new Set(players.filter((p) => p.hp > 0).map((p) => p.teamId));
-  return aliveTeams.size <= 1;
-}
-
-function findTarget(actor: User, weapon: Weapon, allPlayers: User[]): User | null {
-  const enemies = allPlayers.filter((p) => p.teamId !== actor.teamId && p.hp > 0);
-  if (enemies.length === 0) return null;
-
-  const scoredEnemies = enemies.map((enemy) => {
-    let score = 100;
-    if (enemy.hp < 20) score += 50;
-    score += (1 - enemy.hp / enemy.maxHp) * 30;
-
-    if (weapon.strategy === "WEAKEST") {
-      score += (1 - enemy.hp / enemy.maxHp) * 50;
-    } else if (weapon.strategy === "STRONGEST") {
-      score += (enemy.hp / enemy.maxHp) * 50;
-    }
-
-    score += Math.random() * 15;
-    return { enemy, score };
-  });
-
-  const sorted = scoredEnemies.sort((a, b) => b.score - a.score);
-  const best = sorted[0];
-  return best ? best.enemy : null;
-}
-
-function processWeaponUse(actor: User, target: User, weapon: Weapon, generateId: () => string, timestamp: number): BattleEvent[] {
-  const damage = weapon.damage;
-  const isCritical = Math.random() < 0.1;
-  const finalDamage = isCritical ? Math.floor(damage * 1.5) : damage;
-
-  target.hp = Math.max(0, target.hp - finalDamage);
-
-  return [
-    {
-      id: generateId(),
-      type: "ATTACK",
-      actorId: actor.id,
-      targetId: target.id,
-      weaponIndex: 0,
-      timestamp,
-    },
-    {
-      id: generateId(),
-      type: "DAMAGE",
-      targetId: target.id,
-      amount: finalDamage,
-      remainingHp: target.hp,
-      isCritical: isCritical,
-      timestamp,
-    },
-  ];
-}
-
-function processWeaponSequence(
-  actor: User,
-  allPlayers: User[],
-  generateId: () => string,
-  deadPlayers: Set<string>,
-  timestamp: number,
-): BattleEvent[] {
-  const startIndex = actor.currentWeaponIndex || 0;
-
-  for (let i = 0; i < 6; i++) {
-    const checkIndex = (startIndex + i) % 6;
-    const weapon = actor.weapons[checkIndex];
-
-    if (!weapon) continue;
-
-    if (weapon.currentCooldown > 0) {
-      // 쿨다운 중인 무기는 건너뜀
-      continue;
-    }
-
-    if (actor.stamina >= weapon.staminaCost) {
-      const target = findTarget(actor, weapon, allPlayers);
-      if (!target) return [];
-
-      if (weapon.castTicks > 0) {
-        actor.castingWeaponIndex = checkIndex;
-        actor.castingTicksRemaining = weapon.castTicks;
-        actor.stamina -= weapon.staminaCost;
-
-        return [
-          {
+        changeStamina(actor, actor.stamina - weapon.staminaCost);
+        if (weapon.castTicks > 0) {
+          actor.castingWeaponIndex = weaponIndex;
+          actor.castingTicksRemaining = weapon.castTicks;
+          emit({
             id: generateId(),
             type: "CAST_START",
             actorId: actor.id,
-            weaponIndex: checkIndex,
+            weaponIndex,
             duration: weapon.castTicks,
-            timestamp,
-          },
-          {
-            id: generateId(),
-            type: "STAMINA_CHANGE",
-            playerId: actor.id,
-            currentStamina: actor.stamina,
-            timestamp,
-          },
-        ];
-      } else {
-        const weaponEvents = processWeaponUse(actor, target, weapon, generateId, timestamp);
-        actor.stamina -= weapon.staminaCost;
-        weapon.currentCooldown = weapon.cooldownTicks;
-        actor.currentWeaponIndex = (checkIndex + 1) % 6;
-
-        const events: BattleEvent[] = [
-          ...weaponEvents,
-          {
-            id: generateId(),
-            type: "STAMINA_CHANGE",
-            playerId: actor.id,
-            currentStamina: actor.stamina,
-            timestamp,
-          },
-        ];
-
-        events.forEach((e) => {
-          if (e.type === "ATTACK") {
-            e.weaponIndex = checkIndex;
-          }
-        });
-
-        if (target.hp <= 0 && !deadPlayers.has(target.id)) {
-          deadPlayers.add(target.id);
-          events.push({ id: generateId(), type: "DEATH", playerId: target.id, timestamp });
+            timestamp: currentTick,
+          });
+        } else {
+          useWeapon(actor, weaponIndex, weapon);
         }
-
-        return events;
+        break;
       }
-    } else {
-      // 스태미너가 부족한 경우: 대기
-      actor.currentWeaponIndex = checkIndex;
-      return [];
     }
+    if (events.length > 0) timeline.push({ timestamp: currentTick, events });
   }
 
-  return [];
+  const teams = aliveTeams(simPlayers);
+  const result: BattleLog["result"] = {
+    winnerTeamId: teams.size === 1 ? ([...teams][0] ?? null) : null,
+    reason:
+      teams.size === 1 ? "VICTORY" : teams.size === 0 ? "DRAW" : "MAX_TICKS",
+    durationTicks: currentTick,
+  };
+  const endEvent: BattleEvent = {
+    id: generateId(),
+    type: "BATTLE_END",
+    timestamp: currentTick,
+    winnerTeamId: result.winnerTeamId,
+    reason: result.reason,
+  };
+  const lastEntry = timeline[timeline.length - 1];
+  if (lastEntry?.timestamp === currentTick) lastEntry.events.push(endEvent);
+  else timeline.push({ timestamp: currentTick, events: [endEvent] });
+
+  return {
+    initialState,
+    timeline,
+    finalState: { players: capturePlayers(simPlayers) },
+    result,
+  };
 }

@@ -18,7 +18,7 @@ interface BattleCanvasProps {
   isCombat: boolean;
   battleLog: BattleLog | null | undefined;
   enemyPositions: Map<string, { x: number; y: number }>;
-  characterNickname: string | undefined;
+  characterId: string | undefined;
 }
 
 interface DamagePopup {
@@ -34,7 +34,7 @@ export function BattleCanvas({
   isCombat,
   battleLog,
   enemyPositions,
-  characterNickname,
+  characterId,
 }: BattleCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lastAttackIdRef = useRef<string | null>(null);
@@ -142,12 +142,12 @@ export function BattleCanvas({
 
   // 전투 중에는 플레이어가 항시 살아있는 적을 바라보도록 회전각 계산
   const activeRotation = useMemo(() => {
-    if (!characterNickname || !battleLog) return playerRotation;
+    if (!characterId || !battleLog) return playerRotation;
 
     const firstAliveEnemy = battleLog.initialState.players.find(
       (p) =>
         p.teamId !==
-          battleLog.initialState.players.find((player) => player.id === characterNickname)?.teamId &&
+          battleLog.initialState.players.find((player) => player.id === characterId)?.teamId &&
         !deadEnemyIds.has(p.id),
     );
 
@@ -163,7 +163,7 @@ export function BattleCanvas({
     }
 
     return playerRotation;
-  }, [battleLog, deadEnemyIds, enemyPositions, characterNickname, width, height, playerRotation, getSafeCoords]);
+  }, [battleLog, deadEnemyIds, enemyPositions, characterId, width, height, playerRotation, getSafeCoords]);
 
   // --- Trigger Camera Shake ---
   const triggerShake = useCallback((intensity: number) => {
@@ -176,7 +176,7 @@ export function BattleCanvas({
     // 1. Monitor Attack Events for immediate starting shake
     const attackEvents = displayEvents.filter((e): e is BattleEvent & { type: "ATTACK" } => e.type === "ATTACK");
     if (attackEvents.length > 0) {
-      const isPlayerActor = attackEvents.some((e) => e.actorId === characterNickname);
+      const isPlayerActor = attackEvents.some((e) => e.actorId === characterId);
       if (isPlayerActor) {
         triggerShake(4); // Mild shake on player firing
       } else {
@@ -188,7 +188,7 @@ export function BattleCanvas({
     const damageEvents = displayEvents.filter((e): e is BattleEvent & { type: "DAMAGE" } => e.type === "DAMAGE");
     if (damageEvents.length > 0) {
       // Camera Shake & Screen Flash (ONLY when PLAYER takes damage)
-      const hasPlayerDamage = damageEvents.some((e) => e.targetId === characterNickname);
+      const hasPlayerDamage = damageEvents.some((e) => e.targetId === characterId);
       if (hasPlayerDamage) {
         triggerShake(12); // Strong shake for player damage
         setShowRedFlash(true);
@@ -210,7 +210,7 @@ export function BattleCanvas({
         let posX = width / 2;
         let posY = height / 2;
 
-        if (e.targetId !== characterNickname) {
+        if (e.targetId !== characterId) {
           const pos = enemyPositions.get(e.targetId);
           if (pos) {
             const safePos = getSafeCoords(pos);
@@ -237,7 +237,7 @@ export function BattleCanvas({
         setPopups((prev) => [...prev, ...newPopups]);
       }
     }
-  }, [displayEvents, characterNickname, enemyPositions, getSafeCoords, width, height, triggerShake]);
+  }, [displayEvents, characterId, enemyPositions, getSafeCoords, width, height, triggerShake]);
 
   // 컴포넌트 언마운트 시에만 애니메이션 프레임 및 타이머 취소
   useEffect(() => {
@@ -253,12 +253,12 @@ export function BattleCanvas({
 
   // 플레이어 근접 공격 시 가속 돌진 및 슬라이딩 복귀 애니메이션 (requestAnimationFrame 기반)
   useEffect(() => {
-    if (!isCombat || !characterNickname || width === 0 || height === 0) return;
+    if (!isCombat || !characterId || width === 0 || height === 0) return;
 
     // 플레이어의 현재 프레임 근접 공격 이벤트 조회
     const activePlayerMeleeAttack = activeAttacks.find((attack) => {
-      if (attack.actorId !== characterNickname) return false;
-      const attacker = battleLog?.initialState.players.find((p) => p.id === characterNickname);
+      if (attack.actorId !== characterId) return false;
+      const attacker = battleLog?.initialState.players.find((p) => p.id === characterId);
       const weapon = attacker?.weapons[attack.weaponIndex];
       return weapon?.attackType !== "RANGED";
     });
@@ -348,7 +348,7 @@ export function BattleCanvas({
         }
       }
     }
-  }, [activeAttacks, characterNickname, enemyPositions, getSafeCoords, width, height, isCombat, battleLog]);
+  }, [activeAttacks, characterId, enemyPositions, getSafeCoords, width, height, isCombat, battleLog]);
 
   return (
     <Container ref={containerRef}>
@@ -376,7 +376,7 @@ export function BattleCanvas({
                 .filter(
                   (p) =>
                     p.teamId !==
-                      battleLog.initialState.players.find((player) => player.id === characterNickname)?.teamId &&
+                      battleLog.initialState.players.find((player) => player.id === characterId)?.teamId &&
                     !deadEnemyIds.has(p.id),
                 )
                 .map((enemy) => {
@@ -434,13 +434,13 @@ export function BattleCanvas({
               const targetPos = enemyPositions.get(attack.targetId);
 
               const x1 =
-                attack.actorId === characterNickname ? width / 2 : actorPos ? getSafeCoords(actorPos).x : width / 2;
+                attack.actorId === characterId ? width / 2 : actorPos ? getSafeCoords(actorPos).x : width / 2;
               const y1 =
-                attack.actorId === characterNickname ? height / 2 : actorPos ? getSafeCoords(actorPos).y : height / 2;
+                attack.actorId === characterId ? height / 2 : actorPos ? getSafeCoords(actorPos).y : height / 2;
               const x2 =
-                attack.targetId === characterNickname ? width / 2 : targetPos ? getSafeCoords(targetPos).x : width / 2;
+                attack.targetId === characterId ? width / 2 : targetPos ? getSafeCoords(targetPos).x : width / 2;
               const y2 =
-                attack.targetId === characterNickname
+                attack.targetId === characterId
                   ? height / 2
                   : targetPos
                     ? getSafeCoords(targetPos).y

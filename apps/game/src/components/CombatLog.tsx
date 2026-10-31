@@ -1,15 +1,15 @@
 import { useAtomValue } from "jotai";
 import { AnimatePresence, motion } from "motion/react";
-import { FaPause } from "react-icons/fa6";
 import styled from "styled-components";
 
-import { processedEventsAtom } from "@/atoms/globalAtom";
+import { battleLogAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { FieldWidget } from "@/components/Commons";
 
 import portrait from "../assets/portrait.png";
 
 const CombatLog = () => {
   const processedEvents = useAtomValue(processedEventsAtom);
+  const battle = useAtomValue(battleLogAtom);
 
   // actorId가 있는 유의미한 이벤트만 필터링하여 최근 10개 표시
   const logHistory = processedEvents.filter((e) => "actorId" in e).slice(-10);
@@ -17,12 +17,32 @@ const CombatLog = () => {
   return (
     <FieldWidget>
       <Row $justifyContent={"space-between"} $padding="0 0 16px">
-        <SubTitle>BATTLE LOG</SubTitle>
-        <ResumeButton>
-          <FaPause />
-          RESUME
-        </ResumeButton>
+        <SubTitle>
+          {battle?.encounter?.kind === "GHOST" ? "고스트 조우" : "BATTLE LOG"}
+        </SubTitle>
+        <ResumeButton>전투 재생 중</ResumeButton>
       </Row>
+      {battle?.encounter && (
+        <StyledEncounter>
+          {battle.encounter.name}
+          {battle.encounter.kind === "NPC" && (
+            <span>
+              {battle.encounter.faction} · {battle.encounter.role} ·{" "}
+              {battle.encounter.reason}
+            </span>
+          )}
+          {battle.encounter.kind === "GHOST" && (
+            <span>
+              {battle.encounter.worldlineCode} · 개체{" "}
+              {battle.encounter.sourceCharacterId?.slice(0, 8) ?? "기록"} ·{" "}
+              {battle.encounter.recordedRound}라운드 기록 ·{" "}
+              {battle.encounter.recordedAt
+                ? new Date(battle.encounter.recordedAt).toLocaleString("ko-KR")
+                : ""}
+            </span>
+          )}
+        </StyledEncounter>
+      )}
       <Row>
         <ActionLogList>
           <AnimatePresence initial={false} mode="popLayout">
@@ -38,7 +58,13 @@ const CombatLog = () => {
                 <BackgroundImgDiv></BackgroundImgDiv>
                 <ActionLogItemTextContainer>
                   <ActionLogUnitName>{event.type}</ActionLogUnitName>
-                  <ActionLogUnitAction>{"actorId" in event ? event.actorId : "system"}</ActionLogUnitAction>
+                  <ActionLogUnitAction>
+                    {"actorId" in event
+                      ? (battle?.initialState.players.find(
+                          (player) => player.id === event.actorId,
+                        )?.name ?? event.actorId)
+                      : "system"}
+                  </ActionLogUnitAction>
                 </ActionLogItemTextContainer>
               </ActionLogItem>
             ))}
@@ -50,6 +76,18 @@ const CombatLog = () => {
 };
 
 export default CombatLog;
+
+const StyledEncounter = styled.p`
+  color: #85adff;
+  font-size: 12px;
+  margin: 0 0 12px;
+  span {
+    display: block;
+    font-size: 10px;
+    line-height: 1.5;
+    margin-top: 4px;
+  }
+`;
 
 const SubTitle = styled.h3`
   font-size: 12px;
@@ -72,7 +110,7 @@ const Row = styled.div<RowProps>`
   padding: ${(props) => props.$padding || "0"};
 `;
 
-const ResumeButton = styled.button`
+const ResumeButton = styled.span`
   box-sizing: border-box;
 
   display: flex;
@@ -141,7 +179,11 @@ const BackgroundImgDiv = styled.div`
     left: -10px;
     width: 100%;
     height: 100%;
-    background: linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(17, 17, 17, 1) 110%);
+    background: linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(17, 17, 17, 1) 110%
+    );
   }
 `;
 

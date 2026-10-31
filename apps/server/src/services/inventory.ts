@@ -1,0 +1,352 @@
+import {
+  Prisma,
+  type PrismaClient,
+  type Character,
+  type StashItem,
+} from "@prisma/client";
+import { z } from "zod";
+
+const equipmentEntry = z.object({
+  weaponMasterId: z.string().min(1),
+  slotIndex: z.number().int().min(0).max(5),
+});
+const inventoryEntry = z.object({
+  weaponMasterId: z.string().min(1),
+  slotIndex: z.number().int().min(0).max(31),
+  quantity: z.number().int().positive().max(2147483647).default(1),
+});
+const uniqueSlots = (items: { slotIndex: number }[]) =>
+  new Set(items.map((item) => item.slotIndex)).size === items.length;
+export const SlotsSchema = z.object({
+  equipment: z
+    .array(equipmentEntry)
+    .max(6)
+    .refine(uniqueSlots, "Duplicate equipment slot"),
+  inventory: z
+    .array(inventoryEntry)
+    .max(32)
+    .refine(uniqueSlots, "Duplicate backpack slot"),
+});
+export const MoveItemSchema = z.object({
+  direction: z.enum(["to_backpack", "to_stash"]),
+  weaponMasterId: z.string().min(1),
+  slotIndex: z.number().int().min(0).max(31),
+});
+export const EquipItemSchema = z.object({
+  slotIndex: z.number().int().min(0).max(5),
+  weaponMasterId: z.string().min(1).nullable(),
+});
+
+export class InventoryError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode = 400,
+  ) {
+    super(message);
+  }
+}
+
+type Tx = Prisma.TransactionClient;
+export type SlotsInput = z.infer<typeof SlotsSchema>;
+
+// 같은 아이템을 동시에 이동해도 수량을 잃거나 복제하지 않도록 직렬화 충돌을 재시도한다.
+export async function withInventoryTransaction<T>(
+  database: PrismaClient,
+  action: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      return await database.$transaction(action, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      });
+    } catch (error) {
+      const retryable =
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === "P2034" ||
+          (error.code === "P2010" &&
+            ["40001", "40P01"].includes(String(error.meta?.code))));
+      if (!retryable) throw error;
+      if (attempt === 4)
+        throw new InventoryError(
+          "Inventory changed concurrently; retry the request",
+          409,
+        );
+    }
+  }
+  throw new InventoryError("Inventory transaction failed", 409);
+}
+
+async function getCharacter(tx: Tx, characterId: string) {
+  const character = await tx.character.findUnique({
+    where: { id: characterId },
+  });
+  if (!character) throw new InventoryError("Character not found", 404);
+  return character;
+}
+
+export function countItems(
+  equipment: { weaponMasterId: string }[],
+  inventory: { weaponMasterId: string; quantity: number }[],
+) {
+  const counts = new Map<string, number>();
+  for (const item of equipment)
+    counts.set(item.weaponMasterId, (counts.get(item.weaponMasterId) ?? 0) + 1);
+  for (const item of inventory) {
+    if (!Number.isSafeInteger(item.quantity) || item.quantity < 1)
+      throw new InventoryError("Invalid item quantity");
+    counts.set(
+      item.weaponMasterId,
+      (counts.get(item.weaponMasterId) ?? 0) + item.quantity,
+    );
+  }
+  return counts;
+}
+
+export async function calculateInventoryWeight(tx: Tx, characterId: string) {
+  const equipment = await tx.characterWeapon.findMany({
+    where: { characterId },
+    include: { weaponMaster: true },
+  });
+  const inventory = await tx.raidInventoryItem.findMany({
+    where: { characterId },
+    include: { weaponMaster: true },
+  });
+  return (
+    equipment.reduce((sum, item) => sum + item.weaponMaster.weight, 0) +
+    inventory.reduce(
+      (sum, item) => sum + item.weaponMaster.weight * item.quantity,
+      0,
+    )
+  );
+}
+
+export async function updateInventoryWeight(
+  tx: Tx,
+  character: Pick<Character, "id" | "maxWeight">,
+) {
+  const weight = await calculateInventoryWeight(tx, character.id);
+  if (weight > character.maxWeight)
+    throw new InventoryError("Maximum carrying weight exceeded");
+  await tx.character.update({ where: { id: character.id }, data: { weight } });
+  return weight;
+}
+
+export async function syncSlots(
+  database: PrismaClient,
+  characterId: string,
+  input: SlotsInput,
+) {
+  return withInventoryTransaction(database, (tx) =>
+    syncSlotsInTransaction(tx, characterId, input),
+  );
+}
+
+export async function syncSlotsInTransaction(
+  tx: Tx,
+  characterId: string,
+  input: SlotsInput,
+) {
+  const data = SlotsSchema.parse(input);
+  const character = await getCharacter(tx, characterId);
+  const equipment = await tx.characterWeapon.findMany({
+    where: { characterId },
+  });
+  const inventory = await tx.raidInventoryItem.findMany({
+    where: { characterId },
+  });
+  const actual = countItems(equipment, inventory);
+  const requested = countItems(data.equipment, data.inventory);
+  if (
+    actual.size !== requested.size ||
+    [...actual].some(([id, count]) => requested.get(id) !== count)
+  ) {
+    throw new InventoryError("Item quantities must be preserved");
+  }
+  await tx.characterWeapon.deleteMany({ where: { characterId } });
+  await tx.raidInventoryItem.deleteMany({ where: { characterId } });
+  if (data.equipment.length)
+    await tx.characterWeapon.createMany({
+      data: data.equipment.map((item) => ({ ...item, characterId })),
+    });
+  if (data.inventory.length)
+    await tx.raidInventoryItem.createMany({
+      data: data.inventory.map((item) => ({ ...item, characterId })),
+    });
+  return {
+    status: "success",
+    weight: await updateInventoryWeight(tx, character),
+  };
+}
+
+async function writeStashQuantity(
+  tx: Tx,
+  userId: string,
+  weaponMasterId: string,
+  rows: StashItem[],
+  quantity: number,
+) {
+  if (
+    !Number.isSafeInteger(quantity) ||
+    quantity < 0 ||
+    quantity > 2147483647
+  ) {
+    throw new InventoryError("Invalid stash quantity");
+  }
+  const first = rows[0];
+  if (quantity === 0) {
+    await tx.stashItem.deleteMany({ where: { userId, weaponMasterId } });
+  } else if (first) {
+    await tx.stashItem.update({ where: { id: first.id }, data: { quantity } });
+    await tx.stashItem.deleteMany({
+      where: { id: { in: rows.slice(1).map((row) => row.id) } },
+    });
+  } else {
+    await tx.stashItem.create({ data: { userId, weaponMasterId, quantity } });
+  }
+}
+
+export async function mergeIntoStash(
+  tx: Tx,
+  userId: string,
+  weaponMasterId: string,
+  quantity: number,
+) {
+  const rows = await tx.stashItem.findMany({
+    where: { userId, weaponMasterId },
+    orderBy: { id: "asc" },
+  });
+  const existing = countItems([], rows).get(weaponMasterId) ?? 0;
+  await writeStashQuantity(
+    tx,
+    userId,
+    weaponMasterId,
+    rows,
+    existing + quantity,
+  );
+}
+
+export async function moveStashItem(
+  database: PrismaClient,
+  characterId: string,
+  input: z.infer<typeof MoveItemSchema>,
+) {
+  const { direction, weaponMasterId, slotIndex } = MoveItemSchema.parse(input);
+  return withInventoryTransaction(database, async (tx) => {
+    const character = await getCharacter(tx, characterId);
+    if (
+      character.isRaiding ||
+      (await tx.character.count({
+        where: { userId: character.userId, isRaiding: true },
+      }))
+    )
+      throw new InventoryError("Stash is unavailable during a raid", 409);
+    const stash = await tx.stashItem.findMany({
+      where: { userId: character.userId, weaponMasterId },
+      orderBy: { id: "asc" },
+    });
+    const stashQuantity = countItems([], stash).get(weaponMasterId) ?? 0;
+    const item = await tx.raidInventoryItem.findUnique({
+      where: { characterId_slotIndex: { characterId, slotIndex } },
+    });
+    if (direction === "to_backpack") {
+      if (stashQuantity < 1)
+        throw new InventoryError("Item not found in stash");
+      if (item) throw new InventoryError("Backpack slot already occupied");
+      await writeStashQuantity(
+        tx,
+        character.userId,
+        weaponMasterId,
+        stash,
+        stashQuantity - 1,
+      );
+      await tx.raidInventoryItem.create({
+        data: { characterId, weaponMasterId, slotIndex, quantity: 1 },
+      });
+    } else {
+      if (!item || item.weaponMasterId !== weaponMasterId)
+        throw new InventoryError("Item not found in specified backpack slot");
+      countItems([], [item]);
+      await tx.raidInventoryItem.delete({ where: { id: item.id } });
+      await writeStashQuantity(
+        tx,
+        character.userId,
+        weaponMasterId,
+        stash,
+        stashQuantity + item.quantity,
+      );
+    }
+    return {
+      status: "success",
+      weight: await updateInventoryWeight(tx, character),
+    };
+  });
+}
+
+async function putInBackpack(
+  tx: Tx,
+  characterId: string,
+  weaponMasterId: string,
+) {
+  const items = await tx.raidInventoryItem.findMany({
+    where: { characterId },
+    orderBy: { slotIndex: "asc" },
+  });
+  const stack = items.find((item) => item.weaponMasterId === weaponMasterId);
+  if (stack) {
+    await tx.raidInventoryItem.update({
+      where: { id: stack.id },
+      data: { quantity: { increment: 1 } },
+    });
+    return;
+  }
+  const occupied = new Set(items.map((item) => item.slotIndex));
+  const slotIndex = Array.from({ length: 32 }, (_, index) => index).find(
+    (index) => !occupied.has(index),
+  );
+  if (slotIndex === undefined) throw new InventoryError("Backpack is full");
+  await tx.raidInventoryItem.create({
+    data: { characterId, weaponMasterId, slotIndex, quantity: 1 },
+  });
+}
+
+export async function equipItem(
+  database: PrismaClient,
+  characterId: string,
+  input: z.infer<typeof EquipItemSchema>,
+) {
+  const { slotIndex, weaponMasterId } = EquipItemSchema.parse(input);
+  return withInventoryTransaction(database, async (tx) => {
+    const character = await getCharacter(tx, characterId);
+    const equipped = await tx.characterWeapon.findUnique({
+      where: { characterId_slotIndex: { characterId, slotIndex } },
+    });
+    if (equipped?.weaponMasterId !== weaponMasterId) {
+      if (weaponMasterId !== null) {
+        const source = await tx.raidInventoryItem.findFirst({
+          where: { characterId, weaponMasterId },
+          orderBy: { slotIndex: "asc" },
+        });
+        if (!source) throw new InventoryError("Item not in inventory");
+        countItems([], [source]);
+        if (source.quantity > 1)
+          await tx.raidInventoryItem.update({
+            where: { id: source.id },
+            data: { quantity: { decrement: 1 } },
+          });
+        else await tx.raidInventoryItem.delete({ where: { id: source.id } });
+      }
+      if (equipped) {
+        await tx.characterWeapon.delete({ where: { id: equipped.id } });
+        await putInBackpack(tx, characterId, equipped.weaponMasterId);
+      }
+      if (weaponMasterId !== null)
+        await tx.characterWeapon.create({
+          data: { characterId, weaponMasterId, slotIndex },
+        });
+    }
+    return {
+      status: "success",
+      weight: await updateInventoryWeight(tx, character),
+    };
+  });
+}

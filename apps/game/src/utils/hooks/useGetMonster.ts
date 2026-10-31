@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Monster } from "@webgame/types";
 
-import { API_BASE_URL } from "../api";
+import { API_BASE_URL,apiFetch } from "../api";
 
 export interface MonsterWeaponResponse {
   id: string;
@@ -38,7 +38,9 @@ export const useGetMonster = (level: number) => {
   return useQuery<Monster>({
     queryKey: ["monster", level],
     queryFn: async (): Promise<Monster> => {
-      const response = await fetch(`${API_BASE_URL}/monster/match?level=${level}`);
+      const response = await apiFetch(
+        `${API_BASE_URL}/monster/match?level=${level}`,
+      );
 
       if (!response.ok) {
         if (response.status === 404) {

@@ -1,6 +1,7 @@
 import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
 import styled from "styled-components";
 
+import DevelopmentAccountGate from "@/components/DevelopmentAccountGate";
 import GlobalNav from "@/components/GlobalNav";
 
 export const Route = createRootRouteWithContext<RouterContext>()({
@@ -14,10 +15,12 @@ type RouterContext = {
 function RouteComponent() {
   return (
     <Main>
-      <OutletWrapper className="content-container">
-        <Outlet />
-      </OutletWrapper>
-      <GlobalNav />
+      <DevelopmentAccountGate>
+        <OutletWrapper className="content-container">
+          <Outlet />
+        </OutletWrapper>
+        <GlobalNav />
+      </DevelopmentAccountGate>
     </Main>
   );
 }
@@ -52,6 +55,7 @@ const OutletWrapper = styled.div`
   justify-content: center;
   position: relative;
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 `;

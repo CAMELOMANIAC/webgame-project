@@ -24,16 +24,10 @@ interface EquipmentSlotProps {
   index: number;
 }
 
-const getWeaponIcon = (name: string) => {
-  const lower = name.toLowerCase();
-  if (lower.includes("dagger")) return <GiBowieKnife size={24} color="#ffd4d4" />;
-  if (lower.includes("greatsword")) return <GiBroadsword size={24} color="#ccd9ff" />;
-  if (lower.includes("sniper")) return <GiRifle size={24} color="#d4ffd4" />;
-  if (lower.includes("giant slayer") || lower.includes("giant_slayer")) return <GiBattleAxe size={24} color="#ffb3b3" />;
-  if (lower.includes("staff")) return <GiWizardStaff size={24} color="#ebd4ff" />;
-  if (lower.includes("life-saver") || lower.includes("lifesaver") || lower.includes("heal")) return <GiRegeneration size={24} color="#b3ffb3" />;
-  if (lower.includes("secondary")) return <GiTargetArrows size={24} color="#ffe6cc" />;
-  return <GiShardSword size={24} color="#f0d38d" />; // Default/primary
+const getWeaponIcon = (iconKey = "WEAPON") => {
+  const icons = { DAGGER: GiBowieKnife, SWORD: GiBroadsword, RIFLE: GiRifle, AXE: GiBattleAxe, STAFF: GiWizardStaff, HEAL: GiRegeneration, TARGET: GiTargetArrows };
+  const Icon = icons[iconKey as keyof typeof icons] ?? GiShardSword;
+  return <Icon size={24} color="#d4e2ff" />;
 };
 
 const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
@@ -66,8 +60,8 @@ const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
   let remainingCooldown = 0;
   let isAttacking = false;
 
-  if (isCombat && weapon && characterData?.raw.user.nickname) {
-    const actorId = characterData.raw.user.nickname;
+  if (isCombat && weapon && characterData?.raw.id) {
+    const actorId = characterData.raw.id;
 
     // 1. Casting state
     const lastCastStart = [...processedEvents].reverse().find(
@@ -123,7 +117,7 @@ const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
     >
       {!isEmpty && (
         <>
-          {getWeaponIcon(item.name)}
+          {getWeaponIcon(weapon?.iconKey)}
           <WeaponNameLabel>{item.name}</WeaponNameLabel>
           <TooltipLabel>
             <strong>{item.name}</strong>
