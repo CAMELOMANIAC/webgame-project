@@ -3,16 +3,16 @@ import { useAtomValue } from "jotai";
 import Konva from "konva";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Group, Image, Layer, Stage, Text } from "react-konva";
-import styled from "styled-components";
 import useImage from "use-image";
 
+import compass from "@/assets/compass.svg";
 import { displayEventsAtom, processedEventsAtom } from "@/atoms/globalAtom";
-import CanvasEnemyUnit from "@/components/CanvasEnemyUnit";
-import MeleeSlashEffect from "@/components/MeleeSlashEffect";
-import RadarAttackLine from "@/components/RadarAttackLine";
+import { playerRotationAtom } from "@/atoms/raidAtom";
+import CanvasEnemyUnit from "@/components/combat/CanvasEnemyUnit";
+import MeleeSlashEffect from "@/components/combat/MeleeSlashEffect";
+import RadarAttackLine from "@/components/combat/RadarAttackLine";
 
-import compass from "../assets/compass.svg";
-import { playerRotationAtom } from "../atoms/raidAtom";
+import * as styles from "./BattleCanvas.css";
 
 interface BattleCanvasProps {
   isCombat: boolean;
@@ -351,8 +351,8 @@ export function BattleCanvas({
   }, [activeAttacks, characterId, enemyPositions, getSafeCoords, width, height, isCombat, battleLog]);
 
   return (
-    <Container ref={containerRef}>
-      <RedFlashOverlay $visible={showRedFlash} />
+    <div className={styles.container} ref={containerRef}>
+      <div className={styles.redFlashOverlay({ visible: showRedFlash })} />
       {width > 0 && height > 0 && (
         <Stage width={width} height={height}>
           {/* Layer 1: Player Marker (MapGraphCanvas와 동일한 디자인으로 중앙에 고정 렌더링) */}
@@ -477,7 +477,7 @@ export function BattleCanvas({
           </Layer>
         </Stage>
       )}
-    </Container>
+    </div>
   );
 }
 
@@ -575,28 +575,3 @@ function CanvasDamagePopup({ id, x, y, amount, isCritical, onComplete }: CanvasD
     </Group>
   );
 }
-
-const Container = styled.div`
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  overflow: hidden;
-  background: transparent; /* 뒷배경 지도가 완전하고 뚜렷하게 보이도록 투명 설정 */
-  pointer-events: none;
-`;
-
-const RedFlashOverlay = styled.div<{ $visible: boolean }>`
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 10;
-  box-shadow: inset 0 0 40px rgba(255, 113, 108, 0.45);
-  opacity: ${(props) => (props.$visible ? 1 : 0)};
-  transition: opacity 0.12s ease-out;
-`;

@@ -1,7 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import type { BattleLog } from "@webgame/types";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import styled from "styled-components";
 
 import {
   pendingNavigationAtom,
@@ -18,6 +17,8 @@ import {
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 import type { useNavigateRaid } from "@/utils/hooks/useNavigateRaid";
 import { ApiError } from "@/utils/request";
+
+import * as styles from "./NavigationRecovery.css";
 
 interface Props {
   character: CharacterData | undefined;
@@ -70,52 +71,33 @@ export default function NavigationRecovery({
     [400, 403, 404, 409].includes(navigation.error.status);
 
   return (
-    <StyledRecovery role="alert">
-      <strong>이동 결과 확인이 필요합니다</strong>
-      <p>
+    <aside className={styles.recovery} role="alert">
+      <strong className={styles.title}>이동 결과 확인이 필요합니다</strong>
+      <p className={styles.description}>
         저장된 요청으로 서버 결과를 확인합니다. 전투나 보상은 중복 처리되지
         않습니다.
       </p>
-      {navigation.error && <p>{navigation.error.message}</p>}
-      <button type="button" disabled={navigation.isPending} onClick={recover}>
+      {navigation.error && (
+        <p className={styles.description}>{navigation.error.message}</p>
+      )}
+      <button
+        type="button"
+        className={styles.button}
+        disabled={navigation.isPending}
+        onClick={recover}
+      >
         {navigation.isPending ? "결과를 확인하는 중…" : "이동 결과 다시 확인"}
       </button>
       {rejected && (
         <button
           type="button"
+          className={styles.button}
           disabled={navigation.isPending}
           onClick={() => void reloadRejectedRequest()}
         >
           현재 서버 상태로 돌아가기
         </button>
       )}
-    </StyledRecovery>
+    </aside>
   );
 }
-
-const StyledRecovery = styled.aside`
-  position: absolute;
-  inset: 24px 24px auto;
-  z-index: 1000;
-  padding: 20px;
-  border-radius: 16px;
-  background: #201f1f;
-  color: #ecf0f1;
-  p {
-    font-size: 13px;
-    margin: 12px 0;
-  }
-  button {
-    padding: 10px 16px;
-    margin-right: 8px;
-    border: 0;
-    border-radius: 12px;
-    background: #85adff;
-    color: #101010;
-    cursor: pointer;
-  }
-  button:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-`;

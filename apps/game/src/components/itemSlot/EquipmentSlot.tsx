@@ -14,12 +14,12 @@ import {
   GiTargetArrows,
   GiWizardStaff,
 } from "react-icons/gi";
-import styled, { css } from "styled-components";
 
 import { currentTimeAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { isCombatAtom } from "@/atoms/raidAtom";
-import { cornerBracketsMixin } from "@/components/Commons";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
+
+import * as styles from "./EquipmentSlot.css";
 
 interface EquipmentSlotProps {
   item: Item;
@@ -131,14 +131,19 @@ const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
     }
   }
 
+  const slotState = isEmpty
+    ? "empty"
+    : isAttacking
+      ? "attacking"
+      : isCasting
+        ? "casting"
+        : "occupied";
+
   return (
-    <StyledSlot
+    <motion.div
       ref={setNodeRef}
       style={style}
-      $isEmpty={isEmpty}
-      $isCasting={isCasting}
-      $isAttacking={isAttacking}
-      $bracketTone={isAttacking ? "negative" : isCasting ? "positive" : "default"}
+      className={styles.slot({ state: slotState })}
       animate={
         isAttacking
           ? {
@@ -155,24 +160,25 @@ const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
       {...attributes}
       {...listeners}
     >
-      <StyledSlotIndex>0{index + 1}</StyledSlotIndex>
+      <span className={styles.slotIndex}>0{index + 1}</span>
       {!isEmpty && (
         <>
           {getWeaponIcon(weapon?.iconKey)}
-          <StyledWeaponNameLabel>{item.name}</StyledWeaponNameLabel>
-          <StyledTooltipLabel>
+          <span className={styles.weaponNameLabel}>{item.name}</span>
+          <div className={styles.tooltipLabel}>
             <strong>{item.name}</strong>
             {weapon && (
-              <StyledTooltipStats>
+              <div className={styles.tooltipStats}>
                 <span>DMG {weapon.damage}</span>
                 <span>CD {weapon.cooldownTicks}s</span>
                 {weapon.castTicks > 0 && <span>CAST {weapon.castTicks}s</span>}
-              </StyledTooltipStats>
+              </div>
             )}
-          </StyledTooltipLabel>
+          </div>
 
           {isOnCooldown && (
-            <StyledCooldownOverlay
+            <motion.div
+              className={styles.cooldownOverlay}
               animate={
                 { "--cooldown-percent": cooldownProgress } as Record<
                   string,
@@ -186,167 +192,26 @@ const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
                 } as React.CSSProperties
               }
             >
-              <StyledCooldownText>
+              <span className={styles.cooldownText}>
                 {Math.ceil(remainingCooldown)}
-              </StyledCooldownText>
-            </StyledCooldownOverlay>
+              </span>
+            </motion.div>
           )}
 
           {isCasting && (
-            <StyledCastBar>
-              <StyledCastProgress
+            <div className={styles.castBar}>
+              <motion.div
+                className={styles.castProgress}
                 animate={{ width: `${castProgress * 100}%` }}
                 transition={{ duration: 0.95, ease: "linear" }}
                 style={{ width: `${castProgress * 100}%` }}
               />
-            </StyledCastBar>
+            </div>
           )}
         </>
       )}
-    </StyledSlot>
+    </motion.div>
   );
 };
 
 export default EquipmentSlot;
-
-const StyledSlot = styled(motion.div)<{
-  $isCasting?: boolean;
-  $isEmpty?: boolean;
-  $isAttacking?: boolean;
-  $bracketTone?: "default" | "positive" | "negative";
-}>`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  width: 52px;
-  aspect-ratio: 1/1;
-  border: 1px solid
-    ${(props) =>
-      props.$isCasting
-        ? "rgba(133, 173, 255, 0.55)"
-        : props.$isEmpty
-          ? "rgba(255, 255, 255, 0.07)"
-          : "rgba(255, 255, 255, 0.16)"};
-  background-color: ${(props) =>
-    props.$isEmpty ? "rgba(12, 12, 15, 0.78)" : "rgba(20, 20, 24, 0.92)"};
-  backdrop-filter: blur(8px);
-  border-radius: 6px;
-  color: #fafafa;
-  touch-action: none;
-  overflow: visible;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-  cursor: grab;
-
-  ${(props) => (!props.$isEmpty ? cornerBracketsMixin : css``)}
-
-  &:active {
-    cursor: grabbing;
-  }
-
-  &:hover {
-    border-color: ${(props) =>
-      props.$isEmpty
-        ? "rgba(255, 255, 255, 0.12)"
-        : "rgba(133, 173, 255, 0.45)"};
-  }
-`;
-
-const StyledSlotIndex = styled.span`
-  position: absolute;
-  top: 3px;
-  left: 4px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  color: #52525b;
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
-`;
-
-const StyledWeaponNameLabel = styled.span`
-  position: absolute;
-  bottom: 3px;
-  font-size: 10px;
-  font-weight: 500;
-  color: #a1a1aa;
-  max-width: 90%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  pointer-events: none;
-`;
-
-const StyledCooldownOverlay = styled(motion.div)`
-  position: absolute;
-  inset: 0;
-  border-radius: 5px;
-  background: conic-gradient(
-    rgba(9, 9, 11, 0.84) calc(var(--cooldown-percent, 0) * 360deg),
-    rgba(9, 9, 11, 0.35) 0deg
-  );
-  pointer-events: none;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 2;
-`;
-
-const StyledCooldownText = styled.span`
-  font-family: var(--font-mono);
-  color: #ff7162;
-  font-size: 13px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-`;
-
-const StyledCastBar = styled.div`
-  position: absolute;
-  bottom: 3px;
-  left: 5px;
-  right: 5px;
-  height: 3px;
-  background: #27272a;
-  border-radius: 1px;
-  overflow: hidden;
-  z-index: 3;
-`;
-
-const StyledCastProgress = styled(motion.div)`
-  height: 100%;
-  background: #85adff;
-`;
-
-const StyledTooltipLabel = styled.div`
-  display: none;
-  position: absolute;
-  bottom: 108%;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: #101013;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 11px;
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 100;
-  color: #fafafa;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.45);
-
-  ${StyledSlot}:hover & {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-`;
-
-const StyledTooltipStats = styled.div`
-  display: flex;
-  gap: 8px;
-  font-family: var(--font-mono);
-  color: #a1a1aa;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  margin-top: 2px;
-`;

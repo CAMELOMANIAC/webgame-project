@@ -3,7 +3,6 @@ import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useAtom, useAtomValue } from "jotai";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { useEffect } from "react";
-import styled from "styled-components";
 
 import {
   activeDragIdAtom,
@@ -11,17 +10,19 @@ import {
   shortestPathAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
-import { cornerBracketsMixin, InheritMotionDiv, Page } from "@/components/Commons";
-import { FieldBackground } from "@/components/FieldBackground";
-import { FieldHeader } from "@/components/FieldHeader";
-import FieldStatusSection from "@/components/FieldStatusSection";
+import { FieldBackground } from "@/components/field/FieldBackground";
+import { FieldHeader } from "@/components/field/FieldHeader";
+import FieldStatusSection from "@/components/field/FieldStatusSection";
+import NavigationRecovery from "@/components/field/NavigationRecovery";
 import Backpack from "@/components/itemSlot/Backpack";
 import Equipment from "@/components/itemSlot/Equipment";
-import NavigationRecovery from "@/components/NavigationRecovery";
+import { inheritMotionDiv, page } from "@/styles/theme.css";
 import { useEnemyPositions } from "@/utils/hooks/useEnemyPositions";
 import { useFieldCombat } from "@/utils/hooks/useFieldCombat";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useInventoryDrag } from "@/utils/hooks/useInventoryDrag";
+
+import * as styles from "./index.css";
 
 type FieldSearch = {
   tab?: string;
@@ -65,7 +66,7 @@ function RouteComponent() {
     characterData?.inventory.find((item) => item.id === activeId);
 
   return (
-    <Page>
+    <div className={page}>
       <NavigationRecovery
         character={characterData}
         navigation={navigateRaid}
@@ -83,7 +84,8 @@ function RouteComponent() {
         <LayoutGroup id="inventory-group">
           <AnimatePresence initial={false}>
             {tab !== "backpack" && (
-              <InheritMotionDiv
+              <motion.div
+                className={inheritMotionDiv}
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "100%", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
@@ -92,17 +94,19 @@ function RouteComponent() {
                 key="fieldNavHeader"
               >
                 <FieldHeader isCombat={isCombat} />
-              </InheritMotionDiv>
+              </motion.div>
             )}
-            <InheritMotionDiv
+            <motion.div
+              className={inheritMotionDiv}
               layout={isCombat ? undefined : true}
               key="fieldInfo"
             >
               <FieldStatusSection />
               <Equipment />
-            </InheritMotionDiv>
+            </motion.div>
             {tab === "backpack" && (
-              <InheritMotionDiv
+              <motion.div
+                className={inheritMotionDiv}
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "100%", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
@@ -112,15 +116,15 @@ function RouteComponent() {
                 layout={isCombat ? undefined : true}
               >
                 <Backpack />
-              </InheritMotionDiv>
+              </motion.div>
             )}
           </AnimatePresence>
           <DragOverlay dropAnimation={null}>
             {activeId && (
-              <StyledSlotOverlay
+              <motion.div
+                className={styles.slotOverlay}
                 key={String(activeId)}
                 layoutId={String(activeId)}
-                $bracketTone="positive"
                 transition={{
                   type: "spring",
                   stiffness: 500,
@@ -129,36 +133,11 @@ function RouteComponent() {
                 }}
               >
                 {activeItem?.name}
-              </StyledSlotOverlay>
+              </motion.div>
             )}
           </DragOverlay>
         </LayoutGroup>
       </DndContext>
-    </Page>
+    </div>
   );
 }
-
-const StyledSlotOverlay = styled(motion.div)<{
-  $bracketTone?: "default" | "positive" | "negative";
-}>`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  position: absolute;
-  width: 82px;
-  aspect-ratio: 1/1;
-  padding: 8px;
-  border: 1px solid rgba(133, 173, 255, 0.45);
-  border-radius: 6px;
-  color: #fafafa;
-  font-size: 12px;
-  font-weight: 600;
-  touch-action: none;
-  cursor: grabbing;
-  background-color: rgba(16, 16, 19, 0.94);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
-  z-index: 1000;
-  ${cornerBracketsMixin}
-`;
