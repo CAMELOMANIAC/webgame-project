@@ -1,135 +1,94 @@
-# Turborepo starter
+# 서포시 SF 생존 게임
 
-This Turborepo starter is maintained by the Turborepo core team.
+한림그룹의 복귀 실험실에서 정비하고, 다중우주가 중첩된 서포시를 탐사하는 웹게임 프로토타입이다. 장비·능력치 기록을 가진 고스트와 비동기 전투를 진행하며, 동일 인물의 복수 개체를 개별 상태로 보유할 수 있다.
 
-## Using this example
+**현재 상태:** 개발 TODO 01–14의 첫 플레이 구간 구현. 개발용 계정 선택을 사용한다. 변경한 DB 모델은 로컬 테스트 DB에서 검증했으며 **기존 외부 DB에는 적용하지 않았다.**
 
-Run the following command:
+## 문서
+
+- [세계관: 확정 설정과 제안](./docs/SF-생존-게임-세계관.md)
+- [작업 순서·완료 기준](./TODO.md)
+- [현재 구현·API](./PLAN.md)
+- [실행·검증 안내](./docs/DEVELOPMENT.md)
+- [실제 플레이·DB 검증 결과](./docs/QA-2026-10-31.md)
+
+## 구조
+
+| 경로                            | 역할                                                                         |
+| ------------------------------- | ---------------------------------------------------------------------------- |
+| `apps/game`                     | React 19·Vite·TanStack Router·Jotai·React Query·styled-components·Konva 화면 |
+| `apps/server`                   | Fastify·Prisma·PostgreSQL, 전투 계산과 탐사·아이템·임무 정산                 |
+| `packages/types`                | 공통 통신 타입·장비 처리·구역 규칙·단일 원본 지도                            |
+| `packages/ui`                   | 공통 UI 패키지                                                               |
+| `apps/server/prisma/migrations` | 기존 데이터 보존을 위한 DB 변경 이력                                         |
+
+서버가 전투와 보상을 확정하고, 화면은 반환한 로그를 재생한다. 탐사 명령은 세션 버전·고유 요청 ID로 중복 반영을 막는다.
+
+## 로컬 테스트 환경에서 실행
+
+pnpm 9, `--env-file`을 지원하는 Node.js, Docker가 필요하다. 검증 환경은 Node.js 24였다.
 
 ```sh
-npx create-turbo@latest
+pnpm install
+
+docker run --rm -d --name webgame-test \
+  -e POSTGRES_USER=webgame_test \
+  -e POSTGRES_PASSWORD=local-test-only \
+  -e POSTGRES_DB=webgame_test_inventory \
+  -p 127.0.0.1:55432:5432 postgres:16-alpine
+
+export TEST_DATABASE_URL='postgresql://webgame_test:local-test-only@127.0.0.1:55432/webgame_test_inventory'
+
+DATABASE_URL="$TEST_DATABASE_URL" DIRECT_URL="$TEST_DATABASE_URL" \
+  pnpm --filter server exec prisma migrate deploy
+
+pnpm --filter @webgame/types build
+pnpm --filter server preview:test
 ```
 
-## What's inside?
+PostgreSQL 기동이 끝난 뒤 마이그레이션을 실행한다. 위 비밀번호는 일회용 로컬 검증용 예시다. 기존 연결 설정을 덮어쓰지 않는다.
 
-This Turborepo includes the following packages/apps:
+다른 터미널에서 게임을 실행한다.
 
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+```sh
+pnpm --filter game dev --host 127.0.0.1
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+게임은 보통 [로비](http://127.0.0.1:5173/#/field/user), API는 [상태 확인](http://127.0.0.1:3001/health)에서 확인한다. 다른 포트가 표시되면 Vite 안내를 따른다.
 
-```
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
+검증 서버는 ‘로컬 검증 생존자’와 다른 탐사에서 남긴 고스트 기록을 준비한다. 기존 시드는 실행하지 않는다.
 
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+## 첫 임무 플레이
 
-### Develop
+1. ‘로컬 검증 생존자’를 선택하고 ‘한림그룹 임무 통신 확인’으로 이동한다.
+2. 임무를 수락해 받은 카빈을 거점 창고 → 가방으로 옮긴 뒤 ‘하나 장착’을 누른다.
+3. 출격하고 ‘임무: 기록 중계 시설로 이동’을 누른다.
+4. 고스트 또는 통제 요원과 싸워 기록을 확보한다. 쓰러지면 기록을 다시 회수해야 한다.
+5. ‘탈출 지점으로 이동’ 후 ‘탈출하고 거점으로 복귀’를 누른다.
+6. 임무 통신에서 기록을 보고하고 보상과 복귀 관측 기록을 확인한다.
 
-To develop all apps and packages, run the following command:
+거점의 ‘개발용 개체 추가’에서 같은 인물·세계선도 여러 번 추가할 수 있다. 개체 선택은 거점에서만 가능하며 한 계정은 한 개체로 출격한다.
 
-```
-cd my-turborepo
+## 검증
 
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
+```sh
+pnpm check-types
+pnpm test
+pnpm build
+pnpm lint
 
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-```
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
+# 위 로컬 TEST_DATABASE_URL을 설정한 터미널에서 실행
+pnpm --filter server test:integration
 ```
 
-### Remote Caching
+실제 DB 테스트는 로컬 주소와 `webgame_test_*` 이름만 허용한다. 테스트가 만든 계정·개체·장비를 정리하며 외부 DB를 사용하지 않는다.
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+검증 서버는 정상 종료 시 임시 데이터를 정리한다. 강제 종료 후에는 일회용 DB 전체를 정리할 수 있다.
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
+```sh
+docker stop webgame-test
 ```
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+## 현재 범위
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+실제 로그인·외부 DB 적용·배포·정식 수집 경제·균형 조정은 후속 작업이다. 오너의 단계별 정보 공개 구조는 준비했지만, 첫 임무에서는 오너를 언급하지 않는다. 구역명·인물 표식·임무명·대사·보상·중첩 주기는 기획 제안으로 관리한다.

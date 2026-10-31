@@ -1,78 +1,91 @@
-# Ghost Extraction: 핵심 게임 루프 및 서버 API 통합 개발 계획 (PLAN.md)
+# 서포시 SF 생존 게임 — 현재 구현
 
-이 문서는 개별 프로토타입으로 작동하던 클라이언트(지도 탐사, 전투 시뮬레이션, 인벤토리)와 서버(Fastify + Prisma + PostgreSQL)를 유기적으로 연동하여 핵심 게임 루프를 완성하기 위한 설계 및 진행 상황을 관리합니다.
+갱신일: 2026-10-31. 첫 플레이 구간을 위한 TODO 01–14를 구현했다. 상세 완료 근거는 [TODO](./TODO.md), 실행 절차는 [개발 안내](./docs/DEVELOPMENT.md), 실제 검증 결과는 [QA 기록](./docs/QA-2026-10-31.md)에 남긴다.
 
----
+사용자는 **개발용 계정 선택**, **테스트 DB에서만 변경 검증**, **장비·능력치 기록으로 새 고스트 전투 계산**을 선택했다. 기존 외부 DB·연결 설정과 초기 지도 최적화 작업은 보존했다.
 
-## 🏁 Phase 1: 로비(Lobby) 및 창고 아이템 이동 API 구축
+## 기본 루프
 
-익스트랙션 게임의 진입점인 로비 단계에서 유저 창고(Stash)와 캐릭터 가방(Inventory/Backpack) 간에 아이템을 이동하는 기능과 데이터베이스 영속성 레이어를 구축합니다.
+거점 정비 → 선택 개체 출격 → 연결된 지도 경로 이동 → NPC·고스트 전투 → 보상 → 탈출 또는 사망 → 거점 복귀.
 
-### 1. 데이터베이스 모델 및 트랜잭션 설계 (Prisma)
-- 유저 창고(`StashItem`)와 캐릭터 백팩 가방(`RaidInventoryItem`) 간의 아이템 이동은 한쪽이 줄어들면 다른 한쪽이 늘어나는 **원자적(Atomic) 트랜잭션**으로 수행되어야 합니다.
-- **슬롯 및 무게 제약 조건 검증:** 가방으로 아이템을 이동할 때는 최대 가방 크기(32슬롯) 및 최대 무게 제한(`Character.maxWeight`)을 초과하는지 서버에서 실시간 검증합니다.
+- 서버가 체력·스태미나·장비·가방·창고·탐사 상태·임무 진행을 트랜잭션으로 확정한다.
+- 전투 결과에는 시작·최종 참가자 상태, 공격·회복·자원·종료 이벤트, 승패·종료 이유를 포함한다.
+- 탈출은 지정 노드 0에서만 가능하고 가방을 창고에 이관한다. 장착 장비는 유지한다.
+- 사망은 장비·가방을 소실시키고 개체의 최대 체력·스태미나로 회복한다. 창고와 다른 개체는 유지한다.
+- 기본 장비 지원은 보유 개체 전체의 장비·가방과 창고가 비어 있을 때만 요청할 수 있다. 출격 시 자동 지급하지 않는다.
 
-### 2. 서버 API 엔드포인트 구현 (`apps/server`)
-- `POST /character/:characterId/inventory/move`
-  - Body: `{ source: 'stash' | 'backpack', target: 'stash' | 'backpack', weaponMasterId: string, quantity: number, slotIndex?: number }`
-  - 창고와 가방 간의 수량을 트랜잭션으로 이동하고 최신 인벤토리/창고 상태를 반환합니다.
-- `POST /character/:characterId/raid/start`
-  - 탐사 시작 상태로 세션을 활성화합니다. (`Character.isRaiding = true` 및 탐사 타이머 초기화)
+## 데이터 모델
 
----
+| 모델                  | 역할                                                             |
+| --------------------- | ---------------------------------------------------------------- |
+| `User`                | 개발용 계정, 공용 창고, 선택 개체, 정보 공개 진행도              |
+| `CharacterDefinition` | 인물 원형                                                        |
+| `CharacterVariant`    | 인물의 세계선별 변주와 초기 능력치                               |
+| `Character`           | 사용자가 보유한 개별 개체, 현재 능력치·장비·탐사                 |
+| `RaidSession`         | ACTIVE → EXTRACTED 또는 DEAD, 위치·라운드·상태 버전·지도 버전    |
+| `RaidCommand`         | 고유 요청 ID·입력 지문·처리 결과. 같은 명령은 저장 결과 재사용   |
+| `GhostSnapshot`       | 서버가 기록한 탐사·개체·위치·라운드·장비 복사본·능력치·규칙 버전 |
+| `RaidGhostEncounter`  | 탐사 내 같은 고스트 기록의 반복 사용·보상 방지                   |
+| `QuestProgress`       | 임무 정의 버전, 수락·회수·탈출·보고 상태와 보상 수령 시점        |
 
-## 🗺️ Phase 2: 클라이언트 상태 전역화 및 라우팅 재구성
+기존 캐릭터 ID와 상태·장비를 유지하면서 초기 세계선과 선택 개체를 연결한다. 기존 고스트 자료는 규칙 버전 0으로 남기고 새 매칭에서 제외한다. 파괴적인 초기화 시드는 마이그레이션에 사용하지 않는다.
 
-### 1. 전역 상태 정의 (Jotai)
-기존에 `MapGraphCanvas` 내부에 고립되어 있던 상태들을 전역 Atom으로 추출하여 전투 상태(`isCombat`)나 백팩 인벤토리 등과 유기적으로 상호 작용하도록 합니다.
-- **위치:** `apps/game/src/atoms/raidAtom.ts` (신규 생성)
-- **주요 전역 상태:**
-  - `isCombatAtom`: 현재 전투(시뮬레이션 재생) 중인지 여부
-  - `currentNodeIdAtom`: 플레이어가 현재 위치한 노드 ID
-  - `targetNodeIdAtom`: 플레이어가 이동하고자 선택한 대상 노드 ID
-  - `isNavigatingAtom`: 지도 상에서 플레이어가 이동 중인지 여부
-  - `shortestPathAtom`: 계산된 이동 경로 노드 배열
-  - `playerCoordsAtom`: 플레이어의 실시간 픽셀 좌표 (Konva 애니메이션용)
+## API
 
-### 2. 라우트 및 레이아웃 정리
-- **메인 탐사 화면 (`/field`):**
-  - 기존에 `/field/user`에 임시 배치되어 있던 `MapGraphCanvas`를 `/field` 메인 화면으로 이동합니다.
-  - `isCombat` 상태에 따라 화면을 분기합니다.
-    - `isCombat === false`: 전체 화면 지도 탐사 뷰 (`MapGraphCanvas`) + 탐사 HUD
-    - `isCombat === true`: 전체 화면 전투 시뮬레이션 연출 뷰 (`FieldBackground` Konva 레이어) + 전투 로그 (`CombatLog`)
-- **로비 및 마이페이지 (`/field/user`):**
-  - 지도를 제거하고, 캐릭터 상세 정보 및 영구 창고(`StashItem` 목록)를 보여주는 로비 및 정비 화면으로 개편합니다.
-  - 여기에서 창고 <-> 가방 간 아이템 이동 API를 통해 출격 장비를 최종 세팅할 수 있게 합니다.
+개인 API는 개발용 `X-Dev-User-Id` 헤더와 소유권 검증을 사용한다. 실제 인증 수단은 아니며 운영 모드에서는 개발용 접근을 허용하지 않는다.
 
----
+| 메서드·경로                                         | 동작                                        |
+| --------------------------------------------------- | ------------------------------------------- |
+| GET `/health`                                       | 앱 상태 확인                                |
+| GET `/dev/users`                                    | 개발용 계정 선택                            |
+| GET `/dev/character-variants`                       | 인물·세계선 목록                            |
+| GET `/user/:userId/characters`                      | 보유 개체·선택 상태                         |
+| POST `/dev/user/:userId/characters`                 | `{variantId}`로 검증용 개체 추가            |
+| POST `/user/:userId/characters/:characterId/select` | 거점에서 개체 선택                          |
+| GET `/character/:characterId`                       | 개체 능력치·장비·가방·활성 탐사             |
+| GET `/user/:userId/character`                       | 선택 개체 조회 호환 경로                    |
+| GET `/user/:userId/stash`                           | 계정 공용 창고                              |
+| POST `/character/:characterId/inventory/move`       | 창고↔가방 수량 이동                         |
+| PATCH `/character/:characterId/equipment`           | 하나 장착·해제                              |
+| POST `/character/:characterId/slots/sync`           | 전체 수량을 보존하는 슬롯 변경              |
+| POST `/character/:characterId/supplies`             | 빈 소지품·창고에 한해 기본 지원             |
+| GET `/raid/rules`                                   | 출격·탈출 노드, 지원 여부, 지도 버전        |
+| POST `/character/:characterId/raid/start`           | 선택 개체 출격. 중복 시작은 기존 탐사 반환  |
+| POST `/character/:characterId/raid/navigate`        | 경로·버전 검증, 고스트 기록, 조우·전투·정산 |
+| POST `/character/:characterId/raid/extract`         | 지정 지점에서 한 번만 탈출 정산             |
+| GET `/ghost/match?nodeId=26&round=2`                | 위치·라운드 조건에 맞는 다른 계정 기록 조회 |
+| GET `/user/:userId/journal`                         | 임무와 현재 공개할 수 있는 기록·인물만 반환 |
+| POST `/user/:userId/mission/accept`                 | 첫 임무 수락과 구호 장비 지급               |
+| POST `/user/:userId/mission/report`                 | 탈출 후 보고·일회성 보상·연구 기록 공개     |
 
-## ⚔️ Phase 3: 이동 완료 시 인카운터 및 전투 전환
+이동·전투·탈출은 `{raidId, expectedVersion, requestId}`를 받는다. 이동에는 `path`와 선택적인 `equipment`·`inventory`를 함께 보낸다. 인벤토리 이동은 `{direction: "to_backpack" | "to_stash", weaponMasterId, slotIndex}`, 장착은 `{weaponMasterId: string | null, slotIndex}`를 사용한다.
 
-### 1. 노드 도착 이벤트 연동
-- `MapGraphCanvas`의 플레이어 이동 애니메이션이 끝난 시점(목적지 노드 도달 완료)에 콜백 이벤트(`onArrival(nodeId)`)를 발생시킵니다.
-- 목적지에 적(몬스터 또는 타 유저의 고스트)이 위치하는지 여부를 판단합니다.
+직접 탐사 상태 변경·사망 신고·임의 고스트 능력치 저장 API는 405로 거부한다. `/battle/simulate`와 몬스터 검증 경로는 기존 진단용으로 남긴다. 실제 탐사 정산은 탐사 명령 경로를 따른다.
 
-### 2. 전투 API 연동 및 화면 전환
-- 적이 존재하는 경우, 서버의 전투 API(`POST /battle/monster` 또는 `/ghost/match` 및 `/battle/simulate`)를 호출합니다.
-- 서버로부터 전투 로그(`BattleEvent[]`)를 받아와 전역 `battleLogAtom`에 주입합니다.
-- `isCombat` 상태를 `true`로 토글하여 화면을 전투 연출 뷰로 전환하고, 틱(Tick) 단위로 연출 애니메이션을 실행합니다.
+## 통신 실패와 개체별 화면 상태
 
----
+캐시 키는 계정·개체 ID를 포함한다. 이동 요청은 계정·개체별로 세션 저장소에 보관하고, 시간 초과·새로고침 뒤 같은 요청 ID로 결과를 재확인한다. 전투 재생이 끝나기 전에는 결과를 지우거나 새 탐사를 시작하지 않는다. 이전 계정·개체의 응답이 현재 상태를 덮어쓰지 않도록 보호한다.
 
-## 🎒 Phase 4: 보상 획득, 탈출(Extraction) 및 사망 영속성 반영
+## 고스트 규칙 초안
 
-전투 결과에 따른 데이터 변동과 탐사 세션의 탈출/사망 처리를 영속화합니다.
+이동 간선당 1라운드, 별도 전투 명령당 1라운드다. 전투 애니메이션 내부 틱과 구분한다. 실제 방문한 노드에서 전투 직전 상태를 기록한다.
 
-### 1. 전투 결과 반영
-- **전투 승리 시:**
-  - 몬스터가 드롭한 전리품 아이템을 획득하여 캐릭터의 임시 백팩(`RaidInventoryItem`)에 추가합니다.
-  - 인벤토리 변경 사항을 서버 슬롯 동기화 API(`/character/:characterId/slots/sync`)를 통해 동기화합니다.
-- **전투 패배(사망) 시:**
-  - 플레이어가 사망하면 탐사를 즉시 종료합니다.
-  - 가방에 든 전리품과 기존에 소지했던 아이템을 모두 잃는 사망 처리 API(`/character/:characterId/raid/die`)를 호출하고 로비로 이동합니다.
+같은 위치·지도 버전·규칙 버전, ±2라운드·7일 이내의 다른 계정 기록 중 가까운 라운드를 우선한다. 같은 계정의 다른 개체 기록도 제외한다. 같은 탐사에서 이미 사용한 기록은 다시 선택하지 않는다. 상대 기록과 장비 수치는 복사본으로 사용하고 원본 개체를 변경하지 않는다.
 
-### 2. 탈출(Extraction) 및 세션 종료 API 구현 (`apps/server`)
-- `POST /character/:characterId/raid/extract`
-  - **동작 (트랜잭션):** 캐릭터의 가방(`RaidInventoryItem`)에 있는 모든 아이템들을 유저의 창고(`StashItem`) 테이블로 옮겨 담아 커밋(수량 병합 및 생성)하고, 가방을 비운 뒤 `Character.isRaiding = false` 처리합니다.
-- `POST /character/:characterId/raid/die`
-  - **동작 (트랜잭션):** 캐릭터의 가방(`RaidInventoryItem`) 및 현재 착용 중인 무기(`CharacterWeapon`)를 소실(삭제)하고, 캐릭터를 기본 부활 스펙으로 초기화한 뒤 `Character.isRaiding = false` 처리합니다.
+수치·기간·이동 규칙은 조정 가능한 제안이다. 과거 행동 순서를 그대로 재생하는 기능은 구현 범위에 포함하지 않는다.
+
+## 지도·한림그룹·첫 임무
+
+지도 원본은 `packages/types/src/assets/map_graph.json` 하나다. 지도 버전은 `seopo-prototype-1`이다. 클라이언트와 서버는 같은 원본과 구역 규칙을 사용한다.
+
+거점 0은 안전하며, 안정된 생활 지원 구역에서는 구호 담당자가 안내한다. 중첩이 불안정하거나 제한된 시설에서는 통제 요원이 시설·정보 접근을 차단한다. 고스트 기록이 있으면 고스트와 조우할 수 있다. NPC의 소속·역할·적대 이유를 전투에 표시한다. 무기의 공격 방식·아이콘·회복 효과는 이름과 분리한 데이터다.
+
+첫 임무는 구호 장비 수령 → 시설 26으로 이동 → 통제 요원 또는 고스트 전투 → 기록 확보 → 탈출 → 보고다. 기록을 확보한 탐사에서 사망하면 회수 단계로 되돌린다. 보고 시 보상과 ‘복귀 개체 관측 기록’을 한 번만 공개한다.
+
+## 확정하지 않은 서사·후속 범위
+
+세계관의 확정 설정은 [세계관 문서](./docs/SF-생존-게임-세계관.md)를 기준으로 한다. 구역명·인물 표식·임무명·대사·보상·중첩 주기는 제안이다.
+
+오너는 미공개 → 단일 인물로 인식 → 복수 개체 확인의 공개 구조만 준비했다. 첫 임무는 초기 단계만 연다. 후기 단계는 테스트에서 검증한 표식이며 실제 인물·세계선·등장 임무가 확정된 것은 아니다.
+
+실제 로그인, 외부 DB 적용·배포, 정식 수집 경제, 동시 복수 편성, 추가 임무와 균형·성능 조정은 후속 작업이다.
