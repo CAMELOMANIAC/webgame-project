@@ -6,7 +6,7 @@ import { battleLogAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { FieldWidget } from "@/components/Commons";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 
-import portrait from "../assets/portrait.png";
+const SEGMENT_COUNT = 10;
 
 const FieldCharacterInfo = () => {
   const battleLog = useAtomValue(battleLogAtom);
@@ -14,25 +14,31 @@ const FieldCharacterInfo = () => {
   const { data: characterData } = useGetCharacter();
 
   const stats = useMemo(() => {
-    // 1. 전투 중인 경우 시각적으로 처리된 로그 기반 계산
     if (battleLog) {
       const player = battleLog.initialState.players[0];
       let hp = player.hp;
       let stamina = player.stamina;
 
-      // 애니메이션이 완료된 이벤트들만 반영
       for (const event of processedEvents) {
-        if ((event.type === "DAMAGE" || event.type === "HEAL") && event.targetId === player.id) {
+        if (
+          (event.type === "DAMAGE" || event.type === "HEAL") &&
+          event.targetId === player.id
+        ) {
           hp = event.remainingHp;
         }
         if (event.type === "STAMINA_CHANGE" && event.playerId === player.id) {
           stamina = event.currentStamina;
         }
       }
-      return { hp, stamina, maxHp: player.maxHp, maxStamina: player.maxStamina, name: player.name };
+      return {
+        hp,
+        stamina,
+        maxHp: player.maxHp,
+        maxStamina: player.maxStamina,
+        name: player.name,
+      };
     }
 
-    // 2. 평상시 상태 (Character API 활용)
     if (characterData) {
       return {
         hp: characterData.raw.hp,
@@ -48,126 +54,157 @@ const FieldCharacterInfo = () => {
 
   if (!stats) return null;
 
+  const hpRatio = stats.maxHp > 0 ? Math.max(0, stats.hp / stats.maxHp) : 0;
+  const staminaRatio =
+    stats.maxStamina > 0 ? Math.max(0, stats.stamina / stats.maxStamina) : 0;
+  const filledHpSegments = Math.ceil(hpRatio * SEGMENT_COUNT);
+  const filledStaminaSegments = Math.ceil(staminaRatio * SEGMENT_COUNT);
+  const isCritical = !!battleLog || hpRatio <= 0.3;
+
   return (
-    <Container>
-      <Row>
-        <PortraitContainer>
-          <img src={portrait} />
-        </PortraitContainer>
-        <Column>
-          <CharacterName>{stats.name}</CharacterName>
-          <StatusText>STATUS: {battleLog ? (stats.hp <= 0 ? "DEFEATED" : "IN COMBAT") : "NORMAL"}</StatusText>
-        </Column>
-      </Row>
-      <Column>
-        <HPLabelContainer>
-          <HPLabel>VITALITY (HP)</HPLabel>
-          <HPText>
+    <StyledContainer $bracketTone={isCritical ? "negative" : "positive"}>
+      <StyledHeaderRow>
+        <StyledName>{stats.name}</StyledName>
+        <StyledStatusTag $combat={!!battleLog} $defeated={stats.hp <= 0}>
+          {battleLog
+            ? stats.hp <= 0
+              ? "DEFEATED"
+              : "IN COMBAT"
+            : "STANDBY"}
+        </StyledStatusTag>
+      </StyledHeaderRow>
+
+      <StyledGaugeSection>
+        <StyledLabelRow>
+          <StyledMetricLabel>VIT // HP</StyledMetricLabel>
+          <StyledMetricValue $critical={hpRatio <= 0.3}>
             {stats.hp}/{stats.maxHp}
-          </HPText>
-        </HPLabelContainer>
-        <HPContainer $percent={(stats.hp / stats.maxHp) * 100} />
-      </Column>
-      <Column>
-        <HPLabelContainer>
-          <HPLabel>STAMINA</HPLabel>
-          <HPText>
+          </StyledMetricValue>
+        </StyledLabelRow>
+        <StyledSegmentTrack>
+          {Array.from({ length: SEGMENT_COUNT }).map((_, idx) => (
+            <StyledSegmentCell
+              key={`hp-${idx}`}
+              $active={idx < filledHpSegments}
+              $tone={hpRatio <= 0.3 || battleLog ? "negative" : "positive"}
+            />
+          ))}
+        </StyledSegmentTrack>
+      </StyledGaugeSection>
+
+      <StyledGaugeSection>
+        <StyledLabelRow>
+          <StyledMetricLabel>STM // 기력</StyledMetricLabel>
+          <StyledMetricValue>
             {stats.stamina}/{stats.maxStamina}
-          </HPText>
-        </HPLabelContainer>
-        <HPContainer $percent={(stats.stamina / stats.maxStamina) * 100} />
-      </Column>
-    </Container>
+          </StyledMetricValue>
+        </StyledLabelRow>
+        <StyledSegmentTrack>
+          {Array.from({ length: SEGMENT_COUNT }).map((_, idx) => (
+            <StyledSegmentCell
+              key={`stm-${idx}`}
+              $active={idx < filledStaminaSegments}
+              $tone="positive"
+            />
+          ))}
+        </StyledSegmentTrack>
+      </StyledGaugeSection>
+    </StyledContainer>
   );
 };
 
 export default FieldCharacterInfo;
 
-const Container = styled(FieldWidget)`
+const StyledContainer = styled(FieldWidget)`
   flex: 1;
   flex-direction: column;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px;
 `;
 
-const Row = styled.div`
+const StyledHeaderRow = styled.div`
   display: flex;
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  height: 100%;
-  gap: 12px;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 `;
 
-const Column = styled.div`
+const StyledName = styled.p`
+  font-size: 13px;
+  font-weight: 700;
+  color: #fafafa;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const StyledStatusTag = styled.span<{ $combat: boolean; $defeated: boolean }>`
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: ${(props) =>
+    props.$combat || props.$defeated ? "#ff7162" : "#85adff"};
+  background: ${(props) =>
+    props.$combat || props.$defeated
+      ? "rgba(255, 113, 98, 0.14)"
+      : "rgba(133, 173, 255, 0.12)"};
+`;
+
+const StyledGaugeSection = styled.div`
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  align-items: flex-start;
   width: 100%;
-  height: 100%;
-  gap: 6px;
+  gap: 4px;
 `;
 
-const PortraitContainer = styled.div`
-  width: 46px;
-  aspect-ratio: 1/1;
-  border-radius: 12px;
-  overflow: hidden;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-shrink: 0;
-`;
-
-const CharacterName = styled.p`
-  font-size: 12px;
-  font-weight: 600;
-  color: white;
-`;
-
-const HPContainer = styled.div<{ $percent: number }>`
+const StyledLabelRow = styled.div`
   width: 100%;
-  height: 6px;
-  border-radius: 6px;
-  background-color: black;
-  position: relative;
-  &::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    width: ${(props) => props.$percent}%;
-    background-color: #ff716c;
-    border-radius: 6px;
-    transition: width 0.3s ease;
-  }
-`;
-
-const HPLabelContainer = styled.div`
-  width: 100%;
-  height: auto;
   display: flex;
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
 `;
 
-const HPLabel = styled.p`
-  font-size: 8px;
-  font-weight: 300;
-  color: #adaaaa;
+const StyledMetricLabel = styled.p`
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: #71717a;
 `;
 
-const HPText = styled.p`
+const StyledMetricValue = styled.p<{ $critical?: boolean }>`
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
-  color: white;
+  color: ${(props) => (props.$critical ? "#ff7162" : "#fafafa")};
+  font-variant-numeric: tabular-nums;
 `;
 
-const StatusText = styled.p`
-  font-size: 10px;
-  font-weight: 300;
-  color: #85adff;
+const StyledSegmentTrack = styled.div`
+  display: grid;
+  grid-template-columns: repeat(${SEGMENT_COUNT}, 1fr);
+  gap: 2px;
+  width: 100%;
+`;
+
+const StyledSegmentCell = styled.span<{
+  $active: boolean;
+  $tone: "positive" | "negative";
+}>`
+  height: 6px;
+  border-radius: 1px;
+  background-color: ${(props) =>
+    !props.$active
+      ? "#27272a"
+      : props.$tone === "negative"
+        ? "#ff7162"
+        : "#85adff"};
+  transition: background-color 0.2s ease;
 `;

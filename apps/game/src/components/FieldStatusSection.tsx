@@ -1,6 +1,4 @@
 import { useAtomValue } from "jotai";
-import { RiWeightLine } from "react-icons/ri";
-import { SlEnergy } from "react-icons/sl";
 import styled from "styled-components";
 
 import { battleLogAtom, processedEventsAtom } from "@/atoms/globalAtom";
@@ -28,92 +26,89 @@ const FieldStatusSection = () => {
       )
     : undefined;
   return (
-    <StatusSection>
-      <Row>
+    <StyledStatusSection>
+      <StyledPrimaryCol>
         <FieldCharacterInfo />
-      </Row>
-      <Column>
-        <FieldWidget>
-          <Row>
-            <Column $gap="0px">
-              <WidgetLabel>ENERGY</WidgetLabel>
-              <CapacityText>
-                {stamina ?? "—"}/
-                {player?.maxStamina ?? data?.raw.maxStamina ?? "—"}
-              </CapacityText>
-            </Column>
-            <Column $flexGrow={0}>
-              <EnergyIcon />
-            </Column>
-          </Row>
-        </FieldWidget>
-        <FieldWidget>
-          <Row>
-            <Column $gap="0px">
-              <WidgetLabel>WEIGHT</WidgetLabel>
-              <CapacityText>
-                {player?.weight ?? weight ?? "—"}/
-                {player?.maxWeight ?? data?.raw.maxWeight ?? "—"} kg
-              </CapacityText>
-            </Column>
-            <Column $flexGrow={0}>
-              <WeightIcon />
-            </Column>
-          </Row>
-        </FieldWidget>
-      </Column>
-    </StatusSection>
+      </StyledPrimaryCol>
+      <StyledSideCol>
+        <StyledCompactWidget $bracketTone="default">
+          <StyledCellHeader>
+            <StyledWidgetLabel>ENERGY // 기력</StyledWidgetLabel>
+            <StyledMetricDot $tone="positive" />
+          </StyledCellHeader>
+          <StyledCapacityText>
+            {stamina ?? "—"} /{" "}
+            {player?.maxStamina ?? data?.raw.maxStamina ?? "—"}
+          </StyledCapacityText>
+        </StyledCompactWidget>
+        <StyledCompactWidget $bracketTone="default">
+          <StyledCellHeader>
+            <StyledWidgetLabel>WEIGHT // 중량</StyledWidgetLabel>
+            <StyledMetricDot $tone="neutral" />
+          </StyledCellHeader>
+          <StyledCapacityText>
+            {player?.weight ?? weight ?? "—"} /{" "}
+            {player?.maxWeight ?? data?.raw.maxWeight ?? "—"} kg
+          </StyledCapacityText>
+        </StyledCompactWidget>
+      </StyledSideCol>
+    </StyledStatusSection>
   );
 };
 
 export default FieldStatusSection;
 
-const StatusSection = styled.section`
-  display: flex;
-  flex-direction: row;
-  width: 100%;
-  gap: 16px;
-  padding: 24px 24px 0;
-`;
-
-const Row = styled.div`
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
-  flex: 1;
+const StyledStatusSection = styled.section`
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
   width: 100%;
   gap: 8px;
+  padding: 12px 16px 0;
 `;
 
-type ColumnProps = {
-  $flexGrow?: number;
-  $gap?: string;
-};
-const Column = styled.div<ColumnProps>`
+const StyledPrimaryCol = styled.div`
+  display: flex;
+  min-width: 0;
+`;
+
+const StyledSideCol = styled.div`
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  flex: ${(props) => props.$flexGrow ?? 1};
-  width: 100%;
-  gap: ${(props) => props.$gap ?? "8px"};
+  gap: 8px;
+  min-width: 0;
 `;
 
-const WidgetLabel = styled.p`
-  font-size: 8px;
-  font-weight: 300;
-  color: #adaaaa;
+const StyledCompactWidget = styled(FieldWidget)`
+  padding: 10px 12px;
+  gap: 4px;
 `;
 
-const EnergyIcon = styled(SlEnergy)`
-  color: #ff7162;
+const StyledCellHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
 `;
 
-const WeightIcon = styled(RiWeightLine)`
-  color: #b8ffb9;
+const StyledWidgetLabel = styled.p`
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: #71717a;
 `;
 
-const CapacityText = styled.p`
-  font-size: 12px;
+const StyledMetricDot = styled.span<{ $tone: "positive" | "neutral" }>`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: ${(props) =>
+    props.$tone === "positive" ? "#85adff" : "#71717a"};
+`;
+
+const StyledCapacityText = styled.p`
+  font-family: var(--font-mono);
+  font-size: 13px;
   font-weight: 600;
-  color: white;
+  color: #fafafa;
+  font-variant-numeric: tabular-nums;
 `;

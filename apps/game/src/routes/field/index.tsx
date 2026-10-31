@@ -11,7 +11,7 @@ import {
   shortestPathAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
-import { InheritMotionDiv, Page } from "@/components/Commons";
+import { cornerBracketsMixin, InheritMotionDiv, Page } from "@/components/Commons";
 import { FieldBackground } from "@/components/FieldBackground";
 import { FieldHeader } from "@/components/FieldHeader";
 import FieldStatusSection from "@/components/FieldStatusSection";
@@ -53,7 +53,6 @@ function RouteComponent() {
   const [, setTargetNodeId] = useAtom(targetNodeIdAtom);
   const [, setShortestPath] = useAtom(shortestPathAtom);
 
-  // 마운트 시 이전 탐사 세션의 연출/이동 상태가 꼬여있다면 강제 리셋 (사망 후 복귀 시 안전장치)
   useEffect(() => {
     setIsNavigating(false);
     setIsCombat(false);
@@ -88,7 +87,7 @@ function RouteComponent() {
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "100%", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+                transition={{ type: "spring", duration: 0.45, bounce: 0 }}
                 style={{ overflow: "hidden" }}
                 key="fieldNavHeader"
               >
@@ -107,7 +106,7 @@ function RouteComponent() {
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "100%", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+                transition={{ type: "spring", duration: 0.45, bounce: 0 }}
                 style={{ overflow: "hidden", zIndex: 1 }}
                 key="stash"
                 layout={isCombat ? undefined : true}
@@ -118,9 +117,10 @@ function RouteComponent() {
           </AnimatePresence>
           <DragOverlay dropAnimation={null}>
             {activeId && (
-              <SlotOverlay
+              <StyledSlotOverlay
                 key={String(activeId)}
                 layoutId={String(activeId)}
+                $bracketTone="positive"
                 transition={{
                   type: "spring",
                   stiffness: 500,
@@ -129,7 +129,7 @@ function RouteComponent() {
                 }}
               >
                 {activeItem?.name}
-              </SlotOverlay>
+              </StyledSlotOverlay>
             )}
           </DragOverlay>
         </LayoutGroup>
@@ -138,18 +138,27 @@ function RouteComponent() {
   );
 }
 
-const SlotOverlay = styled(motion.div)`
+const StyledSlotOverlay = styled(motion.div)<{
+  $bracketTone?: "default" | "positive" | "negative";
+}>`
   display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   position: absolute;
-  width: 90px;
+  width: 82px;
   aspect-ratio: 1/1;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 16px;
-  color: #ecf0f1;
+  padding: 8px;
+  border: 1px solid rgba(133, 173, 255, 0.45);
+  border-radius: 6px;
+  color: #fafafa;
+  font-size: 12px;
+  font-weight: 600;
   touch-action: none;
   cursor: grabbing;
-  background-color: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(4px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+  background-color: rgba(16, 16, 19, 0.94);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
   z-index: 1000;
+  ${cornerBracketsMixin}
 `;

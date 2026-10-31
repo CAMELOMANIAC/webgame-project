@@ -10,21 +10,21 @@ const GlobalNav = () => {
   const location = useLocation();
   const { tab } = useSearch({ strict: false });
 
+  const isFieldMap = location.pathname === "/field" && !tab;
+  const isBackpack = tab === "backpack";
+  const isQuest = location.pathname === "/field/quest";
+  const isUser = location.pathname === "/field/user";
+
   return (
-    <Container>
+    <StyledNavContainer aria-label="하단 글로벌 내비게이션">
       <Link to="/field" viewTransition={location.pathname !== "/field"}>
-        {location.pathname === "/field" && !tab ? (
-          <>
-            <Highlight layoutId="highlight" />
-            <IconWrapper>
-              <FieldFillIcon />
-            </IconWrapper>
-          </>
-        ) : (
-          <IconWrapper>
-            <FieldLineIcon />
-          </IconWrapper>
-        )}
+        {isFieldMap && <StyledActivePill layoutId="highlight" />}
+        <StyledNavItem $active={isFieldMap}>
+          {isFieldMap ? <StyledFieldFillIcon /> : <StyledFieldLineIcon />}
+          <StyledNavLabel>
+            <StyledNavIndex>01</StyledNavIndex>전술지도
+          </StyledNavLabel>
+        </StyledNavItem>
       </Link>
 
       <Link
@@ -33,128 +33,144 @@ const GlobalNav = () => {
         search={(prev: AnyRouter) => ({ ...prev, tab: "backpack" })}
         viewTransition={location.pathname !== "/field"}
       >
-        {tab === "backpack" ? (
-          <>
-            <Highlight layoutId="highlight" />
-            <IconWrapper>
-              <BackpackFillIcon />
-            </IconWrapper>
-          </>
-        ) : (
-          <IconWrapper>
-            <BackpackLineIcon />
-          </IconWrapper>
-        )}
+        {isBackpack && <StyledActivePill layoutId="highlight" />}
+        <StyledNavItem $active={isBackpack}>
+          {isBackpack ? <StyledBackpackFillIcon /> : <StyledBackpackLineIcon />}
+          <StyledNavLabel>
+            <StyledNavIndex>02</StyledNavIndex>가방
+          </StyledNavLabel>
+        </StyledNavItem>
       </Link>
 
       <Link to="/field/quest" viewTransition>
-        {location.pathname === "/field/quest" ? (
-          <>
-            <Highlight layoutId="highlight" />
-            <IconWrapper>
-              <RadioFillIcon />
-            </IconWrapper>
-          </>
-        ) : (
-          <IconWrapper>
-            <RadioLineIcon />
-          </IconWrapper>
-        )}
+        {isQuest && <StyledActivePill layoutId="highlight" />}
+        <StyledNavItem $active={isQuest}>
+          {isQuest ? <StyledRadioFillIcon /> : <StyledRadioLineIcon />}
+          <StyledNavLabel>
+            <StyledNavIndex>03</StyledNavIndex>임무통신
+          </StyledNavLabel>
+        </StyledNavItem>
       </Link>
 
       <Link to="/field/user" viewTransition>
-        {location.pathname === "/field/user" ? (
-          <>
-            <Highlight layoutId="highlight" />
-            <IconWrapper>
-              <UserFillIcon />
-            </IconWrapper>
-          </>
-        ) : (
-          <IconWrapper>
-            <UserLineIcon />
-          </IconWrapper>
-        )}
+        {isUser && <StyledActivePill layoutId="highlight" />}
+        <StyledNavItem $active={isUser}>
+          {isUser ? <StyledUserFillIcon /> : <StyledUserLineIcon />}
+          <StyledNavLabel>
+            <StyledNavIndex>04</StyledNavIndex>거점정비
+          </StyledNavLabel>
+        </StyledNavItem>
       </Link>
-    </Container>
+    </StyledNavContainer>
   );
 };
 
 export default GlobalNav;
 
-const Container = styled.nav`
-  display: flex;
-  justify-content: space-between;
+const StyledNavContainer = styled.nav`
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
   bottom: 0;
   position: sticky;
+  z-index: 30;
   width: 100%;
-  height: 84px;
-  padding: 16px 48px 24px 48px;
-  color: #adaaaa;
+  height: 64px;
+  padding: 8px 12px 12px;
+  background-color: #0c0c0f;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: #71717a;
+
+  a {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    border-radius: 6px;
+  }
 `;
 
-const Highlight = styled(motion.div)`
+const StyledActivePill = styled(motion.div)`
   position: absolute;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  z-index: -1;
-  display: flex;
-  align-items: center;
-
-  background: #74a4ff;
-  box-shadow: 0px 0px 15px rgba(133, 173, 255, 0.5);
+  inset: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  z-index: 0;
 `;
 
-const IconWrapper = styled.div`
+const StyledNavItem = styled.div<{ $active?: boolean }>`
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  gap: 3px;
+  width: 100%;
+  height: 100%;
+  color: ${(props) => (props.$active ? "#fafafa" : "#71717a")};
+  transition: color 0.15s ease;
 `;
 
-const FieldFillIcon = styled(RiMap2Fill)`
-  width: 18px;
-  height: 18px;
-  color: white;
+const StyledNavLabel = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 3px;
 `;
 
-const FieldLineIcon = styled(RiMap2Line)`
-  width: 18px;
-  height: 18px;
+const StyledNavIndex = styled.span`
+  font-family: var(--font-mono);
+  font-size: 10px;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
 `;
 
-const BackpackFillIcon = styled(MdBackpack)`
-  width: 18px;
-  height: 18px;
-  color: white;
+const StyledFieldFillIcon = styled(RiMap2Fill)`
+  width: 16px;
+  height: 16px;
+  color: #fafafa;
 `;
 
-const BackpackLineIcon = styled(MdOutlineBackpack)`
-  width: 18px;
-  height: 18px;
+const StyledFieldLineIcon = styled(RiMap2Line)`
+  width: 16px;
+  height: 16px;
 `;
 
-const RadioFillIcon = styled(BiSolidRadio)`
-  width: 18px;
-  height: 18px;
-  color: white;
+const StyledBackpackFillIcon = styled(MdBackpack)`
+  width: 16px;
+  height: 16px;
+  color: #fafafa;
 `;
 
-const RadioLineIcon = styled(BiRadio)`
-  width: 18px;
-  height: 18px;
+const StyledBackpackLineIcon = styled(MdOutlineBackpack)`
+  width: 16px;
+  height: 16px;
 `;
 
-const UserFillIcon = styled(FaCircleUser)`
-  width: 18px;
-  height: 18px;
-  color: white;
+const StyledRadioFillIcon = styled(BiSolidRadio)`
+  width: 16px;
+  height: 16px;
+  color: #fafafa;
 `;
 
-const UserLineIcon = styled(FaRegCircleUser)`
-  width: 18px;
-  height: 18px;
+const StyledRadioLineIcon = styled(BiRadio)`
+  width: 16px;
+  height: 16px;
+`;
+
+const StyledUserFillIcon = styled(FaCircleUser)`
+  width: 15px;
+  height: 15px;
+  color: #fafafa;
+`;
+
+const StyledUserLineIcon = styled(FaRegCircleUser)`
+  width: 15px;
+  height: 15px;
 `;

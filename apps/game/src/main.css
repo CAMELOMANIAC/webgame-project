@@ -1,4 +1,32 @@
 @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+
+:root {
+  --font-sans: "Pretendard Variable", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+
+  --surface-base: #09090b;
+  --surface-low: #0c0c0f;
+  --surface-mid: #101013;
+  --surface-high: #141418;
+  --surface-hud: rgba(16, 16, 19, 0.9);
+
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-grid: #27272a;
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --border-positive: rgba(133, 173, 255, 0.35);
+  --border-negative: rgba(255, 113, 98, 0.35);
+
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --text-disabled: #52525b;
+
+  --color-positive: #85adff;
+  --color-negative: #ff7162;
+  --color-cta-bg: #fafafa;
+  --color-cta-fg: #09090b;
+}
 
 *,
 *::before,
@@ -10,12 +38,12 @@ html {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  background-color: grey;
-  font-family: "Pretendard Variable", sans-serif;
+  background-color: #050507;
+  font-family: var(--font-sans);
   font-size: 16px;
-
-  /* overflow-x: hidden;
-  overflow-y: hidden; */
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
@@ -26,15 +54,11 @@ body {
   justify-content: center;
   align-items: center;
   margin: auto;
-  background-color: rgba(14, 14, 14);
+  background-color: var(--surface-base);
+  border-right: 1px solid var(--border-subtle);
+  border-left: 1px solid var(--border-subtle);
   flex-direction: column;
   font-size: 16px;
-}
-
-:root {
-  --primary-color: #4b4b4b;
-  --secondary-color: #f1f1f1;
-  --border-radius: 8px;
 }
 
 #root {
@@ -56,8 +80,6 @@ button {
   color: inherit;
   cursor: pointer;
   appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
 }
 
 p {
@@ -76,25 +98,26 @@ a {
   color: inherit;
 }
 
-/* 슬라이드 애니메이션 예시 (원하실 경우) */
 @keyframes slide-in {
   from {
-    transform: translateX(100px);
+    transform: translateX(60px);
     opacity: 0;
   }
 }
+
 @keyframes slide-out {
   to {
-    transform: translateX(-100px);
+    transform: translateX(-60px);
     opacity: 0;
   }
 }
 
 ::view-transition-old(page-content) {
-  animation: 300ms cubic-bezier(0.4, 0, 0.2, 1) both slide-out;
+  animation: 220ms cubic-bezier(0.22, 1, 0.36, 1) both slide-out;
 }
+
 ::view-transition-new(page-content) {
-  animation: 300ms cubic-bezier(0.4, 0, 0.2, 1) both slide-in;
+  animation: 220ms cubic-bezier(0.22, 1, 0.36, 1) both slide-in;
 }
 
 .content-container {

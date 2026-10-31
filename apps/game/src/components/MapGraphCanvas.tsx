@@ -1684,7 +1684,11 @@ const CanvasContainer = styled.div`
   width: 100%;
   height: 100%;
   position: relative;
-  background: radial-gradient(circle at center, #1b1b1f 0%, #0c0c0e 100%);
+  background-color: #09090b;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 24px 24px;
   overflow: hidden;
 `;
 
@@ -1694,15 +1698,14 @@ const InfoPanel = styled.div`
   left: 24px;
   z-index: 10;
   width: 250px;
-  padding: 16px;
-  background: rgba(10, 11, 18, 0.7);
+  padding: 14px;
+  background: rgba(16, 16, 19, 0.9);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(77, 124, 255, 0.2);
-  border-radius: 16px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-  font-family: "Outfit", "Inter", sans-serif;
-  color: #e4e6eb;
-  pointer-events: auto; /* 패널 내부 스위치 등을 클릭할 수 있도록 활성화 */
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  color: #fafafa;
+  pointer-events: auto;
 `;
 
 const MetricRow = styled.div`
@@ -1710,41 +1713,42 @@ const MetricRow = styled.div`
   justify-content: space-between;
   align-items: center;
   margin-bottom: 6px;
-  font-size: 10px;
+  font-size: 11px;
 `;
 
 const MetricLabel = styled.span`
-  color: #8a8d98;
+  color: #71717a;
 `;
 
 const MetricValue = styled.span`
   font-weight: 600;
-  color: #ffffff;
-  font-family: monospace;
+  color: #fafafa;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 `;
 
 const ExpandableHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 12px;
-  border-top: 1px dashed rgba(77, 124, 255, 0.2);
-  padding-top: 12px;
+  margin-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 10px;
   cursor: pointer;
   user-select: none;
 `;
 
 const SectionLabel = styled.span`
-  color: #ffffff;
-  font-weight: 700;
-  font-size: 10px;
+  color: #fafafa;
+  font-weight: 600;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.04em;
 `;
 
 const ExpandIcon = styled.span<{ $expanded: boolean }>`
-  font-size: 8px;
-  color: #4d7cff;
+  font-size: 10px;
+  color: #85adff;
   transition: transform 0.2s ease;
   transform: rotate(${(props) => (props.$expanded ? "180deg" : "0deg")});
 `;
@@ -1756,40 +1760,37 @@ const ExpandableContent = styled.div<{ $expanded: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: ${(props) => (props.$expanded ? "12px" : "0px")};
+  margin-top: ${(props) => (props.$expanded ? "10px" : "0px")};
 `;
 
 const ToggleButton = styled.button<{ $active: boolean }>`
-  background: ${(props) => (props.$active ? "rgba(77, 124, 255, 0.2)" : "rgba(255, 255, 255, 0.05)")};
-  border: 1px solid ${(props) => (props.$active ? "#4d7cff" : "rgba(255, 255, 255, 0.15)")};
-  color: ${(props) => (props.$active ? "#ffffff" : "#8a8d98")};
-  padding: 4px 12px;
-  border-radius: 8px;
-  font-size: 10px;
-  font-weight: 700;
+  background: ${(props) => (props.$active ? "rgba(133, 173, 255, 0.14)" : "rgba(255, 255, 255, 0.04)")};
+  border: 1px solid ${(props) => (props.$active ? "rgba(133, 173, 255, 0.35)" : "rgba(255, 255, 255, 0.1)")};
+  color: ${(props) => (props.$active ? "#85adff" : "#a1a1aa")};
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: monospace;
+  transition: all 0.15s ease;
+  font-family: var(--font-mono);
 
   &:hover {
-    background: ${(props) => (props.$active ? "rgba(77, 124, 255, 0.3)" : "rgba(255, 255, 255, 0.1)")};
-    border-color: ${(props) => (props.$active ? "#4d7cff" : "rgba(255, 255, 255, 0.3)")};
+    background: ${(props) => (props.$active ? "rgba(133, 173, 255, 0.2)" : "rgba(255, 255, 255, 0.08)")};
   }
 `;
 
 const HoverDetail = styled.div`
-  margin-top: 12px;
+  margin-top: 10px;
   padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 `;
 
 const ControlHint = styled.div`
-  margin-top: 12px;
-  font-size: 9px;
-  color: #4d7cff;
+  margin-top: 10px;
+  font-size: 11px;
+  color: #85adff;
   text-align: center;
-  opacity: 0.8;
-  letter-spacing: 0.5px;
 `;
 
 const NavigationPanel = styled.div`
@@ -1798,28 +1799,25 @@ const NavigationPanel = styled.div`
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
-  width: calc(100% - 48px);
+  width: calc(100% - 32px);
   max-width: 500px;
-  padding: 14px 20px;
-  background: rgba(10, 11, 18, 0.85);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(43, 203, 186, 0.4);
-  border-radius: 20px;
-  box-shadow:
-    0 15px 35px rgba(0, 0, 0, 0.6),
-    0 0 15px rgba(43, 203, 186, 0.15);
-  font-family: "Outfit", "Inter", sans-serif;
-  color: #e4e6eb;
+  padding: 12px 16px;
+  background: rgba(16, 16, 19, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  color: #fafafa;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   pointer-events: auto;
 
   @media (min-width: 600px) {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    gap: 24px;
+    gap: 16px;
   }
 `;
 
@@ -1831,7 +1829,7 @@ const NavInfoArea = styled.div`
 
 const NavButtonArea = styled.div`
   display: flex;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
 
   @media (min-width: 600px) {
@@ -1842,23 +1840,21 @@ const NavButtonArea = styled.div`
 
 const StyledNavButton = styled.button<{ $primary?: boolean }>`
   flex: 1;
-  background: ${(props) => (props.$primary ? "rgba(43, 203, 186, 0.2)" : "rgba(255, 71, 87, 0.15)")};
-  border: 1px solid ${(props) => (props.$primary ? "#2bcbba" : "rgba(255, 71, 87, 0.4)")};
-  color: ${(props) => (props.$primary ? "#2bcbba" : "#ff4757")};
-  padding: 6px 0;
-  border-radius: 8px;
-  font-size: 10px;
-  font-weight: 700;
+  background: ${(props) => (props.$primary ? "#fafafa" : "rgba(255, 113, 98, 0.14)")};
+  border: 1px solid ${(props) => (props.$primary ? "transparent" : "rgba(255, 113, 98, 0.35)")};
+  color: ${(props) => (props.$primary ? "#09090b" : "#ff7162")};
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: "Outfit", sans-serif;
+  transition: background-color 0.15s ease;
+  font-family: var(--font-mono);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-variant-numeric: tabular-nums;
 
   &:hover:not(:disabled) {
-    background: ${(props) => (props.$primary ? "rgba(43, 203, 186, 0.35)" : "rgba(255, 71, 87, 0.25)")};
-    border-color: ${(props) => (props.$primary ? "#2bcbba" : "#ff4757")};
-    box-shadow: 0 0 10px ${(props) => (props.$primary ? "rgba(43, 203, 186, 0.3)" : "rgba(255, 71, 87, 0.3)")};
+    background: ${(props) => (props.$primary ? "#e4e4e7" : "rgba(255, 113, 98, 0.22)")};
   }
 
   &:disabled {

@@ -17,38 +17,38 @@ export function FieldHeader({ isCombat }: FieldHeaderProps) {
           initial={{ x: "100%", opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: "-100%", opacity: 0 }}
-          transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+          transition={{ type: "spring", duration: 0.45, bounce: 0 }}
           style={{ overflow: "hidden", position: "absolute" }}
           key="combatInfo"
         >
-          <TopLayout>
+          <StyledTopLayout>
             <CombatLog />
-          </TopLayout>
+          </StyledTopLayout>
         </InheritMotionDiv>
       ) : (
         <InheritMotionDiv
           initial={{ x: "-100%", opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: "100%", opacity: 0 }}
-          transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+          transition={{ type: "spring", duration: 0.45, bounce: 0 }}
           style={{ overflow: "hidden", position: "absolute" }}
           key="fieldNavTargetSection"
         >
-          <TopLayout>
+          <StyledTopLayout>
             <FieldNavTargetSection />
-          </TopLayout>
+          </StyledTopLayout>
         </InheritMotionDiv>
       )}
     </AnimatePresence>
   );
 }
 
-const TopLayout = styled.div`
+const StyledTopLayout = styled.div`
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
   flex: 1;
   width: 100%;
-  gap: 16px;
-  padding: 24px 24px 0;
+  gap: 12px;
+  padding: 16px 16px 0;
 `;

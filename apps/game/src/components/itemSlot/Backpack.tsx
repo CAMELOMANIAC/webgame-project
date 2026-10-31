@@ -14,23 +14,33 @@ import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 const Backpack = memo(() => {
   const { data: characterData, isLoading, isError } = useGetCharacter();
   const isCombat = useAtomValue(isCombatAtom);
+  const occupiedCount =
+    characterData?.inventory.filter(
+      (item) => !item.id.toString().includes("empty"),
+    ).length ?? 0;
 
   return (
-    <Container>
-      <Title>Backpack Storage</Title>
+    <StyledContainer>
+      <StyledHeader>
+        <StyledTitle>출격 가방</StyledTitle>
+        <StyledSubCode>
+          PACK // {occupiedCount} / {characterData?.inventory.length ?? 32}
+        </StyledSubCode>
+      </StyledHeader>
       <AnimatePresence>
         {isLoading && (
           <InheritMotionDiv
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+            transition={{ type: "spring", duration: 0.45, bounce: 0 }}
             style={{ overflow: "hidden" }}
             key="backpackloading"
           >
-            <button>
+            <StyledStatusBox>
               <CgSpinner />
-            </button>
+              <span>가방 데이터를 불러오는 중...</span>
+            </StyledStatusBox>
           </InheritMotionDiv>
         )}
 
@@ -39,14 +49,16 @@ const Backpack = memo(() => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+            transition={{ type: "spring", duration: 0.45, bounce: 0 }}
             style={{ overflow: "hidden" }}
             key="backpackLoaderror"
           >
-            <button>
-              <MessageContainer>Something went wrong, please retry</MessageContainer>
+            <StyledStatusBox>
+              <StyledMessageContainer>
+                가방 정보를 불러오지 못했습니다.
+              </StyledMessageContainer>
               <IoMdRefresh />
-            </button>
+            </StyledStatusBox>
           </InheritMotionDiv>
         )}
         {characterData && (
@@ -54,54 +66,79 @@ const Backpack = memo(() => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ type: "spring", duration: 0.5, bounce: 0 }}
+            transition={{ type: "spring", duration: 0.45, bounce: 0 }}
             style={{ overflow: "hidden" }}
             key="backpackLoadComplete"
           >
-            <GridContainer layout={isCombat ? undefined : true}>
-              <SlotManager items={characterData?.inventory || []}>{(item) => <BackpackSlot item={item} />}</SlotManager>
-            </GridContainer>
+            <StyledGridContainer layout={isCombat ? undefined : true}>
+              <SlotManager items={characterData?.inventory || []}>
+                {(item) => <BackpackSlot item={item} />}
+              </SlotManager>
+            </StyledGridContainer>
           </InheritMotionDiv>
         )}
       </AnimatePresence>
-    </Container>
+    </StyledContainer>
   );
 });
 
 export default Backpack;
 
-const Container = styled.div`
+const StyledContainer = styled.div`
   width: 100%;
   height: 100%;
   display: flex;
   flex: 1;
   flex-direction: column;
+  background: rgba(12, 12, 15, 0.92);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
   overflow: auto;
 `;
 
-const MessageContainer = styled.div`
-  padding: 24px;
-  color: #ecf0f1;
-  font-size: 14px;
+const StyledHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 `;
 
-const GridContainer = styled(motion.section)`
+const StyledTitle = styled.h3`
+  font-size: 13px;
+  font-weight: 600;
+  color: #fafafa;
+  margin: 0;
+`;
+
+const StyledSubCode = styled.span`
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #71717a;
+  font-variant-numeric: tabular-nums;
+`;
+
+const StyledStatusBox = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: #a1a1aa;
+  font-size: 12px;
+`;
+
+const StyledMessageContainer = styled.span`
+  color: #ff7162;
+  font-size: 12px;
+`;
+
+const StyledGridContainer = styled(motion.section)`
   width: 100%;
   height: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  flex-direction: row;
-  justify-content: space-between;
-  row-gap: 8px;
-  padding: 0 24px 8px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 16px 16px;
   overflow: auto;
-`;
-
-const Title = styled.h3`
-  font-size: 12px;
-  font-weight: 700;
-  color: #ecf0f1;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  padding: 0 24px 15px;
 `;
