@@ -1,5 +1,13 @@
-import type { Prisma, PrismaClient, RaidStatus } from "@prisma/client";
 import type { JournalView } from "@webgame/types";
+import { and, eq } from "drizzle-orm";
+import {
+  type Database,
+  type DbOrTx,
+  questProgresses,
+  type RaidStatus,
+  type TransactionClient,
+  users,
+} from "../db";
 import { disclosedStory, firstMission } from "../logic/story";
 import { requireUserAtBase } from "./characters";
 import {
@@ -9,15 +17,19 @@ import {
 } from "./inventory";
 
 export async function journalView(
-  db: PrismaClient | Prisma.TransactionClient,
+  db: DbOrTx,
   userId: string,
 ): Promise<JournalView> {
-  const user = await db.user.findUniqueOrThrow({
-    where: { id: userId },
-    select: { storyTier: true },
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+    columns: { storyTier: true },
   });
-  const progress = await db.questProgress.findUnique({
-    where: { userId_questId: { userId, questId: firstMission.id } },
+  if (!user) throw new InventoryError("User not found", 404);
+  const progress = await db.query.questProgresses.findFirst({
+    where: and(
+      eq(questProgresses.userId, userId),
+      eq(questProgresses.questId, firstMission.id),
+    ),
   });
   return {
     mission: {
@@ -33,17 +45,20 @@ export async function journalView(
   };
 }
 
-export async function acceptFirstMission(db: PrismaClient, userId: string) {
+export async function acceptFirstMission(db: Database, userId: string) {
   return withInventoryTransaction(db, async (tx) => {
     await requireUserAtBase(tx, userId);
-    const where = { userId_questId: { userId, questId: firstMission.id } };
-    if (!(await tx.questProgress.findUnique({ where }))) {
-      await tx.questProgress.create({
-        data: {
-          userId,
-          questId: firstMission.id,
-          definitionVersion: firstMission.version,
-        },
+    const existing = await tx.query.questProgresses.findFirst({
+      where: and(
+        eq(questProgresses.userId, userId),
+        eq(questProgresses.questId, firstMission.id),
+      ),
+    });
+    if (!existing) {
+      await tx.insert(questProgresses).values({
+        userId,
+        questId: firstMission.id,
+        definitionVersion: firstMission.version,
       });
       await mergeIntoStash(tx, userId, firstMission.supplyWeaponId, 1);
     }
@@ -52,55 +67,71 @@ export async function acceptFirstMission(db: PrismaClient, userId: string) {
 }
 
 export async function missionNeedsRecovery(
-  tx: Prisma.TransactionClient,
+  tx: TransactionClient,
   userId: string,
 ) {
   return (
     (
-      await tx.questProgress.findUnique({
-        where: { userId_questId: { userId, questId: firstMission.id } },
+      await tx.query.questProgresses.findFirst({
+        where: and(
+          eq(questProgresses.userId, userId),
+          eq(questProgresses.questId, firstMission.id),
+        ),
       })
     )?.status === "ACTIVE"
   );
 }
 
 export async function recoverMissionRecord(
-  tx: Prisma.TransactionClient,
+  tx: TransactionClient,
   userId: string,
   raidId: string,
 ) {
-  await tx.questProgress.updateMany({
-    where: { userId, questId: firstMission.id, status: "ACTIVE" },
-    data: { status: "RECOVERED", recoveredRaidId: raidId },
-  });
+  await tx
+    .update(questProgresses)
+    .set({ status: "RECOVERED", recoveredRaidId: raidId, updatedAt: new Date() })
+    .where(
+      and(
+        eq(questProgresses.userId, userId),
+        eq(questProgresses.questId, firstMission.id),
+        eq(questProgresses.status, "ACTIVE"),
+      ),
+    );
 }
 
 export async function finishMissionRaid(
-  tx: Prisma.TransactionClient,
+  tx: TransactionClient,
   userId: string,
   raidId: string,
   status: RaidStatus,
 ) {
   if (status === "ACTIVE") return;
-  await tx.questProgress.updateMany({
-    where: {
-      userId,
-      questId: firstMission.id,
-      status: "RECOVERED",
-      recoveredRaidId: raidId,
-    },
-    data:
+  await tx
+    .update(questProgresses)
+    .set(
       status === "EXTRACTED"
-        ? { status: "READY" }
-        : { status: "ACTIVE", recoveredRaidId: null },
-  });
+        ? { status: "READY", updatedAt: new Date() }
+        : { status: "ACTIVE", recoveredRaidId: null, updatedAt: new Date() },
+    )
+    .where(
+      and(
+        eq(questProgresses.userId, userId),
+        eq(questProgresses.questId, firstMission.id),
+        eq(questProgresses.status, "RECOVERED"),
+        eq(questProgresses.recoveredRaidId, raidId),
+      ),
+    );
 }
 
-export async function reportFirstMission(db: PrismaClient, userId: string) {
+export async function reportFirstMission(db: Database, userId: string) {
   return withInventoryTransaction(db, async (tx) => {
     await requireUserAtBase(tx, userId);
-    const where = { userId_questId: { userId, questId: firstMission.id } };
-    const progress = await tx.questProgress.findUnique({ where });
+    const progress = await tx.query.questProgresses.findFirst({
+      where: and(
+        eq(questProgresses.userId, userId),
+        eq(questProgresses.questId, firstMission.id),
+      ),
+    });
     if (progress?.status === "COMPLETE") return journalView(tx, userId);
     if (progress?.status !== "READY")
       throw new InventoryError(
@@ -108,15 +139,27 @@ export async function reportFirstMission(db: PrismaClient, userId: string) {
         409,
       );
     await mergeIntoStash(tx, userId, firstMission.rewardWeaponId, 1);
-    await tx.questProgress.update({
-      where,
-      data: { status: "COMPLETE", completedAt: new Date() },
+    await tx
+      .update(questProgresses)
+      .set({
+        status: "COMPLETE",
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(questProgresses.userId, userId),
+          eq(questProgresses.questId, firstMission.id),
+        ),
+      );
+    const user = await tx.query.users.findFirst({
+      where: eq(users.id, userId),
     });
-    const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });
-    await tx.user.update({
-      where: { id: userId },
-      data: { storyTier: Math.max(1, user.storyTier) },
-    });
+    if (!user) throw new InventoryError("User not found", 404);
+    await tx
+      .update(users)
+      .set({ storyTier: Math.max(1, user.storyTier), updatedAt: new Date() })
+      .where(eq(users.id, userId));
     return journalView(tx, userId);
   });
 }

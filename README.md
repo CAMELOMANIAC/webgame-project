@@ -6,6 +6,8 @@
 
 ## 문서
 
+- [AI 에이전트 지침서](./AGENTS.md)
+- [비주얼 스타일 가이드](./DESIGN.md)
 - [세계관: 확정 설정과 제안](./docs/SF-생존-게임-세계관.md)
 - [작업 순서·완료 기준](./TODO.md)
 - [현재 구현·API](./PLAN.md)
@@ -14,13 +16,13 @@
 
 ## 구조
 
-| 경로                            | 역할                                                                         |
-| ------------------------------- | ---------------------------------------------------------------------------- |
-| `apps/game`                     | React 19·Vite·TanStack Router·Jotai·React Query·styled-components·Konva 화면 |
-| `apps/server`                   | Fastify·Prisma·PostgreSQL, 전투 계산과 탐사·아이템·임무 정산                 |
-| `packages/types`                | 공통 통신 타입·장비 처리·구역 규칙·단일 원본 지도                            |
-| `packages/ui`                   | 공통 UI 패키지                                                               |
-| `apps/server/prisma/migrations` | 기존 데이터 보존을 위한 DB 변경 이력                                         |
+| 경로                        | 역할                                                                                |
+| --------------------------- | ----------------------------------------------------------------------------------- |
+| `apps/game`                 | React 19·Vite·TanStack Router·Jotai·React Query·Vanilla Extract·Konva 화면          |
+| `apps/server`               | Fastify·Drizzle ORM·PostgreSQL (Supabase), 전투 계산과 탐사·아이템·임무 정산        |
+| `packages/types`            | 공통 통신 타입·장비 처리·구역 규칙·단일 원본 지도                                   |
+| `packages/ui`               | 공통 UI 패키지                                                                      |
+| `apps/server/src/db/schema.ts` | Drizzle ORM 기반 PostgreSQL 테이블·인덱스·관계 스키마 정의                       |
 
 서버가 전투와 보상을 확정하고, 화면은 반환한 로그를 재생한다. 탐사 명령은 세션 버전·고유 요청 ID로 중복 반영을 막는다.
 
@@ -40,13 +42,13 @@ docker run --rm -d --name webgame-test \
 export TEST_DATABASE_URL='postgresql://webgame_test:local-test-only@127.0.0.1:55432/webgame_test_inventory'
 
 DATABASE_URL="$TEST_DATABASE_URL" DIRECT_URL="$TEST_DATABASE_URL" \
-  pnpm --filter server exec prisma migrate deploy
+  pnpm --filter server db:push
 
 pnpm --filter @webgame/types build
 pnpm --filter server preview:test
 ```
 
-PostgreSQL 기동이 끝난 뒤 마이그레이션을 실행한다. 위 비밀번호는 일회용 로컬 검증용 예시다. 기존 연결 설정을 덮어쓰지 않는다.
+PostgreSQL 기동이 끝난 뒤 `db:push`로 Drizzle 스키마를 반영한다. 위 비밀번호는 일회용 로컬 검증용 예시다. 기존 연결 설정을 덮어쓰지 않는다.
 
 다른 터미널에서 게임을 실행한다.
 

@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { PrismaClient, type Prisma } from "@prisma/client";
 import { healingWeapon } from "@webgame/types";
+import {
+  characters,
+  characterWeapons,
+  createDatabase,
+  raidInventoryItems,
+  type TransactionClient,
+} from "../db";
 import { executeMonsterBattle, toBattleWeapon } from "./battle";
 
 function fixture({ armed = true, enemyArmed = false, hp = 35 } = {}) {
-  const database = new PrismaClient({
-    datasources: {
-      db: { url: "postgresql://test:test@127.0.0.1:1/webgame_test" },
-    },
-  });
+  const database = createDatabase(
+    "postgresql://test:test@127.0.0.1:1/webgame_test",
+  );
   const baseWeapon = {
     id: "attack",
     name: "Test Rifle",
@@ -20,13 +24,17 @@ function fixture({ armed = true, enemyArmed = false, hp = 35 } = {}) {
     weight: 1,
     value: 1,
     description: null,
-    attackType: "RANGED",
+    attackType: "RANGED" as const,
     iconKey: "RIFLE",
     effect: null,
   };
   const character = {
     id: "character",
     userId: "user",
+    variantId: "legacy-origin",
+    displayName: null,
+    createdAt: new Date(),
+    activeRaidId: null,
     hp,
     maxHp: 150,
     stamina: 120,
@@ -38,6 +46,7 @@ function fixture({ armed = true, enemyArmed = false, hp = 35 } = {}) {
     currentNodeId: 0,
     isRaiding: true,
     user: { nickname: "Player" },
+    variant: { definition: { id: "legacy-survivor", name: "Player" } },
     weapons: armed
       ? [
           {
@@ -56,12 +65,12 @@ function fixture({ armed = true, enemyArmed = false, hp = 35 } = {}) {
       : [],
   };
   const update = mock.fn(async (args: { data: unknown }) => args.data);
-  const createItem = mock.fn(async () => ({}));
+  const createItem = mock.fn(async (values: unknown) => values);
   const deleteItems = mock.fn(async () => ({ count: 1 }));
   const deleteEquipment = mock.fn(async () => ({ count: 1 }));
-  Reflect.set(database.character, "findUnique", async () => character);
-  Reflect.set(database.character, "update", update);
-  Reflect.set(database.monsterMaster, "findMany", async () => [
+
+  Reflect.set(database.query.characters, "findFirst", async () => character);
+  Reflect.set(database.query.monsterMasters, "findMany", async () => [
     {
       id: "enemy",
       name: "Test Enemy",
@@ -71,25 +80,50 @@ function fixture({ armed = true, enemyArmed = false, hp = 35 } = {}) {
       maxStamina: 100,
       staminaRegen: 0,
       level: 1,
-      weapons: enemyArmed ? [{ slotIndex: 0, weaponMaster: baseWeapon }] : [],
+      weapons: enemyArmed
+        ? [{ slotIndex: 0, weaponMasterId: baseWeapon.id, weaponMaster: baseWeapon }]
+        : [],
     },
   ]);
-  Reflect.set(database.weaponMaster, "findFirst", async () => baseWeapon);
-  Reflect.set(database.weaponMaster, "findUnique", async () => baseWeapon);
-  Reflect.set(database.raidInventoryItem, "findMany", async () => []);
-  Reflect.set(database.raidInventoryItem, "create", createItem);
-  Reflect.set(database.raidInventoryItem, "deleteMany", deleteItems);
-  Reflect.set(database.characterWeapon, "deleteMany", deleteEquipment);
+  Reflect.set(database.query.weaponMasters, "findFirst", async () => baseWeapon);
+  Reflect.set(database.query.raidInventoryItems, "findMany", async () => []);
   Reflect.set(
-    database.characterWeapon,
+    database.query.characterWeapons,
     "findMany",
     async () => character.weapons,
   );
+
+  Reflect.set(database, "update", (table: unknown) => ({
+    set: (data: unknown) => ({
+      where: async () => {
+        if (table === characters) {
+          await update({ data });
+        }
+      },
+    }),
+  }));
+  Reflect.set(database, "insert", (table: unknown) => ({
+    values: async (values: unknown) => {
+      if (table === raidInventoryItems) {
+        await createItem(values);
+      }
+    },
+  }));
+  Reflect.set(database, "delete", (table: unknown) => ({
+    where: async () => {
+      if (table === raidInventoryItems) {
+        await deleteItems();
+      } else if (table === characterWeapons) {
+        await deleteEquipment();
+      }
+    },
+  }));
+
   const transaction = mock.fn(
-    async (callback: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
-      callback(database),
+    async (callback: (tx: TransactionClient) => Promise<unknown>) =>
+      callback(database as unknown as TransactionClient),
   );
-  Reflect.set(database, "$transaction", transaction);
+  Reflect.set(database, "transaction", transaction);
   return {
     database,
     update,

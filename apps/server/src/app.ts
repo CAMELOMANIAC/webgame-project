@@ -1,7 +1,6 @@
 import cors from "@fastify/cors";
-import type { PrismaClient } from "@prisma/client";
 import Fastify, { type FastifyServerOptions } from "fastify";
-import { prisma as defaultDatabase } from "./db";
+import { type Database, db as defaultDatabase } from "./db";
 import { registerDevelopmentIdentity } from "./auth";
 import { registerGameRoutes } from "./routes/game";
 import { registerGhostRoutes } from "./routes/ghosts";
@@ -12,7 +11,7 @@ import { registerQuestRoutes } from "./routes/quests";
 import { registerSimulationRoutes } from "./routes/simulation";
 
 interface AppOptions {
-  database?: PrismaClient;
+  database?: Database;
   logger?: FastifyServerOptions["logger"];
   developmentAuth?: boolean;
 }

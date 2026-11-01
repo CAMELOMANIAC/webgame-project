@@ -1,19 +1,25 @@
 import type {
-  Character,
-  Prisma,
-  PrismaClient,
-  WeaponMaster,
-} from "@prisma/client";
-import { z } from "zod";
-import { hanlimNpcs } from "../logic/npcs";
-import type {
   BattleCombatant,
   GhostMatch,
   RaidBattleResult,
   WeaponData,
 } from "@webgame/types";
-import { simulateBattle } from "../logic/simulateBattle";
+import { eq } from "drizzle-orm";
+import { z } from "zod";
+import {
+  type Character,
+  characters,
+  characterWeapons,
+  type Database,
+  raidGhostEncounters,
+  raidInventoryItems,
+  type TransactionClient,
+  type WeaponMaster,
+  weaponMasters,
+} from "../db";
+import { hanlimNpcs } from "../logic/npcs";
 import { recoveryVitals } from "../logic/rules";
+import { simulateBattle } from "../logic/simulateBattle";
 import {
   calculateInventoryWeight,
   withInventoryTransaction,
@@ -35,7 +41,7 @@ export function toBattleWeapon(weapon: WeaponMaster): WeaponData {
 }
 
 export async function executeMonsterBattle(
-  database: PrismaClient,
+  database: Database,
   characterId: string,
   level = 1,
 ): Promise<RaidBattleResult> {
@@ -45,13 +51,13 @@ export async function executeMonsterBattle(
 }
 
 export async function executeMonsterBattleInTransaction(
-  tx: Prisma.TransactionClient,
+  tx: TransactionClient,
   characterId: string,
   level = 1,
 ): Promise<RaidBattleResult> {
   const { character, player } = await loadBattlePlayer(tx, characterId);
-  const monsters = await tx.monsterMaster.findMany({
-    include: { weapons: { include: { weaponMaster: true } } },
+  const monsters = await tx.query.monsterMasters.findMany({
+    with: { weapons: { with: { weaponMaster: true } } },
   });
   const match = monsters.sort(
     (a, b) => Math.abs(a.level - level) - Math.abs(b.level - level),
@@ -97,14 +103,15 @@ export async function executeMonsterBattleInTransaction(
 }
 
 export async function executeHanlimBattleInTransaction(
-  tx: Prisma.TransactionClient,
+  tx: TransactionClient,
   characterId: string,
 ): Promise<RaidBattleResult> {
   const { character, player } = await loadBattlePlayer(tx, characterId);
   const npc = hanlimNpcs.control;
-  const weapon = await tx.weaponMaster.findUniqueOrThrow({
-    where: { id: npc.weaponId },
+  const weapon = await tx.query.weaponMasters.findFirst({
+    where: eq(weaponMasters.id, npc.weaponId),
   });
+  if (!weapon) throw new Error(`Weapon ${npc.weaponId} not found`);
   const enemy: BattleCombatant = {
     id: `npc:${npc.id}`,
     displayName: npc.name,
@@ -141,15 +148,15 @@ export async function executeHanlimBattleInTransaction(
 }
 
 export async function loadBattlePlayer(
-  tx: Prisma.TransactionClient,
+  tx: TransactionClient,
   characterId: string,
 ) {
-  const character = await tx.character.findUnique({
-    where: { id: characterId },
-    include: {
-      weapons: { include: { weaponMaster: true } },
+  const character = await tx.query.characters.findFirst({
+    where: eq(characters.id, characterId),
+    with: {
+      weapons: { with: { weaponMaster: true } },
       user: true,
-      variant: { include: { definition: true } },
+      variant: { with: { definition: true } },
     },
   });
   if (!character) throw new Error("Character not found");
@@ -183,14 +190,15 @@ export async function loadBattlePlayer(
 }
 
 export async function executeGhostBattleInTransaction(
-  tx: Prisma.TransactionClient,
+  tx: TransactionClient,
   characterId: string,
   raidId: string,
   ghost: GhostMatch,
 ): Promise<RaidBattleResult> {
   const { character, player } = await loadBattlePlayer(tx, characterId);
-  await tx.raidGhostEncounter.create({
-    data: { raidId, snapshotId: ghost.id },
+  await tx.insert(raidGhostEncounters).values({
+    raidId,
+    snapshotId: ghost.id,
   });
   const opponent = {
     ...ghost.combatant,
@@ -220,7 +228,7 @@ export async function executeGhostBattleInTransaction(
 }
 
 async function settleBattle(
-  tx: Prisma.TransactionClient,
+  tx: TransactionClient,
   character: Character,
   player: BattleCombatant,
   enemies: BattleCombatant[],
@@ -237,50 +245,57 @@ async function settleBattle(
 
   const rewardItemName = await (async () => {
     if (playerDied) {
-      await tx.raidInventoryItem.deleteMany({ where: { characterId } });
-      await tx.characterWeapon.deleteMany({ where: { characterId } });
-      await tx.character.update({
-        where: { id: characterId },
-        data: {
+      await tx
+        .delete(raidInventoryItems)
+        .where(eq(raidInventoryItems.characterId, characterId));
+      await tx
+        .delete(characterWeapons)
+        .where(eq(characterWeapons.characterId, characterId));
+      await tx
+        .update(characters)
+        .set({
           isRaiding: false,
           ...recoveryVitals(character),
           time: 0,
           currentNodeId: 0,
           weight: 0,
-        },
-      });
+        })
+        .where(eq(characters.id, characterId));
       return null;
     }
 
     const weight = await calculateInventoryWeight(tx, characterId);
-    await tx.character.update({
-      where: { id: characterId },
-      data: { hp: finalPlayer.hp, stamina: finalPlayer.stamina, weight },
-    });
+    await tx
+      .update(characters)
+      .set({ hp: finalPlayer.hp, stamina: finalPlayer.stamina, weight })
+      .where(eq(characters.id, characterId));
     if (!playerWon) return null;
     const rewardId =
       rewardIds[Math.floor(Math.random() * rewardIds.length)] ??
-      (await tx.weaponMaster.findFirst())?.id;
+      (await tx.query.weaponMasters.findFirst())?.id;
     if (!rewardId) return null;
-    const inventory = await tx.raidInventoryItem.findMany({
-      where: { characterId },
+    const inventory = await tx.query.raidInventoryItems.findMany({
+      where: eq(raidInventoryItems.characterId, characterId),
     });
     const occupied = new Set(inventory.map((item) => item.slotIndex));
     const slotIndex = Array.from({ length: 32 }, (_, index) => index).find(
       (index) => !occupied.has(index),
     );
     if (slotIndex === undefined) return null;
-    const reward = await tx.weaponMaster.findUnique({
-      where: { id: rewardId },
+    const reward = await tx.query.weaponMasters.findFirst({
+      where: eq(weaponMasters.id, rewardId),
     });
     if (!reward || weight + reward.weight > character.maxWeight) return null;
-    await tx.raidInventoryItem.create({
-      data: { characterId, weaponMasterId: rewardId, slotIndex, quantity: 1 },
+    await tx.insert(raidInventoryItems).values({
+      characterId,
+      weaponMasterId: rewardId,
+      slotIndex,
+      quantity: 1,
     });
-    await tx.character.update({
-      where: { id: characterId },
-      data: { weight: weight + reward.weight },
-    });
+    await tx
+      .update(characters)
+      .set({ weight: weight + reward.weight })
+      .where(eq(characters.id, characterId));
     return reward.name;
   })();
 

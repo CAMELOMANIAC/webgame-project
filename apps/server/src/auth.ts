@@ -1,5 +1,6 @@
-import type { PrismaClient } from "@prisma/client";
+import { asc, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
+import { characters, type Database, users } from "./db";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -10,21 +11,23 @@ declare module "fastify" {
 // 개발용 계정 선택이다. 운영 환경에서는 이 헤더를 인증 수단으로 허용하지 않는다.
 export function registerDevelopmentIdentity(
   fastify: FastifyInstance,
-  database: PrismaClient,
+  database: Database,
   enabled: boolean,
 ) {
   fastify.decorateRequest("actorUserId", null);
   fastify.get("/dev/users", async (_request, reply) => {
     if (!enabled) return reply.status(404).send({ error: "Not found" });
-    return database.user.findMany({
-      select: { id: true, nickname: true },
-      orderBy: { createdAt: "asc" },
+    return database.query.users.findMany({
+      columns: { id: true, nickname: true },
+      orderBy: [asc(users.createdAt)],
     });
   });
   fastify.addHook("preHandler", async (request, reply) => {
     const path = request.routeOptions.url ?? "";
     if (path.startsWith("/dev/") && !enabled)
-      return reply.status(404).send({ error: "Development endpoint is disabled" });
+      return reply
+        .status(404)
+        .send({ error: "Development endpoint is disabled" });
     if (
       request.method === "OPTIONS" ||
       path === "/health" ||
@@ -54,9 +57,9 @@ export function registerDevelopmentIdentity(
     if (typeof userId !== "string" || !userId || userId.length > 100) {
       return reply.status(401).send({ error: "Select a development account" });
     }
-    const user = await database.user.findUnique({
-      where: { id: userId },
-      select: { id: true },
+    const user = await database.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { id: true },
     });
     if (!user)
       return reply.status(401).send({ error: "Development account not found" });
@@ -73,9 +76,9 @@ export function registerDevelopmentIdentity(
       params.characterId ??
       (path === "/battle/monster" ? body?.characterId : undefined);
     if (characterId) {
-      const character = await database.character.findUnique({
-        where: { id: characterId },
-        select: { userId: true },
+      const character = await database.query.characters.findFirst({
+        where: eq(characters.id, characterId),
+        columns: { userId: true },
       });
       if (!character)
         return reply.status(404).send({ error: "Character not found" });

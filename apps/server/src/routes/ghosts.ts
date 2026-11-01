@@ -1,10 +1,10 @@
-import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import mapData from "../../../../packages/types/src/assets/map_graph.json";
+import type { Database } from "../db";
 import { matchGhost } from "../services/ghosts";
 
-export function registerGhostRoutes(app: FastifyInstance, db: PrismaClient) {
+export function registerGhostRoutes(app: FastifyInstance, db: Database) {
   app.post("/ghost/snapshot", async (_request, reply) =>
     reply
       .status(405)

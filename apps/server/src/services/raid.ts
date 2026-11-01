@@ -1,35 +1,34 @@
-import type {
-  Character,
-  Prisma,
-  PrismaClient,
-  RaidSession,
-  RaidStatus,
-} from "@prisma/client";
-import type {
-  RaidActionInput,
-  RaidNavigationResult,
-  RaidView,
-} from "@webgame/types";
-import { z } from "zod";
 import {
+  firstMissionNodeId,
+  type RaidActionInput,
+  type RaidNavigationResult,
+  type RaidView,
   seopoMapVersion,
   seopoRegion,
-  firstMissionNodeId,
 } from "@webgame/types";
-import {
-  missionNeedsRecovery,
-  recoverMissionRecord,
-  finishMissionRaid,
-} from "./quests";
-import { hanlimNpcs } from "../logic/npcs";
-import { gameRules } from "../logic/rules";
+import { and, eq, ne, sql } from "drizzle-orm";
+import { z } from "zod";
 import mapData from "../../../../packages/types/src/assets/map_graph.json";
 import {
-  executeMonsterBattleInTransaction,
-  executeHanlimBattleInTransaction,
+  type Character,
+  characters,
+  type Database,
+  raidCommands,
+  raidInventoryItems,
+  type RaidSession,
+  raidSessions,
+  type RaidStatus,
+  type TransactionClient,
+  users,
+} from "../db";
+import { hanlimNpcs } from "../logic/npcs";
+import { gameRules } from "../logic/rules";
+import {
   executeGhostBattleInTransaction,
+  executeHanlimBattleInTransaction,
+  executeMonsterBattleInTransaction,
 } from "./battle";
-import { recordGhosts, matchGhost } from "./ghosts";
+import { matchGhost, recordGhosts } from "./ghosts";
 import {
   calculateInventoryWeight,
   InventoryError,
@@ -38,6 +37,11 @@ import {
   syncSlotsInTransaction,
   withInventoryTransaction,
 } from "./inventory";
+import {
+  finishMissionRaid,
+  missionNeedsRecovery,
+  recoverMissionRecord,
+} from "./quests";
 
 export const RaidActionSchema = z.object({
   raidId: z.string().uuid(),
@@ -75,15 +79,17 @@ function view(raid: RaidSession): RaidView {
 }
 
 async function ownedCharacter(
-  tx: Prisma.TransactionClient,
+  tx: TransactionClient,
   userId: string,
   characterId: string,
 ) {
   // 세션 생성의 FK 검사와 활성 세션 갱신이 서로 잠금을 기다리지 않도록 먼저 잠근다.
-  await tx.$queryRaw`SELECT "id" FROM "Character" WHERE "id" = ${characterId} AND "userId" = ${userId} FOR UPDATE`;
-  const character = await tx.character.findUnique({
-    where: { id: characterId },
-    include: { activeRaid: true },
+  await tx.execute(
+    sql`SELECT "id" FROM "Character" WHERE "id" = ${characterId} AND "userId" = ${userId} FOR UPDATE`,
+  );
+  const character = await tx.query.characters.findFirst({
+    where: eq(characters.id, characterId),
+    with: { activeRaid: true },
   });
   if (!character) throw new InventoryError("Character not found", 404);
   if (character.userId !== userId)
@@ -92,12 +98,14 @@ async function ownedCharacter(
 }
 
 export async function startRaid(
-  database: PrismaClient,
+  database: Database,
   userId: string,
   characterId: string,
 ) {
   return withInventoryTransaction(database, async (tx) => {
-    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
+    await tx.execute(
+      sql`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`,
+    );
     const character = await ownedCharacter(tx, userId, characterId);
     if (character.activeRaid?.status === "ACTIVE")
       return {
@@ -105,37 +113,47 @@ export async function startRaid(
         isRaiding: true,
         raid: view(character.activeRaid),
       };
-    const otherActive = await tx.character.count({
-      where: { userId, isRaiding: true, id: { not: characterId } },
+    const otherActive = await tx.query.characters.findMany({
+      where: and(
+        eq(characters.userId, userId),
+        eq(characters.isRaiding, true),
+        ne(characters.id, characterId),
+      ),
+      columns: { id: true },
     });
-    if (otherActive)
+    if (otherActive.length > 0)
       throw new InventoryError("Another character is already in a raid", 409);
-    const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+    const user = await tx.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+    if (!user) throw new InventoryError("User not found", 404);
     if (user.selectedCharacterId && user.selectedCharacterId !== characterId)
       throw new InventoryError(
         "Select this character before starting a raid",
         409,
       );
     if (!user.selectedCharacterId)
-      await tx.user.update({
-        where: { id: userId },
-        data: { selectedCharacterId: characterId },
-      });
+      await tx
+        .update(users)
+        .set({ selectedCharacterId: characterId })
+        .where(eq(users.id, userId));
     if (character.hp <= 0 || character.isRaiding)
       throw new InventoryError("Character is not ready to start a raid", 409);
-    const raid = await tx.raidSession.create({
-      data: { characterId, currentNodeId: gameRules.startNodeId },
-    });
-    await tx.character.update({
-      where: { id: characterId },
-      data: {
+    const [raid] = await tx
+      .insert(raidSessions)
+      .values({ characterId, currentNodeId: gameRules.startNodeId })
+      .returning();
+    if (!raid) throw new InventoryError("Failed to create raid session", 500);
+    await tx
+      .update(characters)
+      .set({
         isRaiding: true,
         activeRaidId: raid.id,
         currentNodeId: gameRules.startNodeId,
         time: 0,
         weight: await calculateInventoryWeight(tx, characterId),
-      },
-    });
+      })
+      .where(eq(characters.id, characterId));
     await recordGhosts(tx, characterId, raid.id, [
       { nodeId: raid.currentNodeId, round: 0 },
     ]);
@@ -151,14 +169,14 @@ interface ActionResult<T> {
 }
 
 async function performRaidAction<T>(
-  database: PrismaClient,
+  database: Database,
   userId: string,
   characterId: string,
   input: RaidActionInput,
   kind: string,
   payload: unknown,
   action: (
-    tx: Prisma.TransactionClient,
+    tx: TransactionClient,
     raid: RaidSession,
     character: Character,
   ) => Promise<ActionResult<T>>,
@@ -166,15 +184,16 @@ async function performRaidAction<T>(
   const fingerprint = JSON.stringify({ kind, payload });
   return withInventoryTransaction(database, async (tx) => {
     const character = await ownedCharacter(tx, userId, characterId);
-    const raid = await tx.raidSession.findUnique({
-      where: { id: input.raidId },
+    const raid = await tx.query.raidSessions.findFirst({
+      where: eq(raidSessions.id, input.raidId),
     });
     if (!raid || raid.characterId !== characterId)
       throw new InventoryError("Raid does not belong to this character", 403);
-    const previous = await tx.raidCommand.findUnique({
-      where: {
-        raidId_requestId: { raidId: raid.id, requestId: input.requestId },
-      },
+    const previous = await tx.query.raidCommands.findFirst({
+      where: and(
+        eq(raidCommands.raidId, raid.id),
+        eq(raidCommands.requestId, input.requestId),
+      ),
     });
     if (previous) {
       if (previous.fingerprint !== fingerprint)
@@ -199,33 +218,36 @@ async function performRaidAction<T>(
     const result = await action(tx, raid, character);
     const status = result.status ?? "ACTIVE";
     await finishMissionRaid(tx, userId, raid.id, status);
-    const updated = await tx.raidSession.update({
-      where: { id: raid.id },
-      data: {
-        version: { increment: 1 },
+    const [updated] = await tx
+      .update(raidSessions)
+      .set({
+        version: sql`${raidSessions.version} + 1`,
         status,
-        currentNodeId: result.currentNodeId,
-        round: result.round,
-        endedAt: status === "ACTIVE" ? undefined : new Date(),
-      },
-    });
-    await tx.character.update({
-      where: { id: characterId },
-      data:
+        ...(result.currentNodeId !== undefined
+          ? { currentNodeId: result.currentNodeId }
+          : {}),
+        ...(result.round !== undefined ? { round: result.round } : {}),
+        ...(status === "ACTIVE" ? {} : { endedAt: new Date() }),
+      })
+      .where(eq(raidSessions.id, raid.id))
+      .returning();
+    if (!updated) throw new InventoryError("Failed to update raid session", 500);
+    await tx
+      .update(characters)
+      .set(
         status === "ACTIVE"
           ? { currentNodeId: updated.currentNodeId, time: updated.round }
           : { isRaiding: false, activeRaidId: null, currentNodeId: 0, time: 0 },
-    });
+      )
+      .where(eq(characters.id, characterId));
     const response = { ...result.payload, raid: view(updated) };
-    const json: Prisma.InputJsonValue = JSON.parse(JSON.stringify(response));
-    await tx.raidCommand.create({
-      data: {
-        raidId: raid.id,
-        requestId: input.requestId,
-        kind,
-        fingerprint,
-        response: json,
-      },
+    const json = JSON.parse(JSON.stringify(response));
+    await tx.insert(raidCommands).values({
+      raidId: raid.id,
+      requestId: input.requestId,
+      kind,
+      fingerprint,
+      response: json,
     });
     return response;
   });
@@ -242,7 +264,7 @@ const buildingNodes = new Set(
 );
 
 export async function navigateRaid(
-  database: PrismaClient,
+  database: Database,
   userId: string,
   characterId: string,
   input: z.infer<typeof NavigateSchema>,
@@ -318,13 +340,13 @@ export async function navigateRaid(
               round: raid.round + index + 1,
             })),
           );
-          await tx.character.update({
-            where: { id: characterId },
-            data: {
+          await tx
+            .update(characters)
+            .set({
               currentNodeId: stopNodeId,
               time: raid.round + parsed.path.indexOf(stopNodeId),
-            },
-          });
+            })
+            .where(eq(characters.id, characterId));
           const battleLog = ghost
             ? await executeGhostBattleInTransaction(
                 tx,
@@ -376,7 +398,7 @@ export async function navigateRaid(
 }
 
 export async function extractRaid(
-  database: PrismaClient,
+  database: Database,
   userId: string,
   characterId: string,
   input: RaidActionInput,
@@ -392,8 +414,8 @@ export async function extractRaid(
       if (!extractionNodeIds.includes(raid.currentNodeId))
         throw new InventoryError("This node is not an extraction point");
       const character = await ownedCharacter(tx, userId, characterId);
-      const inventory = await tx.raidInventoryItem.findMany({
-        where: { characterId },
+      const inventory = await tx.query.raidInventoryItems.findMany({
+        where: eq(raidInventoryItems.characterId, characterId),
       });
       for (const item of inventory)
         await mergeIntoStash(
@@ -402,18 +424,20 @@ export async function extractRaid(
           item.weaponMasterId,
           item.quantity,
         );
-      await tx.raidInventoryItem.deleteMany({ where: { characterId } });
-      await tx.character.update({
-        where: { id: characterId },
-        data: { weight: await calculateInventoryWeight(tx, characterId) },
-      });
+      await tx
+        .delete(raidInventoryItems)
+        .where(eq(raidInventoryItems.characterId, characterId));
+      await tx
+        .update(characters)
+        .set({ weight: await calculateInventoryWeight(tx, characterId) })
+        .where(eq(characters.id, characterId));
       return { payload: { status: "success" }, status: "EXTRACTED" };
     },
   );
 }
 
 export async function fightRaidMonster(
-  database: PrismaClient,
+  database: Database,
   userId: string,
   characterId: string,
   input: RaidActionInput,

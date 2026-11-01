@@ -1,18 +1,26 @@
 import { randomUUID } from "node:crypto";
-import { PrismaClient } from "@prisma/client";
+import { eq, inArray } from "drizzle-orm";
 import { buildApp } from "../app";
+import {
+  characters,
+  characterWeapons,
+  createDatabase,
+  raidInventoryItems,
+  stashItems,
+  users,
+  weaponMasters,
+} from "../db";
 import { firstMission } from "../logic/story";
 import { extractRaid, navigateRaid, startRaid } from "../services/raid";
 import { pathToNode } from "./mapRoute";
 import { localTestDatabaseUrl } from "./testDatabase";
 
 async function main() {
-  const db = new PrismaClient({
-    datasources: { db: { url: localTestDatabaseUrl() } },
-  });
-  const fixtures = await db.$transaction(async (tx) => {
-    const weapon = await tx.weaponMaster.create({
-      data: {
+  const db = createDatabase(localTestDatabaseUrl());
+  const fixtures = await db.transaction(async (tx) => {
+    const [weapon] = await tx
+      .insert(weaponMasters)
+      .values({
         name: "검증용 잔상 장비",
         damage: 4,
         staminaCost: 1,
@@ -22,33 +30,60 @@ async function main() {
         value: 1,
         attackType: "RANGED",
         iconKey: "RIFLE",
-      },
-    });
-    const user = await tx.user.create({
-      data: {
+      })
+      .returning();
+    if (!weapon) throw new Error("Failed to create preview weapon");
+
+    const [user] = await tx
+      .insert(users)
+      .values({
         email: `preview-${randomUUID()}@example.test`,
         nickname: "로컬 검증 생존자",
-        characters: { create: { displayName: "생존자" } },
-      },
-      include: { characters: true },
-    });
-    const source = await tx.user.create({
-      data: {
+      })
+      .returning();
+    if (!user) throw new Error("Failed to create preview user");
+
+    const [userChar] = await tx
+      .insert(characters)
+      .values({
+        userId: user.id,
+        displayName: "생존자",
+      })
+      .returning();
+    if (!userChar) throw new Error("Failed to create preview character");
+
+    const [source] = await tx
+      .insert(users)
+      .values({
         email: `ghost-${randomUUID()}@example.test`,
         nickname: "고스트 검증 기록",
-        characters: {
-          create: {
-            displayName: "생존자",
-            hp: 40,
-            maxHp: 40,
-            weight: weapon.weight,
-            weapons: { create: { weaponMasterId: weapon.id, slotIndex: 0 } },
-          },
-        },
-      },
-      include: { characters: true },
+      })
+      .returning();
+    if (!source) throw new Error("Failed to create source user");
+
+    const [sourceChar] = await tx
+      .insert(characters)
+      .values({
+        userId: source.id,
+        displayName: "생존자",
+        hp: 40,
+        maxHp: 40,
+        weight: weapon.weight,
+      })
+      .returning();
+    if (!sourceChar) throw new Error("Failed to create source character");
+
+    await tx.insert(characterWeapons).values({
+      characterId: sourceChar.id,
+      weaponMasterId: weapon.id,
+      slotIndex: 0,
     });
-    return { weapon, user, source };
+
+    return {
+      weapon,
+      user: { ...user, characters: [userChar] },
+      source: { ...source, characters: [sourceChar] },
+    };
   });
   const { weapon, user, source } = fixtures;
   const app = buildApp({ database: db, logger: false });
@@ -61,22 +96,24 @@ async function main() {
       await app.close();
       for (const owner of [user, source]) {
         const ids = (
-          await db.character.findMany({
-            where: { userId: owner.id },
-            select: { id: true },
+          await db.query.characters.findMany({
+            where: eq(characters.userId, owner.id),
+            columns: { id: true },
           })
         ).map((character) => character.id);
-        await db.raidInventoryItem.deleteMany({
-          where: { characterId: { in: ids } },
-        });
-        await db.characterWeapon.deleteMany({
-          where: { characterId: { in: ids } },
-        });
-        await db.stashItem.deleteMany({ where: { userId: owner.id } });
-        await db.character.deleteMany({ where: { userId: owner.id } });
-        await db.user.delete({ where: { id: owner.id } });
+        if (ids.length > 0) {
+          await db
+            .delete(raidInventoryItems)
+            .where(inArray(raidInventoryItems.characterId, ids));
+          await db
+            .delete(characterWeapons)
+            .where(inArray(characterWeapons.characterId, ids));
+        }
+        await db.delete(stashItems).where(eq(stashItems.userId, owner.id));
+        await db.delete(characters).where(eq(characters.userId, owner.id));
+        await db.delete(users).where(eq(users.id, owner.id));
       }
-      await db.weaponMaster.delete({ where: { id: weapon.id } });
+      await db.delete(weaponMasters).where(eq(weaponMasters.id, weapon.id));
     } finally {
       await db.$disconnect();
       clearInterval(keepAlive);

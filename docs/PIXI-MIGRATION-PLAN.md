@@ -39,11 +39,11 @@
 
 | 파일 경로 | 주요 역할 및 사용 중인 Konva 기능 | 전환 난이도 |
 | :--- | :--- | :---: |
-| [`MapGraphCanvas.tsx`](file:///Users/yugyusang/Documents/project/webgame-project/apps/game/src/components/MapGraphCanvas.tsx) | 월드 맵(수역, 도로, 건물, 노드, 탈출구), 최단 경로선, 시야 안개(Radial Gradient), 플레이어 마커, 패닝/줌/카메라 추적 및 1-Hop Gate 이동 루프 | **상** |
-| [`BattleCanvas.tsx`](file:///Users/yugyusang/Documents/project/webgame-project/apps/game/src/components/BattleCanvas.tsx) | 전투 중 플레이어 마커(근접 돌진 포함), 적 유닛 배치, 공격 이펙트 오케스트레이션, 플로팅 데미지 팝업(`Konva.Tween`) | **중** |
-| [`CanvasEnemyUnit.tsx`](file:///Users/yugyusang/Documents/project/webgame-project/apps/game/src/components/CanvasEnemyUnit.tsx) | 적 유닛 스폰 인트로 트윈, Idle 배회(`Konva.Animation`), 근접 돌진, 피격 흔들림, 이름표(`Label` + `Tag` + `Text`) | **중** |
-| [`RadarAttackLine.tsx`](file:///Users/yugyusang/Documents/project/webgame-project/apps/game/src/components/RadarAttackLine.tsx) | 원거리 공격 시 탄환 3연발 시차 발사(`Circle.to` 트윈) | **하** |
-| [`MeleeSlashEffect.tsx`](file:///Users/yugyusang/Documents/project/webgame-project/apps/game/src/components/MeleeSlashEffect.tsx) | 근접 공격 대각선 참격 커스텀 드로잉(`Shape sceneFunc` + `progress` 트윈) | **하** |
+| [`MapGraphCanvas.tsx`](file:///Users/yugyusang/Documents/project/webgame-project/apps/game/src/components/field/MapGraphCanvas.tsx) | 월드 맵(수역, 도로, 건물, 노드, 탈출구), 최단 경로선, 시야 안개(Radial Gradient), 플레이어 마커, 패닝/줌/카메라 추적 및 1-Hop Gate 이동 루프 | **상** |
+| [`BattleCanvas.tsx`](file:///Users/yugyusang/Documents/project/webgame-project/apps/game/src/components/combat/BattleCanvas.tsx) | 전투 중 플레이어 마커(근접 돌진 포함), 적 유닛 배치, 공격 이펙트 오케스트레이션, 플로팅 데미지 팝업(`Konva.Tween`) | **중** |
+| [`CanvasEnemyUnit.tsx`](file:///Users/yugyusang/Documents/project/webgame-project/apps/game/src/components/combat/CanvasEnemyUnit.tsx) | 적 유닛 스폰 인트로 트윈, Idle 배회(`Konva.Animation`), 근접 돌진, 피격 흔들림, 이름표(`Label` + `Tag` + `Text`) | **중** |
+| [`RadarAttackLine.tsx`](file:///Users/yugyusang/Documents/project/webgame-project/apps/game/src/components/combat/RadarAttackLine.tsx) | 원거리 공격 시 탄환 3연발 시차 발사(`Circle.to` 트윈) | **하** |
+| [`MeleeSlashEffect.tsx`](file:///Users/yugyusang/Documents/project/webgame-project/apps/game/src/components/combat/MeleeSlashEffect.tsx) | 근접 공격 대각선 참격 커스텀 드로잉(`Shape sceneFunc` + `progress` 트윈) | **하** |
 
 ---
 
