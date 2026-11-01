@@ -9,7 +9,8 @@ export const main = style({
   position: "relative",
   width: "100%",
   height: "100%",
-  overflowX: "hidden",
+  minHeight: 0,
+  overflow: "hidden",
 });
 
 export const outletWrapper = style({

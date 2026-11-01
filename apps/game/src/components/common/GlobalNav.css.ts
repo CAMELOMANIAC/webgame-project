@@ -7,15 +7,27 @@ export const navContainer = style({
   display: "grid",
   gridTemplateColumns: "repeat(4, 1fr)",
   gap: "6px",
-  bottom: 0,
-  position: "sticky",
+  position: "absolute",
+  bottom: "12px",
+  left: "16px",
+  right: "16px",
   zIndex: 30,
-  width: "100%",
-  height: "64px",
-  padding: "8px 12px 12px",
-  backgroundColor: vars.surface.low,
-  borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+  height: "58px",
+  padding: "6px",
+  backgroundColor: "rgba(16, 16, 20, 0.92)",
+  border: "1px solid rgba(255, 255, 255, 0.12)",
+  borderRadius: vars.radius.panel,
+  boxShadow:
+    "0 10px 30px -4px rgba(0, 0, 0, 0.52), inset 0 1px 0 0 rgba(255, 255, 255, 0.14)",
   color: vars.text.muted,
+  viewTransitionName: "global-nav",
+  "@supports": {
+    "(-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))": {
+      backgroundColor: "rgba(14, 15, 19, 0.70)",
+      backdropFilter: "blur(16px) saturate(140%)",
+      WebkitBackdropFilter: "blur(16px) saturate(140%)",
+    },
+  },
 });
 
 export const navLink = style({
@@ -30,10 +42,16 @@ export const navLink = style({
 
 export const activePill = style({
   position: "absolute",
-  inset: 0,
+  top: "6px",
+  bottom: "6px",
+  left: "6px",
+  width: "calc((100% - 30px) / 4)",
   borderRadius: vars.radius.control,
-  background: "rgba(255, 255, 255, 0.07)",
-  border: "1px solid rgba(255, 255, 255, 0.14)",
+  background: "rgba(255, 255, 255, 0.08)",
+  border: "1px solid rgba(255, 255, 255, 0.15)",
+  boxShadow: "inset 0 1px 0 0 rgba(255, 255, 255, 0.12), 0 2px 6px rgba(0, 0, 0, 0.25)",
+  transition: "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+  pointerEvents: "none",
   zIndex: 0,
 });
 

@@ -1,5 +1,4 @@
 import { type AnyRouter, Link, useLocation, useSearch } from "@tanstack/react-router";
-import { motion } from "motion/react";
 import { BiRadio, BiSolidRadio } from "react-icons/bi";
 import { FaCircleUser, FaRegCircleUser } from "react-icons/fa6";
 import { MdBackpack, MdOutlineBackpack } from "react-icons/md";
@@ -16,16 +15,32 @@ const GlobalNav = () => {
   const isQuest = location.pathname === "/field/quest";
   const isUser = location.pathname === "/field/user";
 
+  const activeIndex = isFieldMap
+    ? 0
+    : isBackpack
+      ? 1
+      : isQuest
+        ? 2
+        : isUser
+          ? 3
+          : -1;
+
   return (
     <nav className={styles.navContainer} aria-label="하단 글로벌 내비게이션">
+      {activeIndex >= 0 && (
+        <div
+          className={styles.activePill}
+          style={{
+            transform: `translateX(calc(${activeIndex * 100}% + ${activeIndex * 6}px))`,
+          }}
+        />
+      )}
+
       <Link
         to="/field"
         className={styles.navLink}
         viewTransition={location.pathname !== "/field"}
       >
-        {isFieldMap && (
-          <motion.div className={styles.activePill} layoutId="highlight" />
-        )}
         <div className={styles.navItem({ active: isFieldMap })}>
           {isFieldMap ? (
             <RiMap2Fill className={styles.navIcon} />
@@ -45,9 +60,6 @@ const GlobalNav = () => {
         search={(prev: AnyRouter) => ({ ...prev, tab: "backpack" })}
         viewTransition={location.pathname !== "/field"}
       >
-        {isBackpack && (
-          <motion.div className={styles.activePill} layoutId="highlight" />
-        )}
         <div className={styles.navItem({ active: isBackpack })}>
           {isBackpack ? (
             <MdBackpack className={styles.navIcon} />
@@ -61,9 +73,6 @@ const GlobalNav = () => {
       </Link>
 
       <Link to="/field/quest" className={styles.navLink} viewTransition>
-        {isQuest && (
-          <motion.div className={styles.activePill} layoutId="highlight" />
-        )}
         <div className={styles.navItem({ active: isQuest })}>
           {isQuest ? (
             <BiSolidRadio className={styles.navIcon} />
@@ -77,9 +86,6 @@ const GlobalNav = () => {
       </Link>
 
       <Link to="/field/user" className={styles.navLink} viewTransition>
-        {isUser && (
-          <motion.div className={styles.activePill} layoutId="highlight" />
-        )}
         <div className={styles.navItem({ active: isUser })}>
           {isUser ? (
             <FaCircleUser className={styles.navIcon} />

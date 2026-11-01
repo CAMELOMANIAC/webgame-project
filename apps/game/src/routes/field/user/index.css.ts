@@ -15,7 +15,7 @@ export const lobbyContainer = style({
   containerName: lobbyContainerName,
   color: vars.text.primary,
   margin: "0 auto",
-  padding: "20px 16px",
+  padding: "20px 16px 92px",
 });
 
 export const headerArea = style({

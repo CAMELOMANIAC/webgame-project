@@ -123,3 +123,16 @@ a {
 .content-container {
   view-transition-name: page-content;
 }
+
+::view-transition-group(global-nav) {
+  z-index: 100;
+  animation: none;
+}
+
+::view-transition-old(global-nav) {
+  display: none;
+}
+
+::view-transition-new(global-nav) {
+  animation: none;
+}
