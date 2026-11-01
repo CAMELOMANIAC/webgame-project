@@ -1,10 +1,15 @@
-import {
-  Prisma,
-  type PrismaClient,
-  type Character,
-  type StashItem,
-} from "@prisma/client";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
+import {
+  type Character,
+  characters,
+  characterWeapons,
+  type Database,
+  raidInventoryItems,
+  type StashItem,
+  stashItems,
+  type TransactionClient,
+} from "../db";
 
 const equipmentEntry = z.object({
   weaponMasterId: z.string().min(1),
@@ -46,26 +51,33 @@ export class InventoryError extends Error {
   }
 }
 
-type Tx = Prisma.TransactionClient;
+export type Tx = TransactionClient;
 export type SlotsInput = z.infer<typeof SlotsSchema>;
+
+export function isSerializationError(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth++) {
+    const record = current as { code?: unknown; cause?: unknown };
+    if (record.code === "40001" || record.code === "40P01") {
+      return true;
+    }
+    current = record.cause;
+  }
+  return false;
+}
 
 // 같은 아이템을 동시에 이동해도 수량을 잃거나 복제하지 않도록 직렬화 충돌을 재시도한다.
 export async function withInventoryTransaction<T>(
-  database: PrismaClient,
+  database: Database,
   action: (tx: Tx) => Promise<T>,
 ): Promise<T> {
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      return await database.$transaction(action, {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      return await database.transaction(action, {
+        isolationLevel: "serializable",
       });
     } catch (error) {
-      const retryable =
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        (error.code === "P2034" ||
-          (error.code === "P2010" &&
-            ["40001", "40P01"].includes(String(error.meta?.code))));
-      if (!retryable) throw error;
+      if (!isSerializationError(error)) throw error;
       if (attempt === 4)
         throw new InventoryError(
           "Inventory changed concurrently; retry the request",
@@ -77,8 +89,8 @@ export async function withInventoryTransaction<T>(
 }
 
 async function getCharacter(tx: Tx, characterId: string) {
-  const character = await tx.character.findUnique({
-    where: { id: characterId },
+  const character = await tx.query.characters.findFirst({
+    where: eq(characters.id, characterId),
   });
   if (!character) throw new InventoryError("Character not found", 404);
   return character;
@@ -103,13 +115,13 @@ export function countItems(
 }
 
 export async function calculateInventoryWeight(tx: Tx, characterId: string) {
-  const equipment = await tx.characterWeapon.findMany({
-    where: { characterId },
-    include: { weaponMaster: true },
+  const equipment = await tx.query.characterWeapons.findMany({
+    where: eq(characterWeapons.characterId, characterId),
+    with: { weaponMaster: true },
   });
-  const inventory = await tx.raidInventoryItem.findMany({
-    where: { characterId },
-    include: { weaponMaster: true },
+  const inventory = await tx.query.raidInventoryItems.findMany({
+    where: eq(raidInventoryItems.characterId, characterId),
+    with: { weaponMaster: true },
   });
   return (
     equipment.reduce((sum, item) => sum + item.weaponMaster.weight, 0) +
@@ -127,12 +139,15 @@ export async function updateInventoryWeight(
   const weight = await calculateInventoryWeight(tx, character.id);
   if (weight > character.maxWeight)
     throw new InventoryError("Maximum carrying weight exceeded");
-  await tx.character.update({ where: { id: character.id }, data: { weight } });
+  await tx
+    .update(characters)
+    .set({ weight })
+    .where(eq(characters.id, character.id));
   return weight;
 }
 
 export async function syncSlots(
-  database: PrismaClient,
+  database: Database,
   characterId: string,
   input: SlotsInput,
 ) {
@@ -148,11 +163,11 @@ export async function syncSlotsInTransaction(
 ) {
   const data = SlotsSchema.parse(input);
   const character = await getCharacter(tx, characterId);
-  const equipment = await tx.characterWeapon.findMany({
-    where: { characterId },
+  const equipment = await tx.query.characterWeapons.findMany({
+    where: eq(characterWeapons.characterId, characterId),
   });
-  const inventory = await tx.raidInventoryItem.findMany({
-    where: { characterId },
+  const inventory = await tx.query.raidInventoryItems.findMany({
+    where: eq(raidInventoryItems.characterId, characterId),
   });
   const actual = countItems(equipment, inventory);
   const requested = countItems(data.equipment, data.inventory);
@@ -162,16 +177,20 @@ export async function syncSlotsInTransaction(
   ) {
     throw new InventoryError("Item quantities must be preserved");
   }
-  await tx.characterWeapon.deleteMany({ where: { characterId } });
-  await tx.raidInventoryItem.deleteMany({ where: { characterId } });
+  await tx
+    .delete(characterWeapons)
+    .where(eq(characterWeapons.characterId, characterId));
+  await tx
+    .delete(raidInventoryItems)
+    .where(eq(raidInventoryItems.characterId, characterId));
   if (data.equipment.length)
-    await tx.characterWeapon.createMany({
-      data: data.equipment.map((item) => ({ ...item, characterId })),
-    });
+    await tx
+      .insert(characterWeapons)
+      .values(data.equipment.map((item) => ({ ...item, characterId })));
   if (data.inventory.length)
-    await tx.raidInventoryItem.createMany({
-      data: data.inventory.map((item) => ({ ...item, characterId })),
-    });
+    await tx
+      .insert(raidInventoryItems)
+      .values(data.inventory.map((item) => ({ ...item, characterId })));
   return {
     status: "success",
     weight: await updateInventoryWeight(tx, character),
@@ -194,14 +213,27 @@ async function writeStashQuantity(
   }
   const first = rows[0];
   if (quantity === 0) {
-    await tx.stashItem.deleteMany({ where: { userId, weaponMasterId } });
+    await tx
+      .delete(stashItems)
+      .where(
+        and(
+          eq(stashItems.userId, userId),
+          eq(stashItems.weaponMasterId, weaponMasterId),
+        ),
+      );
   } else if (first) {
-    await tx.stashItem.update({ where: { id: first.id }, data: { quantity } });
-    await tx.stashItem.deleteMany({
-      where: { id: { in: rows.slice(1).map((row) => row.id) } },
-    });
+    await tx
+      .update(stashItems)
+      .set({ quantity })
+      .where(eq(stashItems.id, first.id));
+    const duplicateIds = rows.slice(1).map((row) => row.id);
+    if (duplicateIds.length > 0) {
+      await tx
+        .delete(stashItems)
+        .where(inArray(stashItems.id, duplicateIds));
+    }
   } else {
-    await tx.stashItem.create({ data: { userId, weaponMasterId, quantity } });
+    await tx.insert(stashItems).values({ userId, weaponMasterId, quantity });
   }
 }
 
@@ -211,9 +243,12 @@ export async function mergeIntoStash(
   weaponMasterId: string,
   quantity: number,
 ) {
-  const rows = await tx.stashItem.findMany({
-    where: { userId, weaponMasterId },
-    orderBy: { id: "asc" },
+  const rows = await tx.query.stashItems.findMany({
+    where: and(
+      eq(stashItems.userId, userId),
+      eq(stashItems.weaponMasterId, weaponMasterId),
+    ),
+    orderBy: [asc(stashItems.id)],
   });
   const existing = countItems([], rows).get(weaponMasterId) ?? 0;
   await writeStashQuantity(
@@ -226,27 +261,35 @@ export async function mergeIntoStash(
 }
 
 export async function moveStashItem(
-  database: PrismaClient,
+  database: Database,
   characterId: string,
   input: z.infer<typeof MoveItemSchema>,
 ) {
   const { direction, weaponMasterId, slotIndex } = MoveItemSchema.parse(input);
   return withInventoryTransaction(database, async (tx) => {
     const character = await getCharacter(tx, characterId);
-    if (
-      character.isRaiding ||
-      (await tx.character.count({
-        where: { userId: character.userId, isRaiding: true },
-      }))
-    )
+    const raidingChars = await tx.query.characters.findMany({
+      where: and(
+        eq(characters.userId, character.userId),
+        eq(characters.isRaiding, true),
+      ),
+      columns: { id: true },
+    });
+    if (character.isRaiding || raidingChars.length > 0)
       throw new InventoryError("Stash is unavailable during a raid", 409);
-    const stash = await tx.stashItem.findMany({
-      where: { userId: character.userId, weaponMasterId },
-      orderBy: { id: "asc" },
+    const stash = await tx.query.stashItems.findMany({
+      where: and(
+        eq(stashItems.userId, character.userId),
+        eq(stashItems.weaponMasterId, weaponMasterId),
+      ),
+      orderBy: [asc(stashItems.id)],
     });
     const stashQuantity = countItems([], stash).get(weaponMasterId) ?? 0;
-    const item = await tx.raidInventoryItem.findUnique({
-      where: { characterId_slotIndex: { characterId, slotIndex } },
+    const item = await tx.query.raidInventoryItems.findFirst({
+      where: and(
+        eq(raidInventoryItems.characterId, characterId),
+        eq(raidInventoryItems.slotIndex, slotIndex),
+      ),
     });
     if (direction === "to_backpack") {
       if (stashQuantity < 1)
@@ -259,14 +302,19 @@ export async function moveStashItem(
         stash,
         stashQuantity - 1,
       );
-      await tx.raidInventoryItem.create({
-        data: { characterId, weaponMasterId, slotIndex, quantity: 1 },
+      await tx.insert(raidInventoryItems).values({
+        characterId,
+        weaponMasterId,
+        slotIndex,
+        quantity: 1,
       });
     } else {
       if (!item || item.weaponMasterId !== weaponMasterId)
         throw new InventoryError("Item not found in specified backpack slot");
       countItems([], [item]);
-      await tx.raidInventoryItem.delete({ where: { id: item.id } });
+      await tx
+        .delete(raidInventoryItems)
+        .where(eq(raidInventoryItems.id, item.id));
       await writeStashQuantity(
         tx,
         character.userId,
@@ -287,16 +335,16 @@ async function putInBackpack(
   characterId: string,
   weaponMasterId: string,
 ) {
-  const items = await tx.raidInventoryItem.findMany({
-    where: { characterId },
-    orderBy: { slotIndex: "asc" },
+  const items = await tx.query.raidInventoryItems.findMany({
+    where: eq(raidInventoryItems.characterId, characterId),
+    orderBy: [asc(raidInventoryItems.slotIndex)],
   });
   const stack = items.find((item) => item.weaponMasterId === weaponMasterId);
   if (stack) {
-    await tx.raidInventoryItem.update({
-      where: { id: stack.id },
-      data: { quantity: { increment: 1 } },
-    });
+    await tx
+      .update(raidInventoryItems)
+      .set({ quantity: sql`${raidInventoryItems.quantity} + 1` })
+      .where(eq(raidInventoryItems.id, stack.id));
     return;
   }
   const occupied = new Set(items.map((item) => item.slotIndex));
@@ -304,45 +352,59 @@ async function putInBackpack(
     (index) => !occupied.has(index),
   );
   if (slotIndex === undefined) throw new InventoryError("Backpack is full");
-  await tx.raidInventoryItem.create({
-    data: { characterId, weaponMasterId, slotIndex, quantity: 1 },
+  await tx.insert(raidInventoryItems).values({
+    characterId,
+    weaponMasterId,
+    slotIndex,
+    quantity: 1,
   });
 }
 
 export async function equipItem(
-  database: PrismaClient,
+  database: Database,
   characterId: string,
   input: z.infer<typeof EquipItemSchema>,
 ) {
   const { slotIndex, weaponMasterId } = EquipItemSchema.parse(input);
   return withInventoryTransaction(database, async (tx) => {
     const character = await getCharacter(tx, characterId);
-    const equipped = await tx.characterWeapon.findUnique({
-      where: { characterId_slotIndex: { characterId, slotIndex } },
+    const equipped = await tx.query.characterWeapons.findFirst({
+      where: and(
+        eq(characterWeapons.characterId, characterId),
+        eq(characterWeapons.slotIndex, slotIndex),
+      ),
     });
     if (equipped?.weaponMasterId !== weaponMasterId) {
       if (weaponMasterId !== null) {
-        const source = await tx.raidInventoryItem.findFirst({
-          where: { characterId, weaponMasterId },
-          orderBy: { slotIndex: "asc" },
+        const source = await tx.query.raidInventoryItems.findFirst({
+          where: and(
+            eq(raidInventoryItems.characterId, characterId),
+            eq(raidInventoryItems.weaponMasterId, weaponMasterId),
+          ),
+          orderBy: [asc(raidInventoryItems.slotIndex)],
         });
         if (!source) throw new InventoryError("Item not in inventory");
         countItems([], [source]);
         if (source.quantity > 1)
-          await tx.raidInventoryItem.update({
-            where: { id: source.id },
-            data: { quantity: { decrement: 1 } },
-          });
-        else await tx.raidInventoryItem.delete({ where: { id: source.id } });
+          await tx
+            .update(raidInventoryItems)
+            .set({ quantity: sql`${raidInventoryItems.quantity} - 1` })
+            .where(eq(raidInventoryItems.id, source.id));
+        else
+          await tx
+            .delete(raidInventoryItems)
+            .where(eq(raidInventoryItems.id, source.id));
       }
       if (equipped) {
-        await tx.characterWeapon.delete({ where: { id: equipped.id } });
+        await tx
+          .delete(characterWeapons)
+          .where(eq(characterWeapons.id, equipped.id));
         await putInBackpack(tx, characterId, equipped.weaponMasterId);
       }
       if (weaponMasterId !== null)
-        await tx.characterWeapon.create({
-          data: { characterId, weaponMasterId, slotIndex },
-        });
+        await tx
+          .insert(characterWeapons)
+          .values({ characterId, weaponMasterId, slotIndex });
     }
     return {
       status: "success",

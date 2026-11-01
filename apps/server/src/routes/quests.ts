@@ -1,5 +1,5 @@
-import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
+import type { Database } from "../db";
 import {
   acceptFirstMission,
   journalView,
@@ -7,7 +7,7 @@ import {
 } from "../services/quests";
 import { sendInventoryError } from "./inventory";
 
-export function registerQuestRoutes(app: FastifyInstance, db: PrismaClient) {
+export function registerQuestRoutes(app: FastifyInstance, db: Database) {
   app.get<{ Params: { userId: string } }>(
     "/user/:userId/journal",
     async (request) => journalView(db, request.params.userId),

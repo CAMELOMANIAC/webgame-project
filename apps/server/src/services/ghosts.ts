@@ -1,23 +1,45 @@
-import { Prisma, type PrismaClient } from "@prisma/client";
-import type { BattleCombatant, GhostMatch } from "@webgame/types";
+import {
+  type BattleCombatant,
+  type GhostMatch,
+  seopoMapVersion,
+} from "@webgame/types";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  gte,
+  isNotNull,
+  lte,
+  ne,
+  notExists,
+} from "drizzle-orm";
+import {
+  characters,
+  type DbOrTx,
+  ghostSnapshots,
+  raidGhostEncounters,
+  type TransactionClient,
+} from "../db";
 import { gameRules } from "../logic/rules";
-import { seopoMapVersion } from "@webgame/types";
 import { toBattleWeapon } from "./battle";
 
 export async function recordGhosts(
-  tx: Prisma.TransactionClient,
+  tx: TransactionClient,
   characterId: string,
   raidId: string,
   visits: { nodeId: number; round: number }[],
 ) {
-  const character = await tx.character.findUniqueOrThrow({
-    where: { id: characterId },
-    include: {
-      variant: { include: { definition: true } },
-      weapons: { include: { weaponMaster: true } },
+  const character = await tx.query.characters.findFirst({
+    where: eq(characters.id, characterId),
+    with: {
+      variant: { with: { definition: true } },
+      weapons: { with: { weaponMaster: true } },
     },
   });
-  if (character.hp <= 0) return;
+  if (!character) throw new Error("Character not found");
+  if (character.hp <= 0 || visits.length === 0) return;
   const combatant: BattleCombatant = {
     id: character.id,
     displayName: character.displayName ?? character.variant.definition.name,
@@ -39,35 +61,43 @@ export async function recordGhosts(
         equipped.weaponMaster,
       );
   }
-  await tx.ghostSnapshot.createMany({
-    skipDuplicates: true,
-    data: visits.map((visit) => ({
-      userId: character.userId,
-      characterId,
-      raidId,
-      nodeId: String(visit.nodeId),
-      round: visit.round,
-      time: visit.round,
-      hp: character.hp,
-      maxHp: character.maxHp,
-      stamina: character.stamina,
-      maxStamina: character.maxStamina,
-      staminaRegen: character.staminaRegen,
-      weight: character.weight,
-      maxWeight: character.maxWeight,
-      rulesVersion: gameRules.ghost.rulesVersion,
-      mapVersion: seopoMapVersion,
-      variantId: character.variantId,
-      worldlineCode: character.variant.worldlineCode,
-      combatant: JSON.parse(
-        JSON.stringify({ ...combatant, time: visit.round }),
-      ) as Prisma.InputJsonValue,
-    })),
-  });
+  await tx
+    .insert(ghostSnapshots)
+    .values(
+      visits.map((visit) => ({
+        userId: character.userId,
+        characterId,
+        raidId,
+        nodeId: String(visit.nodeId),
+        round: visit.round,
+        time: visit.round,
+        hp: character.hp,
+        maxHp: character.maxHp,
+        stamina: character.stamina,
+        maxStamina: character.maxStamina,
+        staminaRegen: character.staminaRegen,
+        weight: character.weight,
+        maxWeight: character.maxWeight,
+        rulesVersion: gameRules.ghost.rulesVersion,
+        mapVersion: seopoMapVersion,
+        variantId: character.variantId,
+        worldlineCode: character.variant.worldlineCode,
+        combatant: JSON.parse(
+          JSON.stringify({ ...combatant, time: visit.round }),
+        ),
+      })),
+    )
+    .onConflictDoNothing({
+      target: [
+        ghostSnapshots.raidId,
+        ghostSnapshots.round,
+        ghostSnapshots.nodeId,
+      ],
+    });
 }
 
 export async function matchGhost(
-  db: PrismaClient | Prisma.TransactionClient,
+  db: DbOrTx,
   userId: string,
   nodeId: number,
   round: number,
@@ -75,25 +105,39 @@ export async function matchGhost(
   raidId?: string,
 ): Promise<GhostMatch | null> {
   const { roundTolerance, maxAgeDays, rulesVersion } = gameRules.ghost;
-  const snapshots = await db.ghostSnapshot.findMany({
-    where: {
-      userId: { not: userId },
-      ...(raidId ? { encounters: { none: { raidId } } } : {}),
-      nodeId: String(nodeId),
-      rulesVersion,
-      mapVersion: seopoMapVersion,
-      round: {
-        gte: Math.max(0, round - roundTolerance),
-        lte: round + roundTolerance,
-      },
-      hp: { gt: 0 },
-      combatant: { not: Prisma.AnyNull },
-      createdAt: {
-        gte: new Date(now.getTime() - maxAgeDays * 86400000),
-        lte: now,
-      },
-    },
-    orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+  const conditions = [
+    ne(ghostSnapshots.userId, userId),
+    eq(ghostSnapshots.nodeId, String(nodeId)),
+    eq(ghostSnapshots.rulesVersion, rulesVersion),
+    eq(ghostSnapshots.mapVersion, seopoMapVersion),
+    gte(ghostSnapshots.round, Math.max(0, round - roundTolerance)),
+    lte(ghostSnapshots.round, round + roundTolerance),
+    gt(ghostSnapshots.hp, 0),
+    isNotNull(ghostSnapshots.combatant),
+    gte(
+      ghostSnapshots.createdAt,
+      new Date(now.getTime() - maxAgeDays * 86400000),
+    ),
+    lte(ghostSnapshots.createdAt, now),
+  ];
+  if (raidId) {
+    conditions.push(
+      notExists(
+        db
+          .select()
+          .from(raidGhostEncounters)
+          .where(
+            and(
+              eq(raidGhostEncounters.snapshotId, ghostSnapshots.id),
+              eq(raidGhostEncounters.raidId, raidId),
+            ),
+          ),
+      ),
+    );
+  }
+  const snapshots = await db.query.ghostSnapshots.findMany({
+    where: and(...conditions),
+    orderBy: [desc(ghostSnapshots.createdAt), asc(ghostSnapshots.id)],
   });
   const match = snapshots.sort(
     (a, b) => Math.abs(a.round - round) - Math.abs(b.round - round),

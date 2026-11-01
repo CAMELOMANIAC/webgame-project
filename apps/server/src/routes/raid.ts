@@ -1,9 +1,8 @@
-import type { PrismaClient } from "@prisma/client";
+import { seopoMapVersion } from "@webgame/types";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
+import type { Database } from "../db";
 import { gameRules } from "../logic/rules";
-import { seopoMapVersion } from "@webgame/types";
-import { claimBasicSupplies } from "../services/supplies";
 import { InventoryError } from "../services/inventory";
 import {
   extractionNodeIds,
@@ -14,6 +13,7 @@ import {
   RaidActionSchema,
   startRaid,
 } from "../services/raid";
+import { claimBasicSupplies } from "../services/supplies";
 import { sendInventoryError } from "./inventory";
 
 function actor(request: FastifyRequest) {
@@ -24,7 +24,7 @@ function actor(request: FastifyRequest) {
 
 export function registerRaidRoutes(
   fastify: FastifyInstance,
-  database: PrismaClient,
+  database: Database,
 ) {
   fastify.get("/raid/rules", async () => ({
     extractionNodeIds,

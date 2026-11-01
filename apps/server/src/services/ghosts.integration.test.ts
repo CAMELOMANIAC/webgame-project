@@ -1,27 +1,42 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
-import { buildApp } from "../app";
+import { and, eq } from "drizzle-orm";
 import mapData from "../../../../packages/types/src/assets/map_graph.json";
+import { buildApp } from "../app";
+import {
+  characters,
+  characterWeapons,
+  ghostSnapshots,
+  raidGhostEncounters,
+  raidInventoryItems,
+  stashItems,
+  weaponMasters,
+} from "../db";
 import { gameRules } from "../logic/rules";
 import { integrationFixture } from "../testing/integrationFixture";
+import { nearestBuildingPath } from "../testing/mapRoute";
 import { matchGhost } from "./ghosts";
 import { extractRaid, navigateRaid, startRaid } from "./raid";
-import { nearestBuildingPath } from "../testing/mapRoute";
 
 test("실제 DB: 위치·라운드 기록은 서버 장비를 복사하고 재시도해도 한 번만 남는다", async (t) => {
   const { db, user, character, weapon } = await integrationFixture(t);
   const other = await integrationFixture(t);
-  await db.characterWeapon.create({
-    data: {
-      characterId: character.id,
-      weaponMasterId: weapon.id,
-      slotIndex: 0,
-    },
+  await db.insert(characterWeapons).values({
+    characterId: character.id,
+    weaponMasterId: weapon.id,
+    slotIndex: 0,
   });
   const { raid } = await startRaid(db, user.id, character.id);
   await startRaid(db, user.id, character.id);
-  assert.equal(await db.ghostSnapshot.count({ where: { raidId: raid.id } }), 1);
+  assert.equal(
+    (
+      await db.query.ghostSnapshots.findMany({
+        where: eq(ghostSnapshots.raidId, raid.id),
+      })
+    ).length,
+    1,
+  );
   const edge = mapData.edges.find(
     (edge) => edge.source === 0 || edge.target === 0,
   )!;
@@ -34,11 +49,18 @@ test("실제 DB: 위치·라운드 기록은 서버 장비를 복사하고 재�
   };
   await navigateRaid(db, user.id, character.id, input, () => 0.99);
   await navigateRaid(db, user.id, character.id, input, () => 0.99);
-  assert.equal(await db.ghostSnapshot.count({ where: { raidId: raid.id } }), 2);
-  await db.weaponMaster.update({
-    where: { id: weapon.id },
-    data: { damage: 9999 },
-  });
+  assert.equal(
+    (
+      await db.query.ghostSnapshots.findMany({
+        where: eq(ghostSnapshots.raidId, raid.id),
+      })
+    ).length,
+    2,
+  );
+  await db
+    .update(weaponMasters)
+    .set({ damage: 9999 })
+    .where(eq(weaponMasters.id, weapon.id));
   const match = await matchGhost(db, other.user.id, node, 1);
   assert.equal(match?.source.characterId, character.id);
   assert.equal(match?.round, 1);
@@ -52,21 +74,19 @@ for (const lethal of [false, true])
     const source = await integrationFixture(t);
     const path = nearestBuildingPath();
     const node = path.at(-1)!;
-    await source.db.weaponMaster.update({
-      where: { id: source.weapon.id },
-      data: { damage: lethal ? 10000 : 1 },
+    await source.db
+      .update(weaponMasters)
+      .set({ damage: lethal ? 10000 : 1 })
+      .where(eq(weaponMasters.id, source.weapon.id));
+    await source.db.insert(characterWeapons).values({
+      characterId: source.character.id,
+      weaponMasterId: source.weapon.id,
+      slotIndex: 0,
     });
-    await source.db.characterWeapon.create({
-      data: {
-        characterId: source.character.id,
-        weaponMasterId: source.weapon.id,
-        slotIndex: 0,
-      },
-    });
-    await source.db.character.update({
-      where: { id: source.character.id },
-      data: { displayName: "같은 이름" },
-    });
+    await source.db
+      .update(characters)
+      .set({ displayName: "같은 이름" })
+      .where(eq(characters.id, source.character.id));
     const sourceRaid = (
       await startRaid(source.db, source.user.id, source.character.id)
     ).raid;
@@ -82,21 +102,19 @@ for (const lethal of [false, true])
       },
       () => 0.99,
     );
-    await player.db.character.update({
-      where: { id: player.character.id },
-      data: { hp: lethal ? 1 : 1000, maxHp: 1000, displayName: "같은 이름" },
-    });
+    await player.db
+      .update(characters)
+      .set({ hp: lethal ? 1 : 1000, maxHp: 1000, displayName: "같은 이름" })
+      .where(eq(characters.id, player.character.id));
     if (!lethal) {
-      await player.db.weaponMaster.update({
-        where: { id: player.weapon.id },
-        data: { damage: 1000 },
-      });
-      await player.db.characterWeapon.create({
-        data: {
-          characterId: player.character.id,
-          weaponMasterId: player.weapon.id,
-          slotIndex: 0,
-        },
+      await player.db
+        .update(weaponMasters)
+        .set({ damage: 1000 })
+        .where(eq(weaponMasters.id, player.weapon.id));
+      await player.db.insert(characterWeapons).values({
+        characterId: player.character.id,
+        weaponMasterId: player.weapon.id,
+        slotIndex: 0,
       });
     }
     const raid = (
@@ -132,7 +150,11 @@ for (const lethal of [false, true])
       result,
     );
     assert.equal(
-      await player.db.raidGhostEncounter.count({ where: { raidId: raid.id } }),
+      (
+        await player.db.query.raidGhostEncounters.findMany({
+          where: eq(raidGhostEncounters.raidId, raid.id),
+        })
+      ).length,
       1,
     );
     assert.equal(
@@ -148,16 +170,18 @@ for (const lethal of [false, true])
     );
     assert.equal(
       (
-        await source.db.character.findUniqueOrThrow({
-          where: { id: source.character.id },
+        await source.db.query.characters.findFirst({
+          where: eq(characters.id, source.character.id),
         })
-      ).hp,
+      )?.hp,
       100,
     );
     assert.equal(
-      await source.db.raidInventoryItem.count({
-        where: { characterId: source.character.id },
-      }),
+      (
+        await source.db.query.raidInventoryItems.findMany({
+          where: eq(raidInventoryItems.characterId, source.character.id),
+        })
+      ).length,
       0,
     );
     if (lethal) {
@@ -165,9 +189,11 @@ for (const lethal of [false, true])
       assert.equal((await player.snapshot()).character.hp, 1000);
     } else {
       assert.equal(
-        await player.db.raidInventoryItem.count({
-          where: { characterId: player.character.id },
-        }),
+        (
+          await player.db.query.raidInventoryItems.findMany({
+            where: eq(raidInventoryItems.characterId, player.character.id),
+          })
+        ).length,
         1,
       );
       const back = await navigateRaid(
@@ -189,10 +215,13 @@ for (const lethal of [false, true])
       });
       assert.equal(
         (
-          await player.db.stashItem.findFirstOrThrow({
-            where: { userId: player.user.id, weaponMasterId: source.weapon.id },
+          await player.db.query.stashItems.findFirst({
+            where: and(
+              eq(stashItems.userId, player.user.id),
+              eq(stashItems.weaponMasterId, source.weapon.id),
+            ),
           })
-        ).quantity,
+        )?.quantity,
         1,
       );
     }
@@ -202,9 +231,11 @@ test("실제 DB: 허용 라운드 밖·만료·이전 규칙·다른 위치의 �
   const { db, user, character } = await integrationFixture(t);
   const other = await integrationFixture(t);
   const { raid } = await startRaid(db, user.id, character.id);
-  const where = {
-    raidId_round_nodeId: { raidId: raid.id, round: 0, nodeId: "0" },
-  };
+  const where = and(
+    eq(ghostSnapshots.raidId, raid.id),
+    eq(ghostSnapshots.round, 0),
+    eq(ghostSnapshots.nodeId, "0"),
+  );
   assert.ok(
     await matchGhost(db, other.user.id, 0, gameRules.ghost.roundTolerance),
   );
@@ -213,15 +244,18 @@ test("실제 DB: 허용 라운드 밖·만료·이전 규칙·다른 위치의 �
     null,
   );
   assert.equal(await matchGhost(db, other.user.id, 999, 0), null);
-  await db.ghostSnapshot.update({ where, data: { rulesVersion: 0 } });
+  await db
+    .update(ghostSnapshots)
+    .set({ rulesVersion: 0 })
+    .where(where);
   assert.equal(await matchGhost(db, other.user.id, 0, 0), null);
-  await db.ghostSnapshot.update({
-    where,
-    data: {
+  await db
+    .update(ghostSnapshots)
+    .set({
       rulesVersion: gameRules.ghost.rulesVersion,
       createdAt: new Date(Date.now() - 8 * 86400000),
-    },
-  });
+    })
+    .where(where);
   assert.equal(await matchGhost(db, other.user.id, 0, 0), null);
 });
 

@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
+import { and, eq } from "drizzle-orm";
 import { buildApp } from "../app";
+import {
+  characters,
+  characterWeapons,
+  monsterMasters,
+  monsterWeapons,
+  questProgresses,
+  stashItems,
+  users,
+  weaponMasters,
+} from "../db";
 import { firstMission } from "../logic/story";
 import { integrationFixture } from "../testing/integrationFixture";
 import { pathToNode } from "../testing/mapRoute";
@@ -18,20 +29,18 @@ function command(raid: { id: string; version: number }) {
 
 test("실제 DB: 임무 수락·회수·탈출·보고는 재시도해도 지원과 보상을 한 번씩 지급한다", async (t) => {
   const { db, user, character, weapon } = await integrationFixture(t);
-  await db.character.update({
-    where: { id: character.id },
-    data: { hp: 1000, maxHp: 1000 },
-  });
-  await db.weaponMaster.update({
-    where: { id: weapon.id },
-    data: { damage: 1000 },
-  });
-  await db.characterWeapon.create({
-    data: {
-      characterId: character.id,
-      weaponMasterId: weapon.id,
-      slotIndex: 0,
-    },
+  await db
+    .update(characters)
+    .set({ hp: 1000, maxHp: 1000 })
+    .where(eq(characters.id, character.id));
+  await db
+    .update(weaponMasters)
+    .set({ damage: 1000 })
+    .where(eq(weaponMasters.id, weapon.id));
+  await db.insert(characterWeapons).values({
+    characterId: character.id,
+    weaponMasterId: weapon.id,
+    slotIndex: 0,
   });
   assert.equal((await journalView(db, user.id)).mission.status, "OFFERED");
   const accepts = await Promise.all([
@@ -39,10 +48,16 @@ test("실제 DB: 임무 수락·회수·탈출·보고는 재시도해도 지원
     acceptFirstMission(db, user.id),
   ]);
   assert.equal(accepts[0]?.mission.status, "ACTIVE");
-  const supply = () =>
-    db.stashItem.findFirstOrThrow({
-      where: { userId: user.id, weaponMasterId: firstMission.supplyWeaponId },
+  const supply = async () => {
+    const item = await db.query.stashItems.findFirst({
+      where: and(
+        eq(stashItems.userId, user.id),
+        eq(stashItems.weaponMasterId, firstMission.supplyWeaponId),
+      ),
     });
+    if (!item) throw new Error("Supply item not found");
+    return item;
+  };
   assert.equal((await supply()).quantity, 1);
   await assert.rejects(
     () => reportFirstMission(db, user.id),
@@ -83,7 +98,6 @@ test("실제 DB: 임무 수락·회수·탈출·보고는 재시도해도 지원
     command({ id: raid.id, version: back.raid.version }),
   );
   assert.equal((await journalView(db, user.id)).mission.status, "READY");
-  await db.$disconnect();
   const reports = await Promise.all([
     reportFirstMission(db, user.id),
     reportFirstMission(db, user.id),
@@ -93,26 +107,31 @@ test("실제 DB: 임무 수락·회수·탈출·보고는 재시도해도 지원
   assert.equal((await journalView(db, user.id)).records.length, 1);
   await acceptFirstMission(db, user.id);
   assert.equal((await supply()).quantity, 2);
-  assert.equal(await db.questProgress.count({ where: { userId: user.id } }), 1);
+  assert.equal(
+    (
+      await db.query.questProgresses.findMany({
+        where: eq(questProgresses.userId, user.id),
+      })
+    ).length,
+    1,
+  );
 });
 
 test("실제 DB: 기록을 확보한 탐사에서 사망하면 다시 회수해야 한다", async (t) => {
   const { db, user, character, weapon, monsterIds } =
     await integrationFixture(t);
-  await db.character.update({
-    where: { id: character.id },
-    data: { hp: 1000, maxHp: 1000 },
-  });
-  await db.weaponMaster.update({
-    where: { id: weapon.id },
-    data: { damage: 10000 },
-  });
-  await db.characterWeapon.create({
-    data: {
-      characterId: character.id,
-      weaponMasterId: weapon.id,
-      slotIndex: 0,
-    },
+  await db
+    .update(characters)
+    .set({ hp: 1000, maxHp: 1000 })
+    .where(eq(characters.id, character.id));
+  await db
+    .update(weaponMasters)
+    .set({ damage: 10000 })
+    .where(eq(weaponMasters.id, weapon.id));
+  await db.insert(characterWeapons).values({
+    characterId: character.id,
+    weaponMasterId: weapon.id,
+    slotIndex: 0,
   });
   await acceptFirstMission(db, user.id);
   const { raid } = await startRaid(db, user.id, character.id);
@@ -124,9 +143,13 @@ test("실제 DB: 기록을 확보한 탐사에서 사망하면 다시 회수해�
     () => 0.99,
   );
   assert.equal((await journalView(db, user.id)).mission.status, "RECOVERED");
-  await db.character.update({ where: { id: character.id }, data: { hp: 1 } });
-  const enemy = await db.monsterMaster.create({
-    data: {
+  await db
+    .update(characters)
+    .set({ hp: 1 })
+    .where(eq(characters.id, character.id));
+  const [enemy] = await db
+    .insert(monsterMasters)
+    .values({
       name: "임무 패배 검증",
       hp: 100000,
       maxHp: 100000,
@@ -134,8 +157,13 @@ test("실제 DB: 기록을 확보한 탐사에서 사망하면 다시 회수해�
       maxStamina: 100,
       staminaRegen: 10,
       level: 999,
-      weapons: { create: { weaponMasterId: weapon.id, slotIndex: 0 } },
-    },
+    })
+    .returning();
+  if (!enemy) throw new Error("Failed to create test monster");
+  await db.insert(monsterWeapons).values({
+    monsterId: enemy.id,
+    weaponMasterId: weapon.id,
+    slotIndex: 0,
   });
   monsterIds.push(enemy.id);
   const death = await fightRaidMonster(
@@ -166,7 +194,10 @@ test("실제 DB: 미공개 인물은 응답에서 숨기고 단일 인물·복�
     first.body,
     /owner-instance|executive-contact|경영 책임자/,
   );
-  await db.user.update({ where: { id: user.id }, data: { storyTier: 2 } });
+  await db
+    .update(users)
+    .set({ storyTier: 2 })
+    .where(eq(users.id, user.id));
   const middle = await read();
   assert.equal(
     middle
@@ -177,7 +208,10 @@ test("실제 DB: 미공개 인물은 응답에서 숨기고 단일 인물·복�
     1,
   );
   assert.doesNotMatch(middle.body, /owner-instance/);
-  await db.user.update({ where: { id: user.id }, data: { storyTier: 3 } });
+  await db
+    .update(users)
+    .set({ storyTier: 3 })
+    .where(eq(users.id, user.id));
   const late = await read();
   const identities = late
     .json()

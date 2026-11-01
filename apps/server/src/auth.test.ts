@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { PrismaClient } from "@prisma/client";
 import { buildApp } from "./app";
+import { createDatabase } from "./db";
+
+function createTestDb() {
+  return createDatabase("postgresql://test:test@127.0.0.1:1/webgame_test");
+}
 
 test("계정을 선택하지 않으면 개인 데이터에 접근하지 못한다", async (t) => {
-  const app = buildApp({ database: new PrismaClient(), logger: false });
+  const app = buildApp({ database: createTestDb(), logger: false });
   t.after(() => app.close());
   const response = await app.inject({
     method: "GET",
@@ -14,11 +18,11 @@ test("계정을 선택하지 않으면 개인 데이터에 접근하지 못한�
 });
 
 test("선택한 계정이 다른 사용자의 캐릭터·창고에 접근하지 못한다", async (t) => {
-  const database = new PrismaClient();
-  Reflect.set(database.user, "findUnique", async () => ({
+  const database = createTestDb();
+  Reflect.set(database.query.users, "findFirst", async () => ({
     id: "selected-user",
   }));
-  Reflect.set(database.character, "findUnique", async () => ({
+  Reflect.set(database.query.characters, "findFirst", async () => ({
     userId: "other-user",
   }));
   const app = buildApp({ database, logger: false });
@@ -48,7 +52,7 @@ test("선택한 계정이 다른 사용자의 캐릭터·창고에 접근하지 
 
 test("개발용 계정 선택이 비활성화되면 헤더로 우회하지 못한다", async (t) => {
   const app = buildApp({
-    database: new PrismaClient(),
+    database: createTestDb(),
     logger: false,
     developmentAuth: false,
   });

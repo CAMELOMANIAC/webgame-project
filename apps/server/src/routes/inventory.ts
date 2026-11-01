@@ -1,6 +1,6 @@
-import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
+import type { Database } from "../db";
 import {
   equipItem,
   EquipItemSchema,
@@ -23,7 +23,7 @@ export function sendInventoryError(reply: FastifyReply, error: unknown) {
 
 export function registerInventoryRoutes(
   fastify: FastifyInstance,
-  database: PrismaClient,
+  database: Database,
 ) {
   fastify.post("/character/:characterId/slots/sync", async (request, reply) => {
     try {

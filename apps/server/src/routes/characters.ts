@@ -1,6 +1,7 @@
-import type { PrismaClient } from "@prisma/client";
+import { and, asc, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { characters, characterVariants, type Database } from "../db";
 import {
   characterDetails,
   recruitDevelopmentCharacter,
@@ -11,16 +12,16 @@ import { InventoryError } from "../services/inventory";
 
 export function registerCharacterRoutes(
   app: FastifyInstance,
-  db: PrismaClient,
+  db: Database,
 ) {
   app.get<{ Params: { userId: string } }>(
     "/user/:userId/characters",
     async (request) => ({
       selectedCharacterId: await selectedCharacterId(db, request.params.userId),
-      characters: await db.character.findMany({
-        where: { userId: request.params.userId },
-        include: { variant: { include: { definition: true } } },
-        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      characters: await db.query.characters.findMany({
+        where: eq(characters.userId, request.params.userId),
+        with: { variant: { with: { definition: true } } },
+        orderBy: [asc(characters.createdAt), asc(characters.id)],
       }),
     }),
   );
@@ -29,9 +30,12 @@ export function registerCharacterRoutes(
     async (request, reply) => {
       const id = await selectedCharacterId(db, request.params.userId);
       const character = id
-        ? await db.character.findFirst({
-            where: { id, userId: request.params.userId },
-            include: characterDetails,
+        ? await db.query.characters.findFirst({
+            where: and(
+              eq(characters.id, id),
+              eq(characters.userId, request.params.userId),
+            ),
+            with: characterDetails,
           })
         : null;
       if (!character)
@@ -39,7 +43,7 @@ export function registerCharacterRoutes(
       const { weapons, ...rest } = character;
       return {
         ...rest,
-      displayName: rest.displayName ?? rest.variant.definition.name,
+        displayName: rest.displayName ?? rest.variant.definition.name,
         equipment: weapons,
       };
     },
@@ -47,24 +51,24 @@ export function registerCharacterRoutes(
   app.get<{ Params: { characterId: string } }>(
     "/character/:characterId",
     async (request, reply) => {
-      const character = await db.character.findUnique({
-        where: { id: request.params.characterId },
-        include: characterDetails,
+      const character = await db.query.characters.findFirst({
+        where: eq(characters.id, request.params.characterId),
+        with: characterDetails,
       });
       if (!character)
         return reply.status(404).send({ error: "Character not found" });
       const { weapons, ...rest } = character;
       return {
         ...rest,
-      displayName: rest.displayName ?? rest.variant.definition.name,
+        displayName: rest.displayName ?? rest.variant.definition.name,
         equipment: weapons,
       };
     },
   );
   app.get("/dev/character-variants", async () =>
-    db.characterVariant.findMany({
-      include: { definition: true },
-      orderBy: { id: "asc" },
+    db.query.characterVariants.findMany({
+      with: { definition: true },
+      orderBy: [asc(characterVariants.id)],
     }),
   );
   app.post<{ Params: { userId: string; characterId: string } }>(
