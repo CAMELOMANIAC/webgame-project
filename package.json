@@ -13,7 +13,7 @@
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
-    "postinstall": "pnpm --filter server exec prisma generate && pnpm --filter @webgame/types build"
+    "postinstall": "pnpm --filter @webgame/types build"
   },
   "devDependencies": {
     "prettier": "^3.7.4",

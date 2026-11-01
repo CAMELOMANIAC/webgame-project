@@ -1,8 +1,23 @@
-import { PrismaClient, type Prisma, type WeaponMaster } from "@prisma/client";
-const prisma = new PrismaClient();
+import { eq } from "drizzle-orm";
+import {
+  characters,
+  characterWeapons,
+  createDatabase,
+  ghostSnapshots,
+  ghostWeapons,
+  monsterMasters,
+  monsterWeapons,
+  raidInventoryItems,
+  stashItems,
+  users,
+  type WeaponMaster,
+  weaponMasters,
+} from "./index";
+
+const db = createDatabase();
 
 async function main() {
-  const weapons: Prisma.WeaponMasterCreateInput[] = [
+  const weapons: (typeof weaponMasters.$inferInsert)[] = [
     {
       name: "Primary Sword",
       attackType: "MELEE",
@@ -96,23 +111,21 @@ async function main() {
   ];
 
   console.log("Clearing existing data...");
-  await prisma.raidInventoryItem.deleteMany();
-  await prisma.characterWeapon.deleteMany();
-  await prisma.character.deleteMany();
-  await prisma.monsterWeapon.deleteMany();
-  await prisma.monsterMaster.deleteMany();
-  await prisma.ghostWeapon.deleteMany();
-  await prisma.ghostSnapshot.deleteMany();
-  await prisma.stashItem.deleteMany();
-  await prisma.weaponMaster.deleteMany();
+  await db.delete(raidInventoryItems);
+  await db.delete(characterWeapons);
+  await db.delete(characters);
+  await db.delete(monsterWeapons);
+  await db.delete(monsterMasters);
+  await db.delete(ghostWeapons);
+  await db.delete(ghostSnapshots);
+  await db.delete(stashItems);
+  await db.delete(weaponMasters);
 
   console.log("Seeding weapons...");
   const weaponData: WeaponMaster[] = [];
   for (const w of weapons) {
-    const created = await prisma.weaponMaster.create({
-      data: w,
-    });
-    weaponData.push(created);
+    const [created] = await db.insert(weaponMasters).values(w).returning();
+    if (created) weaponData.push(created);
   }
 
   console.log("Seeding monsters...");
@@ -153,134 +166,138 @@ async function main() {
   const lifeSaver = weaponData.find((w) => w.name === "Life-saver");
 
   for (const m of monsters) {
-    const createdMonster = await prisma.monsterMaster.create({
-      data: m,
-    });
+    const [createdMonster] = await db
+      .insert(monsterMasters)
+      .values(m)
+      .returning();
+    if (!createdMonster) continue;
 
     if (m.name === "Slime" && secondaryDagger) {
-      await prisma.monsterWeapon.create({
-        data: {
-          monsterId: createdMonster.id,
-          weaponMasterId: secondaryDagger.id,
-          slotIndex: 0,
-        },
+      await db.insert(monsterWeapons).values({
+        monsterId: createdMonster.id,
+        weaponMasterId: secondaryDagger.id,
+        slotIndex: 0,
       });
     } else if (m.name === "Goblin" && primarySword) {
-      await prisma.monsterWeapon.create({
-        data: {
-          monsterId: createdMonster.id,
-          weaponMasterId: primarySword.id,
-          slotIndex: 0,
-        },
+      await db.insert(monsterWeapons).values({
+        monsterId: createdMonster.id,
+        weaponMasterId: primarySword.id,
+        slotIndex: 0,
       });
     } else if (m.name === "Orc Warrior") {
       if (primarySword) {
-        await prisma.monsterWeapon.create({
-          data: {
-            monsterId: createdMonster.id,
-            weaponMasterId: primarySword.id,
-            slotIndex: 0,
-          },
+        await db.insert(monsterWeapons).values({
+          monsterId: createdMonster.id,
+          weaponMasterId: primarySword.id,
+          slotIndex: 0,
         });
       }
       if (giantSlayer) {
-        await prisma.monsterWeapon.create({
-          data: {
-            monsterId: createdMonster.id,
-            weaponMasterId: giantSlayer.id,
-            slotIndex: 1,
-          },
+        await db.insert(monsterWeapons).values({
+          monsterId: createdMonster.id,
+          weaponMasterId: giantSlayer.id,
+          slotIndex: 1,
         });
       }
     }
   }
 
   console.log("Creating test user and character...");
-  const user = await prisma.user.upsert({
-    where: { email: "test@example.com" },
-    update: {},
-    create: {
-      email: "test@example.com",
-      nickname: "TestPlayer",
-    },
+  let user = await db.query.users.findFirst({
+    where: eq(users.email, "test@example.com"),
   });
+  if (!user) {
+    const [createdUser] = await db
+      .insert(users)
+      .values({
+        email: "test@example.com",
+        nickname: "TestPlayer",
+      })
+      .returning();
+    user = createdUser!;
+  }
 
-  const character = await prisma.character.upsert({
-    where: { id: user.selectedCharacterId ?? "seed-character" },
-    update: {
-      hp: 100,
-      maxHp: 100,
-      stamina: 100,
-      maxStamina: 100,
-      staminaRegen: 10,
-      weight: 0,
-      maxWeight: 60,
-      time: 0,
-      isRaiding: false,
-    },
-    create: {
-      userId: user.id,
-      hp: 100,
-      maxHp: 100,
-      stamina: 100,
-      maxStamina: 100,
-      staminaRegen: 10,
-      weight: 0,
-      maxWeight: 60,
-      time: 0,
-      isRaiding: false,
-    },
-  });
+  let character = user.selectedCharacterId
+    ? await db.query.characters.findFirst({
+        where: eq(characters.id, user.selectedCharacterId),
+      })
+    : undefined;
+
+  if (character) {
+    const [updatedChar] = await db
+      .update(characters)
+      .set({
+        hp: 100,
+        maxHp: 100,
+        stamina: 100,
+        maxStamina: 100,
+        staminaRegen: 10,
+        weight: 0,
+        maxWeight: 60,
+        time: 0,
+        isRaiding: false,
+      })
+      .where(eq(characters.id, character.id))
+      .returning();
+    character = updatedChar!;
+  } else {
+    const [createdChar] = await db
+      .insert(characters)
+      .values({
+        userId: user.id,
+        hp: 100,
+        maxHp: 100,
+        stamina: 100,
+        maxStamina: 100,
+        staminaRegen: 10,
+        weight: 0,
+        maxWeight: 60,
+        time: 0,
+        isRaiding: false,
+      })
+      .returning();
+    character = createdChar!;
+  }
 
   console.log("Equipping character weapons...");
   if (primarySword) {
-    await prisma.characterWeapon.create({
-      data: {
-        characterId: character.id,
-        weaponMasterId: primarySword.id,
-        slotIndex: 0,
-      },
+    await db.insert(characterWeapons).values({
+      characterId: character.id,
+      weaponMasterId: primarySword.id,
+      slotIndex: 0,
     });
   }
   if (secondaryDagger) {
-    await prisma.characterWeapon.create({
-      data: {
-        characterId: character.id,
-        weaponMasterId: secondaryDagger.id,
-        slotIndex: 1,
-      },
+    await db.insert(characterWeapons).values({
+      characterId: character.id,
+      weaponMasterId: secondaryDagger.id,
+      slotIndex: 1,
     });
   }
 
   console.log("Adding items to character inventory (backpack)...");
   if (sniperRifle) {
-    await prisma.raidInventoryItem.create({
-      data: {
-        characterId: character.id,
-        weaponMasterId: sniperRifle.id,
-        slotIndex: 0,
-      },
+    await db.insert(raidInventoryItems).values({
+      characterId: character.id,
+      weaponMasterId: sniperRifle.id,
+      slotIndex: 0,
     });
   }
   if (lifeSaver) {
-    await prisma.raidInventoryItem.create({
-      data: {
-        characterId: character.id,
-        weaponMasterId: lifeSaver.id,
-        slotIndex: 1,
-      },
+    await db.insert(raidInventoryItems).values({
+      characterId: character.id,
+      weaponMasterId: lifeSaver.id,
+      slotIndex: 1,
     });
   }
 
   console.log("Adding weapons to user stash (warehouse)...");
-  const weaponMasters = await prisma.weaponMaster.findMany();
-  for (const wm of weaponMasters) {
-    await prisma.stashItem.create({
-      data: {
-        userId: user.id,
-        weaponMasterId: wm.id,
-        quantity: 1,
-      },
+  const allWeapons = await db.query.weaponMasters.findMany();
+  for (const wm of allWeapons) {
+    await db.insert(stashItems).values({
+      userId: user.id,
+      weaponMasterId: wm.id,
+      quantity: 1,
     });
   }
 
@@ -293,5 +310,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await db.$disconnect();
   });
