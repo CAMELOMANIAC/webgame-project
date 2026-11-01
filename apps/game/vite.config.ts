@@ -8,7 +8,10 @@ import tsconfigPaths from "vite-tsconfig-paths";
 export default defineConfig({
   base: "./",
   // 예전 빌드 보관 폴더 대신 실제 앱 진입점만 의존성 탐색에 사용한다.
-  optimizeDeps: { entries: ["index.html"] },
+  optimizeDeps: {
+    entries: ["index.html"],
+    exclude: ["@tanstack/react-router-devtools"],
+  },
   plugins: [
     TanStackRouterVite({
       target: "react",
