@@ -6,16 +6,16 @@
 
 ## 최초 준비
 
-1. 저장소 루트에서 `pnpm install`을 실행한다. Prisma Client 생성과 공통 타입 패키지 빌드도 실행된다.
+1. 저장소 루트에서 `pnpm install`을 실행한다. 공통 타입 패키지 빌드도 함께 실행된다.
 2. `apps/server/.env.example`을 참고해 `apps/server/.env`를 준비한다. 기존 연결 설정은 덮어쓰지 않고 값은 외부에 공개하지 않는다.
-3. `DATABASE_URL`과 `DIRECT_URL`을 개발용 PostgreSQL로 설정한다.
-4. 새로 만든 일회용 개발 데이터베이스에 한해 `pnpm --filter server exec prisma migrate deploy`로 스키마와 검증용 콘텐츠를 생성한다. 기존 데이터베이스에 적용하려면 변경 내용을 먼저 확인한다.
+3. `DATABASE_URL`과 `DIRECT_URL`을 개발용 PostgreSQL(또는 Supabase 연결 문자열)로 설정한다.
+4. 새로 만든 일회용 개발 데이터베이스에 한해 `pnpm --filter server db:push`로 Drizzle 스키마를 반영한다. 기존 데이터베이스에 적용하려면 변경 내용을 먼저 확인한다.
 
-마이그레이션 이력은 `apps/server/prisma/migrations`에서 관리한다. 기준 스키마 → 탐사 세션 → 복수 개체 → 고스트 기록 → 고스트 조우 → 서포시 장비·지도 버전 → 임무 진행 순서로 적용한다. 새 빈 DB의 로컬 준비 명령은 [README](../README.md)에 있다.
+데이터베이스 스키마와 관계는 `apps/server/src/db/schema.ts`에서 단일 원본으로 관리하며, `apps/server/drizzle.config.ts`를 통해 `drizzle-kit`과 연동한다. Supabase Transaction Pooler 환경에서도 동작하도록 `postgres` 드라이버의 `prepare: false` 설정을 기본 적용한다. 새 빈 DB의 로컬 준비 명령은 [README](../README.md)에 있다.
 
 현재 사용자의 선택에 따라 기존 외부 데이터베이스에는 적용하지 않았다. 새 코드를 기존 연결로 실행하면 탐사·개체·임무 컬럼이 없다는 오류가 날 수 있다. 검증 시에는 새 스키마를 적용한 별도 로컬 테스트 DB를 명시적으로 사용한다.
 
-새 빈 개발 DB에는 `pnpm --filter server exec prisma migrate deploy`를 사용한다. 이미 기존 테이블이 있는 DB는 먼저 스키마가 기준 이력과 일치하는지 확인한 뒤 기준 마이그레이션을 적용 완료로 등록해야 한다. 확인 없이 `migrate reset`이나 시드를 실행하지 않는다. 외부 DB 적용은 별도 사용자 승인 후 진행한다.
+새 빈 개발 DB에는 `pnpm --filter server db:push`를 사용한다. 이미 기존 테이블이 있는 DB는 먼저 스키마 변경 내역을 확인한 뒤 반영해야 하며, 확인 없이 초기화나 시드를 실행하지 않는다. 외부 DB 적용은 별도 사용자 승인 후 진행한다.
 
 ## 개발 실행
 
@@ -42,7 +42,7 @@ pnpm build
 
 `test`는 실제 포트를 열거나 데이터베이스에 접속하지 않고 서버 API를 검증한다. 서버는 `buildApp({ database, logger })`로 생성하며, 테스트에서 데이터베이스 클라이언트를 주입할 수 있다. 별도 테스트 데이터베이스를 연결할 때는 운영용 연결과 분리한다.
 
-실제 아이템 트랜잭션 검증은 `TEST_DATABASE_URL`을 별도로 지정하고 `pnpm --filter server test:integration`을 실행한다. 이 명령은 기존 `.env`를 읽지 않으며, 로컬 주소의 `webgame_test_*` 데이터베이스만 허용한다. 테스트는 직접 생성한 사용자·캐릭터·아이템만 정리한다. 검사 전에 해당 테스트 DB에 현재 Prisma 스키마를 생성해야 한다.
+실제 아이템 트랜잭션 검증은 `TEST_DATABASE_URL`을 별도로 지정하고 `pnpm --filter server test:integration`을 실행한다. 이 명령은 기존 `.env`를 읽지 않으며, 로컬 주소의 `webgame_test_*` 데이터베이스만 허용한다. 테스트는 직접 생성한 사용자·캐릭터·아이템만 정리한다. 검사 전에 해당 테스트 DB에 현재 Drizzle 스키마(`pnpm --filter server db:push`)를 반영해야 한다.
 
 예를 들어 일회용 PostgreSQL을 `127.0.0.1:55432`에 실행하고 `webgame_test_inventory` 데이터베이스를 준비해 검증할 수 있다. 기존 개발·운영 연결 문자열을 테스트용으로 사용하지 않는다.
 
@@ -64,7 +64,7 @@ pnpm --filter server exec node --env-file=.env dist/apps/server/src/index.js
 
 현재 시드는 기존 캐릭터·장비·창고·고스트 등을 삭제하고 테스트 데이터를 다시 만든다. 평소 실행이나 검증에서는 실행하지 않는다.
 
-일회용 테스트 데이터베이스에서 재생성하기로 판단한 경우에만 `pnpm --filter server exec prisma db seed`를 실행한다.
+일회용 테스트 데이터베이스에서 재생성하기로 판단한 경우에만 `pnpm --filter server db:seed`를 실행한다.
 
 개발용 계정 선택은 `X-Dev-User-Id` 헤더를 사용한다. 실제 로그인은 아니며 `NODE_ENV=production`에서는 계정 선택과 개발 전용 API를 비활성화하고 개인 데이터 요청을 거부한다. 실제 인증 연결은 후속 작업이다.
 
