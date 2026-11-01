@@ -14,7 +14,7 @@ export const container = recipe({
   variants: {
     critical: {
       true: fieldWidget({ tone: "negative" }),
-      false: fieldWidget({ tone: "positive" }),
+      false: fieldWidget({ tone: "default" }),
     },
   },
   defaultVariants: {
