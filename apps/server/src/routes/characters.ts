@@ -43,7 +43,8 @@ export function registerCharacterRoutes(
       const { weapons, ...rest } = character;
       return {
         ...rest,
-        displayName: rest.displayName ?? rest.variant.definition.name,
+        displayName:
+          rest.displayName ?? rest.variant?.definition?.name ?? "생존자",
         equipment: weapons,
       };
     },
@@ -60,7 +61,8 @@ export function registerCharacterRoutes(
       const { weapons, ...rest } = character;
       return {
         ...rest,
-        displayName: rest.displayName ?? rest.variant.definition.name,
+        displayName:
+          rest.displayName ?? rest.variant?.definition?.name ?? "생존자",
         equipment: weapons,
       };
     },

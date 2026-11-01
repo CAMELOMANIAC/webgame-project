@@ -83,7 +83,9 @@ export default function CharacterCollection({
             >
               <div className={styles.cardTopRow}>
                 <strong className={styles.cardName}>
-                  {character.displayName ?? character.variant.definition.name}
+                  {character.displayName ??
+                    character.variant?.definition?.name ??
+                    "생존자"}
                 </strong>
                 <span className={styles.stateTag({ state: cardState })}>
                   {character.isRaiding
@@ -94,7 +96,7 @@ export default function CharacterCollection({
                 </span>
               </div>
               <span className={styles.metaRow}>
-                {character.variant.worldlineCode} · 개체{" "}
+                {character.variant?.worldlineCode ?? "미분류"} · 개체{" "}
                 {character.id.slice(0, 8)}
               </span>
               <span className={styles.statRow}>
@@ -119,7 +121,8 @@ export default function CharacterCollection({
               disabled={locked}
               onClick={() => recruit.mutate(variant.id)}
             >
-              {variant.definition.name} · {variant.worldlineCode} 추가
+              {variant.definition?.name ?? "생존자"} · {variant.worldlineCode}{" "}
+              추가
             </button>
           ))}
         </div>

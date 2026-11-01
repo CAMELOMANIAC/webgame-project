@@ -42,7 +42,8 @@ export async function recordGhosts(
   if (character.hp <= 0 || visits.length === 0) return;
   const combatant: BattleCombatant = {
     id: character.id,
-    displayName: character.displayName ?? character.variant.definition.name,
+    displayName:
+      character.displayName ?? character.variant?.definition?.name ?? "생존자",
     teamId: "TeamB",
     hp: character.hp,
     maxHp: character.maxHp,

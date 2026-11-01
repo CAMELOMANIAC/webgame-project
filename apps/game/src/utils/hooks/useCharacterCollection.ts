@@ -26,12 +26,12 @@ import { readApiResponse } from "../request";
 export interface CharacterVariant {
   id: string;
   worldlineCode: string;
-  definition: { id: string; name: string };
+  definition?: { id: string; name: string };
 }
 export interface OwnedCharacter {
   id: string;
   displayName: string | null;
-  variant: CharacterVariant;
+  variant?: CharacterVariant | null;
   hp: number;
   maxHp: number;
   stamina: number;

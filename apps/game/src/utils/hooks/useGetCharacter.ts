@@ -14,7 +14,7 @@ import {
 export interface CharacterResponse {
   id: string;
   displayName: string;
-  variant: CharacterVariant;
+  variant?: CharacterVariant | null;
   userId: string;
   hp: number;
   maxHp: number;
