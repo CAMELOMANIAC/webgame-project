@@ -11,6 +11,7 @@ import { useRef } from "react";
 
 import {
   activeDragIdAtom,
+  animatingSlotIdsAtom,
   isCombatAtom,
   isInventoryDirtyAtom,
   isNavigatingAtom,
@@ -24,8 +25,10 @@ export function useInventoryDrag(characterData: CharacterData | undefined) {
   const isCombat = useAtomValue(isCombatAtom);
   const isNavigating = useAtomValue(isNavigatingAtom);
   const setActiveDragId = useSetAtom(activeDragIdAtom);
+  const setAnimatingSlotIds = useSetAtom(animatingSlotIdsAtom);
   const setIsInventoryDirty = useSetAtom(isInventoryDirtyAtom);
   const activeIdRef = useRef<UniqueIdentifier | null>(null);
+  const animTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleDragStart = (event: DragStartEvent) => {
     if (isCombat || isNavigating) return;
@@ -89,12 +92,21 @@ export function useInventoryDrag(characterData: CharacterData | undefined) {
         }
         // 3. Inventory -> Equipment
         else if (activeInvIdx !== -1 && overEquipIdx !== -1) {
+          const carriedId = rawInventory[activeInvIdx]?.id;
+          const wasStack = (rawInventory[activeInvIdx]?.quantity ?? 0) > 1;
           didSwap = swapEquipmentBackpack(
             rawEquipment,
             rawInventory,
             overEquipIdx,
             activeInvIdx,
           );
+          if (didSwap && wasStack && carriedId && rawEquipment[overEquipIdx]) {
+            const generatedId = rawEquipment[overEquipIdx].id;
+            rawEquipment[overEquipIdx].id = carriedId;
+            if (rawInventory[activeInvIdx]) {
+              rawInventory[activeInvIdx].id = generatedId;
+            }
+          }
         }
         // 4. Equipment -> Inventory
         else if (activeEquipIdx !== -1 && overInvIdx !== -1) {
@@ -153,6 +165,19 @@ export function useInventoryDrag(characterData: CharacterData | undefined) {
 
     if (didChange) {
       setIsInventoryDirty(true);
+      const movedIds = [activeIdStr, overIdStr].filter(
+        (id) => !id.includes("empty"),
+      );
+      if (movedIds.length > 0) {
+        if (animTimeoutRef.current) {
+          clearTimeout(animTimeoutRef.current);
+        }
+        setAnimatingSlotIds(movedIds);
+        animTimeoutRef.current = setTimeout(() => {
+          setAnimatingSlotIds([]);
+          animTimeoutRef.current = null;
+        }, 360);
+      }
     }
   };
 

@@ -57,16 +57,24 @@ const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
     transform,
     transition,
     isDragging,
+    isOver,
+    activeIndex,
+    overIndex,
   } = useSortable({
     id: item.id,
     disabled: isCombat ? true : isEmpty ? { draggable: true } : false,
   });
 
+  const isSortingEquipment = activeIndex >= 0 && overIndex >= 0;
+  const isExternalOver = isOver && activeIndex === -1 && !isCombat;
+
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+    transform: isSortingEquipment
+      ? CSS.Transform.toString(transform)
+      : undefined,
+    transition: isSortingEquipment ? transition : undefined,
     zIndex: isDragging ? 1 : undefined,
-    opacity: isDragging ? 0 : 1,
+    opacity: isDragging ? 0.25 : 1,
   };
 
   let isCasting = false;
@@ -131,13 +139,15 @@ const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
     }
   }
 
-  const slotState = isEmpty
-    ? "empty"
-    : isAttacking
-      ? "attacking"
-      : isCasting
-        ? "casting"
-        : "occupied";
+  const slotState = isExternalOver
+    ? "casting"
+    : isEmpty
+      ? "empty"
+      : isAttacking
+        ? "attacking"
+        : isCasting
+          ? "casting"
+          : "occupied";
 
   return (
     <motion.div
@@ -147,10 +157,10 @@ const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
       animate={
         isAttacking
           ? {
-              scale: [1, 1.12, 1],
+              scale: [1, 1.08, 1],
               borderColor: [
+                "rgba(255, 255, 255, 0.16)",
                 "#fafafa",
-                "#ff7162",
                 "rgba(255, 255, 255, 0.16)",
               ],
             }

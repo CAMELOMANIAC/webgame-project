@@ -6,6 +6,7 @@ import { useEffect } from "react";
 
 import {
   activeDragIdAtom,
+  animatingSlotIdsAtom,
   isNavigatingAtom,
   shortestPathAtom,
   targetNodeIdAtom,
@@ -45,6 +46,8 @@ function RouteComponent() {
     useFieldCombat(characterData);
   const { handleDragStart, handleDragEnd } = useInventoryDrag(characterData);
   const activeId = useAtomValue(activeDragIdAtom);
+  const animatingSlotIds = useAtomValue(animatingSlotIdsAtom);
+  const isSlotAnimating = animatingSlotIds.length > 0;
   const enemyPositions = useEnemyPositions(
     battleLog,
     characterData?.raw.id,
@@ -96,14 +99,10 @@ function RouteComponent() {
                 <FieldHeader isCombat={isCombat} />
               </motion.div>
             )}
-            <motion.div
-              className={inheritMotionDiv}
-              layout={isCombat ? undefined : true}
-              key="fieldInfo"
-            >
+            <div className={inheritMotionDiv} key="fieldInfo">
               <FieldStatusSection />
               <Equipment />
-            </motion.div>
+            </div>
             {tab === "backpack" && (
               <motion.div
                 className={inheritMotionDiv}
@@ -111,9 +110,8 @@ function RouteComponent() {
                 animate={{ height: "100%", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ type: "spring", duration: 0.45, bounce: 0 }}
-                style={{ overflow: "hidden", zIndex: 1 }}
+                style={{ overflow: isSlotAnimating ? "visible" : "hidden" }}
                 key="stash"
-                layout={isCombat ? undefined : true}
               >
                 <Backpack />
               </motion.div>
@@ -121,19 +119,7 @@ function RouteComponent() {
           </AnimatePresence>
           <DragOverlay dropAnimation={null}>
             {activeId && (
-              <motion.div
-                className={styles.slotOverlay}
-                key={String(activeId)}
-                layoutId={String(activeId)}
-                transition={{
-                  type: "spring",
-                  stiffness: 500,
-                  damping: 30,
-                  mass: 0.8,
-                }}
-              >
-                {activeItem?.name}
-              </motion.div>
+              <div className={styles.slotOverlay}>{activeItem?.name}</div>
             )}
           </DragOverlay>
         </LayoutGroup>

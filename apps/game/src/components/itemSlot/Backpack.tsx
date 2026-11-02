@@ -4,7 +4,7 @@ import { memo } from "react";
 import { CgSpinner } from "react-icons/cg";
 import { IoMdRefresh } from "react-icons/io";
 
-import { isCombatAtom } from "@/atoms/raidAtom";
+import { animatingSlotIdsAtom } from "@/atoms/raidAtom";
 import BackpackSlot from "@/components/itemSlot/BackpackSlot";
 import SlotManager from "@/components/itemSlot/SlotManager";
 import { inheritMotionDiv } from "@/styles/theme.css";
@@ -14,7 +14,8 @@ import * as styles from "./Backpack.css";
 
 const Backpack = memo(() => {
   const { data: characterData, isLoading, isError } = useGetCharacter();
-  const isCombat = useAtomValue(isCombatAtom);
+  const animatingSlotIds = useAtomValue(animatingSlotIdsAtom);
+  const isSlotAnimating = animatingSlotIds.length > 0;
   const occupiedCount =
     characterData?.inventory.filter(
       (item) => !item.id.toString().includes("empty"),
@@ -65,24 +66,26 @@ const Backpack = memo(() => {
           </motion.div>
         )}
         {characterData && (
-          <motion.div
+          <div
             className={inheritMotionDiv}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ type: "spring", duration: 0.45, bounce: 0 }}
-            style={{ overflow: "hidden" }}
+            style={{
+              overflow: isSlotAnimating ? "visible" : "hidden",
+              flex: 1,
+              minHeight: 0,
+              display: "flex",
+            }}
             key="backpackLoadComplete"
           >
             <motion.section
               className={styles.gridContainer}
-              layout={isCombat ? undefined : true}
+              style={{ overflow: isSlotAnimating ? "visible" : "auto" }}
+              layoutScroll
             >
               <SlotManager items={characterData?.inventory || []}>
                 {(item) => <BackpackSlot item={item} />}
               </SlotManager>
             </motion.section>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

@@ -9,8 +9,7 @@ export const slotOverlay = style([
     alignItems: "center",
     justifyContent: "center",
     textAlign: "center",
-    position: "absolute",
-    width: "82px",
+    width: "72px",
     aspectRatio: "1 / 1",
     padding: "8px",
     border: "1px solid rgba(133, 173, 255, 0.45)",
@@ -23,6 +22,7 @@ export const slotOverlay = style([
     backgroundColor: "rgba(16, 16, 19, 0.94)",
     backdropFilter: "blur(8px)",
     boxShadow: "0 12px 24px rgba(0, 0, 0, 0.45)",
+    pointerEvents: "none",
     zIndex: 1000,
   },
 ]);

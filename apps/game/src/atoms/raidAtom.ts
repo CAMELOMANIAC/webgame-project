@@ -32,3 +32,6 @@ export const isInventoryDirtyAtom = atom<boolean>(false);
 // 현재 드래그 중인 아이템 ID (DragOverlay와 SlotManager 간 layoutId 충돌 방지용)
 export const activeDragIdAtom = atom<string | number | null>(null);
 
+// 슬롯 간 이동 애니메이션이 진행 중인 아이템 ID 목록 (z-index 및 overflow 클리핑 해제용)
+export const animatingSlotIdsAtom = atom<string[]>([]);
+

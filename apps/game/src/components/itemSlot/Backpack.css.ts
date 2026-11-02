@@ -8,17 +8,29 @@ export const container = style({
   display: "flex",
   flex: 1,
   flexDirection: "column",
-  backgroundColor: "rgba(12, 12, 15, 0.92)",
-  borderTop: "1px solid rgba(255, 255, 255, 0.08)",
-  backdropFilter: "blur(12px)",
-  overflow: "auto",
+  position: "relative",
+  selectors: {
+    "&::before": {
+      content: '""',
+      position: "absolute",
+      inset: 0,
+      backgroundColor: "rgba(12, 12, 15, 0.92)",
+      borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+      backdropFilter: "blur(12px)",
+      pointerEvents: "none",
+      zIndex: 0,
+    },
+  },
 });
 
 export const header = style({
+  position: "relative",
+  zIndex: 2,
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   padding: "12px 16px 10px",
+  backgroundColor: "rgba(12, 12, 15, 0.96)",
   borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
 });
 
@@ -52,11 +64,12 @@ export const messageContainer = style({
 });
 
 export const gridContainer = style({
+  position: "relative",
   width: "100%",
   height: "100%",
   display: "grid",
   gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
   gap: "8px",
   padding: "12px 16px 16px",
-  overflow: "auto",
+  overflowY: "auto",
 });
