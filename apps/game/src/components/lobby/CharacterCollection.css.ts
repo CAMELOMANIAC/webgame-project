@@ -79,10 +79,10 @@ export const characterButton = recipe({
   variants: {
     state: {
       raiding: [
-        cornerBrackets({ tone: "negative" }),
+        cornerBrackets({ tone: "default" }),
         {
-          border: `1px solid ${vars.border.negative}`,
-          backgroundColor: vars.surface.selected,
+          border: "1px solid rgba(255, 255, 255, 0.16)",
+          backgroundColor: vars.surface.high,
           selectors: {
             "&:disabled": {
               cursor: "default",
@@ -95,7 +95,7 @@ export const characterButton = recipe({
         cornerBrackets({ tone: "positive" }),
         {
           border: `1px solid ${vars.border.positive}`,
-          backgroundColor: vars.surface.selected,
+          backgroundColor: vars.surface.high,
           selectors: {
             "&:disabled": {
               cursor: "default",
@@ -149,8 +149,9 @@ export const stateTag = recipe({
   variants: {
     state: {
       raiding: {
-        color: vars.color.negative,
-        backgroundColor: vars.color.negativeBg,
+        color: vars.text.primary,
+        backgroundColor: "rgba(255, 255, 255, 0.08)",
+        border: "1px solid rgba(255, 255, 255, 0.18)",
       },
       selected: {
         color: vars.color.positive,

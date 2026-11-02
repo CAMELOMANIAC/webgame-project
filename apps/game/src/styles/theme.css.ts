@@ -11,7 +11,7 @@ export const vars = createGlobalTheme(":root", {
     low: "#0c0c0f",
     mid: "#101013",
     high: "#141418",
-    selected: "#13151c",
+    selected: "#141418",
     hud: "rgba(16, 16, 19, 0.9)",
   },
   border: {

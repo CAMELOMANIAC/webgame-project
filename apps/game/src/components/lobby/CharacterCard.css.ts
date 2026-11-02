@@ -16,7 +16,7 @@ export const cardContainer = recipe({
   },
   variants: {
     raiding: {
-      true: cornerBrackets({ tone: "negative" }),
+      true: cornerBrackets({ tone: "default" }),
       false: cornerBrackets({ tone: "positive" }),
     },
   },
@@ -65,9 +65,9 @@ export const statusBadge = recipe({
   variants: {
     raiding: {
       true: {
-        backgroundColor: vars.color.negativeBg,
-        color: vars.color.negative,
-        border: `1px solid ${vars.border.negative}`,
+        backgroundColor: "rgba(255, 255, 255, 0.08)",
+        color: vars.text.primary,
+        border: "1px solid rgba(255, 255, 255, 0.18)",
       },
       false: {
         backgroundColor: vars.color.positiveBg,
@@ -90,7 +90,7 @@ export const statusDot = recipe({
   variants: {
     raiding: {
       true: {
-        backgroundColor: vars.color.negative,
+        backgroundColor: vars.text.primary,
       },
       false: {
         backgroundColor: vars.color.positive,
@@ -196,12 +196,12 @@ export const actionButton = recipe({
   variants: {
     raiding: {
       true: {
-        color: vars.text.primary,
-        border: "1px solid rgba(255, 113, 98, 0.45)",
-        backgroundColor: "rgba(255, 113, 98, 0.18)",
+        color: vars.color.ctaFg,
+        border: "1px solid transparent",
+        backgroundColor: vars.color.ctaBg,
         selectors: {
           "&:hover:not(:disabled)": {
-            backgroundColor: "rgba(255, 113, 98, 0.26)",
+            backgroundColor: vars.color.ctaHover,
           },
         },
       },

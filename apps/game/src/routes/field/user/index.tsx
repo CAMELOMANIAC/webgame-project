@@ -208,7 +208,7 @@ function RouteComponent() {
         <CharacterCollection disabled={gearLocked} />
 
         {character?.isRaiding && (
-          <p className={styles.banner({ tone: "negative" })}>
+          <p className={styles.banner({ tone: "neutral" })}>
             탐사 중에는 창고와 장비를 변경할 수 없습니다. 탐사를 마치고
             복귀하세요.
           </p>

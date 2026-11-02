@@ -52,9 +52,9 @@ export const slot = recipe({
         },
       ],
       attacking: [
-        cornerBrackets({ tone: "negative" }),
+        cornerBrackets({ tone: "default" }),
         {
-          border: `1px solid ${vars.color.negative}`,
+          border: "1px solid #fafafa",
           backgroundColor: "rgba(20, 20, 24, 0.92)",
         },
       ],
@@ -116,7 +116,7 @@ export const cooldownOverlay = style({
 
 export const cooldownText = style({
   fontFamily: vars.font.mono,
-  color: vars.color.negative,
+  color: vars.text.primary,
   fontSize: "13px",
   fontWeight: 700,
   fontVariantNumeric: "tabular-nums",

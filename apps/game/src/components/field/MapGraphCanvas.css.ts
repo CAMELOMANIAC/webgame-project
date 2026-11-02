@@ -232,12 +232,13 @@ export const navButton = recipe({
         },
       },
       false: {
-        background: vars.color.negativeBg,
-        border: `1px solid ${vars.border.negative}`,
-        color: vars.color.negative,
+        background: "rgba(255, 255, 255, 0.06)",
+        border: "1px solid rgba(255, 255, 255, 0.14)",
+        color: vars.text.secondary,
         selectors: {
           "&:hover:not(:disabled)": {
-            background: "rgba(255, 113, 98, 0.22)",
+            background: "rgba(255, 255, 255, 0.12)",
+            color: vars.text.primary,
           },
         },
       },

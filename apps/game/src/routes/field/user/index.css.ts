@@ -60,21 +60,23 @@ export const missionLink = style({
   alignItems: "center",
   justifyContent: "space-between",
   padding: "10px 12px",
-  borderRadius: "6px",
-  background: "rgba(133, 173, 255, 0.08)",
-  border: "1px solid rgba(133, 173, 255, 0.28)",
-  color: vars.color.positive,
+  borderRadius: vars.radius.control,
+  background: vars.surface.mid,
+  border: `1px solid ${vars.border.subtle}`,
+  color: vars.text.primary,
   fontSize: "12px",
   fontWeight: 600,
-  transition: "background-color 0.15s ease",
+  transition: "background-color 0.15s ease, border-color 0.15s ease",
   ":hover": {
-    background: "rgba(133, 173, 255, 0.14)",
+    background: vars.surface.high,
+    borderColor: vars.border.strong,
   },
 });
 
 export const linkCode = style({
   fontFamily: vars.font.mono,
   fontSize: "11px",
+  color: vars.text.muted,
 });
 
 export const banner = recipe({
@@ -96,6 +98,11 @@ export const banner = recipe({
         color: vars.color.negative,
         background: "rgba(255, 113, 98, 0.12)",
         border: "1px solid rgba(255, 113, 98, 0.3)",
+      },
+      neutral: {
+        color: vars.text.secondary,
+        background: vars.surface.mid,
+        border: `1px solid ${vars.border.subtle}`,
       },
     },
   },
