@@ -2,13 +2,16 @@ import { memo } from "react";
 
 import EquipmentSlot from "@/components/itemSlot/EquipmentSlot";
 import SlotManager from "@/components/itemSlot/SlotManager";
-import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
+import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 
 import * as styles from "./Equipment.css";
 
-const Equipment = memo(() => {
-  const { data: characterData, isLoading } = useGetCharacter();
+interface EquipmentProps {
+  characterData: CharacterData | undefined;
+  isLoading: boolean;
+}
 
+const Equipment = memo(({ characterData, isLoading }: EquipmentProps) => {
   if (isLoading) {
     return <div className={styles.container} />;
   }

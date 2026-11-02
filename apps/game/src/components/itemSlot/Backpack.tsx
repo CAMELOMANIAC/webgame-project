@@ -8,12 +8,17 @@ import { animatingSlotIdsAtom } from "@/atoms/raidAtom";
 import BackpackSlot from "@/components/itemSlot/BackpackSlot";
 import SlotManager from "@/components/itemSlot/SlotManager";
 import { inheritMotionDiv } from "@/styles/theme.css";
-import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
+import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 
 import * as styles from "./Backpack.css";
 
-const Backpack = memo(() => {
-  const { data: characterData, isLoading, isError } = useGetCharacter();
+interface BackpackProps {
+  characterData: CharacterData | undefined;
+  isLoading: boolean;
+  isError: boolean;
+}
+
+const Backpack = memo(({ characterData, isLoading, isError }: BackpackProps) => {
   const animatingSlotIds = useAtomValue(animatingSlotIdsAtom);
   const isSlotAnimating = animatingSlotIds.length > 0;
   const occupiedCount =

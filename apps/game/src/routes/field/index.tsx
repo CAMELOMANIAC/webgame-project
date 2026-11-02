@@ -40,7 +40,8 @@ export const Route = createFileRoute("/field/")({
 
 function RouteComponent() {
   const { tab } = useSearch({ from: "/field/" });
-  const { data: characterData } = useGetCharacter();
+  // 같은 데이터로 두 슬롯 목록을 함께 갱신해야 layoutId 이동 전환이 이어진다.
+  const { data: characterData, isLoading, isError } = useGetCharacter();
 
   const { isCombat, setIsCombat, battleLog, navigateRaid, triggerCombat } =
     useFieldCombat(characterData);
@@ -101,7 +102,7 @@ function RouteComponent() {
             )}
             <div className={inheritMotionDiv} key="fieldInfo">
               <FieldStatusSection />
-              <Equipment />
+              <Equipment characterData={characterData} isLoading={isLoading} />
             </div>
             {tab === "backpack" && (
               <motion.div
@@ -113,7 +114,11 @@ function RouteComponent() {
                 style={{ overflow: isSlotAnimating ? "visible" : "hidden" }}
                 key="stash"
               >
-                <Backpack />
+                <Backpack
+                  characterData={characterData}
+                  isLoading={isLoading}
+                  isError={isError}
+                />
               </motion.div>
             )}
           </AnimatePresence>

@@ -24,8 +24,8 @@ const SlotManager = <T extends { id: string | number }>({
     active != null && items.some((i) => String(i.id) === String(active.id));
   const isOverInList =
     over != null && items.some((i) => String(i.id) === String(over.id));
-  // Equipment 내부 정렬 중에는 @dnd-kit/sortable의 밀기 애니메이션만 사용하고,
-  // Equipment <-> Backpack 간 이동/교환 시에는 Framer Motion의 layoutId 전환 애니메이션을 사용한다.
+  // Equipment 드래그 중 밀기는 sortable이, 드롭 후 위치 변경은 Motion의 layout이 처리한다.
+  // Equipment <-> Backpack 이동/교환은 layoutId로 연결한다.
   const isSortingWithinList = Boolean(sortable && isActiveInList && isOverInList);
 
   const content = items.map((item, index) => {
@@ -36,7 +36,7 @@ const SlotManager = <T extends { id: string | number }>({
     return (
       <motion.div
         key={item.id}
-        layout={isCombat || sortable ? undefined : "position"}
+        layout={isCombat ? undefined : "position"}
         layoutId={
           isCombat || isEmpty || isSortingWithinList ? undefined : idStr
         }
