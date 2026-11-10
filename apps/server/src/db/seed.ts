@@ -86,7 +86,7 @@ async function main() {
     },
     {
       id: "hanlim-relief-carbine",
-      name: "한림 구호용 카빈",
+      name: "기업 구호용 카빈",
       damage: 16,
       staminaCost: 4,
       cooldownTicks: 2,
@@ -98,7 +98,7 @@ async function main() {
     },
     {
       id: "hanlim-control-baton",
-      name: "한림 제식 충격봉",
+      name: "기업 제식 충격봉",
       damage: 6,
       staminaCost: 3,
       cooldownTicks: 3,

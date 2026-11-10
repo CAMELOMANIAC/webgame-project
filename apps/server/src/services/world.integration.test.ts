@@ -14,7 +14,7 @@ import { integrationFixture } from "../testing/integrationFixture";
 import { pathToNode } from "../testing/mapRoute";
 import { navigateRaid, startRaid } from "./raid";
 
-test("실제 DB: 한림 제한 시설에서는 소속·역할·적대 이유를 가진 요원과 조우한다", async (t) => {
+test("실제 DB: 기업 제한 시설에서는 소속·역할·적대 이유를 가진 요원과 조우한다", async (t) => {
   const { db, user, character, weapon } = await integrationFixture(t);
   await db
     .update(characters)
@@ -40,7 +40,7 @@ test("실제 DB: 한림 제한 시설에서는 소속·역할·적대 이유를 
     () => (roll++ === 0 ? 0 : 0.999999),
   );
   assert.equal(result.battleLog?.encounter?.kind, "NPC");
-  assert.equal(result.battleLog?.encounter?.faction, "한림그룹");
+  assert.equal(result.battleLog?.encounter?.faction, "기업");
   assert.equal(result.battleLog?.encounter?.role, "시설 통제");
   assert.ok(result.battleLog?.encounter?.reason);
   assert.equal(result.battleLog?.initialState.players.length, 2);

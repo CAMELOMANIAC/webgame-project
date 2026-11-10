@@ -75,7 +75,7 @@ test("실제 DB: 임무 수락·회수·탈출·보고는 재시도해도 지원
     () => 0.99,
   );
   assert.equal(result.stopNodeId, firstMission.targetNodeId);
-  assert.equal(result.battleLog?.encounter?.faction, "한림그룹");
+  assert.equal(result.battleLog?.encounter?.faction, "기업");
   assert.equal((await journalView(db, user.id)).mission.status, "RECOVERED");
   assert.deepEqual(
     await navigateRaid(db, user.id, character.id, input),

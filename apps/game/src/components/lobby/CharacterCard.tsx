@@ -89,7 +89,7 @@ export function CharacterCard({
             ? "탐사 결과 확인"
             : isRaiding
               ? "진행 중인 탐사로 복귀"
-              : "서포시 탐사 출격"}
+              : "회성시 탐사 출격"}
         </span>
         <span className={styles.buttonCode}>
           {pendingResult ? "SYNC →" : isRaiding ? "ACTIVE →" : "DEPLOY → #00"}

@@ -20,7 +20,7 @@ export function seopoRegion(
   if (nodeId === 0)
     return {
       id: "hanlim-lab",
-      name: "한림 복귀 실험실",
+      name: "기업 복귀 실험실",
       facility: "LAB",
       overlap: "STABLE",
       encounter: "SAFE",
