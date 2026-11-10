@@ -29,14 +29,5 @@ export function useGearActions() {
       ),
     onSuccess: refresh,
   });
-  const supplies = useMutation({
-    mutationFn: async (characterId: string) =>
-      readApiResponse(
-        await apiFetch(`${API_BASE_URL}/character/${characterId}/supplies`, {
-          method: "POST",
-        }),
-      ),
-    onSuccess: refresh,
-  });
-  return { equip, supplies };
+  return { equip };
 }

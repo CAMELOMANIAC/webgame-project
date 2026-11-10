@@ -1,8 +1,20 @@
 import { atom } from "jotai";
+import { atomWithStorage, createJSONStorage } from "jotai/utils";
 
 // 현재 전투(전투 애니메이션 재생) 중인지 여부
 export const isCombatAtom = atom<boolean>(false);
 export const raidNoticeAtom = atom<string | null>(null);
+
+export type RaidEndStatus = "EXTRACTED" | "DEAD";
+type UnacknowledgedRaidResults = Partial<Record<string, RaidEndStatus>>;
+
+export const unacknowledgedRaidResultsAtom =
+  atomWithStorage<UnacknowledgedRaidResults>(
+    "webgame.unacknowledgedRaidResults",
+    {},
+    createJSONStorage<UnacknowledgedRaidResults>(() => sessionStorage),
+    { getOnInit: true },
+  );
 
 // 플레이어의 현재 노드 ID
 export const currentNodeIdAtom = atom<number>(0);

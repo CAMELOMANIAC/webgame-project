@@ -76,7 +76,7 @@ export default function DevelopmentAccountGate({
     store.set(displayEventsAtom, []);
     store.set(processedEventsAtom, []);
     setUserId(nextUserId);
-    await navigate({ to: nextUserId ? "/field/user" : "/" });
+    await navigate({ to: nextUserId ? "/base" : "/" });
   };
 
   if (userId)

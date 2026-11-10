@@ -37,7 +37,6 @@ const FieldNavTargetSection = () => {
   const setRequestedNode = useSetAtom(requestedNodeIdAtom);
   const setNode = useSetAtom(currentNodeIdAtom);
   const setCoords = useSetAtom(playerCoordsAtom);
-  const setNotice = useSetAtom(raidNoticeAtom);
   const notice = useAtomValue(raidNoticeAtom);
   const character = data?.raw;
   const region = seopoRegion(
@@ -61,10 +60,8 @@ const FieldNavTargetSection = () => {
     if (!character || !canAct) return;
     extractRaid.mutate(character.id, {
       onSuccess: () => {
-        setNotice("탈출에 성공했습니다. 가방의 물품을 창고로 옮겼습니다.");
         setNode(rules?.startNodeId ?? 0);
         setCoords(null);
-        void navigate({ to: "/field/user" });
       },
     });
   };
@@ -155,7 +152,7 @@ const FieldNavTargetSection = () => {
             <span>
               {extractRaid.isPending
                 ? "탈출 처리 중…"
-                : "탈출하고 거점으로 복귀"}
+                : "탈출하기"}
             </span>
             <span className={styles.actionCode}>EXTRACT →</span>
           </button>
@@ -177,7 +174,7 @@ const FieldNavTargetSection = () => {
           <button
             type="button"
             className={styles.primaryAction}
-            onClick={() => void navigate({ to: "/field/user" })}
+            onClick={() => void navigate({ to: "/base" })}
           >
             <span>거점으로 돌아가기</span>
             <span className={styles.actionCode}>BASE →</span>

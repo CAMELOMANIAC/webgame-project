@@ -5,5 +5,5 @@ export const Route = createFileRoute("/")({
 });
 
 function RouteComponent() {
-  return <Navigate to="/field/user" />;
+  return <Navigate to="/base" />;
 }

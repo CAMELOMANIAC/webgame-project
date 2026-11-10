@@ -69,14 +69,19 @@ export const characterButton = recipe({
     cursor: "pointer",
     textAlign: "left",
     transition: "background-color 0.15s ease, border-color 0.15s ease",
-    selectors: {
-      "&:hover:not(:disabled)": {
-        backgroundColor: vars.surface.high,
-        borderColor: vars.border.strong,
-      },
-    },
   },
   variants: {
+    readOnly: {
+      true: { cursor: "default" },
+      false: {
+        selectors: {
+          "&:hover:not(:disabled)": {
+            backgroundColor: vars.surface.high,
+            borderColor: vars.border.strong,
+          },
+        },
+      },
+    },
     state: {
       raiding: [
         cornerBrackets({ tone: "default" }),
@@ -121,6 +126,7 @@ export const characterButton = recipe({
   },
   defaultVariants: {
     state: "idle",
+    readOnly: false,
   },
 });
 

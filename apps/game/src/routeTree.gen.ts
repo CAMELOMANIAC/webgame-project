@@ -11,6 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FieldIndexRouteImport } from './routes/field/index'
+import { Route as BaseIndexRouteImport } from './routes/base/index'
+import { Route as BaseStashRouteImport } from './routes/base/stash'
+import { Route as BaseQuestRouteImport } from './routes/base/quest'
+import { Route as BaseQuartersRouteImport } from './routes/base/quarters'
+import { Route as BaseMarketRouteImport } from './routes/base/market'
 import { Route as FieldUserIndexRouteImport } from './routes/field/user/index'
 import { Route as FieldQuestIndexRouteImport } from './routes/field/quest/index'
 
@@ -22,6 +27,31 @@ const IndexRoute = IndexRouteImport.update({
 const FieldIndexRoute = FieldIndexRouteImport.update({
   id: '/field/',
   path: '/field/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BaseIndexRoute = BaseIndexRouteImport.update({
+  id: '/base/',
+  path: '/base/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BaseStashRoute = BaseStashRouteImport.update({
+  id: '/base/stash',
+  path: '/base/stash',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BaseQuestRoute = BaseQuestRouteImport.update({
+  id: '/base/quest',
+  path: '/base/quest',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BaseQuartersRoute = BaseQuartersRouteImport.update({
+  id: '/base/quarters',
+  path: '/base/quarters',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BaseMarketRoute = BaseMarketRouteImport.update({
+  id: '/base/market',
+  path: '/base/market',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FieldUserIndexRoute = FieldUserIndexRouteImport.update({
@@ -37,12 +67,22 @@ const FieldQuestIndexRoute = FieldQuestIndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/base/market': typeof BaseMarketRoute
+  '/base/quarters': typeof BaseQuartersRoute
+  '/base/quest': typeof BaseQuestRoute
+  '/base/stash': typeof BaseStashRoute
+  '/base/': typeof BaseIndexRoute
   '/field/': typeof FieldIndexRoute
   '/field/quest/': typeof FieldQuestIndexRoute
   '/field/user/': typeof FieldUserIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/base/market': typeof BaseMarketRoute
+  '/base/quarters': typeof BaseQuartersRoute
+  '/base/quest': typeof BaseQuestRoute
+  '/base/stash': typeof BaseStashRoute
+  '/base': typeof BaseIndexRoute
   '/field': typeof FieldIndexRoute
   '/field/quest': typeof FieldQuestIndexRoute
   '/field/user': typeof FieldUserIndexRoute
@@ -50,20 +90,58 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/base/market': typeof BaseMarketRoute
+  '/base/quarters': typeof BaseQuartersRoute
+  '/base/quest': typeof BaseQuestRoute
+  '/base/stash': typeof BaseStashRoute
+  '/base/': typeof BaseIndexRoute
   '/field/': typeof FieldIndexRoute
   '/field/quest/': typeof FieldQuestIndexRoute
   '/field/user/': typeof FieldUserIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/field/' | '/field/quest/' | '/field/user/'
+  fullPaths:
+    | '/'
+    | '/base/market'
+    | '/base/quarters'
+    | '/base/quest'
+    | '/base/stash'
+    | '/base/'
+    | '/field/'
+    | '/field/quest/'
+    | '/field/user/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/field' | '/field/quest' | '/field/user'
-  id: '__root__' | '/' | '/field/' | '/field/quest/' | '/field/user/'
+  to:
+    | '/'
+    | '/base/market'
+    | '/base/quarters'
+    | '/base/quest'
+    | '/base/stash'
+    | '/base'
+    | '/field'
+    | '/field/quest'
+    | '/field/user'
+  id:
+    | '__root__'
+    | '/'
+    | '/base/market'
+    | '/base/quarters'
+    | '/base/quest'
+    | '/base/stash'
+    | '/base/'
+    | '/field/'
+    | '/field/quest/'
+    | '/field/user/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BaseMarketRoute: typeof BaseMarketRoute
+  BaseQuartersRoute: typeof BaseQuartersRoute
+  BaseQuestRoute: typeof BaseQuestRoute
+  BaseStashRoute: typeof BaseStashRoute
+  BaseIndexRoute: typeof BaseIndexRoute
   FieldIndexRoute: typeof FieldIndexRoute
   FieldQuestIndexRoute: typeof FieldQuestIndexRoute
   FieldUserIndexRoute: typeof FieldUserIndexRoute
@@ -85,6 +163,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FieldIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/base/': {
+      id: '/base/'
+      path: '/base'
+      fullPath: '/base/'
+      preLoaderRoute: typeof BaseIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/base/stash': {
+      id: '/base/stash'
+      path: '/base/stash'
+      fullPath: '/base/stash'
+      preLoaderRoute: typeof BaseStashRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/base/quest': {
+      id: '/base/quest'
+      path: '/base/quest'
+      fullPath: '/base/quest'
+      preLoaderRoute: typeof BaseQuestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/base/quarters': {
+      id: '/base/quarters'
+      path: '/base/quarters'
+      fullPath: '/base/quarters'
+      preLoaderRoute: typeof BaseQuartersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/base/market': {
+      id: '/base/market'
+      path: '/base/market'
+      fullPath: '/base/market'
+      preLoaderRoute: typeof BaseMarketRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/field/user/': {
       id: '/field/user/'
       path: '/field/user'
@@ -104,6 +217,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BaseMarketRoute: BaseMarketRoute,
+  BaseQuartersRoute: BaseQuartersRoute,
+  BaseQuestRoute: BaseQuestRoute,
+  BaseStashRoute: BaseStashRoute,
+  BaseIndexRoute: BaseIndexRoute,
   FieldIndexRoute: FieldIndexRoute,
   FieldQuestIndexRoute: FieldQuestIndexRoute,
   FieldUserIndexRoute: FieldUserIndexRoute,

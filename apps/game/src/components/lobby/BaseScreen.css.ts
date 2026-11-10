@@ -108,19 +108,6 @@ export const banner = recipe({
   },
 });
 
-export const supplyButton = style({
-  width: "100%",
-  marginBottom: "16px",
-  padding: "12px 14px",
-  borderRadius: "6px",
-  border: `1px solid ${vars.border.positive}`,
-  background: vars.color.positiveBg,
-  color: vars.color.positive,
-  fontSize: "12px",
-  fontWeight: 600,
-  cursor: "pointer",
-});
-
 export const mainGrid = style({
   display: "grid",
   gridTemplateColumns: "minmax(0, 1fr)",
@@ -341,4 +328,20 @@ export const loadingSpinner = style({
   borderTopColor: vars.text.primary,
   borderRadius: "50%",
   animation: `${spinKeyframes} 0.9s linear infinite`,
+});
+
+export const scrollPage = style({
+  overflowY: "auto",
+  paddingBottom: 0,
+});
+
+export const previewItem = style({
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "8px",
+  padding: "8px",
+  background: vars.surface.low,
+  border: `1px solid ${vars.border.subtle}`,
+  borderRadius: vars.radius.control,
 });

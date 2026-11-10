@@ -38,6 +38,9 @@ export const navLink = style({
   width: "100%",
   height: "100%",
   borderRadius: vars.radius.control,
+  selectors: {
+    '&[aria-disabled="true"]': { opacity: 0.5 },
+  },
 });
 
 export const activePill = style({

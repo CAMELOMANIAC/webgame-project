@@ -20,9 +20,9 @@ import {
   isCombatAtom,
   isNavigatingAtom,
   playerCoordsAtom,
-  raidNoticeAtom,
   shortestPathAtom,
   targetNodeIdAtom,
+  unacknowledgedRaidResultsAtom,
 } from "@/atoms/raidAtom";
 import { useBattleData } from "@/utils/hooks/useBattleData";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
@@ -46,7 +46,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
   const setTargetNodeId = useSetAtom(targetNodeIdAtom);
   const setShortestPath = useSetAtom(shortestPathAtom);
   const setPlayerCoords = useSetAtom(playerCoordsAtom);
-  const setNotice = useSetAtom(raidNoticeAtom);
+  const setRaidResults = useSetAtom(unacknowledgedRaidResultsAtom);
   const setPendingNavigation = useSetAtom(pendingNavigationAtom);
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -65,7 +65,16 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
         ? Math.max(...timeline.map((e: BattleEvent) => e.timestamp))
         : 0;
     if (time > maxTimestamp) {
-      // 전투 종료 처리!
+      const initialPlayer = battleLog.initialState.players[0];
+      const finalPlayer = battleLog.finalState.players.find(
+        (player) => player.id === initialPlayer?.id,
+      );
+      const playerDied = finalPlayer !== undefined && finalPlayer.hp <= 0;
+
+      if (playerDied && userId) {
+        setRaidResults((results) => ({ ...results, [userId]: "DEAD" }));
+      }
+
       setIsCombat(false);
       if (characterData)
         setPendingNavigation((pending) => {
@@ -73,12 +82,6 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
           delete remaining[pendingNavigationKey(userId, characterData.raw.id)];
           return remaining;
         });
-
-      const initialPlayer = battleLog.initialState.players[0];
-      const finalPlayer = battleLog.finalState.players.find(
-        (player) => player.id === initialPlayer?.id,
-      );
-      const playerDied = finalPlayer !== undefined && finalPlayer.hp <= 0;
 
       // 서버가 확정한 전투 결과를 사용하고, 화면에서 최종 수치를 재계산하지 않는다.
       if (finalPlayer && !playerDied) {
@@ -110,10 +113,6 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       queryClient.invalidateQueries({ queryKey: ["stash", userId] });
 
       if (playerDied) {
-        setNotice(
-          "탐사 중 쓰러졌습니다. 장비와 가방이 소실되어 거점으로 복귀했습니다.",
-        );
-        // 캐시 업데이트로 로비 진입 시 'RETURN TO ACTIVE RAID' 대신 'LAUNCH EXPEDITION'이 뜨도록 강제
         queryClient.setQueryData(
           characterKey(userId, characterData?.raw.id),
           (old: CharacterData | undefined) => {
@@ -123,6 +122,8 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
               raw: {
                 ...old.raw,
                 isRaiding: false,
+                activeRaid: null,
+                activeRaidId: null,
                 hp: old.raw.maxHp,
                 stamina: old.raw.maxStamina,
               },
@@ -136,8 +137,6 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
         setTargetNodeId(null);
         setShortestPath([]);
         setPlayerCoords(null);
-
-        navigate({ to: "/field/user" }); // 로비로 이동
       } else {
         navigate({ to: "/field" }); // 맵으로 복구
       }
@@ -169,7 +168,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     characterData,
     userId,
     setPendingNavigation,
-    setNotice,
+    setRaidResults,
     navigate,
     setIsCombat,
     queryClient,

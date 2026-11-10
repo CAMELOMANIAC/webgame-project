@@ -13,21 +13,21 @@ import { readApiResponse } from "@/utils/request";
 import * as styles from "./CharacterCollection.css";
 
 export default function CharacterCollection({
-  disabled,
+  readOnly = false,
 }: {
-  disabled: boolean;
+  readOnly?: boolean;
 }) {
   const roster = useCharacterRoster();
   const { select, recruit } = useCharacterCollectionActions();
   const pending = useAtomValue(pendingNavigationAtom);
   const variants = useQuery<CharacterVariant[]>({
     queryKey: ["character-variants"],
+    enabled: !readOnly,
     queryFn: async () =>
       readApiResponse(await apiFetch(`${API_BASE_URL}/dev/character-variants`)),
   });
   const characters = roster.data?.characters ?? [];
   const locked =
-    disabled ||
     select.isPending ||
     recruit.isPending ||
     characters.some(
@@ -37,7 +37,10 @@ export default function CharacterCollection({
           (entry) => entry.params.characterId === character.id,
         ),
     );
-  const error = roster.error ?? variants.error ?? select.error ?? recruit.error;
+  const error =
+    roster.error ??
+    (readOnly ? null : (variants.error ?? select.error ?? recruit.error));
+  const Card = readOnly ? "div" : "button";
   return (
     <section className={styles.collection} aria-label="보유 개체">
       <div className={styles.collectionHeader}>
@@ -73,13 +76,15 @@ export default function CharacterCollection({
               ? "selected"
               : "idle";
           return (
-            <button
+            <Card
               key={character.id}
-              type="button"
-              className={styles.characterButton({ state: cardState })}
-              disabled={locked || isSelected}
-              aria-pressed={isSelected}
-              onClick={() => select.mutate(character.id)}
+              className={styles.characterButton({ state: cardState, readOnly })}
+              {...(!readOnly && {
+                type: "button" as const,
+                disabled: locked || isSelected,
+                "aria-pressed": isSelected,
+                onClick: () => select.mutate(character.id),
+              })}
             >
               <div className={styles.cardTopRow}>
                 <strong className={styles.cardName}>
@@ -92,7 +97,9 @@ export default function CharacterCollection({
                     ? "탐사 중"
                     : isSelected
                       ? "선택됨"
-                      : "선택"}
+                      : readOnly
+                        ? "대기 중"
+                        : "선택"}
                 </span>
               </div>
               <span className={styles.metaRow}>
@@ -101,29 +108,31 @@ export default function CharacterCollection({
               <span className={styles.statRow}>
                 HP {character.hp}/{character.maxHp} · 무게 {character.weight}kg
               </span>
-            </button>
+            </Card>
           );
         })}
       </div>
-      <details className={styles.details}>
-        <summary className={styles.summary}>개발용 개체 추가</summary>
-        <p className={styles.description}>
-          수집 기능 검증용입니다. 인물 명칭과 획득 방식은 기획 제안입니다.
-        </p>
-        <div className={styles.variantActions}>
-          {variants.data?.map((variant) => (
-            <button
-              key={variant.id}
-              type="button"
-              className={styles.variantButton}
-              disabled={locked}
-              onClick={() => recruit.mutate(variant.id)}
-            >
-              {variant.definition?.name ?? "생존자"} · {variant.id} 추가
-            </button>
-          ))}
-        </div>
-      </details>
+      {!readOnly && (
+        <details className={styles.details}>
+          <summary className={styles.summary}>개발용 개체 추가</summary>
+          <p className={styles.description}>
+            수집 기능 검증용입니다. 인물 명칭과 획득 방식은 기획 제안입니다.
+          </p>
+          <div className={styles.variantActions}>
+            {variants.data?.map((variant) => (
+              <button
+                key={variant.id}
+                type="button"
+                className={styles.variantButton}
+                disabled={locked}
+                onClick={() => recruit.mutate(variant.id)}
+              >
+                {variant.definition?.name ?? "생존자"} · {variant.id} 추가
+              </button>
+            ))}
+          </div>
+        </details>
+      )}
     </section>
   );
 }

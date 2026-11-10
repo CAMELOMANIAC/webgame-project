@@ -1,8 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { RaidActionInput, RaidView } from "@webgame/types";
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 
 import { selectedUserIdAtom } from "@/atoms/authAtom";
+import { unacknowledgedRaidResultsAtom } from "@/atoms/raidAtom";
 
 import { API_BASE_URL, apiFetch } from "../api";
 import { readApiResponse } from "../request";
@@ -25,6 +26,7 @@ export function raidActionInput(
 export const useRaidSession = () => {
   const queryClient = useQueryClient();
   const userId = useAtomValue(selectedUserIdAtom);
+  const setRaidResults = useSetAtom(unacknowledgedRaidResultsAtom);
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["character", userId] });
     void queryClient.invalidateQueries({ queryKey: ["stash", userId] });
@@ -76,6 +78,9 @@ export const useRaidSession = () => {
       );
     },
     onSuccess: (_result, characterId) => {
+      if (userId) {
+        setRaidResults((results) => ({ ...results, [userId]: "EXTRACTED" }));
+      }
       queryClient.setQueryData(
         characterKey(userId, characterId),
         (old: CharacterData | undefined) =>
