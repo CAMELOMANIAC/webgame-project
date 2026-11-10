@@ -14,7 +14,6 @@ import {
   resetRaidWithoutSession,
   startRaid,
 } from "../services/raid";
-import { claimBasicSupplies } from "../services/supplies";
 import { sendInventoryError } from "./inventory";
 
 function actor(request: FastifyRequest) {
@@ -30,18 +29,8 @@ export function registerRaidRoutes(
   fastify.get("/raid/rules", async () => ({
     extractionNodeIds,
     startNodeId: gameRules.startNodeId,
-    basicSuppliesEnabled: gameRules.basicSuppliesEnabled,
     mapVersion: seopoMapVersion,
   }));
-  fastify.post("/character/:characterId/supplies", async (request, reply) => {
-    try {
-      const { characterId } = request.params as { characterId: string };
-      return await claimBasicSupplies(database, actor(request), characterId);
-    } catch (error) {
-      fastify.log.error(error);
-      return sendInventoryError(reply, error);
-    }
-  });
   fastify.post("/character/:characterId/raid/start", async (request, reply) => {
     try {
       const { characterId } = request.params as { characterId: string };

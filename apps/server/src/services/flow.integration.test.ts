@@ -13,33 +13,6 @@ import {
 } from "../db";
 import { integrationFixture } from "../testing/integrationFixture";
 import { extractRaid, fightRaidMonster, startRaid } from "./raid";
-import { claimBasicSupplies } from "./supplies";
-
-test("실제 DB: 기본 장비 지원은 빈 소지품·창고에서 한 번만 지급한다", async (t) => {
-  const { db, user, character } = await integrationFixture(t);
-  await claimBasicSupplies(db, user.id, character.id);
-  assert.equal(
-    (
-      await db.query.characterWeapons.findMany({
-        where: eq(characterWeapons.characterId, character.id),
-      })
-    ).length,
-    1,
-  );
-  await assert.rejects(
-    () => claimBasicSupplies(db, user.id, character.id),
-    /existing equipment/,
-  );
-});
-
-test("실제 DB: 탐사 중에는 구호 장비를 받을 수 없다", async (t) => {
-  const { db, user, character } = await integrationFixture(t);
-  await startRaid(db, user.id, character.id);
-  await assert.rejects(
-    () => claimBasicSupplies(db, user.id, character.id),
-    /at the base/,
-  );
-});
 
 test("실제 DB: 사망은 탐사를 종료하고 소지품을 소실시킨 뒤 재출격을 허용한다", async (t) => {
   const { db, user, character, weapon, monsterIds } =
@@ -111,7 +84,6 @@ test("실제 DB: 사망은 탐사를 종료하고 소지품을 소실시킨 뒤 
     ).length,
     0,
   );
-  await claimBasicSupplies(db, user.id, character.id);
   const next = await startRaid(db, user.id, character.id);
   assert.notEqual(next.raid.id, raid.id);
 });

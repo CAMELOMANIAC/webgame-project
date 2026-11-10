@@ -6,7 +6,6 @@ import { readApiResponse } from "../request";
 interface RaidRules {
   extractionNodeIds: number[];
   startNodeId: number;
-  basicSuppliesEnabled: boolean;
 }
 
 export function useRaidRules() {
