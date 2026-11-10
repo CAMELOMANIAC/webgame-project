@@ -12,7 +12,6 @@
 - 전투 결과에는 시작·최종 참가자 상태, 공격·회복·자원·종료 이벤트, 승패·종료 이유를 포함한다.
 - 탈출은 지정 노드 0에서만 가능하고 가방을 창고에 이관한다. 장착 장비는 유지한다.
 - 사망은 장비·가방을 소실시키고 개체의 최대 체력·스태미나로 회복한다. 창고와 다른 개체는 유지한다.
-- 기본 장비 지원은 보유 개체 전체의 장비·가방과 창고가 비어 있을 때만 요청할 수 있다. 출격 시 자동 지급하지 않는다.
 
 ## 데이터 모델
 
@@ -48,8 +47,7 @@
 | POST `/character/:characterId/inventory/move`       | 창고↔가방 수량 이동                         |
 | PATCH `/character/:characterId/equipment`           | 하나 장착·해제                              |
 | POST `/character/:characterId/slots/sync`           | 전체 수량을 보존하는 슬롯 변경              |
-| POST `/character/:characterId/supplies`             | 빈 소지품·창고에 한해 기본 지원             |
-| GET `/raid/rules`                                   | 출격·탈출 노드, 지원 여부, 지도 버전        |
+| GET `/raid/rules`                                   | 출격·탈출 노드, 지도 버전        |
 | POST `/character/:characterId/raid/start`           | 선택 개체 출격. 중복 시작은 기존 탐사 반환  |
 | POST `/character/:characterId/raid/navigate`        | 경로·버전 검증, 고스트 기록, 조우·전투·정산 |
 | POST `/character/:characterId/raid/extract`         | 지정 지점에서 한 번만 탈출 정산             |
