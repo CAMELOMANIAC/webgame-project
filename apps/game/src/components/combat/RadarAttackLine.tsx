@@ -1,71 +1,83 @@
-import Konva from "konva";
-import { useEffect, useRef } from "react";
-import { Circle, Group } from "react-konva";
+import { Container, Sprite } from "pixi.js";
+import { useEffect } from "react";
+
+import { usePixiParent } from "@/utils/pixiContext";
+import { getGlowingDotTexture } from "@/utils/pixiTextures";
+import { Easings, runTween, type TweenHandle } from "@/utils/pixiTween";
 
 interface RadarAttackLineProps {
   points: number[];
 }
 
 const RadarAttackLine = ({ points }: RadarAttackLineProps) => {
-  const [x1, y1, x2, y2] = points;
+  const parent = usePixiParent();
+  const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = points;
   const bulletCount = 3; // 발사할 투사체 개수
-  const bulletRefs = useRef<(Konva.Circle | null)[]>([]);
 
   useEffect(() => {
-    const timers: ReturnType<typeof setTimeout>[] = [];
+    if (!parent || parent.destroyed) return;
 
-    bulletRefs.current.forEach((bullet, index) => {
-      if (bullet) {
-        // 투사체 초기 위치 설정
-        bullet.position({ x: x1, y: y1 });
-        bullet.opacity(0);
+    const group = new Container();
+    parent.addChild(group);
 
-        // 시차를 두고 발사 (staggered delay)
-        const timer = setTimeout(() => {
-          // 노드가 여전히 유효하고 레이어에 정상 마운트되어 있는 경우에만 애니메이션 실행
-          if (!bullet || !bullet.getLayer()) return;
-
-          bullet.opacity(1);
-          bullet.to({
-            x: x2,
-            y: y2,
-            duration: 0.15, // 날아가는 속도
-            easing: Konva.Easings.Linear,
-            onFinish: () => {
-              if (bullet && bullet.getLayer()) {
-                bullet.opacity(0);
-              }
-            },
-          });
-        }, index * 60); // 각 발사체 사이의 간격 (60ms)
-
-        timers.push(timer);
-      }
+    const { texture, logicalSize } = getGlowingDotTexture({
+      radius: 2.5,
+      fill: "#ff716c",
+      shadowColor: "#ff716c",
+      shadowBlur: 10,
+      shadowAlpha: 1,
     });
+
+    const bullets: Sprite[] = [];
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const tweens: TweenHandle[] = [];
+
+    for (let index = 0; index < bulletCount; index++) {
+      const bullet = new Sprite(texture);
+      bullet.anchor.set(0.5);
+      bullet.width = logicalSize;
+      bullet.height = logicalSize;
+      bullet.position.set(x1, y1);
+      bullet.alpha = 0;
+      group.addChild(bullet);
+      bullets.push(bullet);
+
+      const timer = setTimeout(() => {
+        if (bullet.destroyed || group.destroyed) return;
+        bullet.alpha = 1;
+
+        const tween = runTween({
+          duration: 0.15,
+          easing: Easings.Linear,
+          onUpdate: (progress) => {
+            if (bullet.destroyed) return;
+            bullet.position.set(
+              x1 + (x2 - x1) * progress,
+              y1 + (y2 - y1) * progress,
+            );
+          },
+          onFinish: () => {
+            if (!bullet.destroyed) {
+              bullet.alpha = 0;
+            }
+          },
+        });
+        tweens.push(tween);
+      }, index * 60);
+
+      timers.push(timer);
+    }
 
     return () => {
       timers.forEach(clearTimeout);
+      tweens.forEach((t) => t.destroy());
+      if (!group.destroyed) {
+        group.destroy({ children: true, texture: false });
+      }
     };
-  }, [x1, y1, x2, y2]);
+  }, [parent, x1, y1, x2, y2]);
 
-  return (
-    <Group>
-      {Array.from({ length: bulletCount }).map((_, i) => (
-        <Circle
-          key={i}
-          ref={(el: Konva.Circle | null) => {
-            bulletRefs.current[i] = el;
-          }}
-          radius={2.5}
-          fill="#ff716c"
-          shadowColor="#ff716c"
-          shadowBlur={10}
-          opacity={0}
-        />
-      ))}
-    </Group>
-  );
+  return null;
 };
 
 export default RadarAttackLine;
-

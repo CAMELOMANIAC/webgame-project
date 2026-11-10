@@ -1,6 +1,8 @@
-import Konva from "konva";
-import { useEffect, useRef } from "react";
-import { Shape } from "react-konva";
+import { Graphics } from "pixi.js";
+import { useEffect } from "react";
+
+import { usePixiParent } from "@/utils/pixiContext";
+import { Easings, runTween } from "@/utils/pixiTween";
 
 interface MeleeSlashEffectProps {
   x: number;
@@ -8,64 +10,68 @@ interface MeleeSlashEffectProps {
 }
 
 const MeleeSlashEffect = ({ x, y }: MeleeSlashEffectProps) => {
-  const shapeRef = useRef<Konva.Shape | null>(null);
+  const parent = usePixiParent();
 
   useEffect(() => {
-    const shape = shapeRef.current;
-    if (!shape) return;
+    if (!parent || parent.destroyed) return;
 
-    // Reset initial animation properties
-    shape.opacity(0);
-    shape.setAttr("progress", 0);
-    
-    // Add small random angle offset to keep the slash feeling dynamic
-    const randomOffset = Math.random() * 20 - 10;
-    shape.rotation(randomOffset);
+    const slashGraphics = new Graphics();
+    slashGraphics.position.set(x, y);
+    slashGraphics.angle = Math.random() * 20 - 10;
+    parent.addChild(slashGraphics);
 
-    // Play drawing crossed slash animation
-    shape.opacity(1);
-    shape.to({
-      progress: 1, // Draw slashes sequentially
-      opacity: 0,
+    const tween = runTween({
       duration: 0.25,
-      easing: Konva.Easings.EaseOut,
-    });
-  }, [x, y]);
+      easing: Easings.EaseOut,
+      onUpdate: (progress) => {
+        if (slashGraphics.destroyed) return;
 
-  return (
-    <Shape
-      ref={shapeRef}
-      x={x}
-      y={y}
-      sceneFunc={(context, shape) => {
-        const progress = shape.getAttr("progress") ?? 0;
-        
-        // Single diagonal slash '/' (bottom-left to top-right)
+        const alpha = Math.max(0, 1 - progress);
         const startX = -18;
         const startY = 18;
         const endX = startX + 36 * progress;
         const endY = startY - 36 * progress;
 
-        context.beginPath();
-        context.moveTo(startX, startY);
-        context.lineTo(endX, endY);
-        context.lineWidth = 4;
-        context.strokeStyle = "#ffffff";
-        context.stroke();
+        slashGraphics.clear();
 
-        context.beginPath();
-        context.moveTo(startX, startY);
-        context.lineTo(endX, endY);
-        context.lineWidth = 1.5;
-        context.strokeStyle = "#ff716c";
-        context.stroke();
-      }}
-      shadowColor="#ff716c"
-      shadowBlur={15}
-      opacity={0}
-      listening={false}
-    />
-  );
+        // White outer slash stroke
+        slashGraphics
+          .moveTo(startX, startY)
+          .lineTo(endX, endY)
+          .stroke({
+            width: 4,
+            color: 0xffffff,
+            alpha,
+            cap: "round",
+          });
+
+        // Inner crimson core stroke
+        slashGraphics
+          .moveTo(startX, startY)
+          .lineTo(endX, endY)
+          .stroke({
+            width: 1.5,
+            color: 0xff716c,
+            alpha,
+            cap: "round",
+          });
+      },
+      onFinish: () => {
+        if (!slashGraphics.destroyed) {
+          slashGraphics.clear();
+        }
+      },
+    });
+
+    return () => {
+      tween.destroy();
+      if (!slashGraphics.destroyed) {
+        slashGraphics.destroy();
+      }
+    };
+  }, [parent, x, y]);
+
+  return null;
 };
 
 export default MeleeSlashEffect;
