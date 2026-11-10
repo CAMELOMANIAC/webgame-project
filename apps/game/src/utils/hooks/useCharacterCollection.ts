@@ -25,7 +25,6 @@ import { readApiResponse } from "../request";
 
 export interface CharacterVariant {
   id: string;
-  worldlineCode: string;
   definition?: { id: string; name: string };
 }
 export interface OwnedCharacter {

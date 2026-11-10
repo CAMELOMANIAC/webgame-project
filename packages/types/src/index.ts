@@ -173,7 +173,6 @@ export interface BattleLog {
     recordedRound?: number;
     recordedAt?: string;
     sourceCharacterId?: string | null;
-    worldlineCode?: string | null;
     faction?: string;
     role?: string;
     reason?: string;
@@ -225,7 +224,6 @@ export interface GhostMatch {
     characterId: string | null;
     displayName: string;
     variantId: string | null;
-    worldlineCode: string | null;
   };
   combatant: BattleCombatant;
 }

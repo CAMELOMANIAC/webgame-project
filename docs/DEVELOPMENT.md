@@ -17,6 +17,15 @@
 
 새 빈 개발 DB에는 `pnpm --filter server db:push`를 사용한다. 이미 기존 테이블이 있는 DB는 먼저 스키마 변경 내역을 확인한 뒤 반영해야 하며, 확인 없이 초기화나 시드를 실행하지 않는다. 외부 DB 적용은 별도 사용자 승인 후 진행한다.
 
+기존 DB에서 세계선 코드만 제거할 때는 다음 SQL을 사용한다. PostgreSQL은 컬럼을 삭제할 때 해당 컬럼을 포함한 중복 방지 인덱스도 함께 삭제한다.
+
+```sql
+BEGIN;
+ALTER TABLE "CharacterVariant" DROP COLUMN IF EXISTS "worldlineCode";
+ALTER TABLE "GhostSnapshot" DROP COLUMN IF EXISTS "worldlineCode";
+COMMIT;
+```
+
 ## 개발 실행
 
 루트에서 `pnpm dev`를 실행한다. 공통 타입 감시 빌드, 게임 화면, API 서버가 실행된다.
@@ -74,7 +83,7 @@ pnpm --filter server exec node --env-file=.env dist/apps/server/src/index.js
 
 브라우저 검증용 서버는 `TEST_DATABASE_URL`을 설정하고 `pnpm --filter server preview:test`로 실행할 수 있다. 로컬 테스트 DB에만 임시 계정 2개와 장비를 추가하며, 다른 계정으로 실제 탐사·탈출해 시설 26의 고스트 기록을 준비한다. 별도로 게임 개발 서버를 실행해 ‘로컬 검증 생존자’를 선택한다. 정상 종료 시 생성한 데이터만 정리하며, 프로세스를 강제 종료했다면 일회용 DB 컨테이너를 정리한다.
 
-첫 임무는 임무 통신 → 수락 → 창고 장비 장착 → 출격 → 임무 시설 이동 → 전투 → 탈출 → 보고 순서다. 개발용 개체 추가에서는 같은 인물·세계선도 반복 추가할 수 있다. 다른 개체를 선택하려면 진행 중 탐사와 미확인 전투 결과를 마쳐야 한다.
+첫 임무는 임무 통신 → 수락 → 창고 장비 장착 → 출격 → 임무 시설 이동 → 전투 → 탈출 → 보고 순서다. 개발용 개체 추가에서는 같은 인물의 변주도 반복 추가할 수 있다. 다른 개체를 선택하려면 진행 중 탐사와 미확인 전투 결과를 마쳐야 한다.
 
 지도 원본은 `packages/types/src/assets/map_graph.json` 하나이며 서버·화면·경로 탐색·테스트가 같은 파일을 읽는다. 인물·세계선·아이템·중첩 규칙·임무의 구체적 명칭과 수치는 기획 제안으로 관리한다.
 

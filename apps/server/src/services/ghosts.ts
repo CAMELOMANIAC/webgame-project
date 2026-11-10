@@ -82,7 +82,6 @@ export async function recordGhosts(
         rulesVersion: gameRules.ghost.rulesVersion,
         mapVersion: seopoMapVersion,
         variantId: character.variantId,
-        worldlineCode: character.variant.worldlineCode,
         combatant: JSON.parse(
           JSON.stringify({ ...combatant, time: visit.round }),
         ),
@@ -136,10 +135,11 @@ export async function matchGhost(
       ),
     );
   }
-  const snapshots = await db.query.ghostSnapshots.findMany({
-    where: and(...conditions),
-    orderBy: [desc(ghostSnapshots.createdAt), asc(ghostSnapshots.id)],
-  });
+  const snapshots = await db
+    .select()
+    .from(ghostSnapshots)
+    .where(and(...conditions))
+    .orderBy(desc(ghostSnapshots.createdAt), asc(ghostSnapshots.id));
   const match = snapshots.sort(
     (a, b) => Math.abs(a.round - round) - Math.abs(b.round - round),
   )[0];
@@ -155,7 +155,6 @@ export async function matchGhost(
       characterId: match.characterId,
       displayName: combatant.displayName ?? "고스트",
       variantId: match.variantId,
-      worldlineCode: match.worldlineCode,
     },
     combatant,
   };

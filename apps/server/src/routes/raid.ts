@@ -11,6 +11,7 @@ import {
   NavigateSchema,
   navigateRaid,
   RaidActionSchema,
+  resetRaidWithoutSession,
   startRaid,
 } from "../services/raid";
 import { claimBasicSupplies } from "../services/supplies";
@@ -50,6 +51,22 @@ export function registerRaidRoutes(
       return sendInventoryError(reply, error);
     }
   });
+  fastify.post<{ Params: { characterId: string } }>(
+    "/character/:characterId/raid/recover",
+    async (request, reply) => {
+      try {
+        await resetRaidWithoutSession(
+          database,
+          actor(request),
+          request.params.characterId,
+        );
+        return reply.status(204).send();
+      } catch (error) {
+        fastify.log.error(error);
+        return sendInventoryError(reply, error);
+      }
+    },
+  );
   fastify.post(
     "/character/:characterId/raid/navigate",
     async (request, reply) => {

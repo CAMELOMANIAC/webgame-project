@@ -97,6 +97,32 @@ async function ownedCharacter(
   return character;
 }
 
+export async function resetRaidWithoutSession(
+  database: Database,
+  userId: string,
+  characterId: string,
+) {
+  await withInventoryTransaction(database, async (tx) => {
+    const character = await ownedCharacter(tx, userId, characterId);
+    if (!character.isRaiding || character.activeRaid?.status === "ACTIVE")
+      return;
+
+    const activeSession = await tx.query.raidSessions.findFirst({
+      where: and(
+        eq(raidSessions.characterId, characterId),
+        eq(raidSessions.status, "ACTIVE"),
+      ),
+      columns: { id: true },
+    });
+    if (activeSession) return;
+
+    await tx
+      .update(characters)
+      .set({ isRaiding: false, activeRaidId: null, currentNodeId: 0, time: 0 })
+      .where(eq(characters.id, characterId));
+  });
+}
+
 export async function startRaid(
   database: Database,
   userId: string,

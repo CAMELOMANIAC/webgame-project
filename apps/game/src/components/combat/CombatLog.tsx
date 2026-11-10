@@ -36,7 +36,7 @@ const CombatLog = () => {
           )}
           {battle.encounter.kind === "GHOST" && (
             <span className={styles.encounterMeta}>
-              {battle.encounter.worldlineCode} · 개체{" "}
+              개체{" "}
               {battle.encounter.sourceCharacterId?.slice(0, 8) ?? "기록"} ·{" "}
               {battle.encounter.recordedRound}라운드 기록 ·{" "}
               {battle.encounter.recordedAt

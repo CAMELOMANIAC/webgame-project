@@ -1,10 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Item, RaidView } from "@webgame/types";
 import { useAtomValue } from "jotai";
 
 import { selectedUserIdAtom } from "@/atoms/authAtom";
 
 import { API_BASE_URL, apiFetch } from "../api";
+import { readApiResponse } from "../request";
 import {
   characterKey,
   type CharacterVariant,
@@ -75,6 +76,7 @@ export interface CharacterData {
 }
 
 export const useGetCharacter = (requestedUserId?: string) => {
+  const queryClient = useQueryClient();
   const selectedUserId = useAtomValue(selectedUserIdAtom);
   const userId = requestedUserId ?? selectedUserId;
   const roster = useCharacterRoster(userId ?? undefined);
@@ -82,14 +84,20 @@ export const useGetCharacter = (requestedUserId?: string) => {
   const characterQuery = useQuery<CharacterData>({
     enabled: !!userId && !!characterId,
     queryKey: characterKey(userId, characterId),
-    queryFn: async (): Promise<CharacterData> => {
-      const response = await apiFetch(
-        `${API_BASE_URL}/character/${characterId}`,
-      );
-      if (!response.ok) {
-        throw new Error("Failed to fetch character data");
+    queryFn: async ({ signal }): Promise<CharacterData> => {
+      const url = `${API_BASE_URL}/character/${characterId}`;
+      const fetchCharacter = async () =>
+        readApiResponse<CharacterResponse>(await apiFetch(url, { signal }));
+      let data = await fetchCharacter();
+      if (data.isRaiding && data.activeRaid?.status !== "ACTIVE") {
+        const response = await apiFetch(`${url}/raid/recover`, {
+          method: "POST",
+          signal,
+        });
+        if (!response.ok) await readApiResponse(response);
+        data = await fetchCharacter();
+        void queryClient.invalidateQueries({ queryKey: ["characters", userId] });
       }
-      const data: CharacterResponse = await response.json();
 
       // 정규화된 데이터 생성 함수
       const createEmptyWeapon = (index: number) => ({

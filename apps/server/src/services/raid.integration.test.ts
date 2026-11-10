@@ -32,6 +32,41 @@ const firstEdge = mapData.edges.find(
 if (!firstEdge) throw new Error("Test map needs an edge from node zero");
 const nextNode = firstEdge.source === 0 ? firstEdge.target : firstEdge.source;
 
+test("실제 DB: 활성 세션이 없는 탐사 상태만 거점으로 복구한다", async (t) => {
+  const { db, user, character, snapshot } = await integrationFixture(t);
+  const app = buildApp({ database: db, logger: false });
+  t.after(() => app.close());
+  const recover = () =>
+    app.inject({
+      method: "POST",
+      url: `/character/${character.id}/raid/recover`,
+      headers: { "x-dev-user-id": user.id },
+    });
+
+  await db
+    .update(characters)
+    .set({ isRaiding: true, currentNodeId: nextNode, time: 4, hp: 10 })
+    .where(eq(characters.id, character.id));
+  assert.equal((await recover()).statusCode, 204);
+  const { character: recovered } = await snapshot();
+  assert.equal(recovered.isRaiding, false);
+  assert.equal(recovered.activeRaidId, null);
+  assert.equal(recovered.currentNodeId, 0);
+  assert.equal(recovered.time, 0);
+  assert.equal(recovered.hp, 10);
+
+  const { raid } = await startRaid(db, user.id, character.id);
+  assert.equal((await recover()).statusCode, 204);
+  assert.equal((await snapshot()).character.activeRaidId, raid.id);
+
+  await db
+    .update(characters)
+    .set({ activeRaidId: null })
+    .where(eq(characters.id, character.id));
+  assert.equal((await recover()).statusCode, 204);
+  assert.equal((await snapshot()).character.isRaiding, true);
+});
+
 test("실제 DB: 중복 출격은 같은 탐사를 반환하고 체력을 초기화하지 않는다", async (t) => {
   const { db, user, character } = await integrationFixture(t);
   await db

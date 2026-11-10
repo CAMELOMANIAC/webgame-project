@@ -291,8 +291,12 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     }
   }, [isNavigating]);
 
+  const hasActiveRaid =
+    characterData?.raw.isRaiding &&
+    characterData.raw.activeRaid?.status === "ACTIVE";
+
   const startNavigation = (path: number[], targetB?: Building | null) => {
-    if (!characterData?.raw.isRaiding) return;
+    if (!hasActiveRaid) return;
     if (characterData && pendingNavigations[pendingNavigationKey(characterData.raw.userId, characterData.raw.id)]) return;
     if (path.length <= 1) return;
     if (!characterData?.raw.id) {
@@ -363,7 +367,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
   // 대상 노드 선택 시 네비게이션 트리거 (개발 모드인 경우 승인 단계를 거치고, 일반 모드면 즉시 출발)
   const handleTargetSelect = (targetId: number, targetBuilding?: Building) => {
-    if (isNavigating || isCombat || !characterData?.raw.isRaiding) {
+    if (isNavigating || isCombat || !hasActiveRaid) {
       return;
     }
     setTargetBuilding(targetBuilding || null);

@@ -142,7 +142,6 @@ export async function executeHanlimBattleInTransaction(
       faction: npc.faction,
       role: npc.role,
       reason: npc.reason,
-      worldlineCode: npc.worldlineCode,
     },
   };
 }
@@ -222,7 +221,6 @@ export async function executeGhostBattleInTransaction(
       recordedRound: ghost.round,
       recordedAt: ghost.createdAt,
       sourceCharacterId: ghost.source.characterId,
-      worldlineCode: ghost.source.worldlineCode,
     },
   };
 }

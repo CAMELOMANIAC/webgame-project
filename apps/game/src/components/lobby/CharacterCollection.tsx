@@ -96,8 +96,7 @@ export default function CharacterCollection({
                 </span>
               </div>
               <span className={styles.metaRow}>
-                {character.variant?.worldlineCode ?? "미분류"} · 개체{" "}
-                {character.id.slice(0, 8)}
+                개체 {character.id.slice(0, 8)}
               </span>
               <span className={styles.statRow}>
                 HP {character.hp}/{character.maxHp} · 무게 {character.weight}kg
@@ -109,8 +108,7 @@ export default function CharacterCollection({
       <details className={styles.details}>
         <summary className={styles.summary}>개발용 개체 추가</summary>
         <p className={styles.description}>
-          수집 기능 검증용입니다. 인물·세계선 명칭과 획득 방식은 기획
-          제안입니다.
+          수집 기능 검증용입니다. 인물 명칭과 획득 방식은 기획 제안입니다.
         </p>
         <div className={styles.variantActions}>
           {variants.data?.map((variant) => (
@@ -121,8 +119,7 @@ export default function CharacterCollection({
               disabled={locked}
               onClick={() => recruit.mutate(variant.id)}
             >
-              {variant.definition?.name ?? "생존자"} · {variant.worldlineCode}{" "}
-              추가
+              {variant.definition?.name ?? "생존자"} · {variant.id} 추가
             </button>
           ))}
         </div>

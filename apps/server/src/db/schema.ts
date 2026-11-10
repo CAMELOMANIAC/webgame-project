@@ -70,18 +70,11 @@ export const characterVariants = pgTable(
         onDelete: "restrict",
         onUpdate: "cascade",
       }),
-    worldlineCode: text("worldlineCode").notNull(),
     maxHp: integer("maxHp").notNull().default(100),
     maxStamina: integer("maxStamina").notNull().default(100),
     staminaRegen: integer("staminaRegen").notNull().default(10),
     maxWeight: integer("maxWeight").notNull().default(50),
   },
-  (table) => [
-    uniqueIndex("CharacterVariant_definitionId_worldlineCode_key").on(
-      table.definitionId,
-      table.worldlineCode,
-    ),
-  ],
 );
 
 export const characters = pgTable(
@@ -348,7 +341,6 @@ export const ghostSnapshots = pgTable(
     mapVersion: text("mapVersion").notNull().default("seopo-prototype-1"),
     combatant: jsonb("combatant"),
     variantId: text("variantId"),
-    worldlineCode: text("worldlineCode"),
   },
   (table) => [
     uniqueIndex("GhostSnapshot_raidId_round_nodeId_key").on(

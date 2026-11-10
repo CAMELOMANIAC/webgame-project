@@ -49,6 +49,7 @@ const FieldNavTargetSection = () => {
     !!pending[pendingNavigationKey(character?.userId, character?.id)];
   const canAct =
     !!character?.isRaiding &&
+    character.activeRaid?.status === "ACTIVE" &&
     !isMoving &&
     !isCombat &&
     !hasPending &&

@@ -14,7 +14,7 @@ import { recruitDevelopmentCharacter, selectCharacter } from "./characters";
 import { moveStashItem } from "./inventory";
 import { extractRaid, startRaid } from "./raid";
 
-test("실제 DB: 같은 인물·세계선의 두 개체는 체력과 장비·탐사 상태가 독립적이다", async (t) => {
+test("실제 DB: 같은 변주의 두 개체는 체력과 장비·탐사 상태가 독립적이다", async (t) => {
   const { db, user, character, weapon } = await integrationFixture(t);
   const twin = await recruitDevelopmentCharacter(db, user.id, "legacy-origin");
   assert.notEqual(twin.id, character.id);
