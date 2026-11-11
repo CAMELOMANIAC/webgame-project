@@ -5,7 +5,7 @@ export const firstMissionNodeId = 26;
 export interface RegionContext {
   id: string;
   name: string;
-  facility: "LAB" | "ARCHIVE" | "RELIEF" | "INFRASTRUCTURE";
+  facility: "SHELTER" | "ARCHIVE" | "RELIEF" | "INFRASTRUCTURE";
   overlap: "STABLE" | "UNSTABLE";
   encounter: "SAFE" | "SUPPORT" | "HOSTILE";
   extraction: boolean;
@@ -19,9 +19,9 @@ export function seopoRegion(
 ): RegionContext {
   if (nodeId === 0)
     return {
-      id: "hanlim-lab",
-      name: "기업 복귀 실험실",
-      facility: "LAB",
+      id: "temp-shelter",
+      name: "임시 대피 구역",
+      facility: "SHELTER",
       overlap: "STABLE",
       encounter: "SAFE",
       extraction: true,
