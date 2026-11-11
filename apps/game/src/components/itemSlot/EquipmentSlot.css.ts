@@ -15,6 +15,7 @@ export const slot = recipe({
     backdropFilter: "blur(8px)",
     borderRadius: vars.radius.control,
     color: vars.text.primary,
+    userSelect: "none",
     touchAction: "none",
     overflow: "visible",
     transition: "border-color 0.15s ease, background-color 0.15s ease",

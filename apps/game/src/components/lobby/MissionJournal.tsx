@@ -122,7 +122,7 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
             {mission.status === "ACTIVE" && (
               <p className={styles.noticeText({ tone: "positive" })}>
                 {mode === "base"
-                  ? "지원 장비를 창고에서 꺼내 장착하세요. 출격 후 지도에서 임무 목표로 이동할 수 있습니다."
+                  ? "지원 장비를 창고에서 꺼내 장착하세요. 배치 후 지도에서 임무 목표로 이동할 수 있습니다."
                   : "전술지도에서 임무 목표로 이동해 기록을 확보하세요."}
               </p>
             )}

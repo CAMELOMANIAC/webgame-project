@@ -13,6 +13,8 @@ export interface StashItemResponse {
   weaponMaster: {
     id: string;
     name: string;
+    iconKey: string;
+    attackType: "MELEE" | "RANGED";
     weight: number;
     value: number;
     damage: number;

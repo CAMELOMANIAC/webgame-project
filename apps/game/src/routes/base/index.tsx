@@ -29,7 +29,7 @@ function BaseHome() {
   return (
     <BaseScreen
       title="기업 복귀 실험실"
-      description="선택한 개체의 출격 상태와 임무 통신을 확인합니다."
+      description="선택한 개체의 배치 상태와 임무 통신을 확인합니다."
     >
       {notice && (
         <p className={styles.banner({ tone: "neutral" })} role="status">

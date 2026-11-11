@@ -17,13 +17,14 @@ import {
 
 import { currentTimeAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { isCombatAtom } from "@/atoms/raidAtom";
-import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
+import { type CharacterData, useGetCharacter } from "@/utils/hooks/useGetCharacter";
 
 import * as styles from "./EquipmentSlot.css";
 
 interface EquipmentSlotProps {
   item: Item;
   index: number;
+  characterData?: CharacterData;
 }
 
 const getWeaponIcon = (iconKey = "WEAPON") => {
@@ -40,11 +41,16 @@ const getWeaponIcon = (iconKey = "WEAPON") => {
   return <Icon size={20} color="#fafafa" />;
 };
 
-const EquipmentSlot = ({ item, index }: EquipmentSlotProps) => {
+const EquipmentSlot = ({
+  item,
+  index,
+  characterData: propCharacterData,
+}: EquipmentSlotProps) => {
   const isCombat = useAtomValue(isCombatAtom);
   const currentTime = useAtomValue(currentTimeAtom);
   const processedEvents = useAtomValue(processedEventsAtom);
-  const { data: characterData } = useGetCharacter();
+  const { data: queriedCharacterData } = useGetCharacter();
+  const characterData = propCharacterData ?? queriedCharacterData;
 
   const isEmpty = item.id.toString().includes("empty");
   const rawEquipmentItem = characterData?.raw.equipment[index];

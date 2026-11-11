@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Database } from "../db";
 import { gameRules } from "../logic/rules";
-import { InventoryError } from "../services/inventory";
+import { InventoryError, SlotsSchema } from "../services/inventory";
 import {
   extractionNodeIds,
   extractRaid,
@@ -34,7 +34,11 @@ export function registerRaidRoutes(
   fastify.post("/character/:characterId/raid/start", async (request, reply) => {
     try {
       const { characterId } = request.params as { characterId: string };
-      return await startRaid(database, actor(request), characterId);
+      const loadout =
+        request.body !== undefined && request.body !== null
+          ? SlotsSchema.parse(request.body)
+          : undefined;
+      return await startRaid(database, actor(request), characterId, loadout);
     } catch (error) {
       fastify.log.error(error);
       return sendInventoryError(reply, error);

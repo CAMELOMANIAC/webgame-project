@@ -29,7 +29,7 @@ const Backpack = memo(({ characterData, isLoading, isError }: BackpackProps) => 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h3 className={styles.title}>출격 가방</h3>
+        <h3 className={styles.title}>배치 가방</h3>
         <span className={styles.subCode}>
           PACK // {occupiedCount} / {characterData?.inventory.length ?? 32}
         </span>

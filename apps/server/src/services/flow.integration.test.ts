@@ -14,7 +14,7 @@ import {
 import { integrationFixture } from "../testing/integrationFixture";
 import { extractRaid, fightRaidMonster, startRaid } from "./raid";
 
-test("실제 DB: 사망은 탐사를 종료하고 소지품을 소실시킨 뒤 재출격을 허용한다", async (t) => {
+test("실제 DB: 사망은 탐사를 종료하고 소지품을 소실시킨 뒤 재배치를 허용한다", async (t) => {
   const { db, user, character, weapon, monsterIds } =
     await integrationFixture(t);
   await db

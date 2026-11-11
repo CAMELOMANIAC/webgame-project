@@ -67,7 +67,7 @@ test("실제 DB: 활성 세션이 없는 탐사 상태만 거점으로 복구한
   assert.equal((await snapshot()).character.isRaiding, true);
 });
 
-test("실제 DB: 중복 출격은 같은 탐사를 반환하고 체력을 초기화하지 않는다", async (t) => {
+test("실제 DB: 중복 배치는 같은 탐사를 반환하고 체력을 초기화하지 않는다", async (t) => {
   const { db, user, character } = await integrationFixture(t);
   await db
     .update(characters)

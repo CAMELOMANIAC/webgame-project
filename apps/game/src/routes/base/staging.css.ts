@@ -1,5 +1,4 @@
 import { style } from "@vanilla-extract/css";
-import { recipe } from "@vanilla-extract/recipes";
 
 import { vars } from "@/styles/theme.css";
 
@@ -9,7 +8,7 @@ export const container = style({
   width: "100%",
   maxWidth: "1200px",
   margin: "0 auto",
-  padding: "20px 16px 120px",
+  padding: "20px 16px 148px",
   color: vars.text.primary,
   gap: "16px",
 });
@@ -113,108 +112,49 @@ export const contentArea = style({
   minWidth: 0,
 });
 
-export const floatingDock = style({
+export const floatingCtaContainer = style({
   position: "fixed",
-  bottom: "20px",
+  bottom: "82px",
   left: "16px",
   right: "16px",
-  maxWidth: "760px",
-  margin: "0 auto",
-  zIndex: 40,
-  backgroundColor: "rgba(16, 16, 20, 0.94)",
-  backdropFilter: "blur(16px)",
-  WebkitBackdropFilter: "blur(16px)",
-  border: "1px solid rgba(255, 255, 255, 0.15)",
-  borderRadius: vars.radius.panel,
-  boxShadow:
-    "0 12px 32px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05)",
-  padding: "10px 14px",
+  zIndex: 25,
+  display: "flex",
+  justifyContent: "center",
+  pointerEvents: "none",
+});
+
+export const floatingCtaButton = style({
+  minHeight: "48px",
+  minWidth: "220px",
+  maxWidth: "360px",
+  width: "100%",
+  padding: "0 24px",
+  border: 0,
+  borderRadius: vars.radius.control,
+  backgroundColor: vars.color.ctaBg,
+  color: vars.color.ctaFg,
+  fontSize: "14px",
+  fontWeight: 700,
+  letterSpacing: "-0.01em",
+  cursor: "pointer",
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between",
-  gap: "14px",
-  "@media": {
-    "(max-width: 540px)": {
-      flexDirection: "column",
-      alignItems: "stretch",
-      gap: "10px",
-      bottom: "12px",
-      left: "12px",
-      right: "12px",
-      padding: "12px",
+  justifyContent: "center",
+  pointerEvents: "auto",
+  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(250, 250, 250, 0.16)",
+  transition: "background-color 0.15s ease, transform 0.1s ease, opacity 0.15s ease",
+  selectors: {
+    "&:hover:not(:disabled)": {
+      backgroundColor: vars.color.ctaHover,
+    },
+    "&:active:not(:disabled)": {
+      transform: "scale(0.98)",
+    },
+    "&:disabled": {
+      opacity: 0.45,
+      cursor: "default",
     },
   },
-});
-
-export const dockInfo = style({
-  display: "flex",
-  flexDirection: "column",
-  gap: "2px",
-  minWidth: 0,
-});
-
-export const dockTag = style({
-  fontFamily: vars.font.mono,
-  fontSize: "10px",
-  fontWeight: 600,
-  color: vars.text.muted,
-  letterSpacing: "0.06em",
-  fontVariantNumeric: "tabular-nums",
-});
-
-export const dockTitle = style({
-  fontSize: "13px",
-  fontWeight: 600,
-  color: vars.text.primary,
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-});
-
-export const dockCtaButton = recipe({
-  base: {
-    minHeight: "46px",
-    padding: "0 22px",
-    border: 0,
-    borderRadius: vars.radius.control,
-    backgroundColor: vars.color.ctaBg,
-    color: vars.color.ctaFg,
-    fontSize: "13px",
-    fontWeight: 700,
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "12px",
-    whiteSpace: "nowrap",
-    flexShrink: 0,
-    boxShadow: "0 4px 14px rgba(250, 250, 250, 0.18)",
-    transition: "background-color 0.15s ease, transform 0.1s ease",
-    selectors: {
-      "&:hover:not(:disabled)": {
-        backgroundColor: vars.color.ctaHover,
-      },
-      "&:active:not(:disabled)": {
-        transform: "scale(0.98)",
-      },
-      "&:disabled": {
-        opacity: 0.45,
-        cursor: "default",
-      },
-    },
-    "@media": {
-      "(max-width: 540px)": {
-        width: "100%",
-        justifyContent: "space-between",
-      },
-    },
-  },
-});
-
-export const buttonCode = style({
-  fontFamily: vars.font.mono,
-  fontSize: "11px",
-  opacity: 0.85,
 });
 
 export const summaryCard = style({

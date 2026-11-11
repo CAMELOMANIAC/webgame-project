@@ -1,8 +1,10 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useSetAtom } from "jotai";
-import { motion } from "motion/react";
+import { useAtomValue, useSetAtom } from "jotai";
+import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 
+import { selectedUserIdAtom } from "@/atoms/authAtom";
 import { battleLogAtom } from "@/atoms/globalAtom";
 import {
   currentNodeIdAtom,
@@ -15,14 +17,26 @@ import {
 } from "@/atoms/raidAtom";
 import * as baseStyles from "@/components/lobby/BaseScreen.css";
 import CharacterCollection from "@/components/lobby/CharacterCollection";
+import { LoadoutEditor } from "@/components/lobby/LoadoutEditor";
 import { page } from "@/styles/theme.css";
-import { useGearActions } from "@/utils/hooks/useGearActions";
-import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
-import { useGetStash } from "@/utils/hooks/useGetStash";
-import { useMoveStashItem } from "@/utils/hooks/useMoveStashItem";
+import { characterKey } from "@/utils/hooks/useCharacterCollection";
+import {
+  type CharacterData,
+  useGetCharacter,
+} from "@/utils/hooks/useGetCharacter";
+import {
+  type StashItemResponse,
+  useGetStash,
+} from "@/utils/hooks/useGetStash";
 import { useRaidSession } from "@/utils/hooks/useRaidSession";
 
 import * as styles from "./staging.css";
+
+interface StagingLoadoutDraft {
+  characterId: string;
+  characterData: CharacterData;
+  stash: StashItemResponse[];
+}
 
 export const Route = createFileRoute("/base/staging")({
   component: ExpeditionStagingScreen,
@@ -30,11 +44,12 @@ export const Route = createFileRoute("/base/staging")({
 
 function ExpeditionStagingScreen() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const selectedUserId = useAtomValue(selectedUserIdAtom);
   const [step, setStep] = useState<1 | 2>(1);
+  const [draft, setDraft] = useState<StagingLoadoutDraft | null>(null);
   const characterQuery = useGetCharacter();
   const stashQuery = useGetStash();
-  const { equip } = useGearActions();
-  const moveItemMutation = useMoveStashItem();
   const { startRaid } = useRaidSession();
 
   const setNotice = useSetAtom(raidNoticeAtom);
@@ -46,73 +61,74 @@ function ExpeditionStagingScreen() {
   const setCoords = useSetAtom(playerCoordsAtom);
   const setBattleLog = useSetAtom(battleLogAtom);
 
-  const character = characterQuery.data?.raw;
-  const stash = stashQuery.data ?? [];
-  const backpack = character?.inventory ?? [];
-  const filledBackpack = backpack.filter((slot) => Boolean(slot.weaponMaster));
-  const gearLocked =
-    !character || moveItemMutation.isPending || equip.isPending;
+  const serverCharacterData = characterQuery.data;
+  const serverStash = stashQuery.data ?? [];
+  const activeDraft =
+    draft &&
+    serverCharacterData &&
+    draft.characterId === serverCharacterData.raw.id
+      ? draft
+      : null;
+  const effectiveCharacterData = activeDraft
+    ? activeDraft.characterData
+    : serverCharacterData;
+  const effectiveStash = activeDraft ? activeDraft.stash : serverStash;
+  const character = effectiveCharacterData?.raw;
 
   const equippedWeapons =
     character?.equipment.filter((e) => e.weaponMaster) ?? [];
   const isArmed = equippedWeapons.length > 0;
 
-  // 장비 장착 / 해제 / 이동 핸들러
-  const handleEquip = (weaponMasterId: string) => {
-    if (!character || gearLocked) return;
-    const slot = character.equipment.find((item) => !item.weaponMaster);
-    if (!slot) {
-      alert("출격 장비 슬롯이 가득 찼습니다.");
-      return;
-    }
-    equip.mutate({
-      characterId: character.id,
-      weaponMasterId,
-      slotIndex: slot.slotIndex,
-    });
-  };
-
-  const handleMoveToBackpack = (weaponMasterId: string) => {
-    if (!character || gearLocked) return;
-    const emptySlot = backpack.find((slot) => !slot.weaponMaster);
-    if (!emptySlot) {
-      alert("가방 슬롯이 가득 찼습니다.");
-      return;
-    }
-    moveItemMutation.mutate({
-      characterId: character.id,
-      direction: "to_backpack",
-      weaponMasterId,
-      slotIndex: emptySlot.slotIndex,
-    });
-  };
-
-  const handleMoveToStash = (weaponMasterId: string, slotIndex: number) => {
-    if (!character || gearLocked) return;
-    moveItemMutation.mutate({
-      characterId: character.id,
-      direction: "to_stash",
-      weaponMasterId,
-      slotIndex,
-    });
-  };
-
-  // 최종 출격 실행
+  // 최종 배치 실행 (이동/장착 변경사항을 배치 시작 요청과 함께 한 번에 전송)
   const handleConfirmDeploy = () => {
-    if (!character || startRaid.isPending) return;
-    startRaid.mutate(character.id, {
-      onSuccess: ({ raid }) => {
-        setNotice(null);
-        setNode(raid.currentNodeId);
-        setIsCombat(false);
-        setIsNavigating(false);
-        setTarget(null);
-        setPath([]);
-        setCoords(null);
-        setBattleLog(null);
-        void navigate({ to: "/field", replace: true });
+    if (!character || !effectiveCharacterData || startRaid.isPending) return;
+    const equipment = effectiveCharacterData.raw.equipment
+      .filter((w) => w.weaponMaster !== null)
+      .map((w) => ({
+        weaponMasterId: w.weaponMaster!.id,
+        slotIndex: w.slotIndex,
+      }));
+    const inventory = effectiveCharacterData.raw.inventory
+      .filter((i) => i.weaponMaster !== null && i.quantity > 0)
+      .map((i) => ({
+        weaponMasterId: i.weaponMaster!.id,
+        slotIndex: i.slotIndex,
+        quantity: i.quantity,
+      }));
+
+    startRaid.mutate(
+      {
+        characterId: character.id,
+        loadout: { equipment, inventory },
       },
-    });
+      {
+        onSuccess: ({ raid }) => {
+          queryClient.setQueryData<CharacterData>(
+            characterKey(selectedUserId, character.id),
+            {
+              ...effectiveCharacterData,
+              raw: {
+                ...effectiveCharacterData.raw,
+                isRaiding: true,
+                activeRaid: raid,
+                activeRaidId: raid.id,
+                currentNodeId: raid.currentNodeId,
+              },
+            },
+          );
+          setDraft(null);
+          setNotice(null);
+          setNode(raid.currentNodeId);
+          setIsCombat(false);
+          setIsNavigating(false);
+          setTarget(null);
+          setPath([]);
+          setCoords(null);
+          setBattleLog(null);
+          void navigate({ to: "/field", replace: true });
+        },
+      },
+    );
   };
 
   const handleBack = () => {
@@ -156,11 +172,11 @@ function ExpeditionStagingScreen() {
           <p className={styles.stepDescription}>
             {step === 1
               ? "1단계: 이번 탐사에 투입할 대원을 선택하세요."
-              : "2단계: 출격할 대원의 무기를 장착하고 공용 창고에서 물품을 보급하세요."}
+              : "2단계: 배치할 대원의 무기를 장착하고 공용 창고에서 물품을 보급하세요."}
           </p>
         </header>
 
-        {/* STEP 1: 출격 대원 선택 (Character Selection) */}
+        {/* STEP 1: 배치 대원 선택 (Character Selection) */}
         {step === 1 && (
           <div className={styles.contentArea}>
             <CharacterCollection readOnly={false} />
@@ -168,7 +184,7 @@ function ExpeditionStagingScreen() {
             {character ? (
               <div className={styles.summaryCard}>
                 <div className={styles.summaryHeader}>
-                  <h2 className={styles.summaryTitle}>선택된 출격 대원</h2>
+                  <h2 className={styles.summaryTitle}>선택된 배치 대원</h2>
                   <span className={styles.telemetryCode}>
                     OPERATOR // #{character.id.slice(0, 8)}
                   </span>
@@ -186,7 +202,7 @@ function ExpeditionStagingScreen() {
               </div>
             ) : (
               <div className={styles.warningBox}>
-                출격할 대원을 위 목록에서 선택해 주세요.
+                배치할 대원을 위 목록에서 선택해 주세요.
               </div>
             )}
           </div>
@@ -197,7 +213,7 @@ function ExpeditionStagingScreen() {
           <div className={styles.contentArea}>
             {!isArmed && (
               <div className={styles.warningBox}>
-                ⚠️ 주의: 현재 무기가 장착되어 있지 않습니다. 비무장 상태로 출격하면
+                ⚠️ 주의: 현재 무기가 장착되어 있지 않습니다. 비무장 상태로 배치하면
                 적대 개체와 조우 시 큰 피해를 입을 수 있습니다. 아래 창고에서 무기를
                 장착하세요.
               </div>
@@ -209,184 +225,63 @@ function ExpeditionStagingScreen() {
               </div>
             )}
 
-            <div className={baseStyles.inventoryStashArea}>
-              {/* 1. 출격 장비 슬롯 */}
-              <div className={baseStyles.sectionPanel}>
-                <h2 className={baseStyles.sectionHeader}>
-                  <span>출격 장비</span>
-                  <span className={baseStyles.sectionCode}>
-                    LOADOUT // {equippedWeapons.length}/
-                    {character.equipment.length}
-                  </span>
-                </h2>
-                <div className={baseStyles.itemGrid}>
-                  {character.equipment.map((slot) =>
-                    slot.weaponMaster ? (
-                      <motion.button
-                        key={slot.id}
-                        disabled={gearLocked}
-                        className={baseStyles.itemSlotButton({ equipped: true })}
-                        onClick={() =>
-                          equip.mutate({
-                            characterId: character.id,
-                            weaponMasterId: null,
-                            slotIndex: slot.slotIndex,
-                          })
-                        }
-                      >
-                        <div className={baseStyles.slotTopMeta}>
-                          <span>EQ-0{slot.slotIndex + 1}</span>
-                          <span>해제</span>
-                        </div>
-                        <p className={baseStyles.itemName}>{slot.weaponMaster.name}</p>
-                        <span className={baseStyles.itemDetails}>
-                          DMG {slot.weaponMaster.damage} · {slot.weaponMaster.weight}kg
-                        </span>
-                      </motion.button>
-                    ) : (
-                      <div className={baseStyles.emptySlot} key={slot.id}>
-                        <span className={baseStyles.emptySlotCode}>EMPTY</span>
-                        <span className={baseStyles.emptySlotIndex}>
-                          장비 {slot.slotIndex + 1}
-                        </span>
-                      </div>
-                    ),
-                  )}
-                </div>
-              </div>
-
-              {/* 2. 공용 창고 */}
-              <div className={baseStyles.sectionPanel}>
-                <h2 className={baseStyles.sectionHeader}>
-                  <span>거점 공용 창고</span>
-                  <span className={baseStyles.sectionCode}>
-                    STASH // {stash.length} ITEMS
-                  </span>
-                </h2>
-                <div className={baseStyles.itemGrid}>
-                  {stash.length === 0 ? (
-                    <p className={baseStyles.emptyMessage}>보관 중인 물품이 없습니다.</p>
-                  ) : (
-                    stash.map((item) => (
-                      <motion.button
-                        disabled={gearLocked}
-                        key={item.id}
-                        className={baseStyles.itemSlotButton({ equipped: false })}
-                        onClick={() => handleMoveToBackpack(item.weaponMasterId)}
-                      >
-                        <div className={baseStyles.slotTopMeta}>
-                          <span>STASH</span>
-                          <span className={baseStyles.quantityBadge}>
-                            ×{item.quantity}
-                          </span>
-                        </div>
-                        <p className={baseStyles.itemName}>{item.weaponMaster.name}</p>
-                        <span className={baseStyles.itemDetails}>
-                          DMG {item.weaponMaster.damage} · {item.weaponMaster.weight}kg
-                        </span>
-                      </motion.button>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* 3. 출격 가방 */}
-              <div className={baseStyles.sectionPanel}>
-                <h2 className={baseStyles.sectionHeader}>
-                  <span>출격 가방</span>
-                  <span className={baseStyles.sectionCode}>
-                    PACK // {filledBackpack.length} / 32
-                  </span>
-                </h2>
-                <div className={baseStyles.itemGrid}>
-                  {filledBackpack.length === 0 ? (
-                    <p className={baseStyles.emptyMessage}>
-                      가방에 보관 중인 물품이 없습니다.
-                    </p>
-                  ) : (
-                    filledBackpack.map((slot) => (
-                      <div className={baseStyles.slotActions} key={slot.id}>
-                        <motion.button
-                          disabled={gearLocked}
-                          className={baseStyles.itemSlotButton({ equipped: false })}
-                          onClick={() =>
-                            handleMoveToStash(slot.weaponMaster!.id, slot.slotIndex)
-                          }
-                        >
-                          <div className={baseStyles.slotTopMeta}>
-                            <span>
-                              #{String(slot.slotIndex + 1).padStart(2, "0")}
-                            </span>
-                            <span className={baseStyles.quantityBadge}>
-                              ×{slot.quantity}
-                            </span>
-                          </div>
-                          <p className={baseStyles.itemName}>
-                            {slot.weaponMaster!.name}
-                          </p>
-                          <span className={baseStyles.itemDetails}>
-                            DMG {slot.weaponMaster!.damage} · 창고 이관
-                          </span>
-                        </motion.button>
-                        <button
-                          type="button"
-                          className={baseStyles.smallAction}
-                          disabled={gearLocked}
-                          onClick={() => handleEquip(slot.weaponMaster!.id)}
-                        >
-                          하나 장착
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
+            <LoadoutEditor
+              characterData={effectiveCharacterData}
+              isLoading={characterQuery.isLoading}
+              stash={effectiveStash}
+              disabled={startRaid.isPending}
+              commitMode="deferred"
+              onDraftChange={(nextCharacterData, nextStash) => {
+                setDraft({
+                  characterId: nextCharacterData.raw.id,
+                  characterData: nextCharacterData,
+                  stash: nextStash,
+                });
+              }}
+            />
           </div>
         )}
 
-        {/* STEP 1 플로팅 하단 CTA 독 */}
-        {step === 1 && canProceedStep1 && character && (
-          <aside className={styles.floatingDock} aria-label="출격 대원 확정 독">
-            <div className={styles.dockInfo}>
-              <span className={styles.dockTag}>대원 선택 완료 // 01</span>
-              <span className={styles.dockTitle}>
-                {character.displayName} (체력 {character.hp}/{character.maxHp})
-              </span>
-            </div>
-            <button
-              type="button"
-              className={styles.dockCtaButton()}
-              onClick={() => setStep(2)}
+        {/* 플로팅 하단 CTA 버튼 */}
+        <AnimatePresence mode="wait">
+          {step === 1 && canProceedStep1 && character && (
+            <motion.div
+              key="staging-cta-step1"
+              className={styles.floatingCtaContainer}
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.8 }}
             >
-              <span>다음: 장비 선택</span>
-              <span className={styles.buttonCode}>LOADOUT →</span>
-            </button>
-          </aside>
-        )}
-
-        {/* STEP 2 플로팅 하단 CTA 독 */}
-        {step === 2 && canDeploy && character && (
-          <aside className={styles.floatingDock} aria-label="원정 최종 출격 독">
-            <div className={styles.dockInfo}>
-              <span className={styles.dockTag}>원정 출격 준비 // 02</span>
-              <span className={styles.dockTitle}>
-                {character.displayName} · {equippedWeapons.length}개 무기 장착
-              </span>
-            </div>
-            <button
-              type="button"
-              disabled={startRaid.isPending}
-              className={styles.dockCtaButton()}
-              onClick={handleConfirmDeploy}
+              <button
+                type="button"
+                className={styles.floatingCtaButton}
+                onClick={() => setStep(2)}
+              >
+                장비 선택 →
+              </button>
+            </motion.div>
+          )}
+          {step === 2 && canDeploy && character && (
+            <motion.div
+              key="staging-cta-step2"
+              className={styles.floatingCtaContainer}
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.8 }}
             >
-              <span>
-                {startRaid.isPending ? "출격 인스턴스 전이 중…" : "최종 탐사 출격 승인"}
-              </span>
-              <span className={styles.buttonCode}>EMBARK → #00</span>
-            </button>
-          </aside>
-        )}
+              <button
+                type="button"
+                disabled={startRaid.isPending}
+                className={styles.floatingCtaButton}
+                onClick={handleConfirmDeploy}
+              >
+                {startRaid.isPending ? "배치 중…" : "탐사 배치"}
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

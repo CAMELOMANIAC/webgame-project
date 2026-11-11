@@ -6,7 +6,7 @@
 
 ## 기본 루프
 
-거점 정비 → 선택 개체 출격 → 연결된 지도 경로 이동 → NPC·고스트 전투 → 보상 → 탈출 또는 사망 → 거점 복귀.
+거점 정비 → 선택 개체 배치 → 연결된 지도 경로 이동 → NPC·고스트 전투 → 보상 → 탈출 또는 사망 → 거점 복귀.
 
 - 서버가 체력·스태미나·장비·가방·창고·탐사 상태·임무 진행을 트랜잭션으로 확정한다.
 - 전투 결과에는 시작·최종 참가자 상태, 공격·회복·자원·종료 이벤트, 승패·종료 이유를 포함한다.
@@ -47,8 +47,8 @@
 | POST `/character/:characterId/inventory/move`       | 창고↔가방 수량 이동                         |
 | PATCH `/character/:characterId/equipment`           | 하나 장착·해제                              |
 | POST `/character/:characterId/slots/sync`           | 전체 수량을 보존하는 슬롯 변경              |
-| GET `/raid/rules`                                   | 출격·탈출 노드, 지도 버전        |
-| POST `/character/:characterId/raid/start`           | 선택 개체 출격. 중복 시작은 기존 탐사 반환  |
+| GET `/raid/rules`                                   | 배치·탈출 노드, 지도 버전        |
+| POST `/character/:characterId/raid/start`           | 선택 개체 배치. 중복 시작은 기존 탐사 반환  |
 | POST `/character/:characterId/raid/navigate`        | 경로·버전 검증, 고스트 기록, 조우·전투·정산 |
 | POST `/character/:characterId/raid/extract`         | 지정 지점에서 한 번만 탈출 정산             |
 | GET `/ghost/match?nodeId=26&round=2`                | 위치·라운드 조건에 맞는 다른 계정 기록 조회 |

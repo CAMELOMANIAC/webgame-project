@@ -197,6 +197,115 @@ export async function syncSlotsInTransaction(
   };
 }
 
+/**
+ * 캐릭터(장비·가방)와 공용 창고의 총 보유 수량 풀을 기준으로 새 로드아웃 후 창고 잔여 수량을 계산한다.
+ */
+export function reconcileLoadoutWithStash(
+  pool: ReadonlyMap<string, number>,
+  stashCounts: ReadonlyMap<string, number>,
+  requestedCounts: ReadonlyMap<string, number>,
+): Map<string, number> {
+  for (const [weaponMasterId, requestedQty] of requestedCounts) {
+    const available = pool.get(weaponMasterId) ?? 0;
+    if (requestedQty > available) {
+      throw new InventoryError("Insufficient items in character and stash");
+    }
+  }
+
+  const nextStash = new Map<string, number>();
+  for (const [weaponMasterId, totalQty] of pool) {
+    const requestedQty = requestedCounts.get(weaponMasterId) ?? 0;
+    const nextQty = totalQty - requestedQty;
+    const prevQty = stashCounts.get(weaponMasterId) ?? 0;
+    if (nextQty !== prevQty) {
+      nextStash.set(weaponMasterId, nextQty);
+    }
+  }
+  return nextStash;
+}
+
+/**
+ * 배치 시작 시점에 캐릭터 장비·가방과 유저 공용 창고 수량을 단일 트랜잭션으로 정산·반영한다.
+ */
+export async function syncLoadoutWithStashInTransaction(
+  tx: Tx,
+  userId: string,
+  characterId: string,
+  input: SlotsInput,
+) {
+  const data = SlotsSchema.parse(input);
+  const character = await getCharacter(tx, characterId);
+  if (character.userId !== userId) {
+    throw new InventoryError("User does not own this character", 403);
+  }
+
+  const [stash, equipment, inventory] = await Promise.all([
+    tx.query.stashItems.findMany({
+      where: eq(stashItems.userId, userId),
+      orderBy: [asc(stashItems.id)],
+    }),
+    tx.query.characterWeapons.findMany({
+      where: eq(characterWeapons.characterId, characterId),
+    }),
+    tx.query.raidInventoryItems.findMany({
+      where: eq(raidInventoryItems.characterId, characterId),
+    }),
+  ]);
+
+  const stashRowsByWeapon = new Map<string, StashItem[]>();
+  for (const row of stash) {
+    const list = stashRowsByWeapon.get(row.weaponMasterId);
+    if (list) list.push(row);
+    else stashRowsByWeapon.set(row.weaponMasterId, [row]);
+  }
+
+  const stashCounts = countItems([], stash);
+  const charCounts = countItems(equipment, inventory);
+  const pool = new Map<string, number>();
+  for (const [id, qty] of stashCounts) pool.set(id, (pool.get(id) ?? 0) + qty);
+  for (const [id, qty] of charCounts) pool.set(id, (pool.get(id) ?? 0) + qty);
+
+  const requestedCounts = countItems(data.equipment, data.inventory);
+  const changedStashQuantities = reconcileLoadoutWithStash(
+    pool,
+    stashCounts,
+    requestedCounts,
+  );
+
+  await tx
+    .delete(characterWeapons)
+    .where(eq(characterWeapons.characterId, characterId));
+  await tx
+    .delete(raidInventoryItems)
+    .where(eq(raidInventoryItems.characterId, characterId));
+
+  if (data.equipment.length > 0) {
+    await tx
+      .insert(characterWeapons)
+      .values(data.equipment.map((item) => ({ ...item, characterId })));
+  }
+  if (data.inventory.length > 0) {
+    await tx
+      .insert(raidInventoryItems)
+      .values(data.inventory.map((item) => ({ ...item, characterId })));
+  }
+
+  for (const [weaponMasterId, nextQty] of changedStashQuantities) {
+    await writeStashQuantity(
+      tx,
+      userId,
+      weaponMasterId,
+      stashRowsByWeapon.get(weaponMasterId) ?? [],
+      nextQty,
+    );
+  }
+
+  return {
+    status: "success",
+    weight: await updateInventoryWeight(tx, character),
+  };
+}
+
 async function writeStashQuantity(
   tx: Tx,
   userId: string,

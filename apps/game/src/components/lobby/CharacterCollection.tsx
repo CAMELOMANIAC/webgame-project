@@ -47,9 +47,6 @@ export default function CharacterCollection({
         <h2 className={styles.title}>보유 개체 · {characters.length}</h2>
         <span className={styles.rosterCode}>ROSTER // ACTIVE-01</span>
       </div>
-      <p className={styles.description}>
-        한 번에 한 개체로 출격합니다. 같은 인물도 개체별 상태가 유지됩니다.
-      </p>
       {roster.isPending && (
         <p className={styles.description}>개체를 불러오는 중입니다.</p>
       )}

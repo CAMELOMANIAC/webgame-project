@@ -7,6 +7,7 @@ import {
   EquipItemSchema,
   InventoryError,
   MoveItemSchema,
+  reconcileLoadoutWithStash,
   SlotsSchema,
   withInventoryTransaction,
 } from "./inventory";
@@ -167,6 +168,14 @@ test("잘못된 아이템 요청은 DB 접근 전에 API에서 거부한다", as
       url: "/character/c/inventory/move",
       payload: { weaponMasterId: "a", direction: "to_stash", slotIndex: -1 },
     },
+    {
+      method: "POST" as const,
+      url: "/character/c/raid/start",
+      payload: {
+        equipment: [{ weaponMasterId: "a", slotIndex: 9 }],
+        inventory: [],
+      },
+    },
   ];
   for (const request of requests)
     assert.equal(
@@ -179,4 +188,40 @@ test("잘못된 아이템 요청은 DB 접근 전에 API에서 거부한다", as
       400,
     );
   assert.equal(transaction.mock.callCount(), 0);
+});
+
+test("배치 정산은 캐릭터와 창고의 총 수량을 보존하고 초과 요청을 거부한다", () => {
+  const pool = new Map([
+    ["rifle", 2],
+    ["medkit", 3],
+  ]);
+  const stashCounts = new Map([
+    ["rifle", 1],
+    ["medkit", 2],
+  ]);
+  const requested = new Map([
+    ["rifle", 2],
+    ["medkit", 1],
+  ]);
+  const nextStash = reconcileLoadoutWithStash(pool, stashCounts, requested);
+  assert.equal(nextStash.get("rifle"), 0);
+  assert.equal(nextStash.has("medkit"), false);
+
+  const storedToStash = reconcileLoadoutWithStash(
+    pool,
+    stashCounts,
+    new Map([["rifle", 1]]),
+  );
+  assert.equal(storedToStash.has("rifle"), false);
+  assert.equal(storedToStash.get("medkit"), 3);
+
+  assert.throws(
+    () =>
+      reconcileLoadoutWithStash(
+        pool,
+        stashCounts,
+        new Map([["rifle", 3]]),
+      ),
+    InventoryError,
+  );
 });

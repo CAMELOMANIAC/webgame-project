@@ -45,7 +45,7 @@ export async function requireUserAtBase(
   tx: TransactionClient,
   userId: string,
 ) {
-  // 선택과 출격이 경쟁해도 계정당 한 개체만 출격하게 한다.
+  // 선택과 배치가 경쟁해도 계정당 한 개체만 배치하게 한다.
   await tx.execute(sql`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`);
   const raiding = await tx.query.characters.findMany({
     where: and(eq(characters.userId, userId), eq(characters.isRaiding, true)),

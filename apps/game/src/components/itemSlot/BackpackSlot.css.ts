@@ -15,6 +15,7 @@ export const slot = recipe({
     padding: "8px",
     borderRadius: vars.radius.control,
     color: vars.text.primary,
+    userSelect: "none",
     transition:
       "background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease",
   },

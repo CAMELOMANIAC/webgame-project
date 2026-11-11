@@ -44,15 +44,18 @@ export const useSyncItemsMutation = () => {
       );
 
       if (!response.ok) {
-        throw new Error("Failed to sync items with server");
+        const errorData = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(errorData.error || "Failed to sync items with server");
       }
 
       return response.json();
     },
-    onSuccess: () => {
-      // 동기화 성공 후 캐릭터 데이터 무효화하여 최신 상태 유지
-      queryClient.invalidateQueries({ queryKey: ["character"] });
-      queryClient.invalidateQueries({ queryKey: ["characters"] });
+    onSettled: () => {
+      // 동기화 완료/실패 시 최신 서버 상태로 정렬
+      void queryClient.invalidateQueries({ queryKey: ["character"] });
+      void queryClient.invalidateQueries({ queryKey: ["characters"] });
     },
   });
 };

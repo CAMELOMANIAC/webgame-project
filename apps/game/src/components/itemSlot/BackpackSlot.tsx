@@ -40,7 +40,6 @@ const BackpackSlot = ({ item }: BackpackProps) => {
   return (
     <div
       ref={combinedRef}
-      draggable={isDraggable}
       className={styles.slot({
         state: slotState,
         dragging: isDragging,

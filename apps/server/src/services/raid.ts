@@ -33,7 +33,9 @@ import {
   calculateInventoryWeight,
   InventoryError,
   mergeIntoStash,
+  type SlotsInput,
   SlotsSchema,
+  syncLoadoutWithStashInTransaction,
   syncSlotsInTransaction,
   withInventoryTransaction,
 } from "./inventory";
@@ -127,6 +129,7 @@ export async function startRaid(
   database: Database,
   userId: string,
   characterId: string,
+  loadout?: SlotsInput,
 ) {
   return withInventoryTransaction(database, async (tx) => {
     await tx.execute(
@@ -165,6 +168,16 @@ export async function startRaid(
         .where(eq(users.id, userId));
     if (character.hp <= 0 || character.isRaiding)
       throw new InventoryError("Character is not ready to start a raid", 409);
+    const weight = loadout
+      ? (
+          await syncLoadoutWithStashInTransaction(
+            tx,
+            userId,
+            characterId,
+            loadout,
+          )
+        ).weight
+      : await calculateInventoryWeight(tx, characterId);
     const [raid] = await tx
       .insert(raidSessions)
       .values({ characterId, currentNodeId: gameRules.startNodeId })
@@ -177,7 +190,7 @@ export async function startRaid(
         activeRaidId: raid.id,
         currentNodeId: gameRules.startNodeId,
         time: 0,
-        weight: await calculateInventoryWeight(tx, characterId),
+        weight,
       })
       .where(eq(characters.id, characterId));
     await recordGhosts(tx, characterId, raid.id, [

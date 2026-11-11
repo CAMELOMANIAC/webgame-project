@@ -135,7 +135,7 @@ test("실제 DB: 캐릭터 선택·추가와 다른 사용자 조회를 API에�
   );
 });
 
-test("실제 DB: 개체 선택과 다른 개체 출격이 경쟁해도 선택·활성 탐사가 일치한다", async (t) => {
+test("실제 DB: 개체 선택과 다른 개체 배치가 경쟁해도 선택·활성 탐사가 일치한다", async (t) => {
   const { db, user, character } = await integrationFixture(t);
   const twin = await recruitDevelopmentCharacter(
     db,

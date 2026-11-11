@@ -23,6 +23,25 @@ export function raidActionInput(
   };
 }
 
+export interface StartRaidLoadoutInput {
+  equipment: Array<{
+    weaponMasterId: string;
+    slotIndex: number;
+  }>;
+  inventory: Array<{
+    weaponMasterId: string;
+    slotIndex: number;
+    quantity: number;
+  }>;
+}
+
+export type StartRaidInput =
+  | string
+  | {
+      characterId: string;
+      loadout?: StartRaidLoadoutInput;
+    };
+
 export const useRaidSession = () => {
   const queryClient = useQueryClient();
   const userId = useAtomValue(selectedUserIdAtom);
@@ -34,13 +53,23 @@ export const useRaidSession = () => {
     void queryClient.invalidateQueries({ queryKey: ["journal", userId] });
   };
   const startRaidMutation = useMutation({
-    mutationFn: async (characterId: string) =>
-      readApiResponse<{ status: string; isRaiding: boolean; raid: RaidView }>(
+    mutationFn: async (input: StartRaidInput) => {
+      const characterId = typeof input === "string" ? input : input.characterId;
+      const loadout = typeof input === "string" ? undefined : input.loadout;
+      return readApiResponse<{ status: string; isRaiding: boolean; raid: RaidView }>(
         await apiFetch(`${API_BASE_URL}/character/${characterId}/raid/start`, {
           method: "POST",
+          ...(loadout
+            ? {
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(loadout),
+              }
+            : {}),
         }),
-      ),
-    onSuccess: (result, characterId) => {
+      );
+    },
+    onSuccess: (result, input) => {
+      const characterId = typeof input === "string" ? input : input.characterId;
       queryClient.setQueryData(
         characterKey(userId, characterId),
         (old: CharacterData | undefined) =>
