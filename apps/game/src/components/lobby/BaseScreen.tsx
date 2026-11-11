@@ -17,7 +17,7 @@ export function BaseScreen({
     <div className={`${page} ${styles.scrollPage}`}>
       <div className={styles.lobbyContainer}>
         <header className={styles.headerArea}>
-          <span className={styles.subTitle}>HL-LAB // SEC-00</span>
+          <span className={styles.subTitle}>SHELTER // SEC-00</span>
           <h1 className={styles.mainTitle}>{title}</h1>
           <p className={styles.leadText}>{description}</p>
         </header>

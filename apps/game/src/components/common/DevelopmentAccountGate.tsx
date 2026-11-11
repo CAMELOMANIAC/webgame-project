@@ -109,7 +109,7 @@ export default function DevelopmentAccountGate({
   return (
     <section className={styles.accountPanel}>
       <div className={styles.headerBlock}>
-        <span className={styles.telemetryLabel}>HL-LAB // AUTH-GATE</span>
+        <span className={styles.telemetryLabel}>SHELTER // AUTH-GATE</span>
         <h1 className={styles.panelTitle}>생존자 선택</h1>
         <p className={styles.panelText}>플레이할 개발용 계정을 선택하세요.</p>
       </div>

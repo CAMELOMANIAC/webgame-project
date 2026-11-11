@@ -41,10 +41,10 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
       <div className={styles.journal}>
         <header className={styles.pageHeader}>
           <div className={styles.telemetryTop}>
-            <span>HL-LAB // COMM-ARCHIVE</span>
-            <span>한림 복귀 실험실 · 임무 통신</span>
+            <span>SHELTER // COMM-ARCHIVE</span>
+            <span>임시 대피 구역 · 임무 통신</span>
           </div>
-          <h1>서포시 운영 기록</h1>
+          <h1>도시 운영 기록</h1>
           <p>임무명·구역명·대사는 검증용 초안입니다.</p>
         </header>
 

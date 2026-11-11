@@ -71,7 +71,7 @@ const FieldNavTargetSection = () => {
       <div className={styles.topTelemetryBar}>
         <div className={styles.telemetryLeft}>
           <span className={styles.statusDot({ positive: isStable })} />
-          <h3 className={styles.subTitle}>회성시 탐사</h3>
+          <h3 className={styles.subTitle}>도시 탐사</h3>
           <span className={styles.nodeCode}>[NODE #{nodeId}]</span>
         </div>
         <span className={styles.overlapBadge({ positive: isStable })}>

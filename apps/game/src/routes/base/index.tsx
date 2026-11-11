@@ -28,7 +28,7 @@ function BaseHome() {
 
   return (
     <BaseScreen
-      title="기업 복귀 실험실"
+      title="임시 대피 구역"
       description="선택한 개체의 배치 상태와 임무 통신을 확인합니다."
     >
       {notice && (

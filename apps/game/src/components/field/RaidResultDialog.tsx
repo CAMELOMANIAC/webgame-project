@@ -42,7 +42,7 @@ export function RaidResultDialog({
       className={styles.dialog}
       onCancel={(event) => event.preventDefault()}
     >
-      <p className={styles.eyebrow}>HL-LAB // RAID RESULT</p>
+      <p className={styles.eyebrow}>SHELTER // RAID RESULT</p>
       <h2
         id={titleId}
         className={styles.title({
