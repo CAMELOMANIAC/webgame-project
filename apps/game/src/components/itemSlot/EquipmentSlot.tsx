@@ -4,53 +4,29 @@ import type { Item } from "@webgame/types";
 import { useAtomValue } from "jotai";
 import { motion } from "motion/react";
 import React from "react";
-import {
-  GiBattleAxe,
-  GiBowieKnife,
-  GiBroadsword,
-  GiRegeneration,
-  GiRifle,
-  GiShardSword,
-  GiTargetArrows,
-  GiWizardStaff,
-} from "react-icons/gi";
 
 import { currentTimeAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { isCombatAtom } from "@/atoms/raidAtom";
-import { type CharacterData, useGetCharacter } from "@/utils/hooks/useGetCharacter";
+import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 
 import * as styles from "./EquipmentSlot.css";
+import * as slotStyles from "./ItemSlot.css";
+import ItemSlotContent from "./ItemSlotContent";
 
 interface EquipmentSlotProps {
   item: Item;
   index: number;
-  characterData?: CharacterData;
+  characterData: CharacterData | undefined;
 }
-
-const getWeaponIcon = (iconKey = "WEAPON") => {
-  const icons = {
-    DAGGER: GiBowieKnife,
-    SWORD: GiBroadsword,
-    RIFLE: GiRifle,
-    AXE: GiBattleAxe,
-    STAFF: GiWizardStaff,
-    HEAL: GiRegeneration,
-    TARGET: GiTargetArrows,
-  };
-  const Icon = icons[iconKey as keyof typeof icons] ?? GiShardSword;
-  return <Icon size={20} color="#fafafa" />;
-};
 
 const EquipmentSlot = ({
   item,
   index,
-  characterData: propCharacterData,
+  characterData,
 }: EquipmentSlotProps) => {
   const isCombat = useAtomValue(isCombatAtom);
   const currentTime = useAtomValue(currentTimeAtom);
   const processedEvents = useAtomValue(processedEventsAtom);
-  const { data: queriedCharacterData } = useGetCharacter();
-  const characterData = propCharacterData ?? queriedCharacterData;
 
   const isEmpty = item.id.toString().includes("empty");
   const rawEquipmentItem = characterData?.raw.equipment[index];
@@ -159,7 +135,7 @@ const EquipmentSlot = ({
     <motion.div
       ref={setNodeRef}
       style={style}
-      className={styles.slot({ state: slotState })}
+      className={slotStyles.slot({ state: slotState })}
       animate={
         isAttacking
           ? {
@@ -176,11 +152,10 @@ const EquipmentSlot = ({
       {...attributes}
       {...listeners}
     >
-      <span className={styles.slotIndex}>0{index + 1}</span>
+      <span className={slotStyles.slotIndex}>0{index + 1}</span>
       {!isEmpty && (
         <>
-          {getWeaponIcon(weapon?.iconKey)}
-          <span className={styles.weaponNameLabel}>{item.name}</span>
+          <ItemSlotContent name={item.name} iconKey={weapon?.iconKey} />
           <div className={styles.tooltipLabel}>
             <strong>{item.name}</strong>
             {weapon && (

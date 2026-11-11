@@ -88,35 +88,52 @@ export function moveStashToBackpackDraft(
     return { ok: false, error: "창고에 해당 물품이 없습니다." };
   }
 
-  const weightError = checkWeightLimit(
-    newRaw.weight,
-    stashItem.weaponMaster.weight,
-    newRaw.maxWeight,
-  );
-  if (weightError) {
-    return { ok: false, error: weightError };
-  }
-
-  const preferredSlot =
-    preferredSlotIndex !== undefined
-      ? newRaw.inventory[preferredSlotIndex]
-      : undefined;
   const targetSlot =
-    preferredSlot && !preferredSlot.weaponMaster
-      ? preferredSlot
-      : newRaw.inventory.find((slot) => !slot.weaponMaster);
+    preferredSlotIndex === undefined
+      ? newRaw.inventory.find((slot) => !slot.weaponMaster)
+      : newRaw.inventory[preferredSlotIndex];
 
   if (!targetSlot) {
-    return { ok: false, error: "가방 슬롯이 가득 찼습니다." };
+    return {
+      ok: false,
+      error:
+        preferredSlotIndex === undefined
+          ? "가방 슬롯이 가득 찼습니다."
+          : "유효하지 않은 가방 슬롯입니다.",
+    };
   }
 
-  newRaw.inventory[targetSlot.slotIndex] = {
-    id: `local-inv-${crypto.randomUUID()}`,
-    slotIndex: targetSlot.slotIndex,
-    weaponMaster: { ...stashItem.weaponMaster },
-    quantity: 1,
-  };
+  const displaced = targetSlot.weaponMaster;
+  const sameItem = displaced?.id === weaponMasterId;
+  const deltaWeight =
+    stashItem.weaponMaster.weight -
+    (sameItem ? 0 : (displaced?.weight ?? 0) * targetSlot.quantity);
+  const weightError = checkWeightLimit(
+    newRaw.weight,
+    deltaWeight,
+    newRaw.maxWeight,
+  );
+  if (weightError) return { ok: false, error: weightError };
+
   adjustStashQuantity(nextStash, stashItem.weaponMaster, newRaw.userId, -1);
+  if (sameItem) {
+    targetSlot.quantity += 1;
+  } else {
+    if (displaced) {
+      adjustStashQuantity(
+        nextStash,
+        displaced,
+        newRaw.userId,
+        targetSlot.quantity,
+      );
+    }
+    newRaw.inventory[targetSlot.slotIndex] = {
+      id: `local-inv-${crypto.randomUUID()}`,
+      slotIndex: targetSlot.slotIndex,
+      weaponMaster: { ...stashItem.weaponMaster },
+      quantity: 1,
+    };
+  }
 
   return {
     ok: true,
@@ -145,8 +162,7 @@ export function moveStashToEquipmentDraft(
   }
 
   const displaced = targetEquip.weaponMaster;
-  const deltaWeight =
-    stashItem.weaponMaster.weight - (displaced?.weight ?? 0);
+  const deltaWeight = stashItem.weaponMaster.weight - (displaced?.weight ?? 0);
   const weightError = checkWeightLimit(
     newRaw.weight,
     deltaWeight,

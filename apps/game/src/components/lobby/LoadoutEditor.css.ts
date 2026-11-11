@@ -44,12 +44,7 @@ export const panelDropZone = recipe({
   },
 });
 
-export const backpackGrid = style({
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fill, minmax(74px, 1fr))",
-  gap: "8px",
-  width: "100%",
-});
+export const slotGrid = style([equipmentStrip, { display: "flex" }]);
 
 export const emptyDropArea = recipe({
   base: {
@@ -79,28 +74,6 @@ export const emptyDropArea = recipe({
   },
   defaultVariants: {
     over: false,
-  },
-});
-
-export const stashDraggableItem = recipe({
-  base: {
-    touchAction: "pan-y",
-    userSelect: "none",
-    cursor: "grab",
-  },
-  variants: {
-    dragging: {
-      true: {
-        opacity: 0.3,
-        cursor: "grabbing",
-      },
-      false: {
-        opacity: 1,
-      },
-    },
-  },
-  defaultVariants: {
-    dragging: false,
   },
 });
 

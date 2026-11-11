@@ -4,13 +4,15 @@ import { useAtomValue } from "jotai";
 
 import { isCombatAtom } from "@/atoms/raidAtom";
 
-import * as styles from "./BackpackSlot.css";
+import * as styles from "./ItemSlot.css";
+import ItemSlotContent from "./ItemSlotContent";
 
 interface BackpackProps {
   item: Item;
+  index?: number;
 }
 
-const BackpackSlot = ({ item }: BackpackProps) => {
+const BackpackSlot = ({ item, index }: BackpackProps) => {
   const isCombat = useAtomValue(isCombatAtom);
   const isEmpty = item?.id.toString().includes("empty");
 
@@ -34,29 +36,27 @@ const BackpackSlot = ({ item }: BackpackProps) => {
     setDragRef(node);
   };
 
-  const isDraggable = !isEmpty && !isCombat;
-  const slotState = isOver ? "over" : isEmpty ? "empty" : "occupied";
+  const slotState = isOver ? "casting" : isEmpty ? "empty" : "occupied";
 
   return (
     <div
       ref={combinedRef}
-      className={styles.slot({
-        state: slotState,
-        dragging: isDragging,
-        draggable: isDraggable,
-      })}
+      className={`${styles.slot({ state: slotState })} ${isDragging ? styles.dragging : ""} ${isCombat || isEmpty ? styles.staticSlot : ""}`}
+      title={isEmpty ? "빈 가방 슬롯" : item.name}
       {...attributes}
       {...listeners}
     >
-      {isEmpty ? (
-        <span className={styles.emptyLabel}>EMPTY</span>
-      ) : (
-        <>
-          <span className={styles.itemName}>{item.name}</span>
-          {(item.quantity ?? 0) > 1 && (
-            <span className={styles.quantityBadge}>×{item.quantity}</span>
-          )}
-        </>
+      {index !== undefined && (
+        <span className={styles.slotIndex}>
+          {String(index + 1).padStart(2, "0")}
+        </span>
+      )}
+      {!isEmpty && (
+        <ItemSlotContent
+          name={item.name}
+          iconKey={item.iconKey}
+          quantity={item.quantity}
+        />
       )}
     </div>
   );

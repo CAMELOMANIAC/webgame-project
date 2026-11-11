@@ -2,6 +2,8 @@ import { style } from "@vanilla-extract/css";
 
 import { vars } from "@/styles/theme.css";
 
+import { itemSlotSize } from "./ItemSlot.css";
+
 export const container = style({
   width: "100%",
   height: "100%",
@@ -68,7 +70,8 @@ export const gridContainer = style({
   width: "100%",
   height: "100%",
   display: "grid",
-  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gridTemplateColumns: `repeat(auto-fill, ${itemSlotSize})`,
+  alignContent: "start",
   gap: "8px",
   padding: "12px 16px 16px",
   overflowY: "auto",

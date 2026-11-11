@@ -1,7 +1,7 @@
 import { createContainer, keyframes, style } from "@vanilla-extract/css";
 import { recipe } from "@vanilla-extract/recipes";
 
-import { cornerBrackets, vars } from "@/styles/theme.css";
+import { vars } from "@/styles/theme.css";
 
 const lobbyContainerName = createContainer();
 
@@ -158,55 +158,6 @@ export const itemGrid = style({
   display: "grid",
   gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 104px), 1fr))",
   gap: "8px",
-});
-
-export const itemSlotButton = recipe({
-  base: {
-    background: vars.surface.high,
-    border: `1px solid ${vars.border.strong}`,
-    borderRadius: "6px",
-    padding: "10px",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    textAlign: "left",
-    cursor: "pointer",
-    position: "relative",
-    minHeight: "78px",
-    width: "100%",
-    transition: "background-color 0.15s ease, border-color 0.15s ease",
-    selectors: {
-      "&:hover:not(:disabled)": {
-        background: "#18181d",
-        borderColor: "rgba(133, 173, 255, 0.4)",
-      },
-    },
-    ":disabled": {
-      opacity: 0.4,
-      cursor: "default",
-    },
-  },
-  variants: {
-    equipped: {
-      true: cornerBrackets({ tone: "default" }),
-      false: {},
-    },
-  },
-  defaultVariants: {
-    equipped: false,
-  },
-});
-
-export const slotTopMeta = style({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  width: "100%",
-  fontFamily: vars.font.mono,
-  fontSize: "11px",
-  color: vars.text.muted,
-  fontVariantNumeric: "tabular-nums",
 });
 
 export const slotActions = style({

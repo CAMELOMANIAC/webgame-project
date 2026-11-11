@@ -15,7 +15,13 @@ import {
 } from "@dnd-kit/core";
 import { useAtomValue, useSetAtom } from "jotai";
 import { LayoutGroup, motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   activeDragIdAtom,
@@ -26,6 +32,8 @@ import {
 } from "@/atoms/raidAtom";
 import BackpackSlot from "@/components/itemSlot/BackpackSlot";
 import Equipment from "@/components/itemSlot/Equipment";
+import * as slotStyles from "@/components/itemSlot/ItemSlot.css";
+import ItemSlotContent from "@/components/itemSlot/ItemSlotContent";
 import SlotManager from "@/components/itemSlot/SlotManager";
 import * as baseStyles from "@/components/lobby/BaseScreen.css";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
@@ -43,6 +51,33 @@ import * as styles from "./LoadoutEditor.css";
 
 const BACKPACK_DROPZONE_ID = "backpack-dropzone";
 const STASH_DROPZONE_ID = "stash-dropzone";
+
+function LoadoutDropZone({
+  id,
+  enabled,
+  over,
+  ready,
+  style,
+  children,
+}: {
+  id: string;
+  enabled: boolean;
+  over: boolean;
+  ready: boolean;
+  style?: CSSProperties;
+  children: ReactNode;
+}) {
+  const { setNodeRef } = useDroppable({ id, disabled: !enabled });
+  return (
+    <div
+      ref={setNodeRef}
+      className={styles.panelDropZone({ over, ready })}
+      style={style}
+    >
+      {children}
+    </div>
+  );
+}
 
 interface LoadoutEditorProps {
   characterData: CharacterData | undefined;
@@ -75,19 +110,17 @@ function StashItemCard({
       ref={setNodeRef}
       type="button"
       disabled={disabled}
-      className={`${baseStyles.itemSlotButton({ equipped: false })} ${styles.stashDraggableItem({ dragging: isDragging })}`}
+      className={`${slotStyles.slot({ state: "occupied" })} ${slotStyles.button} ${isDragging ? slotStyles.dragging : ""}`}
+      title={`${item.weaponMaster.name} · ×${item.quantity} · DMG ${item.weaponMaster.damage} · ${item.weaponMaster.weight}kg`}
       onClick={() => onMoveToBackpack(item.weaponMasterId)}
       {...attributes}
       {...listeners}
     >
-      <div className={baseStyles.slotTopMeta}>
-        <span>STASH</span>
-        <span className={baseStyles.quantityBadge}>×{item.quantity}</span>
-      </div>
-      <p className={baseStyles.itemName}>{item.weaponMaster.name}</p>
-      <span className={baseStyles.itemDetails}>
-        DMG {item.weaponMaster.damage} · {item.weaponMaster.weight}kg
-      </span>
+      <ItemSlotContent
+        name={item.weaponMaster.name}
+        iconKey={item.weaponMaster.iconKey}
+        quantity={item.quantity}
+      />
     </motion.button>
   );
 }
@@ -135,9 +168,9 @@ export function LoadoutEditor({
 
   const isBusy = Boolean(
     disabled ||
-      !character ||
-      (commitMode === "immediate" &&
-        (moveItemMutation.isPending || syncMutation.isPending)),
+    !character ||
+    (commitMode === "immediate" &&
+      (moveItemMutation.isPending || syncMutation.isPending)),
   );
 
   const sensors = useSensors(
@@ -183,24 +216,11 @@ export function LoadoutEditor({
   const canDropInStash =
     isDraggingBackpack || (commitMode === "deferred" && isDraggingEquipment);
 
-  const { setNodeRef: setBackpackDropRef, isOver: isBackpackPanelOver } =
-    useDroppable({
-      id: BACKPACK_DROPZONE_ID,
-      disabled: isBusy || !canDropInBackpack,
-    });
-
-  const { setNodeRef: setStashDropRef, isOver: isStashPanelOver } =
-    useDroppable({
-      id: STASH_DROPZONE_ID,
-      disabled: isBusy || !canDropInStash,
-    });
-
   const isBackpackOver =
     canDropInBackpack &&
-    (isBackpackPanelOver ||
-      Boolean(overId && backpack.some((slot) => slot.id === overId)));
-  const isStashOver =
-    canDropInStash && (isStashPanelOver || overId === STASH_DROPZONE_ID);
+    (overId === BACKPACK_DROPZONE_ID ||
+      backpack.some((slot) => slot.id === overId));
+  const isStashOver = canDropInStash && overId === STASH_DROPZONE_ID;
 
   const handleMoveToBackpack = (
     weaponMasterId: string,
@@ -289,9 +309,27 @@ export function LoadoutEditor({
   };
 
   const collisionDetection: CollisionDetection = (args) => {
-    const pointerCollisions = pointerWithin(args);
-    const collisions =
-      pointerCollisions.length > 0 ? pointerCollisions : rectIntersection(args);
+    const source = String(args.active.id);
+    const fromStash = source.startsWith("stash:");
+    const fromEquipment = equipment.some((slot) => slot.id === source);
+    const fromBackpack = backpack.some((slot) => slot.id === source);
+    const candidates = {
+      ...args,
+      droppableContainers: args.droppableContainers.filter(({ id }) => {
+        if (id === BACKPACK_DROPZONE_ID) return fromStash || fromEquipment;
+        if (id === STASH_DROPZONE_ID) {
+          return fromBackpack || (fromEquipment && commitMode === "deferred");
+        }
+        return (
+          !fromStash ||
+          commitMode === "deferred" ||
+          !equipment.some((slot) => slot.id === id)
+        );
+      }),
+    };
+    const collisions = args.pointerCoordinates
+      ? pointerWithin(candidates)
+      : rectIntersection(candidates);
     // 개별 슬롯(장비/가방) 위를 우선하고, 빈 여백일 때만 패널 드롭존을 선택한다.
     const specificSlot = collisions.find(
       (c) => c.id !== BACKPACK_DROPZONE_ID && c.id !== STASH_DROPZONE_ID,
@@ -339,9 +377,7 @@ export function LoadoutEditor({
         dropTargetId === BACKPACK_DROPZONE_ID ||
         backpack.some((item) => item.id === dropTargetId)
       ) {
-        const targetSlot = backpack.find(
-          (slot) => slot.id === dropTargetId && !slot.weaponMaster,
-        );
+        const targetSlot = backpack.find((slot) => slot.id === dropTargetId);
         handleMoveToBackpack(weaponMasterId, targetSlot?.slotIndex);
         return;
       }
@@ -448,12 +484,11 @@ export function LoadoutEditor({
           </div>
 
           {/* 2. 배치 가방 (아이템에 따라 동적 확장) */}
-          <div
-            ref={setBackpackDropRef}
-            className={styles.panelDropZone({
-              over: isBackpackOver,
-              ready: canDropInBackpack && !isBackpackOver,
-            })}
+          <LoadoutDropZone
+            id={BACKPACK_DROPZONE_ID}
+            enabled={!isBusy}
+            over={isBackpackOver}
+            ready={canDropInBackpack && !isBackpackOver}
             style={{ overflow: isSlotAnimating ? "visible" : undefined }}
           >
             <h2 className={baseStyles.sectionHeader}>
@@ -467,21 +502,27 @@ export function LoadoutEditor({
                 가방이 비어 있습니다.
               </div>
             ) : (
-              <div className={styles.backpackGrid}>
+              <div className={styles.slotGrid}>
                 <SlotManager items={filledInventoryItems}>
-                  {(item) => <BackpackSlot item={item} />}
+                  {(item) => (
+                    <BackpackSlot
+                      item={item}
+                      index={
+                        backpack.find((slot) => slot.id === item.id)?.slotIndex
+                      }
+                    />
+                  )}
                 </SlotManager>
               </div>
             )}
-          </div>
+          </LoadoutDropZone>
 
           {/* 3. 거점 공용 창고 */}
-          <div
-            ref={setStashDropRef}
-            className={styles.panelDropZone({
-              over: isStashOver,
-              ready: canDropInStash && !isStashOver,
-            })}
+          <LoadoutDropZone
+            id={STASH_DROPZONE_ID}
+            enabled={!isBusy}
+            over={isStashOver}
+            ready={canDropInStash && !isStashOver}
           >
             <h2 className={baseStyles.sectionHeader}>
               <span>거점 공용 창고</span>
@@ -494,7 +535,7 @@ export function LoadoutEditor({
                 보관 중인 물품이 없습니다.
               </div>
             ) : (
-              <div className={baseStyles.itemGrid}>
+              <div className={styles.slotGrid}>
                 {stash.map((item) => (
                   <StashItemCard
                     key={item.id}
@@ -508,7 +549,7 @@ export function LoadoutEditor({
                 ))}
               </div>
             )}
-          </div>
+          </LoadoutDropZone>
         </div>
 
         <DragOverlay dropAnimation={null}>
