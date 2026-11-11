@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAtomValue, useSetAtom } from "jotai";
 import { AnimatePresence, motion } from "motion/react";
@@ -24,16 +24,12 @@ import {
   type CharacterData,
   useGetCharacter,
 } from "@/utils/hooks/useGetCharacter";
-import {
-  type StashItemResponse,
-  useGetStash,
-} from "@/utils/hooks/useGetStash";
+import { type StashItemResponse, useGetStash } from "@/utils/hooks/useGetStash";
 import { useRaidSession } from "@/utils/hooks/useRaidSession";
 
 import * as styles from "./staging.css";
 
 interface StagingLoadoutDraft {
-  characterId: string;
   characterData: CharacterData;
   stash: StashItemResponse[];
 }
@@ -47,7 +43,6 @@ function ExpeditionStagingScreen() {
   const queryClient = useQueryClient();
   const selectedUserId = useAtomValue(selectedUserIdAtom);
   const [step, setStep] = useState<1 | 2>(1);
-  const [draft, setDraft] = useState<StagingLoadoutDraft | null>(null);
   const characterQuery = useGetCharacter();
   const stashQuery = useGetStash();
   const { startRaid } = useRaidSession();
@@ -62,26 +57,30 @@ function ExpeditionStagingScreen() {
   const setBattleLog = useSetAtom(battleLogAtom);
 
   const serverCharacterData = characterQuery.data;
-  const serverStash = stashQuery.data ?? [];
-  const activeDraft =
-    draft &&
-    serverCharacterData &&
-    draft.characterId === serverCharacterData.raw.id
-      ? draft
-      : null;
-  const effectiveCharacterData = activeDraft
-    ? activeDraft.characterData
-    : serverCharacterData;
-  const effectiveStash = activeDraft ? activeDraft.stash : serverStash;
+  const draftKey = [
+    "staging-loadout",
+    selectedUserId,
+    serverCharacterData?.raw.id,
+  ];
+  const { data: draft } = useQuery<StagingLoadoutDraft>({
+    queryKey: draftKey,
+    queryFn: skipToken,
+    gcTime: 0,
+  });
+  const effectiveCharacterData = draft?.characterData ?? serverCharacterData;
+  const effectiveStash = draft?.stash ?? stashQuery.data ?? [];
+  const canEditLoadout = stashQuery.data !== undefined;
   const character = effectiveCharacterData?.raw;
-
-  const equippedWeapons =
-    character?.equipment.filter((e) => e.weaponMaster) ?? [];
-  const isArmed = equippedWeapons.length > 0;
 
   // 최종 배치 실행 (이동/장착 변경사항을 배치 시작 요청과 함께 한 번에 전송)
   const handleConfirmDeploy = () => {
-    if (!character || !effectiveCharacterData || startRaid.isPending) return;
+    if (
+      !character ||
+      !effectiveCharacterData ||
+      !canEditLoadout ||
+      startRaid.isPending
+    )
+      return;
     const equipment = effectiveCharacterData.raw.equipment
       .filter((w) => w.weaponMaster !== null)
       .map((w) => ({
@@ -99,7 +98,7 @@ function ExpeditionStagingScreen() {
     startRaid.mutate(
       {
         characterId: character.id,
-        loadout: { equipment, inventory },
+        loadout: draft ? { equipment, inventory } : undefined,
       },
       {
         onSuccess: ({ raid }) => {
@@ -116,7 +115,7 @@ function ExpeditionStagingScreen() {
               },
             },
           );
-          setDraft(null);
+          queryClient.removeQueries({ queryKey: draftKey, exact: true });
           setNotice(null);
           setNode(raid.currentNodeId);
           setIsCombat(false);
@@ -132,6 +131,7 @@ function ExpeditionStagingScreen() {
   };
 
   const handleBack = () => {
+    if (startRaid.isPending) return;
     if (step === 2) {
       setStep(1);
     } else {
@@ -140,48 +140,50 @@ function ExpeditionStagingScreen() {
   };
 
   const canProceedStep1 = Boolean(character && character.hp > 0);
-  const canDeploy = Boolean(character && !startRaid.isPending);
+  const canDeploy = Boolean(character && canEditLoadout);
 
   return (
     <div className={`${page} ${baseStyles.scrollPage}`}>
       <div className={styles.container}>
-        {/* 텔레메트리 헤더 & 단계 숫자 인디케이터 */}
-        <header className={styles.headerArea}>
-          <div className={styles.headerTop}>
-            <div className={styles.headerTitleGroup}>
-              <button
-                type="button"
-                className={styles.backButton}
-                onClick={handleBack}
-                aria-label="이전 화면으로 이동"
-              >
-                <span className={styles.backArrow}>←</span>
-              </button>
-              <div>
-                <span className={styles.telemetryCode}>
-                  HL-LAB // EXPEDITION STAGING
-                </span>
-                <h1 className={styles.title}>원정 탐사 준비</h1>
-              </div>
-            </div>
-            <div className={styles.stepBadge}>
-              <span className={styles.stepNumber}>0{step}</span>
-              <span className={styles.stepTotal}>/ 02</span>
+        {/* 상단 고정 텔레메트리 헤더 */}
+        <header className={styles.headerTop}>
+          <div className={styles.headerTitleGroup}>
+            <button
+              type="button"
+              className={styles.backButton}
+              onClick={handleBack}
+              disabled={startRaid.isPending}
+              aria-label="이전 화면으로 이동"
+            >
+              <span className={styles.backArrow}>←</span>
+            </button>
+            <div>
+              <span className={styles.telemetryCode}>
+                SHELTER // EXPEDITION STAGING
+              </span>
+              <h1 className={styles.title}>원정 탐사 준비</h1>
             </div>
           </div>
+          <div className={styles.stepBadge}>
+            <span className={styles.stepNumber}>0{step}</span>
+            <span className={styles.stepTotal}>/ 02</span>
+          </div>
+        </header>
+
+        <div className={styles.headerArea}>
           <p className={styles.stepDescription}>
             {step === 1
               ? "1단계: 이번 탐사에 투입할 대원을 선택하세요."
               : "2단계: 배치할 대원의 무기를 장착하고 공용 창고에서 물품을 보급하세요."}
           </p>
-        </header>
+        </div>
 
         {/* STEP 1: 배치 대원 선택 (Character Selection) */}
         {step === 1 && (
           <div className={styles.contentArea}>
             <CharacterCollection readOnly={false} />
 
-            {character ? (
+            {character && (
               <div className={styles.summaryCard}>
                 <div className={styles.summaryHeader}>
                   <h2 className={styles.summaryTitle}>선택된 배치 대원</h2>
@@ -200,10 +202,6 @@ function ExpeditionStagingScreen() {
                   </span>
                 </div>
               </div>
-            ) : (
-              <div className={styles.warningBox}>
-                배치할 대원을 위 목록에서 선택해 주세요.
-              </div>
             )}
           </div>
         )}
@@ -211,17 +209,22 @@ function ExpeditionStagingScreen() {
         {/* STEP 2: 장비창 및 장비 선택 (Loadout & Inventory) */}
         {step === 2 && character && (
           <div className={styles.contentArea}>
-            {!isArmed && (
-              <div className={styles.warningBox}>
-                ⚠️ 주의: 현재 무기가 장착되어 있지 않습니다. 비무장 상태로 배치하면
-                적대 개체와 조우 시 큰 피해를 입을 수 있습니다. 아래 창고에서 무기를
-                장착하세요.
-              </div>
-            )}
-
             {startRaid.error && (
-              <div className={styles.warningBox}>
+              <p className={baseStyles.banner({ tone: "negative" })} role="alert">
                 {startRaid.error.message}
+              </p>
+            )}
+            {stashQuery.isLoading && <p>창고를 불러오는 중입니다.</p>}
+            {stashQuery.isError && !canEditLoadout && (
+              <div className={baseStyles.banner({ tone: "negative" })} role="alert">
+                창고를 불러오지 못했습니다.
+                <button
+                  type="button"
+                  className={baseStyles.smallAction}
+                  onClick={() => void stashQuery.refetch()}
+                >
+                  다시 불러오기
+                </button>
               </div>
             )}
 
@@ -229,11 +232,10 @@ function ExpeditionStagingScreen() {
               characterData={effectiveCharacterData}
               isLoading={characterQuery.isLoading}
               stash={effectiveStash}
-              disabled={startRaid.isPending}
+              disabled={!canEditLoadout || startRaid.isPending}
               commitMode="deferred"
               onDraftChange={(nextCharacterData, nextStash) => {
-                setDraft({
-                  characterId: nextCharacterData.raw.id,
+                queryClient.setQueryData<StagingLoadoutDraft>(draftKey, {
                   characterData: nextCharacterData,
                   stash: nextStash,
                 });
@@ -251,7 +253,12 @@ function ExpeditionStagingScreen() {
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
-              transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.8 }}
+              transition={{
+                type: "spring",
+                stiffness: 420,
+                damping: 32,
+                mass: 0.8,
+              }}
             >
               <button
                 type="button"
@@ -269,7 +276,12 @@ function ExpeditionStagingScreen() {
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
-              transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.8 }}
+              transition={{
+                type: "spring",
+                stiffness: 420,
+                damping: 32,
+                mass: 0.8,
+              }}
             >
               <button
                 type="button"

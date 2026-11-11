@@ -8,13 +8,13 @@ export const container = style({
   width: "100%",
   maxWidth: "1200px",
   margin: "0 auto",
-  padding: "20px 16px 148px",
+  padding: "0 16px 148px",
   color: vars.text.primary,
   gap: "16px",
 });
 
 export const headerArea = style({
-  paddingBottom: "16px",
+  paddingBottom: "12px",
   borderBottom: `1px solid ${vars.border.subtle}`,
   display: "flex",
   flexDirection: "column",
@@ -22,10 +22,19 @@ export const headerArea = style({
 });
 
 export const headerTop = style({
+  position: "sticky",
+  top: 0,
+  zIndex: 20,
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   gap: "10px",
+  margin: "0 -16px",
+  padding: "16px 16px 14px",
+  backgroundColor: "rgba(9, 9, 11, 0.92)",
+  backdropFilter: "blur(12px)",
+  WebkitBackdropFilter: "blur(12px)",
+  borderBottom: `1px solid ${vars.border.subtle}`,
 });
 
 export const headerTitleGroup = style({
@@ -203,14 +212,4 @@ export const operatorStatus = style({
   fontFamily: vars.font.mono,
   fontSize: "11px",
   color: vars.text.secondary,
-});
-
-export const warningBox = style({
-  padding: "10px 12px",
-  borderRadius: vars.radius.control,
-  backgroundColor: vars.color.negativeBg,
-  border: `1px solid ${vars.border.negative}`,
-  color: vars.color.negative,
-  fontSize: "12px",
-  lineHeight: 1.4,
 });
