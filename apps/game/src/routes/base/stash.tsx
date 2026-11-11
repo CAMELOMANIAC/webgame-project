@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 
 import { BaseScreen } from "@/components/lobby/BaseScreen";
 import * as styles from "@/components/lobby/BaseScreen.css";
+import CharacterCollection from "@/components/lobby/CharacterCollection";
 import { useGearActions } from "@/utils/hooks/useGearActions";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useGetStash } from "@/utils/hooks/useGetStash";
@@ -18,6 +19,7 @@ function StashScreen() {
   const character = characterQuery.data?.raw;
   const stash = stashQuery.data ?? [];
   const backpack = character?.inventory ?? [];
+  const filledBackpack = backpack.filter((slot) => Boolean(slot.weaponMaster));
   const gearLocked =
     !character || moveItemMutation.isPending || equip.isPending;
   const error = stashQuery.error ?? moveItemMutation.error ?? equip.error;
@@ -65,9 +67,10 @@ function StashScreen() {
 
   return (
     <BaseScreen
-      title="창고 정비"
-      description="공용 창고와 선택한 개체의 출격 장비를 관리합니다."
+      title="거점 정비소"
+      description="출격할 개체를 선택하고 공용 창고에서 장비와 물품을 정비합니다."
     >
+      <CharacterCollection readOnly={false} />
       {stashQuery.isLoading && <p>창고를 불러오는 중입니다.</p>}
       {error && (
         <p className={styles.banner({ tone: "negative" })} role="alert">
@@ -172,58 +175,50 @@ function StashScreen() {
           <h3 className={styles.sectionHeader}>
             <span>출격 가방</span>
             <span className={styles.sectionCode}>
-              PACK // {backpack.filter((b) => b.weaponMaster).length} / 32
+              PACK // {filledBackpack.length} / 32
             </span>
           </h3>
           <div className={styles.itemGrid}>
-            {backpack.map((slot, index) => {
-              if (slot.weaponMaster) {
-                return (
-                  <div className={styles.slotActions} key={slot.id}>
-                    <motion.button
-                      disabled={gearLocked}
-                      key={slot.id}
-                      className={styles.itemSlotButton({ equipped: false })}
-                      onClick={() =>
-                        handleMoveToStash(slot.weaponMaster!.id, slot.slotIndex)
-                      }
-                    >
-                      <div className={styles.slotTopMeta}>
-                        <span>
-                          #{String(slot.slotIndex + 1).padStart(2, "0")}
-                        </span>
-                        <span className={styles.quantityBadge}>
-                          ×{slot.quantity}
-                        </span>
-                      </div>
-                      <p className={styles.itemName}>
-                        {slot.weaponMaster.name}
-                      </p>
-                      <span className={styles.itemDetails}>
-                        DMG {slot.weaponMaster.damage} · 창고 이관
+            {filledBackpack.length === 0 ? (
+              <p className={styles.emptyMessage}>
+                가방에 보관 중인 물품이 없습니다.
+              </p>
+            ) : (
+              filledBackpack.map((slot) => (
+                <div className={styles.slotActions} key={slot.id}>
+                  <motion.button
+                    disabled={gearLocked}
+                    className={styles.itemSlotButton({ equipped: false })}
+                    onClick={() =>
+                      handleMoveToStash(slot.weaponMaster!.id, slot.slotIndex)
+                    }
+                  >
+                    <div className={styles.slotTopMeta}>
+                      <span>
+                        #{String(slot.slotIndex + 1).padStart(2, "0")}
                       </span>
-                    </motion.button>
-                    <button
-                      type="button"
-                      className={styles.smallAction}
-                      disabled={gearLocked}
-                      onClick={() => handleEquip(slot.weaponMaster!.id)}
-                    >
-                      하나 장착
-                    </button>
-                  </div>
-                );
-              } else {
-                return (
-                  <div className={styles.emptySlot} key={`empty-${index}`}>
-                    <span className={styles.emptySlotCode}>SLOT</span>
-                    <span className={styles.emptySlotIndex}>
-                      {String(index + 1).padStart(2, "0")}
+                      <span className={styles.quantityBadge}>
+                        ×{slot.quantity}
+                      </span>
+                    </div>
+                    <p className={styles.itemName}>
+                      {slot.weaponMaster!.name}
+                    </p>
+                    <span className={styles.itemDetails}>
+                      DMG {slot.weaponMaster!.damage} · 창고 이관
                     </span>
-                  </div>
-                );
-              }
-            })}
+                  </motion.button>
+                  <button
+                    type="button"
+                    className={styles.smallAction}
+                    disabled={gearLocked}
+                    onClick={() => handleEquip(slot.weaponMaster!.id)}
+                  >
+                    하나 장착
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

@@ -1,231 +1,127 @@
 import { style } from "@vanilla-extract/css";
-import { recipe } from "@vanilla-extract/recipes";
 
-import { cornerBrackets, vars } from "@/styles/theme.css";
+import { vars } from "@/styles/theme.css";
 
-export const cardContainer = recipe({
-  base: {
-    backgroundColor: vars.surface.mid,
-    border: "1px solid rgba(255, 255, 255, 0.08)",
-    borderRadius: vars.radius.card,
-    padding: "16px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "14px",
-    position: "relative",
-  },
-  variants: {
-    raiding: {
-      true: cornerBrackets({ tone: "default" }),
-      false: cornerBrackets({ tone: "positive" }),
-    },
-  },
-  defaultVariants: {
-    raiding: false,
-  },
-});
-
-export const headerRow = style({
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: "12px",
-  paddingBottom: "12px",
-  borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
-});
-
-export const telemetryCode = style({
-  display: "block",
-  fontFamily: vars.font.mono,
-  fontSize: "11px",
-  color: vars.text.muted,
-  fontVariantNumeric: "tabular-nums",
-  marginBottom: "2px",
-});
-
-export const nickname = style({
-  fontSize: "18px",
-  fontWeight: 700,
-  color: vars.text.primary,
-  margin: 0,
-  letterSpacing: "-0.02em",
-});
-
-export const statusBadge = recipe({
-  base: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "6px",
-    fontFamily: vars.font.mono,
-    fontSize: "11px",
-    fontWeight: 600,
-    padding: "4px 8px",
-    borderRadius: vars.radius.badge,
-  },
-  variants: {
-    raiding: {
-      true: {
-        backgroundColor: "rgba(255, 255, 255, 0.08)",
-        color: vars.text.primary,
-        border: "1px solid rgba(255, 255, 255, 0.18)",
-      },
-      false: {
-        backgroundColor: vars.color.positiveBg,
-        color: vars.color.positive,
-        border: `1px solid ${vars.border.positive}`,
-      },
-    },
-  },
-  defaultVariants: {
-    raiding: false,
-  },
-});
-
-export const statusDot = recipe({
-  base: {
-    width: "6px",
-    height: "6px",
-    borderRadius: "50%",
-  },
-  variants: {
-    raiding: {
-      true: {
-        backgroundColor: vars.text.primary,
-      },
-      false: {
-        backgroundColor: vars.color.positive,
-      },
-    },
-  },
-  defaultVariants: {
-    raiding: false,
-  },
-});
-
-export const telemetryGrid = style({
+// 카드 자체가 거대한 흰색 버튼으로 동작
+export const cardButton = style({
   width: "100%",
-  display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-  gap: "1px",
-  backgroundColor: vars.border.grid,
-  border: "1px solid rgba(255, 255, 255, 0.08)",
-  borderRadius: vars.radius.control,
-  overflow: "hidden",
-});
-
-export const gridCell = style({
-  backgroundColor: vars.surface.low,
-  padding: "10px",
+  minHeight: "170px",
+  backgroundColor: vars.color.ctaBg,
+  color: vars.color.ctaFg,
+  border: 0,
+  borderRadius: "10px",
+  padding: "20px",
   display: "flex",
   flexDirection: "column",
-  gap: "6px",
+  justifyContent: "space-between",
+  gap: "14px",
+  cursor: "pointer",
+  textAlign: "left",
+  fontFamily: vars.font.sans,
+  boxSizing: "border-box",
+  transition: "background-color 0.15s ease, transform 0.1s ease",
+  ":hover": {
+    backgroundColor: vars.color.ctaHover,
+  },
+  ":focus-visible": {
+    outline: `2px solid ${vars.color.positive}`,
+    outlineOffset: "2px",
+  },
+  selectors: {
+    "&:disabled": {
+      opacity: 0.5,
+      cursor: "default",
+    },
+  },
 });
 
-export const cellHeader = style({
+export const cardBody = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "8px",
+});
+
+// 이름과 체력 숫자를 한 줄에 균형 있게 배치
+export const topRow = style({
+  display: "flex",
+  alignItems: "baseline",
+  justifyContent: "space-between",
+  gap: "12px",
+});
+
+export const characterName = style({
+  margin: 0,
+  fontSize: "20px",
+  fontWeight: 700,
+  letterSpacing: "-0.02em",
+  color: vars.color.ctaFg,
+});
+
+// 체력만 숫자로 크게 표현
+export const hpNumber = style({
+  margin: 0,
+  fontFamily: vars.font.mono,
+  fontSize: "22px",
+  fontWeight: 800,
+  fontVariantNumeric: "tabular-nums",
+  letterSpacing: "-0.02em",
+  color: vars.color.ctaFg,
+  display: "flex",
+  alignItems: "baseline",
+  gap: "3px",
+});
+
+export const hpMax = style({
+  fontSize: "13px",
+  fontWeight: 600,
+  color: "rgba(9, 9, 11, 0.45)",
+});
+
+export const hpUnit = style({
+  fontSize: "10px",
+  fontWeight: 700,
+  color: "rgba(9, 9, 11, 0.5)",
+  letterSpacing: "0.04em",
+});
+
+// 장착 장비 간략히 표시
+export const loadoutText = style({
+  margin: 0,
+  fontSize: "12px",
+  color: "rgba(9, 9, 11, 0.7)",
+  lineHeight: 1.5,
+});
+
+export const emptySubtext = style({
+  margin: 0,
+  fontSize: "13px",
+  color: "rgba(9, 9, 11, 0.65)",
+  lineHeight: 1.5,
+});
+
+// 카드 하단: 카드 제목이 아래로 내려와 "탐사 준비"가 됨
+export const cardFooter = style({
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  gap: "4px",
+  paddingTop: "12px",
+  borderTop: "1px solid rgba(9, 9, 11, 0.12)",
+  width: "100%",
+  marginTop: "4px",
 });
 
-export const statLabel = style({
-  fontFamily: vars.font.mono,
-  fontSize: "11px",
-  fontWeight: 500,
-  color: vars.text.muted,
+export const footerTitle = style({
   margin: 0,
+  fontSize: "17px",
+  fontWeight: 700,
+  letterSpacing: "-0.02em",
+  color: vars.color.ctaFg,
 });
 
-export const metricDot = recipe({
-  base: {
-    width: "6px",
-    height: "6px",
-    borderRadius: "50%",
-  },
-  variants: {
-    tone: {
-      positive: { backgroundColor: vars.color.positive },
-      negative: { backgroundColor: vars.color.negative },
-      neutral: { backgroundColor: vars.text.muted },
-    },
-  },
-  defaultVariants: {
-    tone: "neutral",
-  },
-});
-
-export const statValue = recipe({
-  base: {
-    fontFamily: vars.font.mono,
-    fontSize: "13px",
-    fontWeight: 600,
-    fontVariantNumeric: "tabular-nums",
-    margin: 0,
-  },
-  variants: {
-    critical: {
-      true: { color: vars.color.negative },
-      false: { color: vars.text.primary },
-    },
-  },
-  defaultVariants: {
-    critical: false,
-  },
-});
-
-export const actionButton = recipe({
-  base: {
-    width: "100%",
-    height: "44px",
-    padding: "0 14px",
-    borderRadius: vars.radius.control,
-    fontSize: "13px",
-    fontWeight: 600,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    cursor: "pointer",
-    transition: "background-color 0.15s ease",
-    selectors: {
-      "&:disabled": {
-        opacity: 0.4,
-        cursor: "default",
-      },
-    },
-  },
-  variants: {
-    raiding: {
-      true: {
-        color: vars.color.ctaFg,
-        border: "1px solid transparent",
-        backgroundColor: vars.color.ctaBg,
-        selectors: {
-          "&:hover:not(:disabled)": {
-            backgroundColor: vars.color.ctaHover,
-          },
-        },
-      },
-      false: {
-        color: vars.color.ctaFg,
-        border: "1px solid transparent",
-        backgroundColor: vars.color.ctaBg,
-        selectors: {
-          "&:hover:not(:disabled)": {
-            backgroundColor: vars.color.ctaHover,
-          },
-        },
-      },
-    },
-  },
-  defaultVariants: {
-    raiding: false,
-  },
-});
-
-export const buttonCode = style({
+export const footerCode = style({
   fontFamily: vars.font.mono,
-  fontSize: "11px",
-  fontWeight: 600,
+  fontSize: "12px",
+  fontWeight: 700,
+  color: "rgba(9, 9, 11, 0.7)",
   fontVariantNumeric: "tabular-nums",
-  opacity: 0.85,
 });

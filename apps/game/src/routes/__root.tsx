@@ -122,10 +122,12 @@ function GameLayout() {
       <div className={`${styles.outletWrapper} content-container`}>
         <Outlet />
       </div>
-      <GlobalNav
-        mode={inRaid ? "raid" : "base"}
-        fieldBusy={isCombat || isNavigating || !!result}
-      />
+      {path !== "/base/staging" && (
+        <GlobalNav
+          mode={inRaid ? "raid" : "base"}
+          fieldBusy={isCombat || isNavigating || !!result}
+        />
+      )}
       {result && userId && (
         <RaidResultDialog
           result={result}

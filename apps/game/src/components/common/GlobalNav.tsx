@@ -1,6 +1,6 @@
 import { Link, useLocation, useSearch } from "@tanstack/react-router";
 import { BiHome, BiRadio, BiSolidHome, BiSolidRadio } from "react-icons/bi";
-import { FaBed, FaCircleUser, FaRegCircleUser } from "react-icons/fa6";
+import { FaCircleUser, FaRegCircleUser } from "react-icons/fa6";
 import {
   MdBackpack,
   MdOutlineBackpack,
@@ -47,15 +47,15 @@ const baseTabs = [
   { link: { to: "/base" }, label: "홈", icon: BiHome, activeIcon: BiSolidHome },
   {
     link: { to: "/base/stash" },
-    label: "창고",
+    label: "거점",
     icon: RiArchiveDrawerLine,
     activeIcon: RiArchiveDrawerFill,
   },
   {
-    link: { to: "/base/quarters" },
-    label: "숙소",
-    icon: FaBed,
-    activeIcon: FaBed,
+    link: { to: "/base/quest" },
+    label: "임무",
+    icon: BiRadio,
+    activeIcon: BiSolidRadio,
   },
   {
     link: { to: "/base/market" },
@@ -77,7 +77,8 @@ export default function GlobalNav({
   const pathname = location.pathname.replace(/\/$/, "");
   const tabs = mode === "raid" ? raidTabs : baseTabs;
   const activeIndex = tabs.findIndex(({ link }, index) => {
-    if (mode === "base" && pathname === "/base/quest") return index === 0;
+    if (mode === "base" && pathname === "/base/staging") return index === 0;
+    if (mode === "base" && pathname === "/base/quarters") return index === 1;
     if (pathname !== link.to) return false;
     return (
       link.to !== "/field" || (tab === "backpack" ? index === 1 : index === 0)
