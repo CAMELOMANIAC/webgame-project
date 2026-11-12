@@ -1,4 +1,4 @@
-import type { RaidNavigationResult } from "@webgame/types";
+import type { GhostMatch, RaidNavigationResult } from "@webgame/types";
 import { seopoMapVersion } from "@webgame/types";
 import {
   and,
@@ -20,17 +20,23 @@ import {
   type RaidSession,
   type TransactionClient,
 } from "../db";
+import { patrolsForRaid } from "../logic/ghostPatrols";
 import { nodesCloserThan } from "../logic/roadDistances";
 import { gameRules } from "../logic/rules";
 import { toGhostMatch } from "./ghosts";
 
 export type GhostRoster = NonNullable<RaidSession["ghostRoster"]>;
 type Track = GhostRoster["tracks"][number];
-interface RouteStep {
-  id: string;
+interface TimedStep {
   nodeId: string;
   time: number;
 }
+interface RouteStep extends TimedStep {
+  id: string;
+}
+type TrackedEncounter =
+  | { kind: "GHOST"; ghost: GhostMatch }
+  | { kind: "NPC_GHOST"; patrolId: string; time: number };
 const routeColumns = {
   id: ghostSnapshots.id,
   nodeId: ghostSnapshots.nodeId,
@@ -80,6 +86,7 @@ export function createGhostTracker(
   roster: GhostRoster,
   userId: string,
   lastTravelTime: number,
+  raid: Pick<RaidSession, "id" | "entryNodeId">,
   now = new Date(),
 ) {
   const { trackedCount, maxAgeDays, rulesVersion, matchWindowMinutes } =
@@ -97,9 +104,13 @@ export function createGhostTracker(
   const laterStep = alias(ghostSnapshots, "later_step");
   const nearby = new Map<string, string[]>();
   const routes = new Map<string, RouteStep[]>();
+  const patrols = patrolsForRaid(raid.id, raid.entryNodeId);
   let nextRecruitTime = 0;
 
-  function findClosestStep(steps: RouteStep[], targetTime: number) {
+  function findClosestStep<T extends TimedStep>(
+    steps: T[],
+    targetTime: number,
+  ) {
     let bestIndex = -1;
     let bestDiff = Infinity;
     for (let index = 0; index < steps.length; index++) {
@@ -115,7 +126,7 @@ export function createGhostTracker(
           steps[bestIndex]!.time > targetTime) ||
         (diff === bestDiff &&
           bestIndex !== -1 &&
-          (step.time <= targetTime) === (steps[bestIndex]!.time <= targetTime))
+          step.time <= targetTime === steps[bestIndex]!.time <= targetTime)
       ) {
         bestDiff = diff;
         bestIndex = index;
@@ -126,6 +137,20 @@ export function createGhostTracker(
       step: steps[bestIndex]!,
       previous: bestIndex > 0 ? steps[bestIndex - 1] : undefined,
     };
+  }
+
+  function crosses(
+    active: { step: TimedStep; previous?: TimedStep } | null,
+    from: number,
+    to: number,
+  ) {
+    if (!active) return false;
+    return (
+      active.step.nodeId === String(to) ||
+      (from !== to &&
+        active.step.nodeId === String(from) &&
+        active.previous?.nodeId === String(to))
+    );
   }
 
   async function routeFor(track: Track) {
@@ -296,7 +321,12 @@ export function createGhostTracker(
     initialize(entryNodeId: number) {
       return fill(0, entryNodeId, true);
     },
-    async match(from: number, to: number, time: number, safeArrival: boolean) {
+    async match(
+      from: number,
+      to: number,
+      time: number,
+      safeArrival: boolean,
+    ): Promise<TrackedEncounter | null> {
       roster.tracks = roster.tracks.filter((track) => track.lastTime >= time);
       await fill(time, to);
       if (safeArrival) return null;
@@ -304,20 +334,31 @@ export function createGhostTracker(
       for (const track of roster.tracks) {
         const steps = await routeFor(track);
         const active = findClosestStep(steps, time);
-        if (!active) continue;
-        const { step, previous } = active;
-        const sameNode = step.nodeId === String(to);
-        const oppositeDirection =
-          from !== to &&
-          step.nodeId === String(from) &&
-          previous?.nodeId === String(to);
-        if (!sameNode && !oppositeDirection) continue;
+        if (!active || !crosses(active, from, to)) continue;
         const snapshot = await tx.query.ghostSnapshots.findFirst({
-          where: eq(ghostSnapshots.id, step.id),
+          where: eq(ghostSnapshots.id, active.step.id),
         });
-        if (snapshot) return toGhostMatch(snapshot);
+        const ghost = snapshot && toGhostMatch(snapshot);
+        if (ghost) return { kind: "GHOST", ghost };
+      }
+
+      const vacancies = trackedCount - roster.tracks.length;
+      const activePatrols = patrols
+        .filter((patrol) => !roster.defeatedPatrolIds?.includes(patrol.id))
+        .slice(0, Math.max(0, vacancies));
+      for (const patrol of activePatrols) {
+        const active = findClosestStep(patrol.stepsNear(time), time);
+        if (active && crosses(active, from, to))
+          return {
+            kind: "NPC_GHOST",
+            patrolId: patrol.id,
+            time: active.step.time,
+          };
       }
       return null;
+    },
+    defeatPatrol(patrolId: string) {
+      (roster.defeatedPatrolIds ??= []).push(patrolId);
     },
     defeat(characterId: string) {
       roster.defeatedCharacterIds.push(characterId);

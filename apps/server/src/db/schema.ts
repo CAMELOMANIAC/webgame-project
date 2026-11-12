@@ -276,6 +276,7 @@ export const raidSessions = pgTable(
         recordedThrough: string;
       }[];
       defeatedCharacterIds: string[];
+      defeatedPatrolIds?: string[];
     }>(),
     startedAt: timestamp("startedAt", { precision: 3, mode: "date" })
       .notNull()
@@ -357,7 +358,7 @@ export const ghostSnapshots = pgTable(
     variantId: text("variantId"),
   },
   (table) => [
-    uniqueIndex("GhostSnapshot_raidId_time_nodeId_key").on(
+    index("GhostSnapshot_raidId_time_nodeId_idx").on(
       table.raidId,
       table.time,
       table.nodeId,

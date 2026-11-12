@@ -170,3 +170,94 @@ test("실제 DB: 먼 진입 기록을 추적하고 빈자리는 현재 위치에
     [retainedRaid.id, replacementRaid.id],
   );
 });
+
+test("실제 DB: 빈자리를 채운 NPC 고스트와 조우하고 승리한 순찰 상대는 다시 등장하지 않는다", async (t) => {
+  const { db, user, character, weapon } = await integrationFixture(t);
+  await db
+    .update(characters)
+    .set({ hp: 1000, maxHp: 1000 })
+    .where(eq(characters.id, character.id));
+  await db
+    .update(weaponMasters)
+    .set({ damage: 1000 })
+    .where(eq(weaponMasters.id, weapon.id));
+  await db.insert(characterWeapons).values({
+    characterId: character.id,
+    weaponMasterId: weapon.id,
+    slotIndex: 0,
+  });
+
+  const { raid } = await startRaid(db, user.id, character.id);
+  const laps = Array.from({ length: 4 }, () => [16, 47, 48, 20, 16, 13]).flat();
+  const path = [0, 1, 13, ...laps];
+  const input = {
+    raidId: raid.id,
+    expectedVersion: 0,
+    requestId: randomUUID(),
+    path,
+  };
+  const encounter = await navigateRaid(db, user.id, character.id, input);
+  assert.equal(encounter.encounterTriggered, true);
+  assert.equal(encounter.battleLog?.encounter?.kind, "NPC_GHOST");
+  assert.equal(encounter.battleLog?.encounter?.patrolId, "patrol-01");
+  assert.equal(encounter.battleLog?.result.winnerTeamId, "TeamA");
+  assert.deepEqual(
+    await navigateRaid(db, user.id, character.id, input),
+    encounter,
+  );
+
+  const saved = await db.query.raidSessions.findFirst({
+    where: eq(raidSessions.id, raid.id),
+  });
+  assert.deepEqual(saved?.ghostRoster?.defeatedPatrolIds, ["patrol-01"]);
+  const arrivedIndex = path.findIndex(
+    (_nodeId, index) =>
+      pathTravelMinutes(path.slice(0, index + 1)) === encounter.raid.time,
+  );
+  assert.ok(arrivedIndex > 0 && arrivedIndex < path.length - 1);
+  const onward = await navigateRaid(db, user.id, character.id, {
+    raidId: raid.id,
+    expectedVersion: encounter.raid.version,
+    requestId: randomUUID(),
+    path: path.slice(arrivedIndex),
+  });
+  assert.equal(onward.encounterTriggered, false);
+  assert.equal(onward.raid.currentNodeId, path.at(-1));
+});
+
+test("실제 DB: 플레이어 고스트가 추적 자리를 모두 차지하면 NPC 고스트는 투입되지 않는다", async (t) => {
+  const { db, user, character } = await integrationFixture(t);
+  const laps = Array.from({ length: 4 }, () => [16, 47, 48, 20, 16, 13]).flat();
+  const path = [0, 1, 13, ...laps];
+  const endTime = pathTravelMinutes(path);
+
+  for (let index = 0; index < gameRules.ghost.trackedCount; index++) {
+    const source = await integrationFixture(t);
+    const { raid } = await startRaid(
+      source.db,
+      source.user.id,
+      source.character.id,
+      undefined,
+      93,
+    );
+    await source.db.transaction((tx) =>
+      recordGhosts(tx, source.character.id, raid.id, [
+        { nodeId: 94, time: endTime },
+      ]),
+    );
+  }
+
+  const { raid } = await startRaid(db, user.id, character.id);
+  const result = await navigateRaid(db, user.id, character.id, {
+    raidId: raid.id,
+    expectedVersion: 0,
+    requestId: randomUUID(),
+    path,
+  });
+  assert.equal(result.encounterTriggered, false);
+  assert.equal(result.raid.time, endTime);
+  const saved = await db.query.raidSessions.findFirst({
+    where: eq(raidSessions.id, raid.id),
+  });
+  assert.equal(saved?.ghostRoster?.tracks.length, gameRules.ghost.trackedCount);
+});

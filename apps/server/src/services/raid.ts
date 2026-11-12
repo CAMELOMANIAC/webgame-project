@@ -21,11 +21,12 @@ import {
   type TransactionClient,
   users,
 } from "../db";
-import { pathTravelVisits } from "../logic/roadDistances";
+import { hasRoad, pathTravelVisits } from "../logic/roadDistances";
 import { gameRules } from "../logic/rules";
 import {
   executeGhostBattleInTransaction,
   executeHanlimBattleInTransaction,
+  executePatrolGhostBattleInTransaction,
   executeMonsterBattleInTransaction,
 } from "./battle";
 import {
@@ -307,13 +308,6 @@ async function performRaidAction<T>(
   });
 }
 
-const roadKey = (a: number, b: number) =>
-  `${Math.min(a, b)}:${Math.max(a, b)}`;
-
-const connectedRoads = new Set(
-  mapData.edges.map(({ source, target }) => roadKey(source, target)),
-);
-
 export async function getRaidNavigationResult(
   database: Database,
   userId: string,
@@ -395,7 +389,7 @@ export async function navigateRaid(
       }
       for (let index = 1; index < parsed.path.length; index++) {
         if (
-          !connectedRoads.has(roadKey(parsed.path[index - 1]!, parsed.path[index]!))
+          !hasRoad(parsed.path[index - 1]!, parsed.path[index]!)
         )
           throw new InventoryError("Path contains disconnected nodes");
       }
@@ -420,6 +414,7 @@ export async function navigateRaid(
         ghostRoster,
         userId,
         lastTravelTime,
+        raid,
       );
       if (!raid.ghostRoster && raid.time === 0)
         await tracker.initialize(raid.entryNodeId);
@@ -429,13 +424,13 @@ export async function navigateRaid(
         const stopTime = visit.time;
         const isMissionEncounter =
           missionActive && stopNodeId === firstMissionNodeId;
-        const ghost = await tracker.match(
+        const encounter = await tracker.match(
           path[stopIndex - 1]!,
           stopNodeId,
           stopTime,
           stopNodeId === gameRules.startNodeId,
         );
-        if (ghost || isMissionEncounter) {
+        if (encounter || isMissionEncounter) {
           await recordGhosts(
             tx,
             characterId,
@@ -449,20 +444,30 @@ export async function navigateRaid(
               time: stopTime,
             })
             .where(eq(characters.id, characterId));
-          const battleLog = ghost
-            ? await executeGhostBattleInTransaction(
-                tx,
-                characterId,
-                raid.id,
-                ghost,
-              )
-            : await executeHanlimBattleInTransaction(tx, characterId);
+          const battleLog =
+            encounter?.kind === "GHOST"
+              ? await executeGhostBattleInTransaction(
+                  tx,
+                  characterId,
+                  raid.id,
+                  encounter.ghost,
+                )
+              : encounter?.kind === "NPC_GHOST"
+                ? await executePatrolGhostBattleInTransaction(
+                    tx,
+                    characterId,
+                    encounter.patrolId,
+                    encounter.time,
+                  )
+                : await executeHanlimBattleInTransaction(tx, characterId);
           if (
             battleLog.result.winnerTeamId === "TeamA" &&
             !battleLog.playerDied
           ) {
-            if (ghost?.source.characterId)
-              tracker.defeat(ghost.source.characterId);
+            if (encounter?.kind === "GHOST" && encounter.ghost.source.characterId)
+              tracker.defeat(encounter.ghost.source.characterId);
+            if (encounter?.kind === "NPC_GHOST")
+              tracker.defeatPatrol(encounter.patrolId);
             if (isMissionEncounter)
               await recoverMissionRecord(tx, userId, raid.id);
           }

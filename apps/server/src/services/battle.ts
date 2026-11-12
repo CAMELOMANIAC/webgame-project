@@ -17,6 +17,7 @@ import {
   type WeaponMaster,
   weaponMasters,
 } from "../db";
+import { patrolCombat } from "../logic/ghostPatrols";
 import { hanlimNpcs } from "../logic/npcs";
 import { recoveryVitals } from "../logic/rules";
 import { simulateBattle } from "../logic/simulateBattle";
@@ -106,14 +107,47 @@ export async function executeHanlimBattleInTransaction(
   tx: TransactionClient,
   characterId: string,
 ): Promise<RaidBattleResult> {
-  const { character, player } = await loadBattlePlayer(tx, characterId);
   const npc = hanlimNpcs.control;
   const weapon = await tx.query.weaponMasters.findFirst({
     where: eq(weaponMasters.id, npc.weaponId),
   });
   if (!weapon) throw new Error(`Weapon ${npc.weaponId} not found`);
+  return executeNpcCombat(tx, characterId, npc.id, npc, toBattleWeapon(weapon), {
+    kind: "NPC",
+    name: npc.name,
+    faction: npc.faction,
+    role: npc.role,
+    reason: npc.reason,
+  });
+}
+
+export async function executePatrolGhostBattleInTransaction(
+  tx: TransactionClient,
+  characterId: string,
+  patrolId: string,
+  recordedTime: number,
+): Promise<RaidBattleResult> {
+  return executeNpcCombat(
+    tx,
+    characterId,
+    patrolId,
+    patrolCombat,
+    patrolCombat.weapon,
+    { kind: "NPC_GHOST", name: patrolCombat.name, patrolId, recordedTime },
+  );
+}
+
+async function executeNpcCombat(
+  tx: TransactionClient,
+  characterId: string,
+  npcId: string,
+  npc: { name: string; hp: number; stamina: number; staminaRegen: number },
+  weapon: WeaponData,
+  encounter: NonNullable<RaidBattleResult["encounter"]>,
+): Promise<RaidBattleResult> {
+  const { character, player } = await loadBattlePlayer(tx, characterId);
   const enemy: BattleCombatant = {
-    id: `npc:${npc.id}`,
+    id: `npc:${npcId}`,
     displayName: npc.name,
     teamId: "TeamB",
     hp: npc.hp,
@@ -125,25 +159,10 @@ export async function executeHanlimBattleInTransaction(
     maxWeight: 50,
     time: character.time,
     currentWeaponIndex: 0,
-    weapons: [toBattleWeapon(weapon), null, null, null, null, null],
+    weapons: [weapon, null, null, null, null, null],
   };
-  const result = await settleBattle(
-    tx,
-    character,
-    player,
-    [enemy],
-    [weapon.id],
-  );
-  return {
-    ...result,
-    encounter: {
-      kind: "NPC",
-      name: npc.name,
-      faction: npc.faction,
-      role: npc.role,
-      reason: npc.reason,
-    },
-  };
+  const result = await settleBattle(tx, character, player, [enemy], [weapon.id]);
+  return { ...result, encounter };
 }
 
 export async function loadBattlePlayer(

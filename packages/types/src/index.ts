@@ -167,9 +167,10 @@ export interface BattleLogEntry {
 
 export interface BattleLog {
   encounter?: {
-    kind: "NPC" | "GHOST";
+    kind: "NPC" | "GHOST" | "NPC_GHOST";
     name: string;
     snapshotId?: string;
+    patrolId?: string;
     recordedTime?: number;
     recordedAt?: string;
     sourceCharacterId?: string | null;

@@ -64,37 +64,46 @@ export async function recordGhosts(
         equipped.weaponMaster,
       );
   }
-  await tx
-    .insert(ghostSnapshots)
-    .values(
-      visits.map((visit) => ({
-        userId: character.userId,
-        characterId,
-        raidId,
-        nodeId: String(visit.nodeId),
-        time: visit.time,
-        hp: character.hp,
-        maxHp: character.maxHp,
-        stamina: character.stamina,
-        maxStamina: character.maxStamina,
-        staminaRegen: character.staminaRegen,
-        weight: character.weight,
-        maxWeight: character.maxWeight,
-        rulesVersion: gameRules.ghost.rulesVersion,
-        mapVersion: seopoMapVersion,
-        variantId: character.variantId,
-        combatant: JSON.parse(
-          JSON.stringify({ ...combatant, time: visit.time }),
-        ),
-      })),
-    )
-    .onConflictDoNothing({
-      target: [
-        ghostSnapshots.raidId,
-        ghostSnapshots.time,
-        ghostSnapshots.nodeId,
-      ],
-    });
+  const existing = await tx
+    .select({
+      time: ghostSnapshots.time,
+      nodeId: ghostSnapshots.nodeId,
+    })
+    .from(ghostSnapshots)
+    .where(eq(ghostSnapshots.raidId, raidId));
+  const recordedKeys = new Set(
+    existing.map((row) => `${row.time}:${row.nodeId}`),
+  );
+  const uniqueVisits = visits.filter((visit) => {
+    const key = `${visit.time}:${visit.nodeId}`;
+    if (recordedKeys.has(key)) return false;
+    recordedKeys.add(key);
+    return true;
+  });
+  if (uniqueVisits.length === 0) return;
+
+  await tx.insert(ghostSnapshots).values(
+    uniqueVisits.map((visit) => ({
+      userId: character.userId,
+      characterId,
+      raidId,
+      nodeId: String(visit.nodeId),
+      time: visit.time,
+      hp: character.hp,
+      maxHp: character.maxHp,
+      stamina: character.stamina,
+      maxStamina: character.maxStamina,
+      staminaRegen: character.staminaRegen,
+      weight: character.weight,
+      maxWeight: character.maxWeight,
+      rulesVersion: gameRules.ghost.rulesVersion,
+      mapVersion: seopoMapVersion,
+      variantId: character.variantId,
+      combatant: JSON.parse(
+        JSON.stringify({ ...combatant, time: visit.time }),
+      ),
+    })),
+  );
 }
 
 export async function matchGhost(

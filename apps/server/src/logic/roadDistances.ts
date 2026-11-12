@@ -29,6 +29,10 @@ export function roadTravelMinutes(from: number, to: number): number {
   return Math.min(maxEdgeMinutes, Math.max(stepUnitMinutes, rawMinutes));
 }
 
+export function hasRoad(from: number, to: number): boolean {
+  return roads[from]?.some((road) => road.nodeId === to) ?? false;
+}
+
 export function pathTravelVisits(
   path: number[],
   startTime = 0,
