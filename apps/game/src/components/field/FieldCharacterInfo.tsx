@@ -1,7 +1,8 @@
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { useMemo } from "react";
 
 import { battleLogAtom, processedEventsAtom } from "@/atoms/globalAtom";
+import { focusPlayerTriggerAtom } from "@/atoms/raidAtom";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 
 import defaultSurvivorPortrait from "../../assets/survivor-portrait-tranparent.png";
@@ -12,6 +13,7 @@ const SEGMENT_COUNT = 10;
 const FieldCharacterInfo = () => {
   const battleLog = useAtomValue(battleLogAtom);
   const processedEvents = useAtomValue(processedEventsAtom);
+  const setFocusPlayerTrigger = useSetAtom(focusPlayerTriggerAtom);
   const { data: characterData } = useGetCharacter();
 
   const stats = useMemo(() => {
@@ -60,10 +62,14 @@ const FieldCharacterInfo = () => {
     stats.maxStamina > 0 ? Math.max(0, stats.stamina / stats.maxStamina) : 0;
   const filledHpSegments = Math.ceil(hpRatio * SEGMENT_COUNT);
   const filledStaminaSegments = Math.ceil(staminaRatio * SEGMENT_COUNT);
-  const hpTone = hpRatio <= 0.3 || battleLog ? "negative" : "positive";
+  const hpTone = hpRatio <= 0.3 || battleLog ? "negative" : "neutral";
 
   return (
-    <div className={styles.container}>
+    <button
+      type="button"
+      className={styles.container}
+      onClick={() => setFocusPlayerTrigger((n) => n + 1)}
+    >
       <div className={styles.headerRow}>
         <div className={styles.portraitWrap} aria-hidden="true">
           <img
@@ -106,13 +112,13 @@ const FieldCharacterInfo = () => {
             <span
               key={`stm-${idx}`}
               className={styles.segmentCell({
-                state: idx < filledStaminaSegments ? "positive" : "empty",
+                state: idx < filledStaminaSegments ? "secondary" : "empty",
               })}
             />
           ))}
         </div>
       </div>
-    </div>
+    </button>
   );
 };
 

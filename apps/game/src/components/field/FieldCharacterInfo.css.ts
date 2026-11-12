@@ -11,6 +11,10 @@ export const container = style([
     justifyContent: "space-between",
     gap: "8px",
     padding: "12px",
+    cursor: "pointer",
+    textAlign: "left",
+    font: "inherit",
+    color: "inherit",
   },
 ]);
 
@@ -125,6 +129,8 @@ export const segmentCell = recipe({
   variants: {
     state: {
       empty: { backgroundColor: vars.border.grid },
+      neutral: { backgroundColor: vars.text.primary },
+      secondary: { backgroundColor: vars.text.secondary },
       positive: { backgroundColor: vars.color.positive },
       negative: { backgroundColor: vars.color.negative },
     },

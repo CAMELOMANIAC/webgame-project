@@ -1,7 +1,7 @@
 import type { UseMutationResult } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import type { BattleLog } from "@webgame/types";
-import { getDefaultStore, useAtom } from "jotai";
+import { getDefaultStore, useAtom, useAtomValue } from "jotai";
 import { Application, Container, Graphics, Sprite, Text, TextStyle } from "pixi.js";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
@@ -10,6 +10,7 @@ import { selectedUserIdAtom } from "@/atoms/authAtom";
 import { pendingNavigationAtom, pendingNavigationKey } from "@/atoms/pendingNavigationAtom";
 import {
   currentNodeIdAtom,
+  focusPlayerTriggerAtom,
   followPlayerAtom,
   isInventoryDirtyAtom,
   isNavigatingAtom,
@@ -25,7 +26,7 @@ import type { NavigateRaidParams, NavigateRaidResponse } from "@/utils/hooks/use
 import { useRaidRules } from "@/utils/hooks/useRaidRules";
 import { findShortestPath } from "@/utils/pathfinding";
 import { getFogOfWarTexture, loadCompassTexture } from "@/utils/pixiTextures";
-import { Easings, runTween } from "@/utils/pixiTween";
+import { Easings, runTween, type TweenHandle } from "@/utils/pixiTween";
 import { createRTreeIndex, searchRTreeIndex } from "@/utils/rtreeCulling";
 
 import mapData from "../../../../../packages/types/src/assets/map_graph.json";
@@ -64,6 +65,52 @@ type Water = WaterPoint[];
 
 const nodes = mapData.nodes as Node[];
 const edges = mapData.edges as unknown as Edge[];
+
+const MIN_ZOOM_SCALE = 0.2;
+const MAX_ZOOM_SCALE = 10;
+const FOG_VISIBLE_MIN_SCALE = 1.0;
+
+function syncFogVisibility(
+  sightMaskSprite: Sprite | null,
+  scale: number,
+  hasPlayerCoords: boolean,
+) {
+  if (sightMaskSprite && !sightMaskSprite.destroyed) {
+    sightMaskSprite.visible = hasPlayerCoords && scale >= FOG_VISIBLE_MIN_SCALE;
+  }
+}
+const MAP_BOUNDS = nodes.reduce(
+  (acc, node) => ({
+    minX: Math.min(acc.minX, node.x),
+    maxX: Math.max(acc.maxX, node.x),
+    minY: Math.min(acc.minY, node.y),
+    maxY: Math.max(acc.maxY, node.y),
+  }),
+  { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity },
+);
+
+/** 뷰포트 중심이 지도 노드 경계를 벗어나지 않도록 월드 좌표를 제한한다. */
+function clampWorldPosition(
+  x: number,
+  y: number,
+  scale: number,
+  viewportWidth: number,
+  viewportHeight: number,
+): { x: number; y: number } {
+  if (!Number.isFinite(MAP_BOUNDS.minX) || viewportWidth <= 0 || viewportHeight <= 0) {
+    return { x, y };
+  }
+  const halfW = viewportWidth / 2;
+  const halfH = viewportHeight / 2;
+  const minWorldX = halfW - MAP_BOUNDS.maxX * scale;
+  const maxWorldX = halfW - MAP_BOUNDS.minX * scale;
+  const minWorldY = halfH - MAP_BOUNDS.maxY * scale;
+  const maxWorldY = halfH - MAP_BOUNDS.minY * scale;
+  return {
+    x: Math.max(minWorldX, Math.min(maxWorldX, x)),
+    y: Math.max(minWorldY, Math.min(maxWorldY, y)),
+  };
+}
 
 // 빌딩 렌더링 고속화를 위해 coordinates 배열을 1차원 플랫 구조로 미리 변환 (모듈 스코프 1회 수행)
 const buildings = ((mapData.buildings || []) as unknown as Building[]).map((b) => ({
@@ -204,6 +251,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const playerMarkerSpriteRef = useRef<Sprite | null>(null);
 
   const [isPixiReady, setIsPixiReady] = useState(false);
+  const focusTweenRef = useRef<TweenHandle | null>(null);
+  const focusPlayerTrigger = useAtomValue(focusPlayerTriggerAtom);
 
   const { data: characterData } = useGetCharacter();
   const queryClient = useQueryClient();
@@ -779,8 +828,11 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         }
       }
 
-      // 3. 건물 폴리곤 검사 (showBuildings 활성화 시)
-      if (showBuildingsRef.current) {
+      // 3. 건물 폴리곤 검사 (showBuildings 활성화 및 전장의 안개 표시 배율 이상일 때만 허용)
+      if (
+        showBuildingsRef.current &&
+        (worldContainerRef.current?.scale.x ?? 0) >= FOG_VISIBLE_MIN_SCALE
+      ) {
         const candidates = searchRTreeIndex<Building>(buildingsRTree, {
           minX: worldX,
           minY: worldY,
@@ -803,6 +855,9 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       if (isCombatRef.current || e.button !== 0) return;
       const world = worldContainerRef.current;
       if (!world) return;
+
+      focusTweenRef.current?.destroy();
+      focusTweenRef.current = null;
 
       isDragging = true;
       hasMovedBeyondThreshold = false;
@@ -827,7 +882,14 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
         if (hasMovedBeyondThreshold) {
           // GPU 유니폼 행렬만 즉시 갱신 (React 리렌더링 0회!)
-          world.position.set(dragStartWorldX + dx, dragStartWorldY + dy);
+          const clampedPos = clampWorldPosition(
+            dragStartWorldX + dx,
+            dragStartWorldY + dy,
+            world.scale.x,
+            host.clientWidth,
+            host.clientHeight,
+          );
+          world.position.set(clampedPos.x, clampedPos.y);
 
           const now = performance.now();
           if (benchmarkStatsRef.current.lastFrameTime > 0) {
@@ -1013,6 +1075,9 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       const world = worldContainerRef.current;
       if (!world) return;
 
+      focusTweenRef.current?.destroy();
+      focusTweenRef.current = null;
+
       const rect = host.getBoundingClientRect();
       const pointerX = e.clientX - rect.left;
       const pointerY = e.clientY - rect.top;
@@ -1025,15 +1090,19 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
       const scaleBy = 1.15;
       const newScale = e.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
-      const clampedScale = Math.max(0.05, Math.min(10, newScale));
+      const clampedScale = Math.max(MIN_ZOOM_SCALE, Math.min(MAX_ZOOM_SCALE, newScale));
 
-      const newPos = {
-        x: pointerX - mousePointTo.x * clampedScale,
-        y: pointerY - mousePointTo.y * clampedScale,
-      };
+      const newPos = clampWorldPosition(
+        pointerX - mousePointTo.x * clampedScale,
+        pointerY - mousePointTo.y * clampedScale,
+        clampedScale,
+        host.clientWidth,
+        host.clientHeight,
+      );
 
       world.scale.set(clampedScale);
       world.position.set(newPos.x, newPos.y);
+      syncFogVisibility(sightMaskSpriteRef.current, clampedScale, Boolean(playerCoordsRef.current));
 
       if (playerMarkerSpriteRef.current && !playerMarkerSpriteRef.current.destroyed) {
         const invScale = 1 / clampedScale;
@@ -1099,6 +1168,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
     world.position.set(newX, newY);
     world.scale.set(scale);
+    syncFogVisibility(sightMaskSpriteRef.current, scale, Boolean(playerCoordsRef.current));
 
     if (playerMarkerSpriteRef.current && !playerMarkerSpriteRef.current.destroyed) {
       playerMarkerSpriteRef.current.width = 50 / scale;
@@ -1148,6 +1218,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         if (world.destroyed) return;
         const s = startScale + (targetScale - startScale) * p;
         world.scale.set(s);
+        syncFogVisibility(sightMaskSpriteRef.current, s, Boolean(playerCoordsRef.current));
         world.position.set(
           startX + (targetX - startX) * p,
           startY + (targetY - startY) * p,
@@ -1166,6 +1237,68 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       tween.destroy();
     };
   }, [isPixiReady, isCombat, dimensions.width, dimensions.height, currentNodeId, playerCoords]);
+
+  // 2.2. 캐릭터 HUD 클릭 시 카메라를 플레이어 위치 중앙으로 부드럽게 이동
+  useEffect(() => {
+    if (focusPlayerTrigger === 0) return;
+    const world = worldContainerRef.current;
+    if (!isPixiReady || isCombat || !world || dimensions.width === 0 || dimensions.height === 0) {
+      return;
+    }
+
+    const playerPos =
+      playerCoordsRef.current ||
+      playerCoords ||
+      (nodes[currentNodeId] ? { x: nodes[currentNodeId].x, y: nodes[currentNodeId].y } : null);
+    if (!playerPos) return;
+
+    const targetScale = 3.0;
+    const targetPos = clampWorldPosition(
+      dimensions.width / 2 - playerPos.x * targetScale,
+      dimensions.height / 2 - playerPos.y * targetScale,
+      targetScale,
+      dimensions.width,
+      dimensions.height,
+    );
+
+    const startScale = world.scale.x;
+    const startX = world.x;
+    const startY = world.y;
+
+    focusTweenRef.current?.destroy();
+    focusTweenRef.current = runTween({
+      duration: 0.45,
+      easing: Easings.EaseInOut,
+      onUpdate: (p) => {
+        if (world.destroyed) return;
+        const s = startScale + (targetScale - startScale) * p;
+        world.scale.set(s);
+        syncFogVisibility(sightMaskSpriteRef.current, s, Boolean(playerCoordsRef.current));
+        world.position.set(
+          startX + (targetPos.x - startX) * p,
+          startY + (targetPos.y - startY) * p,
+        );
+        if (playerMarkerSpriteRef.current && !playerMarkerSpriteRef.current.destroyed) {
+          playerMarkerSpriteRef.current.width = 50 / s;
+          playerMarkerSpriteRef.current.height = 50 / s;
+        }
+      },
+      onFinish: () => {
+        focusTweenRef.current = null;
+        setStageTransform({
+          x: targetPos.x,
+          y: targetPos.y,
+          scale: targetScale,
+        });
+      },
+    });
+
+    return () => {
+      focusTweenRef.current?.destroy();
+      focusTweenRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusPlayerTrigger]);
 
   // [BENCHMARK] 컬링 연산 시간(ms) 상태
   const [cullingTimeMs, setCullingTimeMs] = useState<number>(0);
@@ -1284,7 +1417,11 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       playerCoordsRef.current = playerCoords;
       if (sightMaskSpriteRef.current && !sightMaskSpriteRef.current.destroyed) {
         sightMaskSpriteRef.current.position.set(playerCoords.x, playerCoords.y);
-        sightMaskSpriteRef.current.visible = true;
+        syncFogVisibility(
+          sightMaskSpriteRef.current,
+          worldContainerRef.current?.scale.x ?? 3.0,
+          true,
+        );
       }
       if (playerMarkerSpriteRef.current && !playerMarkerSpriteRef.current.destroyed) {
         playerMarkerSpriteRef.current.position.set(playerCoords.x, playerCoords.y);
@@ -1403,6 +1540,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
       world.scale.set(newScale);
       world.position.set(newStageX, newStageY);
+      syncFogVisibility(sightMaskSpriteRef.current, newScale, Boolean(playerCoordsRef.current));
 
       if (playerMarkerSpriteRef.current && !playerMarkerSpriteRef.current.destroyed) {
         playerMarkerSpriteRef.current.width = 50 / newScale;

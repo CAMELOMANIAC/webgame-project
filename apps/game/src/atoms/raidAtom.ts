@@ -34,6 +34,9 @@ export const playerCoordsAtom = atom<{ x: number; y: number } | null>(null);
 // 카메라 추적 여부
 export const followPlayerAtom = atom<boolean>(true);
 
+// 캐릭터 HUD 클릭 시 카메라를 플레이어 위치로 이동시키는 트리거 카운터
+export const focusPlayerTriggerAtom = atom<number>(0);
+
 // 플레이어의 현재 방향 회전 각도 (도 단위, 0도 = 북쪽)
 export const playerRotationAtom = atom<number>(0);
 
