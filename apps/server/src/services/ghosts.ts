@@ -14,6 +14,7 @@ import {
   lte,
   ne,
   notExists,
+  sql,
 } from "drizzle-orm";
 import {
   characters,
@@ -30,7 +31,7 @@ export async function recordGhosts(
   tx: TransactionClient,
   characterId: string,
   raidId: string,
-  visits: { nodeId: number; round: number }[],
+  visits: { nodeId: number; time: number }[],
 ) {
   const character = await tx.query.characters.findFirst({
     where: eq(characters.id, characterId),
@@ -71,8 +72,7 @@ export async function recordGhosts(
         characterId,
         raidId,
         nodeId: String(visit.nodeId),
-        round: visit.round,
-        time: visit.round,
+        time: visit.time,
         hp: character.hp,
         maxHp: character.maxHp,
         stamina: character.stamina,
@@ -84,14 +84,14 @@ export async function recordGhosts(
         mapVersion: seopoMapVersion,
         variantId: character.variantId,
         combatant: JSON.parse(
-          JSON.stringify({ ...combatant, time: visit.round }),
+          JSON.stringify({ ...combatant, time: visit.time }),
         ),
       })),
     )
     .onConflictDoNothing({
       target: [
         ghostSnapshots.raidId,
-        ghostSnapshots.round,
+        ghostSnapshots.time,
         ghostSnapshots.nodeId,
       ],
     });
@@ -101,17 +101,20 @@ export async function matchGhost(
   db: DbOrTx,
   userId: string,
   nodeId: number,
-  round: number,
+  time: number,
   now = new Date(),
   raidId?: string,
 ): Promise<GhostMatch | null> {
-  const { maxAgeDays, rulesVersion } = gameRules.ghost;
+  const { maxAgeDays, rulesVersion, matchWindowMinutes } = gameRules.ghost;
+  const minTime = Math.max(0, time - matchWindowMinutes);
+  const maxTime = time + matchWindowMinutes;
   const conditions = [
     ne(ghostSnapshots.userId, userId),
     eq(ghostSnapshots.nodeId, String(nodeId)),
     eq(ghostSnapshots.rulesVersion, rulesVersion),
     eq(ghostSnapshots.mapVersion, seopoMapVersion),
-    eq(ghostSnapshots.round, round),
+    gte(ghostSnapshots.time, minTime),
+    lte(ghostSnapshots.time, maxTime),
     gt(ghostSnapshots.hp, 0),
     isNotNull(ghostSnapshots.combatant),
     gte(
@@ -139,7 +142,12 @@ export async function matchGhost(
     .select()
     .from(ghostSnapshots)
     .where(and(...conditions))
-    .orderBy(desc(ghostSnapshots.createdAt), asc(ghostSnapshots.id))
+    .orderBy(
+      sql`abs(${ghostSnapshots.time} - ${time}) asc`,
+      sql`case when ${ghostSnapshots.time} <= ${time} then 0 else 1 end asc`,
+      desc(ghostSnapshots.createdAt),
+      asc(ghostSnapshots.id),
+    )
     .limit(1);
   return match ? toGhostMatch(match) : null;
 }
@@ -150,7 +158,7 @@ export function toGhostMatch(match: GhostSnapshot): GhostMatch | null {
   return {
     id: match.id,
     nodeId: Number(match.nodeId),
-    round: match.round,
+    time: match.time,
     createdAt: match.createdAt.toISOString(),
     rulesVersion: match.rulesVersion,
     source: {

@@ -218,7 +218,7 @@ export async function executeGhostBattleInTransaction(
       kind: "GHOST",
       name: ghost.source.displayName,
       snapshotId: ghost.id,
-      recordedRound: ghost.round,
+      recordedTime: ghost.time,
       recordedAt: ghost.createdAt,
       sourceCharacterId: ghost.source.characterId,
     },

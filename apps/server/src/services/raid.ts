@@ -21,6 +21,7 @@ import {
   type TransactionClient,
   users,
 } from "../db";
+import { pathTravelVisits } from "../logic/roadDistances";
 import { gameRules } from "../logic/rules";
 import {
   executeGhostBattleInTransaction,
@@ -85,7 +86,7 @@ function view(raid: RaidSession): RaidView {
     status: raid.status,
     version: raid.version,
     currentNodeId: raid.currentNodeId,
-    round: raid.round,
+    time: raid.time,
   };
 }
 
@@ -206,7 +207,7 @@ export async function startRaid(
       })
       .where(eq(characters.id, characterId));
     await recordGhosts(tx, characterId, raid.id, [
-      { nodeId: raid.currentNodeId, round: 0 },
+      { nodeId: raid.currentNodeId, time: 0 },
     ]);
     return { status: "success", isRaiding: true, raid: view(raid) };
   });
@@ -216,7 +217,7 @@ interface ActionResult<T> {
   payload: T;
   status?: RaidStatus;
   currentNodeId?: number;
-  round?: number;
+  time?: number;
   ghostRoster?: GhostRoster;
 }
 
@@ -278,7 +279,7 @@ async function performRaidAction<T>(
         ...(result.currentNodeId !== undefined
           ? { currentNodeId: result.currentNodeId }
           : {}),
-        ...(result.round !== undefined ? { round: result.round } : {}),
+        ...(result.time !== undefined ? { time: result.time } : {}),
         ...(result.ghostRoster ? { ghostRoster: result.ghostRoster } : {}),
         ...(status === "ACTIVE" ? {} : { endedAt: new Date() }),
       })
@@ -289,7 +290,7 @@ async function performRaidAction<T>(
       .update(characters)
       .set(
         status === "ACTIVE"
-          ? { currentNodeId: updated.currentNodeId, time: updated.round }
+          ? { currentNodeId: updated.currentNodeId, time: updated.time }
           : { isRaiding: false, activeRaidId: null, currentNodeId: 0, time: 0 },
       )
       .where(eq(characters.id, characterId));
@@ -403,10 +404,12 @@ export async function navigateRaid(
           equipment: parsed.equipment,
           inventory: parsed.inventory,
         });
-      // A building move records one round at the same road node.
+      // A building move records one step at the same road node.
       const path = isBuildingMove
         ? [raid.currentNodeId, raid.currentNodeId]
         : parsed.path;
+      const plannedVisits = pathTravelVisits(path, raid.time);
+      const lastTravelTime = plannedVisits.at(-1)?.time ?? raid.time;
       const missionActive =
         !isBuildingMove &&
         path.indexOf(firstMissionNodeId, 1) !== -1 &&
@@ -416,37 +419,34 @@ export async function navigateRaid(
         tx,
         ghostRoster,
         userId,
-        raid.round + path.length - 1,
+        lastTravelTime,
       );
-      if (!raid.ghostRoster && raid.round === 0)
+      if (!raid.ghostRoster && raid.time === 0)
         await tracker.initialize(raid.entryNodeId);
       for (let stopIndex = 1; stopIndex < path.length; stopIndex++) {
-        const stopNodeId = path[stopIndex]!;
-        const stopRound = raid.round + stopIndex;
+        const visit = plannedVisits[stopIndex - 1]!;
+        const stopNodeId = visit.nodeId;
+        const stopTime = visit.time;
         const isMissionEncounter =
           missionActive && stopNodeId === firstMissionNodeId;
         const ghost = await tracker.match(
           path[stopIndex - 1]!,
           stopNodeId,
-          stopRound,
+          stopTime,
           stopNodeId === gameRules.startNodeId,
         );
         if (ghost || isMissionEncounter) {
-          const visitedPath = path.slice(1, stopIndex + 1);
           await recordGhosts(
             tx,
             characterId,
             raid.id,
-            visitedPath.map((nodeId, index) => ({
-              nodeId,
-              round: raid.round + index + 1,
-            })),
+            plannedVisits.slice(0, stopIndex),
           );
           await tx
             .update(characters)
             .set({
               currentNodeId: stopNodeId,
-              time: stopRound,
+              time: stopTime,
             })
             .where(eq(characters.id, characterId));
           const battleLog = ghost
@@ -469,24 +469,17 @@ export async function navigateRaid(
           return {
             payload: { encounterTriggered: true, stopNodeId, battleLog },
             currentNodeId: stopNodeId,
-            round: stopRound,
+            time: stopTime,
             ghostRoster,
             status: battleLog.playerDied ? "DEAD" : "ACTIVE",
           };
         }
       }
-      await recordGhosts(
-        tx,
-        characterId,
-        raid.id,
-        path
-          .slice(1)
-          .map((nodeId, index) => ({ nodeId, round: raid.round + index + 1 })),
-      );
+      await recordGhosts(tx, characterId, raid.id, plannedVisits);
       return {
         payload: { encounterTriggered: false },
         currentNodeId: path.at(-1),
-        round: raid.round + path.length - 1,
+        time: lastTravelTime,
         ghostRoster,
       };
     },
@@ -547,8 +540,9 @@ export async function fightRaidMonster(
     "BATTLE",
     { level },
     async (tx, raid) => {
+      const nextTime = raid.time + gameRules.travel.battleActionMinutes;
       await recordGhosts(tx, characterId, raid.id, [
-        { nodeId: raid.currentNodeId, round: raid.round + 1 },
+        { nodeId: raid.currentNodeId, time: nextTime },
       ]);
       const battleLog = await executeMonsterBattleInTransaction(
         tx,
@@ -557,7 +551,7 @@ export async function fightRaidMonster(
       );
       return {
         payload: battleLog,
-        round: raid.round + 1,
+        time: nextTime,
         status: battleLog.playerDied ? "DEAD" : "ACTIVE",
       };
     },

@@ -335,9 +335,9 @@ test("실제 DB: 선택한 진입 지점에서 배치하고 중복 배치는 원
   assert.equal(before.stash[0]?.quantity, 1);
   const result = await deploy(37, true);
   assert.equal(result.statusCode, 200);
-  const { raid } = result.json<{ raid: { id: string; currentNodeId: number; round: number } }>();
+  const { raid } = result.json<{ raid: { id: string; currentNodeId: number; time: number } }>();
   assert.equal(raid.currentNodeId, 37);
-  assert.equal(raid.round, 0);
+  assert.equal(raid.time, 0);
   assert.deepEqual((await deploy(93)).json().raid, raid);
   const deployed = await snapshot();
   assert.equal(deployed.character.currentNodeId, 37);
@@ -348,5 +348,5 @@ test("실제 DB: 선택한 진입 지점에서 배치하고 중복 배치는 원
     with: { snapshots: true },
   });
   assert.equal(saved?.entryNodeId, 37);
-  assert.deepEqual(saved?.snapshots.map(({ nodeId, round }) => [nodeId, round]), [["37", 0]]);
+  assert.deepEqual(saved?.snapshots.map(({ nodeId, time }) => [nodeId, time]), [["37", 0]]);
 });

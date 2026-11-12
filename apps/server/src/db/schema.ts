@@ -262,7 +262,7 @@ export const raidSessions = pgTable(
     version: integer("version").notNull().default(0),
     entryNodeId: integer("entryNodeId").notNull().default(0),
     currentNodeId: integer("currentNodeId").notNull().default(0),
-    round: integer("round").notNull().default(0),
+    time: integer("time").notNull().default(0),
     // 이전 거리 기반 판정으로 저장된 탐사 데이터를 보존한다.
     encounterTravel: jsonb("encounterTravel").$type<{
       visitedEdges: string[];
@@ -272,7 +272,7 @@ export const raidSessions = pgTable(
       tracks: {
         sourceRaidId: string;
         characterId: string;
-        lastRound: number;
+        lastTime: number;
         recordedThrough: string;
       }[];
       defeatedCharacterIds: string[];
@@ -332,7 +332,7 @@ export const ghostSnapshots = pgTable(
         onUpdate: "cascade",
       }),
     nodeId: text("nodeId").notNull(),
-    time: integer("time").notNull(),
+    time: integer("time").notNull().default(0),
     hp: integer("hp").notNull(),
     maxHp: integer("maxHp").notNull(),
     stamina: integer("stamina").notNull(),
@@ -351,26 +351,25 @@ export const ghostSnapshots = pgTable(
       onDelete: "set null",
       onUpdate: "cascade",
     }),
-    round: integer("round").notNull().default(0),
     rulesVersion: integer("rulesVersion").notNull().default(0),
     mapVersion: text("mapVersion").notNull().default("seopo-prototype-1"),
     combatant: jsonb("combatant"),
     variantId: text("variantId"),
   },
   (table) => [
-    uniqueIndex("GhostSnapshot_raidId_round_nodeId_key").on(
+    uniqueIndex("GhostSnapshot_raidId_time_nodeId_key").on(
       table.raidId,
-      table.round,
+      table.time,
       table.nodeId,
     ),
-    index("GhostSnapshot_nodeId_rulesVersion_round_createdAt_idx").on(
+    index("GhostSnapshot_nodeId_rulesVersion_time_createdAt_idx").on(
       table.nodeId,
       table.rulesVersion,
-      table.round,
+      table.time,
       table.createdAt,
     ),
-    index("GhostSnapshot_round_rulesVersion_mapVersion_createdAt_idx").on(
-      table.round,
+    index("GhostSnapshot_time_rulesVersion_mapVersion_createdAt_idx").on(
+      table.time,
       table.rulesVersion,
       table.mapVersion,
       table.createdAt,

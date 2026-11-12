@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { buildApp } from "./app";
 import { createDatabase } from "./db";
+import {
+  pathTravelMinutes,
+  pathTravelVisits,
+  roadTravelMinutes,
+} from "./logic/roadDistances";
 
 // 실제 접속은 하지 않는다. DB 의존 API는 주입한 클라이언트의 메서드로 대체한다.
 function createTestDb() {
@@ -63,4 +68,17 @@ test("전투 API는 DB 없이 시뮬레이션 로그를 반환한다", async (t)
     durationTicks: 0,
   });
   assert.equal(response.json().timeline[0].events[0].type, "BATTLE_END");
+});
+
+test("도로 이동 시간은 실제 간선 길이에 비례해 10분~60분 단위로 누적된다", () => {
+  assert.equal(roadTravelMinutes(0, 1), 10);
+  assert.equal(roadTravelMinutes(1, 26), 30);
+  assert.equal(roadTravelMinutes(26, 28), 20);
+  assert.equal(roadTravelMinutes(28, 28), 10);
+  assert.deepEqual(pathTravelVisits([0, 1, 26, 28], 0), [
+    { nodeId: 1, time: 10 },
+    { nodeId: 26, time: 40 },
+    { nodeId: 28, time: 60 },
+  ]);
+  assert.equal(pathTravelMinutes([0, 1, 26, 28]), 60);
 });

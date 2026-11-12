@@ -26,10 +26,15 @@ import { toGhostMatch } from "./ghosts";
 
 export type GhostRoster = NonNullable<RaidSession["ghostRoster"]>;
 type Track = GhostRoster["tracks"][number];
+interface RouteStep {
+  id: string;
+  nodeId: string;
+  time: number;
+}
 const routeColumns = {
   id: ghostSnapshots.id,
   nodeId: ghostSnapshots.nodeId,
-  round: ghostSnapshots.round,
+  time: ghostSnapshots.time,
 };
 
 export async function loadGhostRoster(
@@ -74,10 +79,11 @@ export function createGhostTracker(
   tx: TransactionClient,
   roster: GhostRoster,
   userId: string,
-  lastTravelRound: number,
+  lastTravelTime: number,
   now = new Date(),
 ) {
-  const { trackedCount, maxAgeDays, rulesVersion } = gameRules.ghost;
+  const { trackedCount, maxAgeDays, rulesVersion, matchWindowMinutes } =
+    gameRules.ghost;
   const oldest = new Date(now.getTime() - maxAgeDays * 86400000);
   const eligible = [
     ne(ghostSnapshots.userId, userId),
@@ -90,12 +96,61 @@ export function createGhostTracker(
   ];
   const laterStep = alias(ghostSnapshots, "later_step");
   const nearby = new Map<string, string[]>();
-  const routes = new Map<string, Map<number, { id: string; nodeId: string }>>();
-  let nextRecruitRound = 0;
+  const routes = new Map<string, RouteStep[]>();
+  let nextRecruitTime = 0;
 
-  async function fill(round: number, playerNode: number, initial = false) {
+  function findClosestStep(steps: RouteStep[], targetTime: number) {
+    let bestIndex = -1;
+    let bestDiff = Infinity;
+    for (let index = 0; index < steps.length; index++) {
+      const step = steps[index]!;
+      if (targetTime > 0 && step.time <= 0) continue;
+      const diff = Math.abs(step.time - targetTime);
+      if (diff > matchWindowMinutes) continue;
+      if (
+        diff < bestDiff ||
+        (diff === bestDiff &&
+          bestIndex !== -1 &&
+          step.time <= targetTime &&
+          steps[bestIndex]!.time > targetTime) ||
+        (diff === bestDiff &&
+          bestIndex !== -1 &&
+          (step.time <= targetTime) === (steps[bestIndex]!.time <= targetTime))
+      ) {
+        bestDiff = diff;
+        bestIndex = index;
+      }
+    }
+    if (bestIndex === -1) return null;
+    return {
+      step: steps[bestIndex]!,
+      previous: bestIndex > 0 ? steps[bestIndex - 1] : undefined,
+    };
+  }
+
+  async function routeFor(track: Track) {
+    const cached = routes.get(track.sourceRaidId);
+    if (cached) return cached;
+
+    const steps = await tx
+      .select(routeColumns)
+      .from(ghostSnapshots)
+      .where(
+        and(
+          ...eligible,
+          eq(ghostSnapshots.raidId, track.sourceRaidId),
+          lte(ghostSnapshots.createdAt, new Date(track.recordedThrough)),
+          lte(ghostSnapshots.time, track.lastTime),
+        ),
+      )
+      .orderBy(asc(ghostSnapshots.time), asc(ghostSnapshots.id));
+    routes.set(track.sourceRaidId, steps);
+    return steps;
+  }
+
+  async function fill(time: number, playerNode: number, initial = false) {
     const vacancies = trackedCount - roster.tracks.length;
-    if (vacancies <= 0 || (!initial && round < nextRecruitRound)) return;
+    if (vacancies <= 0 || (!initial && time < nextRecruitTime)) return;
 
     const excluded = [
       ...roster.defeatedCharacterIds,
@@ -109,21 +164,28 @@ export function createGhostTracker(
         ? notInArray(ghostSnapshots.characterId, excluded)
         : undefined,
     );
+    const minWindowTime = initial ? 0 : Math.max(1, time - matchWindowMinutes);
+    const maxWindowTime = initial ? 0 : time + matchWindowMinutes;
+
     if (!initial) {
       const [next] = await tx
-        .select({ round: ghostSnapshots.round })
+        .select({ time: ghostSnapshots.time })
         .from(ghostSnapshots)
         .where(
           and(
             available,
-            gte(ghostSnapshots.round, round),
-            lte(ghostSnapshots.round, lastTravelRound),
+            gte(ghostSnapshots.time, minWindowTime),
+            lte(ghostSnapshots.time, lastTravelTime + matchWindowMinutes),
           ),
         )
-        .orderBy(asc(ghostSnapshots.round))
+        .orderBy(asc(ghostSnapshots.time))
         .limit(1);
-      if (next?.round !== round) {
-        nextRecruitRound = next?.round ?? lastTravelRound + 1;
+      if (!next) {
+        nextRecruitTime = lastTravelTime + 1;
+        return;
+      }
+      if (next.time > maxWindowTime) {
+        nextRecruitTime = Math.max(0, next.time - matchWindowMinutes);
         return;
       }
     }
@@ -148,7 +210,12 @@ export function createGhostTracker(
       .where(
         and(
           available,
-          eq(ghostSnapshots.round, round),
+          initial
+            ? eq(ghostSnapshots.time, 0)
+            : and(
+                gte(ghostSnapshots.time, minWindowTime),
+                lte(ghostSnapshots.time, maxWindowTime),
+              ),
           notInArray(ghostSnapshots.nodeId, nearbyNodes),
           initial
             ? exists(
@@ -158,7 +225,7 @@ export function createGhostTracker(
                   .where(
                     and(
                       eq(laterStep.raidId, ghostSnapshots.raidId),
-                      gt(laterStep.round, round),
+                      gt(laterStep.time, 0),
                       eq(laterStep.rulesVersion, rulesVersion),
                       eq(laterStep.mapVersion, seopoMapVersion),
                       gt(laterStep.hp, 0),
@@ -168,7 +235,23 @@ export function createGhostTracker(
                     ),
                   ),
               )
-            : undefined,
+            : exists(
+                tx
+                  .select({ id: laterStep.id })
+                  .from(laterStep)
+                  .where(
+                    and(
+                      eq(laterStep.raidId, ghostSnapshots.raidId),
+                      gte(laterStep.time, time),
+                      eq(laterStep.rulesVersion, rulesVersion),
+                      eq(laterStep.mapVersion, seopoMapVersion),
+                      gt(laterStep.hp, 0),
+                      isNotNull(laterStep.combatant),
+                      gte(laterStep.createdAt, oldest),
+                      lte(laterStep.createdAt, now),
+                    ),
+                  ),
+              ),
         ),
       )
       .orderBy(
@@ -186,63 +269,48 @@ export function createGhostTracker(
     for (const candidate of candidates) {
       if (!candidate.sourceRaidId || !candidate.characterId) continue;
       const [last] = await tx
-        .select({ round: ghostSnapshots.round })
+        .select({ time: ghostSnapshots.time })
         .from(ghostSnapshots)
         .where(
           and(...eligible, eq(ghostSnapshots.raidId, candidate.sourceRaidId)),
         )
-        .orderBy(desc(ghostSnapshots.round))
+        .orderBy(desc(ghostSnapshots.time))
         .limit(1);
       if (!last) continue;
-      roster.tracks.push({
+      const newTrack: Track = {
         sourceRaidId: candidate.sourceRaidId,
         characterId: candidate.characterId,
-        lastRound: last.round,
+        lastTime: last.time,
         recordedThrough: now.toISOString(),
-      });
+      };
+      if (!initial) {
+        const steps = await routeFor(newTrack);
+        const active = findClosestStep(steps, time);
+        if (!active || nearbyNodes.includes(active.step.nodeId)) continue;
+      }
+      roster.tracks.push(newTrack);
     }
-  }
-
-  async function routeFor(track: Track, round: number) {
-    const cached = routes.get(track.sourceRaidId);
-    if (cached) return cached;
-
-    const steps = await tx
-      .select(routeColumns)
-      .from(ghostSnapshots)
-      .where(
-        and(
-          ...eligible,
-          eq(ghostSnapshots.raidId, track.sourceRaidId),
-          lte(ghostSnapshots.createdAt, new Date(track.recordedThrough)),
-          gte(ghostSnapshots.round, round - 1),
-          lte(ghostSnapshots.round, Math.min(lastTravelRound, track.lastRound)),
-        ),
-      )
-      .orderBy(asc(ghostSnapshots.round), asc(ghostSnapshots.id));
-    const route = new Map(steps.map((step) => [step.round, step]));
-    routes.set(track.sourceRaidId, route);
-    return route;
   }
 
   return {
     initialize(entryNodeId: number) {
       return fill(0, entryNodeId, true);
     },
-    async match(from: number, to: number, round: number, safeArrival: boolean) {
-      roster.tracks = roster.tracks.filter((track) => track.lastRound >= round);
-      await fill(round, to);
+    async match(from: number, to: number, time: number, safeArrival: boolean) {
+      roster.tracks = roster.tracks.filter((track) => track.lastTime >= time);
+      await fill(time, to);
       if (safeArrival) return null;
 
       for (const track of roster.tracks) {
-        const route = await routeFor(track, round);
-        const step = route.get(round);
-        if (!step) continue;
+        const steps = await routeFor(track);
+        const active = findClosestStep(steps, time);
+        if (!active) continue;
+        const { step, previous } = active;
         const sameNode = step.nodeId === String(to);
         const oppositeDirection =
           from !== to &&
           step.nodeId === String(from) &&
-          route.get(round - 1)?.nodeId === String(to);
+          previous?.nodeId === String(to);
         if (!sameNode && !oppositeDirection) continue;
         const snapshot = await tx.query.ghostSnapshots.findFirst({
           where: eq(ghostSnapshots.id, step.id),

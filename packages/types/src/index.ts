@@ -170,7 +170,7 @@ export interface BattleLog {
     kind: "NPC" | "GHOST";
     name: string;
     snapshotId?: string;
-    recordedRound?: number;
+    recordedTime?: number;
     recordedAt?: string;
     sourceCharacterId?: string | null;
     faction?: string;
@@ -197,7 +197,7 @@ export interface RaidView {
   status: "ACTIVE" | "EXTRACTED" | "DEAD";
   version: number;
   currentNodeId: number;
-  round: number;
+  time: number;
 }
 
 export interface RaidActionInput {
@@ -223,7 +223,7 @@ export interface RaidNavigationResult {
 export interface GhostMatch {
   id: string;
   nodeId: number;
-  round: number;
+  time: number;
   createdAt: string;
   rulesVersion: number;
   source: {

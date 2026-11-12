@@ -18,18 +18,18 @@ export function registerGhostRoutes(app: FastifyInstance, db: Database) {
           .int()
           .min(0)
           .max(mapData.nodes.length - 1),
-        round: z.coerce.number().int().nonnegative(),
+        time: z.coerce.number().int().nonnegative(),
       })
       .safeParse(request.query);
     if (!query.success)
       return reply
         .status(400)
-        .send({ error: "Provide a valid nodeId and round" });
+        .send({ error: "Provide a valid nodeId and time" });
     const match = await matchGhost(
       db,
       request.actorUserId!,
       query.data.nodeId,
-      query.data.round,
+      query.data.time,
     );
     if (!match)
       return reply.status(404).send({ error: "No compatible ghost record" });

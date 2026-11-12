@@ -10,6 +10,7 @@ import {
   users,
   weaponMasters,
 } from "../db";
+import { pathTravelMinutes } from "../logic/roadDistances";
 import { gameRules } from "../logic/rules";
 import { firstMission } from "../logic/story";
 import { recordGhosts } from "../services/ghosts";
@@ -126,10 +127,10 @@ async function main() {
     const sourceEntry = gameRules.entryNodeIds[1]!;
     const raid = (await startRaid(db, source.id, characterId, undefined, sourceEntry)).raid;
     const path = pathToNode(firstMission.targetNodeId);
-    // 임무 시설에서 고스트 전투를 검증할 수 있도록 해당 라운드의 기록을 준비한다.
+    // 임무 시설에서 고스트 전투를 검증할 수 있도록 해당 시간대의 기록을 준비한다.
     await db.transaction((tx) =>
       recordGhosts(tx, characterId, raid.id, [
-        { nodeId: firstMission.targetNodeId, round: path.length - 1 },
+        { nodeId: firstMission.targetNodeId, time: pathTravelMinutes(path) },
       ]),
     );
     await app.listen({ host: "127.0.0.1", port: 3001 });

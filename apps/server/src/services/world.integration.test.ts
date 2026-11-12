@@ -9,6 +9,7 @@ import {
   raidSessions,
   weaponMasters,
 } from "../db";
+import { pathTravelMinutes } from "../logic/roadDistances";
 import { gameRules } from "../logic/rules";
 import { integrationFixture } from "../testing/integrationFixture";
 import { pathToNode } from "../testing/mapRoute";
@@ -27,7 +28,7 @@ test("실제 DB: 임무를 수락하지 않은 개체는 중계 시설에서 통
   });
   assert.equal(result.encounterTriggered, false);
   assert.equal(result.raid.currentNodeId, firstMissionNodeId);
-  assert.equal(result.raid.round, path.length - 1);
+  assert.equal(result.raid.time, pathTravelMinutes(path));
 });
 
 test("실제 DB: 먼 진입 기록을 추적하고 빈자리는 현재 위치에서 떨어진 고스트만 채운다", async (t) => {
@@ -81,29 +82,30 @@ test("실제 DB: 먼 진입 기록을 추적하고 빈자리는 현재 위치에
   const putSteps = (
     actor: typeof source,
     raidId: string,
-    visits: { nodeId: number; round: number }[],
+    visits: { nodeId: number; time: number }[],
   ) =>
     actor.db.transaction((tx) =>
       recordGhosts(tx, actor.character.id, raidId, visits),
     );
 
   await putSteps(source, sourceRaid.id, [
-    { nodeId: 26, round: 1 },
-    { nodeId: 1, round: 2 },
-    { nodeId: 28, round: 3 },
+    { nodeId: 47, time: 10 },
+    { nodeId: 26, time: 40 },
+    { nodeId: 1, time: 70 },
+    { nodeId: 28, time: 90 },
   ]);
-  await putSteps(ended, endedRaid.id, [{ nodeId: 47, round: 1 }]);
+  await putSteps(ended, endedRaid.id, [{ nodeId: 47, time: 10 }]);
   await putSteps(retained, retainedRaid.id, [
-    { nodeId: 47, round: 1 },
-    { nodeId: 49, round: 4 },
+    { nodeId: 47, time: 10 },
+    { nodeId: 49, time: 120 },
   ]);
   await putSteps(replacement, replacementRaid.id, [
-    { nodeId: 93, round: 3 },
-    { nodeId: 94, round: 4 },
+    { nodeId: 93, time: 80 },
+    { nodeId: 94, time: 90 },
   ]);
   await putSteps(nearby, nearbyRaid.id, [
-    { nodeId: 1, round: 1 },
-    { nodeId: 28, round: 3 },
+    { nodeId: 1, time: 10 },
+    { nodeId: 28, time: 80 },
   ]);
 
   await player.db
@@ -144,7 +146,7 @@ test("실제 DB: 먼 진입 기록을 추적하고 빈자리는 현재 위치에
 
   const second = await move(1, path.slice(1));
   assert.equal(second.stopNodeId, 26);
-  assert.equal(second.raid.round, 2);
+  assert.equal(second.raid.time, 40);
   assert.equal(second.battleLog?.encounter?.kind, "GHOST");
   assert.equal(
     second.battleLog?.encounter?.sourceCharacterId,
