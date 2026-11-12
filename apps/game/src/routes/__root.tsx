@@ -4,21 +4,18 @@ import {
   Outlet,
   useBlocker,
   useLocation,
-  useNavigate,
 } from "@tanstack/react-router";
-import { getDefaultStore, useAtom, useAtomValue, useSetAtom } from "jotai";
+import { getDefaultStore, useAtomValue } from "jotai";
 
 import { selectedUserIdAtom } from "@/atoms/authAtom";
 import { pendingNavigationAtom } from "@/atoms/pendingNavigationAtom";
 import {
   isCombatAtom,
   isNavigatingAtom,
-  raidNoticeAtom,
   unacknowledgedRaidResultsAtom,
 } from "@/atoms/raidAtom";
 import DevelopmentAccountGate from "@/components/common/DevelopmentAccountGate";
 import GlobalNav from "@/components/common/GlobalNav";
-import { RaidResultDialog } from "@/components/field/RaidResultDialog";
 import { BaseScreen } from "@/components/lobby/BaseScreen";
 import * as baseStyles from "@/components/lobby/BaseScreen.css";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
@@ -45,14 +42,12 @@ function RouteComponent() {
 
 function GameLayout() {
   const { pathname } = useLocation();
-  const navigate = useNavigate();
   const path = pathname.replace(/\/$/, "");
   const userId = useAtomValue(selectedUserIdAtom);
   const pending = useAtomValue(pendingNavigationAtom);
   const isCombat = useAtomValue(isCombatAtom);
   const isNavigating = useAtomValue(isNavigatingAtom);
-  const [raidResults, setRaidResults] = useAtom(unacknowledgedRaidResultsAtom);
-  const setNotice = useSetAtom(raidNoticeAtom);
+  const raidResults = useAtomValue(unacknowledgedRaidResultsAtom);
   const result = userId ? raidResults[userId] : undefined;
   const character = useGetCharacter();
   const hasPendingResult = Object.values(pending).some(
@@ -67,12 +62,20 @@ function GameLayout() {
     enableBeforeUnload: false,
     shouldBlockFn: ({ current, next }) => {
       const store = getDefaultStore();
+      const currentPath = current.pathname.replace(/\/$/, "");
+      const nextPath = next.pathname.replace(/\/$/, "");
+      const hasUnacknowledgedResult = !!(
+        userId && store.get(unacknowledgedRaidResultsAtom)[userId]
+      );
+
+      if (hasUnacknowledgedResult) {
+        return nextPath !== "/field/result";
+      }
+
       return (
-        current.pathname.replace(/\/$/, "") === "/field" &&
-        next.pathname.replace(/\/$/, "") !== "/field" &&
-        (store.get(isCombatAtom) ||
-          store.get(isNavigatingAtom) ||
-          !!(userId && store.get(unacknowledgedRaidResultsAtom)[userId]))
+        currentPath === "/field" &&
+        nextPath !== "/field" &&
+        (store.get(isCombatAtom) || store.get(isNavigatingAtom))
       );
     },
   });
@@ -102,9 +105,13 @@ function GameLayout() {
     );
   }
 
+  if (result && path !== "/field/result") {
+    return <Navigate to="/field/result" replace />;
+  }
   if (
     inRaid &&
-    (!fieldRoute || ((!activeRaid || result) && path !== "/field"))
+    !result &&
+    (!fieldRoute || (!activeRaid && path !== "/field"))
   ) {
     return <Navigate to="/field" replace />;
   }
@@ -122,22 +129,10 @@ function GameLayout() {
       <div className={`${styles.outletWrapper} content-container`}>
         <Outlet />
       </div>
-      <GlobalNav
-        mode={inRaid ? "raid" : "base"}
-        fieldBusy={isCombat || isNavigating || !!result}
-      />
-      {result && userId && (
-        <RaidResultDialog
-          result={result}
-          onReturn={() => {
-            setNotice(null);
-            setRaidResults((results) => {
-              const remaining = { ...results };
-              delete remaining[userId];
-              return remaining;
-            });
-            void navigate({ to: "/base", replace: true });
-          }}
+      {!result && (
+        <GlobalNav
+          mode={inRaid ? "raid" : "base"}
+          fieldBusy={isCombat || isNavigating}
         />
       )}
     </>

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FieldIndexRouteImport } from './routes/field/index'
 import { Route as BaseIndexRouteImport } from './routes/base/index'
+import { Route as FieldResultRouteImport } from './routes/field/result'
 import { Route as BaseStashRouteImport } from './routes/base/stash'
 import { Route as BaseStagingRouteImport } from './routes/base/staging'
 import { Route as BaseQuestRouteImport } from './routes/base/quest'
@@ -33,6 +34,11 @@ const FieldIndexRoute = FieldIndexRouteImport.update({
 const BaseIndexRoute = BaseIndexRouteImport.update({
   id: '/base/',
   path: '/base/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FieldResultRoute = FieldResultRouteImport.update({
+  id: '/field/result',
+  path: '/field/result',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BaseStashRoute = BaseStashRouteImport.update({
@@ -78,6 +84,7 @@ export interface FileRoutesByFullPath {
   '/base/quest': typeof BaseQuestRoute
   '/base/staging': typeof BaseStagingRoute
   '/base/stash': typeof BaseStashRoute
+  '/field/result': typeof FieldResultRoute
   '/base/': typeof BaseIndexRoute
   '/field/': typeof FieldIndexRoute
   '/field/quest/': typeof FieldQuestIndexRoute
@@ -90,6 +97,7 @@ export interface FileRoutesByTo {
   '/base/quest': typeof BaseQuestRoute
   '/base/staging': typeof BaseStagingRoute
   '/base/stash': typeof BaseStashRoute
+  '/field/result': typeof FieldResultRoute
   '/base': typeof BaseIndexRoute
   '/field': typeof FieldIndexRoute
   '/field/quest': typeof FieldQuestIndexRoute
@@ -103,6 +111,7 @@ export interface FileRoutesById {
   '/base/quest': typeof BaseQuestRoute
   '/base/staging': typeof BaseStagingRoute
   '/base/stash': typeof BaseStashRoute
+  '/field/result': typeof FieldResultRoute
   '/base/': typeof BaseIndexRoute
   '/field/': typeof FieldIndexRoute
   '/field/quest/': typeof FieldQuestIndexRoute
@@ -117,6 +126,7 @@ export interface FileRouteTypes {
     | '/base/quest'
     | '/base/staging'
     | '/base/stash'
+    | '/field/result'
     | '/base/'
     | '/field/'
     | '/field/quest/'
@@ -129,6 +139,7 @@ export interface FileRouteTypes {
     | '/base/quest'
     | '/base/staging'
     | '/base/stash'
+    | '/field/result'
     | '/base'
     | '/field'
     | '/field/quest'
@@ -141,6 +152,7 @@ export interface FileRouteTypes {
     | '/base/quest'
     | '/base/staging'
     | '/base/stash'
+    | '/field/result'
     | '/base/'
     | '/field/'
     | '/field/quest/'
@@ -154,6 +166,7 @@ export interface RootRouteChildren {
   BaseQuestRoute: typeof BaseQuestRoute
   BaseStagingRoute: typeof BaseStagingRoute
   BaseStashRoute: typeof BaseStashRoute
+  FieldResultRoute: typeof FieldResultRoute
   BaseIndexRoute: typeof BaseIndexRoute
   FieldIndexRoute: typeof FieldIndexRoute
   FieldQuestIndexRoute: typeof FieldQuestIndexRoute
@@ -181,6 +194,13 @@ declare module '@tanstack/react-router' {
       path: '/base'
       fullPath: '/base/'
       preLoaderRoute: typeof BaseIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/field/result': {
+      id: '/field/result'
+      path: '/field/result'
+      fullPath: '/field/result'
+      preLoaderRoute: typeof FieldResultRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/base/stash': {
@@ -242,6 +262,7 @@ const rootRouteChildren: RootRouteChildren = {
   BaseQuestRoute: BaseQuestRoute,
   BaseStagingRoute: BaseStagingRoute,
   BaseStashRoute: BaseStashRoute,
+  FieldResultRoute: FieldResultRoute,
   BaseIndexRoute: BaseIndexRoute,
   FieldIndexRoute: FieldIndexRoute,
   FieldQuestIndexRoute: FieldQuestIndexRoute,
