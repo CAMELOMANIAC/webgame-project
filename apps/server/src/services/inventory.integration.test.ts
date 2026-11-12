@@ -1,13 +1,20 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { eq } from "drizzle-orm";
-import { characters, raidInventoryItems, stashItems } from "../db";
+import {
+  characters,
+  characterWeapons,
+  raidInventoryItems,
+  stashItems,
+} from "../db";
 import { integrationFixture as fixture } from "../testing/integrationFixture";
 import {
   equipItem,
   InventoryError,
   moveStashItem,
   syncSlots,
+  unequipAllEquipment,
+  unequipOtherCharactersEquipment,
 } from "./inventory";
 
 test("실제 DB: 슬롯 동기화는 묶음 수량과 무게를 보존한다", async (t) => {
@@ -243,4 +250,74 @@ test("실제 DB: 탐사 중 창고 이동을 거부한다", async (t) => {
     /raid/,
   );
   assert.deepEqual(await snapshot(), before);
+});
+
+test("실제 DB: 장비 일괄 해제는 장착 장비만 창고로 옮기고 가방은 유지한다", async (t) => {
+  const { db, user, character, weapon, snapshot } = await fixture(t);
+  await db.insert(characterWeapons).values([
+    { characterId: character.id, weaponMasterId: weapon.id, slotIndex: 0 },
+    { characterId: character.id, weaponMasterId: weapon.id, slotIndex: 2 },
+  ]);
+  await db.insert(raidInventoryItems).values({
+    characterId: character.id,
+    weaponMasterId: weapon.id,
+    slotIndex: 0,
+    quantity: 1,
+  });
+
+  const response = await unequipAllEquipment(db, character.id);
+  const saved = await snapshot();
+
+  assert.equal(saved.equipment.length, 0);
+  assert.equal(saved.inventory.length, 1);
+  assert.equal(saved.inventory[0]?.quantity, 1);
+  assert.equal(saved.stash[0]?.quantity, 2);
+  assert.equal(saved.character.weight, 2);
+  assert.equal(response.weight, 2);
+  assert.equal(response.equipment.length, 0);
+  assert.equal(response.stash[0]?.quantity, 2);
+  assert.equal(user.id, saved.character.userId);
+});
+
+test("실제 DB: 다른 생존자 장비 해제는 선택 생존자를 제외하고 타 생존자 장비만 창고로 회수한다", async (t) => {
+  const { db, user, character, weapon, snapshot } = await fixture(t);
+  const [otherChar] = await db
+    .insert(characters)
+    .values({ userId: user.id, maxWeight: 50, weight: 4 })
+    .returning();
+  if (!otherChar) throw new Error("Failed to create other character");
+
+  await db.insert(characterWeapons).values([
+    { characterId: character.id, weaponMasterId: weapon.id, slotIndex: 0 },
+    { characterId: otherChar.id, weaponMasterId: weapon.id, slotIndex: 1 },
+  ]);
+  await db.insert(raidInventoryItems).values({
+    characterId: otherChar.id,
+    weaponMasterId: weapon.id,
+    slotIndex: 0,
+    quantity: 1,
+  });
+
+  const response = await unequipOtherCharactersEquipment(db, character.id);
+  const saved = await snapshot();
+  const otherSavedChar = await db.query.characters.findFirst({
+    where: eq(characters.id, otherChar.id),
+  });
+  const otherEquipped = await db.query.characterWeapons.findMany({
+    where: eq(characterWeapons.characterId, otherChar.id),
+  });
+  const otherBag = await db.query.raidInventoryItems.findMany({
+    where: eq(raidInventoryItems.characterId, otherChar.id),
+  });
+
+  assert.equal(saved.equipment.length, 1);
+  assert.equal(otherEquipped.length, 0);
+  assert.equal(otherBag.length, 1);
+  assert.equal(otherSavedChar?.weight, 2);
+  assert.equal(saved.stash[0]?.quantity, 1);
+  assert.deepEqual(response.unequippedCharacters, [
+    { characterId: otherChar.id, weight: 2 },
+  ]);
+  assert.equal(response.recoveredItems.length, 1);
+  assert.equal(response.recoveredItems[0]?.quantity, 1);
 });

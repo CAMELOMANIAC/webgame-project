@@ -9,6 +9,8 @@ import {
   MoveItemSchema,
   SlotsSchema,
   syncSlots,
+  unequipAllEquipment,
+  unequipOtherCharactersEquipment,
 } from "../services/inventory";
 
 export function sendInventoryError(reply: FastifyReply, error: unknown) {
@@ -61,6 +63,30 @@ export function registerInventoryRoutes(
           characterId,
           MoveItemSchema.parse(request.body),
         );
+      } catch (error) {
+        fastify.log.error(error);
+        return sendInventoryError(reply, error);
+      }
+    },
+  );
+  fastify.post(
+    "/character/:characterId/equipment/unequip-all",
+    async (request, reply) => {
+      try {
+        const { characterId } = request.params as { characterId: string };
+        return await unequipAllEquipment(database, characterId);
+      } catch (error) {
+        fastify.log.error(error);
+        return sendInventoryError(reply, error);
+      }
+    },
+  );
+  fastify.post(
+    "/character/:characterId/equipment/unequip-others",
+    async (request, reply) => {
+      try {
+        const { characterId } = request.params as { characterId: string };
+        return await unequipOtherCharactersEquipment(database, characterId);
       } catch (error) {
         fastify.log.error(error);
         return sendInventoryError(reply, error);

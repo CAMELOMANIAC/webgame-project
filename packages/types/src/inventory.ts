@@ -44,6 +44,23 @@ export interface StashMoveResponse extends InventoryUpdateResponse {
   stash: StashItemData[];
 }
 
+export interface RecoveredStashDelta {
+  weaponMaster: InventoryWeapon;
+  quantity: number;
+}
+
+export interface UnequippedCharacterSummary {
+  characterId: string;
+  weight: number;
+}
+
+export interface UnequipOthersResponse {
+  status: "success";
+  stash: StashItemData[];
+  unequippedCharacters: UnequippedCharacterSummary[];
+  recoveredItems: RecoveredStashDelta[];
+}
+
 // 화면의 슬롯 교환에서도 여러 개짜리 묶음을 장착하며 수량이 사라지지 않게 한다.
 export function swapEquipmentBackpack<T extends { id: string }>(
   equipment: EquipmentEntry<T>[],

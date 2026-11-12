@@ -1,8 +1,11 @@
 import type {
   InventoryUpdateResponse,
+  RecoveredStashDelta,
   StashMoveResponse,
+  UnequippedCharacterSummary,
+  UnequipOthersResponse,
 } from "@webgame/types";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   type Character,
@@ -385,6 +388,29 @@ export async function mergeIntoStash(
   );
 }
 
+async function assertNoActiveRaid(
+  tx: Tx,
+  character: Pick<Character, "userId" | "isRaiding">,
+) {
+  const raidingChars = await tx.query.characters.findMany({
+    where: and(
+      eq(characters.userId, character.userId),
+      eq(characters.isRaiding, true),
+    ),
+    columns: { id: true },
+  });
+  if (character.isRaiding || raidingChars.length > 0) {
+    throw new InventoryError("Stash is unavailable during a raid", 409);
+  }
+}
+
+function readUserStash(tx: Tx, userId: string) {
+  return tx.query.stashItems.findMany({
+    where: eq(stashItems.userId, userId),
+    with: { weaponMaster: true },
+  });
+}
+
 export async function moveStashItem(
   database: Database,
   characterId: string,
@@ -393,15 +419,7 @@ export async function moveStashItem(
   const { direction, weaponMasterId, slotIndex } = MoveItemSchema.parse(input);
   return withInventoryTransaction(database, async (tx) => {
     const character = await getCharacter(tx, characterId);
-    const raidingChars = await tx.query.characters.findMany({
-      where: and(
-        eq(characters.userId, character.userId),
-        eq(characters.isRaiding, true),
-      ),
-      columns: { id: true },
-    });
-    if (character.isRaiding || raidingChars.length > 0)
-      throw new InventoryError("Stash is unavailable during a raid", 409);
+    await assertNoActiveRaid(tx, character);
     const stash = await tx.query.stashItems.findMany({
       where: and(
         eq(stashItems.userId, character.userId),
@@ -451,10 +469,127 @@ export async function moveStashItem(
     return {
       status: "success",
       ...(await updateInventorySnapshot(tx, character)),
-      stash: await tx.query.stashItems.findMany({
-        where: eq(stashItems.userId, character.userId),
-        with: { weaponMaster: true },
-      }),
+      stash: await readUserStash(tx, character.userId),
+    };
+  });
+}
+
+/**
+ * 선택된 생존자의 장착 장비만 모두 해제하여 계정의 공용 창고로 회수한다.
+ */
+export async function unequipAllEquipment(
+  database: Database,
+  characterId: string,
+): Promise<StashMoveResponse> {
+  return withInventoryTransaction(database, async (tx) => {
+    const character = await getCharacter(tx, characterId);
+    await assertNoActiveRaid(tx, character);
+
+    const equipped = await tx.query.characterWeapons.findMany({
+      where: eq(characterWeapons.characterId, characterId),
+    });
+    if (equipped.length > 0) {
+      await tx
+        .delete(characterWeapons)
+        .where(eq(characterWeapons.characterId, characterId));
+      const counts = countItems(equipped, []);
+      for (const [weaponMasterId, quantity] of [...counts.entries()].sort(
+        ([a], [b]) => a.localeCompare(b),
+      )) {
+        await mergeIntoStash(tx, character.userId, weaponMasterId, quantity);
+      }
+    }
+
+    return {
+      status: "success",
+      ...(await updateInventorySnapshot(tx, character)),
+      stash: await readUserStash(tx, character.userId),
+    };
+  });
+}
+
+/**
+ * 현재 생존자를 제외한 같은 계정의 다른 생존자들이 장착 중인 장비를 공용 창고로 회수한다.
+ */
+export async function unequipOtherCharactersEquipment(
+  database: Database,
+  keepCharacterId: string,
+): Promise<UnequipOthersResponse> {
+  return withInventoryTransaction(database, async (tx) => {
+    const keepCharacter = await getCharacter(tx, keepCharacterId);
+    await assertNoActiveRaid(tx, keepCharacter);
+
+    const otherChars = await tx.query.characters.findMany({
+      where: and(
+        eq(characters.userId, keepCharacter.userId),
+        ne(characters.id, keepCharacterId),
+      ),
+      columns: { id: true },
+    });
+    const otherIds = otherChars.map((entry) => entry.id);
+    if (otherIds.length === 0) {
+      return {
+        status: "success",
+        stash: await readUserStash(tx, keepCharacter.userId),
+        unequippedCharacters: [],
+        recoveredItems: [],
+      };
+    }
+
+    const otherEquipped = await tx.query.characterWeapons.findMany({
+      where: inArray(characterWeapons.characterId, otherIds),
+      with: { weaponMaster: true },
+    });
+    const recoveredItems: RecoveredStashDelta[] = [];
+    const unequippedCharacters: UnequippedCharacterSummary[] = [];
+
+    if (otherEquipped.length > 0) {
+      await tx
+        .delete(characterWeapons)
+        .where(inArray(characterWeapons.characterId, otherIds));
+
+      const grouped = new Map<string, RecoveredStashDelta>();
+      const affectedCharacterIds = new Set<string>();
+      for (const entry of otherEquipped) {
+        affectedCharacterIds.add(entry.characterId);
+        const existing = grouped.get(entry.weaponMasterId);
+        if (existing) {
+          existing.quantity += 1;
+        } else {
+          grouped.set(entry.weaponMasterId, {
+            weaponMaster: entry.weaponMaster,
+            quantity: 1,
+          });
+        }
+      }
+
+      for (const [weaponMasterId, delta] of [...grouped.entries()].sort(
+        ([a], [b]) => a.localeCompare(b),
+      )) {
+        await mergeIntoStash(
+          tx,
+          keepCharacter.userId,
+          weaponMasterId,
+          delta.quantity,
+        );
+        recoveredItems.push(delta);
+      }
+
+      for (const otherId of [...affectedCharacterIds].sort()) {
+        const weight = await calculateInventoryWeight(tx, otherId);
+        await tx
+          .update(characters)
+          .set({ weight })
+          .where(eq(characters.id, otherId));
+        unequippedCharacters.push({ characterId: otherId, weight });
+      }
+    }
+
+    return {
+      status: "success",
+      stash: await readUserStash(tx, keepCharacter.userId),
+      unequippedCharacters,
+      recoveredItems,
     };
   });
 }

@@ -225,3 +225,47 @@ test("배치 정산은 캐릭터와 창고의 총 수량을 보존하고 초과 
     InventoryError,
   );
 });
+
+test("일괄 장비 해제 API는 소유권을 검증하고 탐사 중 409 오류를 반환한다", async (t) => {
+  const database = createTestDb();
+  const app = buildApp({ database, logger: false });
+  t.after(() => app.close());
+
+  Reflect.set(database.query.users, "findFirst", async () => ({
+    id: "test-user",
+  }));
+  Reflect.set(database.query.characters, "findFirst", async () => ({
+    userId: "other-user",
+  }));
+
+  for (const url of [
+    "/character/c/equipment/unequip-all",
+    "/character/c/equipment/unequip-others",
+  ]) {
+    const forbidden = await app.inject({
+      method: "POST",
+      url,
+      headers: { "x-dev-user-id": "test-user" },
+    });
+    assert.equal(forbidden.statusCode, 403);
+  }
+
+  Reflect.set(database.query.characters, "findFirst", async () => ({
+    userId: "test-user",
+  }));
+  Reflect.set(database, "transaction", async () => {
+    throw new InventoryError("Stash is unavailable during a raid", 409);
+  });
+
+  for (const url of [
+    "/character/c/equipment/unequip-all",
+    "/character/c/equipment/unequip-others",
+  ]) {
+    const conflict = await app.inject({
+      method: "POST",
+      url,
+      headers: { "x-dev-user-id": "test-user" },
+    });
+    assert.equal(conflict.statusCode, 409);
+  }
+});
