@@ -1,15 +1,25 @@
+import { useIsMutating } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { useAtomValue } from "jotai";
 
+import { selectedUserIdAtom } from "@/atoms/authAtom";
 import { BaseScreen } from "@/components/lobby/BaseScreen";
 import * as styles from "@/components/lobby/BaseScreen.css";
 import CharacterCollection from "@/components/lobby/CharacterCollection";
 import { LoadoutEditor } from "@/components/lobby/LoadoutEditor";
+import { characterSelectionKey } from "@/utils/hooks/useCharacterCollection";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useGetStash } from "@/utils/hooks/useGetStash";
+import { inventoryMutationKey } from "@/utils/inventoryCache";
 
 export const Route = createFileRoute("/base/stash")({ component: StashScreen });
 
 function StashScreen() {
+  const userId = useAtomValue(selectedUserIdAtom);
+  const isSelecting =
+    useIsMutating({ mutationKey: characterSelectionKey(userId) }) > 0;
+  const isSavingInventory =
+    useIsMutating({ mutationKey: inventoryMutationKey(userId) }) > 0;
   const characterQuery = useGetCharacter();
   const stashQuery = useGetStash();
   const stash = stashQuery.data ?? [];
@@ -20,7 +30,7 @@ function StashScreen() {
       title="거점 정비소"
       description="배치할 개체를 선택하고 공용 창고에서 장비와 물품을 정비합니다."
     >
-      <CharacterCollection readOnly={false} />
+      <CharacterCollection disabled={isSavingInventory || isSelecting} />
       {stashQuery.isLoading && <p>창고를 불러오는 중입니다.</p>}
       {error && (
         <p className={styles.banner({ tone: "negative" })} role="alert">
@@ -40,6 +50,9 @@ function StashScreen() {
         characterData={characterQuery.data}
         isLoading={characterQuery.isLoading}
         stash={stash}
+        disabled={
+          isSelecting || isSavingInventory || stashQuery.data === undefined
+        }
       />
     </BaseScreen>
   );
