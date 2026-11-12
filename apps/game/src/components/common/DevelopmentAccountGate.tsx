@@ -20,6 +20,7 @@ import {
   playerCoordsAtom,
   requestedNodeIdAtom,
   shortestPathAtom,
+  targetBuildingIdAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
 import { API_BASE_URL, apiFetch } from "@/utils/api";
@@ -63,6 +64,7 @@ export default function DevelopmentAccountGate({
     store.set(isNavigatingAtom, false);
     store.set(currentNodeIdAtom, 0);
     store.set(targetNodeIdAtom, null);
+    store.set(targetBuildingIdAtom, null);
     store.set(requestedNodeIdAtom, null);
     store.set(shortestPathAtom, []);
     store.set(playerCoordsAtom, null);

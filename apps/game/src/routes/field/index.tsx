@@ -1,14 +1,21 @@
 import { DndContext, DragOverlay } from "@dnd-kit/core";
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useAtom, useAtomValue } from "jotai";
-import { AnimatePresence, LayoutGroup, motion } from "motion/react";
+import {
+  AnimatePresence,
+  LayoutGroup,
+  motion,
+  useReducedMotion,
+} from "motion/react";
 import { useEffect } from "react";
 
 import {
   activeDragIdAtom,
   animatingSlotIdsAtom,
   isNavigatingAtom,
+  isRecommendDestinationsOpenAtom,
   shortestPathAtom,
+  targetBuildingIdAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
 import { FieldBackground } from "@/components/field/FieldBackground";
@@ -40,6 +47,8 @@ export const Route = createFileRoute("/field/")({
 
 function RouteComponent() {
   const { tab } = useSearch({ from: "/field/" });
+  const reduceMotion = useReducedMotion();
+  const exitOffset = reduceMotion ? 0 : 12;
   // 같은 데이터로 두 슬롯 목록을 함께 갱신해야 layoutId 이동 전환이 이어진다.
   const { data: characterData, isLoading, isError } = useGetCharacter();
 
@@ -49,21 +58,39 @@ function RouteComponent() {
   const activeId = useAtomValue(activeDragIdAtom);
   const animatingSlotIds = useAtomValue(animatingSlotIdsAtom);
   const isSlotAnimating = animatingSlotIds.length > 0;
-  const enemyPositions = useEnemyPositions(
-    battleLog,
-    characterData?.raw.id,
-  );
+  const enemyPositions = useEnemyPositions(battleLog, characterData?.raw.id);
 
   const [, setIsNavigating] = useAtom(isNavigatingAtom);
   const [, setTargetNodeId] = useAtom(targetNodeIdAtom);
+  const [, setTargetBuildingId] = useAtom(targetBuildingIdAtom);
   const [, setShortestPath] = useAtom(shortestPathAtom);
+  const [isRecommendOpen, setIsRecommendOpen] = useAtom(
+    isRecommendDestinationsOpenAtom,
+  );
 
   useEffect(() => {
     setIsNavigating(false);
     setIsCombat(false);
     setTargetNodeId(null);
+    setTargetBuildingId(null);
     setShortestPath([]);
-  }, [setIsNavigating, setIsCombat, setTargetNodeId, setShortestPath]);
+    setIsRecommendOpen(false);
+  }, [
+    setIsNavigating,
+    setIsCombat,
+    setTargetNodeId,
+    setTargetBuildingId,
+    setShortestPath,
+    setIsRecommendOpen,
+  ]);
+
+  useEffect(() => {
+    if (isCombat || tab === "backpack") {
+      setIsRecommendOpen(false);
+    }
+  }, [isCombat, tab, setIsRecommendOpen]);
+
+  const hideFieldInfo = isRecommendOpen && !isCombat && tab !== "backpack";
 
   const activeItem =
     characterData?.equipment.find((item) => item.id === activeId) ||
@@ -94,26 +121,53 @@ function RouteComponent() {
               <motion.div
                 className={inheritMotionDiv}
                 initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "100%", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ type: "spring", duration: 0.45, bounce: 0 }}
+                animate={{ height: "100%", opacity: 1, y: 0 }}
+                exit={{ height: 0, opacity: 0, y: exitOffset }}
+                transition={{
+                  type: "spring",
+                  duration: reduceMotion ? 0 : 0.45,
+                  bounce: 0,
+                }}
                 style={{ overflow: "hidden" }}
                 key="fieldNavHeader"
               >
                 <FieldHeader isCombat={isCombat} />
               </motion.div>
             )}
-            <div className={inheritMotionDiv} key="fieldInfo">
-              <FieldStatusSection />
-              <Equipment characterData={characterData} isLoading={isLoading} />
-            </div>
+            {!hideFieldInfo && (
+              <motion.div
+                className={inheritMotionDiv}
+                key="fieldInfo"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1, y: 0 }}
+                exit={{ height: 0, opacity: 0, y: exitOffset }}
+                transition={{
+                  duration: reduceMotion ? 0 : 0.24,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+                style={{
+                  flexShrink: 0,
+                  overflow: isSlotAnimating ? "visible" : "hidden",
+                }}
+              >
+                <FieldStatusSection />
+                <Equipment
+                  characterData={characterData}
+                  isLoading={isLoading}
+                />
+              </motion.div>
+            )}
             {tab === "backpack" && (
               <motion.div
                 className={inheritMotionDiv}
                 initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "100%", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ type: "spring", duration: 0.45, bounce: 0 }}
+                animate={{ height: "100%", opacity: 1, y: 0 }}
+                exit={{ height: 0, opacity: 0, y: exitOffset }}
+                transition={{
+                  type: "spring",
+                  duration: reduceMotion ? 0 : 0.45,
+                  bounce: 0,
+                }}
                 style={{ overflow: isSlotAnimating ? "visible" : "hidden" }}
                 key="stash"
               >

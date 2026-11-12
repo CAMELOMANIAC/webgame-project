@@ -20,7 +20,11 @@ export const currentNodeIdAtom = atom<number>(0);
 
 // 플레이어의 목적지 노드 ID
 export const targetNodeIdAtom = atom<number | null>(null);
+export const targetBuildingIdAtom = atom<number | null>(null);
 export const requestedNodeIdAtom = atom<number | null>(null);
+
+// 이동 버튼 클릭 시 선택된 경로로 이동을 시작하는 트리거 카운터
+export const startNavigationTriggerAtom = atom<number>(0);
 
 // 플레이어가 현재 이동 중인지 여부
 export const isNavigatingAtom = atom<boolean>(false);
@@ -36,6 +40,14 @@ export const followPlayerAtom = atom<boolean>(true);
 
 // 캐릭터 HUD 클릭 시 카메라를 플레이어 위치로 이동시키는 트리거 카운터
 export const focusPlayerTriggerAtom = atom<number>(0);
+
+// 추천 목적지 패널 열림 여부
+export const isRecommendDestinationsOpenAtom = atom<boolean>(false);
+
+// 추천 목적지 선택 시 경로 전체가 한눈에 들어오도록 카메라를 맞추는 트리거
+export const focusRouteTargetAtom = atom<{ nodeId: number; seq: number } | null>(
+  null,
+);
 
 // 플레이어의 현재 방향 회전 각도 (도 단위, 0도 = 북쪽)
 export const playerRotationAtom = atom<number>(0);

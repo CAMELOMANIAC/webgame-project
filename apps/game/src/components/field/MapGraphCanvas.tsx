@@ -11,6 +11,7 @@ import { pendingNavigationAtom, pendingNavigationKey } from "@/atoms/pendingNavi
 import {
   currentNodeIdAtom,
   focusPlayerTriggerAtom,
+  focusRouteTargetAtom,
   followPlayerAtom,
   isInventoryDirtyAtom,
   isNavigatingAtom,
@@ -18,6 +19,8 @@ import {
   playerRotationAtom,
   requestedNodeIdAtom,
   shortestPathAtom,
+  startNavigationTriggerAtom,
+  targetBuildingIdAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
 import { getBuildingCenter } from "@/utils/getBuildingCenter";
@@ -253,6 +256,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const [isPixiReady, setIsPixiReady] = useState(false);
   const focusTweenRef = useRef<TweenHandle | null>(null);
   const focusPlayerTrigger = useAtomValue(focusPlayerTriggerAtom);
+  const focusRouteTarget = useAtomValue(focusRouteTargetAtom);
+  const startNavigationTrigger = useAtomValue(startNavigationTriggerAtom);
 
   const { data: characterData } = useGetCharacter();
   const queryClient = useQueryClient();
@@ -320,6 +325,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const [currentNodeId, setCurrentNodeId] = useAtom(currentNodeIdAtom);
   const [pendingNavigations] = useAtom(pendingNavigationAtom);
   const [targetNodeId, setTargetNodeId] = useAtom(targetNodeIdAtom);
+  const [, setTargetBuildingId] = useAtom(targetBuildingIdAtom);
   const [requestedNodeId, setRequestedNodeId] = useAtom(requestedNodeIdAtom);
   const { data: raidRules } = useRaidRules();
   const raidRulesRef = useRef(raidRules);
@@ -470,17 +476,23 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     );
   };
 
-  // 대상 노드 선택 시 네비게이션 트리거
+  // 대상 노드 선택 시 목적지 및 예상 경로 표시 (이동 버튼 클릭 시 실제 이동)
   const handleTargetSelect = (targetId: number, targetB?: Building) => {
     if (isNavigating || isCombat || !hasActiveRaid) {
       return;
     }
-    setTargetBuilding(targetB || null);
-    if (showDevPanel) {
-      setTargetNodeId(targetId);
-    } else {
-      startNavigation(findShortestPath(currentNodeId, targetId), targetB ?? null);
+    const startPos = playerCoordsRef.current ?? nodes[currentNodeId];
+    const path = findShortestPath(currentNodeId, targetId);
+    const nextBuilding = targetB ?? null;
+    if (!startPos || buildCoordPath(path, startPos, nextBuilding).length <= 1) {
+      setTargetBuilding(null);
+      setTargetBuildingId(null);
+      setTargetNodeId(null);
+      return;
     }
+    setTargetBuilding(nextBuilding);
+    setTargetBuildingId(nextBuilding?.id ?? null);
+    setTargetNodeId(targetId);
   };
 
   selectTargetRef.current = handleTargetSelect;
@@ -489,6 +501,13 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     setRequestedNodeId(null);
     selectTargetRef.current(requestedNodeId);
   }, [requestedNodeId, isNavigating, isCombat, setRequestedNodeId]);
+
+  useEffect(() => {
+    if (startNavigationTrigger === 0) return;
+    if (targetNodeId === null || shortestPath.length === 0) return;
+    startNavigation(shortestPath, targetBuilding);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startNavigationTrigger]);
 
   // 노드/건물 호버 해제 안전 헬퍼
   const resetHoverHud = () => {
@@ -1238,29 +1257,9 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     };
   }, [isPixiReady, isCombat, dimensions.width, dimensions.height, currentNodeId, playerCoords]);
 
-  // 2.2. 캐릭터 HUD 클릭 시 카메라를 플레이어 위치 중앙으로 부드럽게 이동
-  useEffect(() => {
-    if (focusPlayerTrigger === 0) return;
+  const animateCameraTo = (targetPos: { x: number; y: number }, targetScale: number) => {
     const world = worldContainerRef.current;
-    if (!isPixiReady || isCombat || !world || dimensions.width === 0 || dimensions.height === 0) {
-      return;
-    }
-
-    const playerPos =
-      playerCoordsRef.current ||
-      playerCoords ||
-      (nodes[currentNodeId] ? { x: nodes[currentNodeId].x, y: nodes[currentNodeId].y } : null);
-    if (!playerPos) return;
-
-    const targetScale = 3.0;
-    const targetPos = clampWorldPosition(
-      dimensions.width / 2 - playerPos.x * targetScale,
-      dimensions.height / 2 - playerPos.y * targetScale,
-      targetScale,
-      dimensions.width,
-      dimensions.height,
-    );
-
+    if (!world) return;
     const startScale = world.scale.x;
     const startX = world.x;
     const startY = world.y;
@@ -1292,6 +1291,36 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         });
       },
     });
+  };
+
+  // 2.2. 캐릭터 HUD 클릭 시 카메라를 플레이어 위치 중앙으로 부드럽게 이동
+  useEffect(() => {
+    if (focusPlayerTrigger === 0) return;
+    if (
+      !isPixiReady ||
+      isCombat ||
+      !worldContainerRef.current ||
+      dimensions.width === 0 ||
+      dimensions.height === 0
+    ) {
+      return;
+    }
+
+    const playerPos =
+      playerCoordsRef.current ||
+      playerCoords ||
+      (nodes[currentNodeId] ? { x: nodes[currentNodeId].x, y: nodes[currentNodeId].y } : null);
+    if (!playerPos) return;
+
+    const targetScale = 3.0;
+    const targetPos = clampWorldPosition(
+      dimensions.width / 2 - playerPos.x * targetScale,
+      dimensions.height / 2 - playerPos.y * targetScale,
+      targetScale,
+      dimensions.width,
+      dimensions.height,
+    );
+    animateCameraTo(targetPos, targetScale);
 
     return () => {
       focusTweenRef.current?.destroy();
@@ -1299,6 +1328,66 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPlayerTrigger]);
+
+  // 2.3. 추천 목적지 선택 시 출발지~도착지 경로가 한눈에 들어오도록 카메라 이동·축소
+  useEffect(() => {
+    if (!focusRouteTarget) return;
+    if (
+      !isPixiReady ||
+      isCombat ||
+      !worldContainerRef.current ||
+      dimensions.width === 0 ||
+      dimensions.height === 0
+    ) {
+      return;
+    }
+
+    const path = findShortestPath(currentNodeId, focusRouteTarget.nodeId);
+    const routeNodeIds = path.length > 0 ? path : [currentNodeId, focusRouteTarget.nodeId];
+    const points: { x: number; y: number }[] = [];
+    const startPos = playerCoordsRef.current || playerCoords;
+    if (startPos) points.push(startPos);
+    for (const id of routeNodeIds) {
+      const n = nodes[id];
+      if (n) points.push({ x: n.x, y: n.y });
+    }
+    if (points.length === 0) return;
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const pt of points) {
+      minX = Math.min(minX, pt.x);
+      maxX = Math.max(maxX, pt.x);
+      minY = Math.min(minY, pt.y);
+      maxY = Math.max(maxY, pt.y);
+    }
+
+    const availW = Math.max(120, dimensions.width - 120);
+    const availH = Math.max(120, dimensions.height - 280);
+    const rawScale = Math.min(
+      availW / Math.max(maxX - minX, 80),
+      availH / Math.max(maxY - minY, 80),
+    );
+    const targetScale = Math.max(MIN_ZOOM_SCALE, Math.min(3.0, rawScale));
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const targetPos = clampWorldPosition(
+      dimensions.width / 2 - centerX * targetScale,
+      dimensions.height / 2 + 30 - centerY * targetScale,
+      targetScale,
+      dimensions.width,
+      dimensions.height,
+    );
+    animateCameraTo(targetPos, targetScale);
+
+    return () => {
+      focusTweenRef.current?.destroy();
+      focusTweenRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRouteTarget]);
 
   // [BENCHMARK] 컬링 연산 시간(ms) 상태
   const [cullingTimeMs, setCullingTimeMs] = useState<number>(0);
@@ -1353,8 +1442,15 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     } else {
       setShortestPath([]);
       setTargetBuilding(null);
+      setTargetBuildingId(null);
     }
-  }, [currentNodeId, targetNodeId, setShortestPath, setTargetBuilding]);
+  }, [
+    currentNodeId,
+    targetNodeId,
+    setShortestPath,
+    setTargetBuilding,
+    setTargetBuildingId,
+  ]);
 
   // 5.2. 드로잉을 위한 최단 경로 플랫 좌표 배열
   const shortestPathPoints = useMemo(() => {
@@ -1381,7 +1477,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     const pathLine = pathLineGraphicsRef.current;
     // 이동 중 남은 경로는 프레임 루프에서만 그린다.
     if (!isNavigating && pathLine && !pathLine.destroyed) {
-      if (targetNodeId === null || isCombat || !showDevPanel) {
+      if (targetNodeId === null || isCombat) {
         pathLine.clear();
       } else {
         drawPathLineGraphics(pathLine, shortestPathPoints);
@@ -1405,7 +1501,6 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     isPixiReady,
     isNavigating,
     isCombat,
-    showDevPanel,
     shortestPathPoints,
     targetNodeId,
     targetBuilding,
@@ -1606,6 +1701,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         }
         setTargetNodeId(null);
         setTargetBuilding(null);
+        setTargetBuildingId(null);
         setIsNavigating(false);
         void queryClient.invalidateQueries({ queryKey: ["character"] });
 
@@ -1966,6 +2062,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
               onClick={() => {
                 setTargetNodeId(null);
                 setTargetBuilding(null);
+                setTargetBuildingId(null);
               }}
             >
               CANCEL

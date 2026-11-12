@@ -1,12 +1,14 @@
 import { style } from "@vanilla-extract/css";
 import { recipe } from "@vanilla-extract/recipes";
 
-import { fieldWidget, vars } from "@/styles/theme.css";
+import { cornerBrackets, fieldWidget, vars } from "@/styles/theme.css";
 
 export const container = style([
   fieldWidget({ tone: "default" }),
   {
     height: "auto",
+    maxHeight: "100%",
+    minHeight: 0,
     width: "100%",
     flexDirection: "column",
     justifyContent: "flex-start",
@@ -16,6 +18,13 @@ export const container = style([
     gap: "10px",
   },
 ]);
+
+export const destinationHeader = style({
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "8px",
+});
 
 export const destinationRow = style({
   display: "flex",
@@ -49,7 +58,7 @@ export const statusHint = recipe({
 
 export const telemetryGrid = style({
   display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
   gap: "1px",
   backgroundColor: vars.border.grid,
   border: "1px solid rgba(255, 255, 255, 0.08)",
@@ -59,10 +68,11 @@ export const telemetryGrid = style({
 
 export const telemetryCell = style({
   backgroundColor: vars.surface.low,
-  padding: "8px 10px",
+  padding: "6px 8px",
   display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
+  flexDirection: "column",
+  alignItems: "flex-start",
+  gap: "2px",
 });
 
 export const cellLabel = style({
@@ -129,4 +139,207 @@ export const actionCode = style({
   fontFamily: vars.font.mono,
   fontSize: "11px",
   fontVariantNumeric: "tabular-nums",
+});
+
+export const recommendToggle = recipe({
+  base: {
+    flexShrink: 0,
+    width: "30px",
+    height: "30px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: vars.radius.control,
+    cursor: "pointer",
+    fontSize: "16px",
+    transition: "background-color 0.15s ease, color 0.15s ease",
+    selectors: {
+      "&:disabled": {
+        opacity: 0.4,
+        cursor: "default",
+      },
+    },
+  },
+  variants: {
+    open: {
+      true: {
+        border: `1px solid ${vars.color.ctaBg}`,
+        backgroundColor: vars.color.ctaBg,
+        color: vars.color.ctaFg,
+        selectors: {
+          "&:hover:not(:disabled)": {
+            backgroundColor: vars.color.ctaHover,
+          },
+        },
+      },
+      false: {
+        border: `1px solid ${vars.border.strong}`,
+        backgroundColor: vars.surface.low,
+        color: vars.text.primary,
+        selectors: {
+          "&:hover:not(:disabled)": {
+            backgroundColor: vars.surface.high,
+          },
+        },
+      },
+    },
+  },
+  defaultVariants: {
+    open: false,
+  },
+});
+
+export const recommendList = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "6px",
+  overflowY: "auto",
+  maxHeight: "48dvh",
+  minHeight: 0,
+  flex: "1 1 auto",
+  paddingRight: "2px",
+});
+
+export const bodySection = recipe({
+  base: {
+    display: "grid",
+    minHeight: 0,
+    transition:
+      "grid-template-rows 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease",
+    "@media": {
+      "(prefers-reduced-motion: reduce)": { transition: "none" },
+    },
+  },
+  variants: {
+    visible: {
+      true: { gridTemplateRows: "1fr", opacity: 1 },
+      false: { gridTemplateRows: "0fr", opacity: 0 },
+    },
+  },
+});
+
+export const bodyContent = style({
+  display: "flex",
+  flexDirection: "column",
+  minHeight: 0,
+  overflow: "hidden",
+  gap: "10px",
+});
+
+export const recommendItem = recipe({
+  base: {
+    position: "relative",
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: vars.radius.control,
+    border: `1px solid ${vars.border.subtle}`,
+    backgroundColor: vars.surface.low,
+    color: vars.text.primary,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "10px",
+    flexShrink: 0,
+    textAlign: "left",
+    cursor: "pointer",
+    transition: "background-color 0.15s ease, border-color 0.15s ease",
+    selectors: {
+      "&:hover:not(:disabled)": {
+        backgroundColor: vars.surface.high,
+        borderColor: vars.border.strong,
+      },
+      "&:disabled": {
+        opacity: 0.45,
+        cursor: "default",
+      },
+    },
+  },
+  variants: {
+    active: {
+      true: [
+        cornerBrackets({ tone: "positive" }),
+        {
+          borderColor: vars.border.positive,
+          backgroundColor: vars.surface.high,
+        },
+      ],
+      false: [cornerBrackets({ tone: "default" })],
+    },
+  },
+  defaultVariants: {
+    active: false,
+  },
+});
+
+export const recommendInfo = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "3px",
+  minWidth: 0,
+});
+
+export const recommendMeta = style({
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+});
+
+export const recommendTag = recipe({
+  base: {
+    fontFamily: vars.font.mono,
+    fontSize: "10px",
+    fontWeight: 600,
+    padding: "1px 5px",
+    borderRadius: "2px",
+  },
+  variants: {
+    tone: {
+      positive: {
+        color: vars.color.positive,
+        backgroundColor: vars.color.positiveBg,
+      },
+      neutral: {
+        color: vars.text.secondary,
+        backgroundColor: vars.surface.high,
+      },
+    },
+  },
+  defaultVariants: {
+    tone: "neutral",
+  },
+});
+
+export const recommendCode = style({
+  fontFamily: vars.font.mono,
+  fontSize: "10px",
+  color: vars.text.muted,
+  fontVariantNumeric: "tabular-nums",
+});
+
+export const recommendName = style({
+  fontSize: "13px",
+  fontWeight: 600,
+  color: vars.text.primary,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+});
+
+export const recommendTime = style({
+  flexShrink: 0,
+  fontFamily: vars.font.mono,
+  fontSize: "12px",
+  fontWeight: 600,
+  color: vars.text.secondary,
+  fontVariantNumeric: "tabular-nums",
+});
+
+export const recommendEmpty = style({
+  padding: "14px 12px",
+  borderRadius: vars.radius.control,
+  border: `1px solid ${vars.border.subtle}`,
+  backgroundColor: vars.surface.low,
+  color: vars.text.muted,
+  fontSize: "12px",
+  textAlign: "center",
 });

@@ -27,6 +27,36 @@ function getDistance(n1: Node, n2: Node): number {
   return Math.sqrt((n1.x - n2.x) ** 2 + (n1.y - n2.y) ** 2);
 }
 
+const STEP_UNIT_MINUTES = 10;
+const MAX_EDGE_MINUTES = 60;
+const DISTANCE_PER_STEP_UNIT = 20;
+const BUILDING_MOVE_MINUTES = 10;
+
+export function roadTravelMinutes(from: number, to: number): number {
+  if (from === to) return BUILDING_MOVE_MINUTES;
+  const fromNode = nodes[from];
+  const toNode = nodes[to];
+  if (!fromNode || !toNode) return STEP_UNIT_MINUTES;
+  const length = getDistance(fromNode, toNode);
+  const rawMinutes =
+    Math.round(length / DISTANCE_PER_STEP_UNIT) * STEP_UNIT_MINUTES;
+  return Math.min(MAX_EDGE_MINUTES, Math.max(STEP_UNIT_MINUTES, rawMinutes));
+}
+
+export function estimatePathTravelMinutes(
+  path: number[],
+  hasTargetBuilding = false,
+): number {
+  if (path.length === 1) {
+    return hasTargetBuilding ? BUILDING_MOVE_MINUTES : 0;
+  }
+  let total = 0;
+  for (let index = 1; index < path.length; index++) {
+    total += roadTravelMinutes(path[index - 1]!, path[index]!);
+  }
+  return total;
+}
+
 // 도로 타입에 따른 가중치 배율 (대로변 선호)
 const ROAD_MULTIPLIER = {
   main: 1.0,

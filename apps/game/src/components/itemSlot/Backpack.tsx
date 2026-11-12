@@ -1,5 +1,5 @@
 import { useAtomValue } from "jotai";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { memo } from "react";
 import { CgSpinner } from "react-icons/cg";
 import { IoMdRefresh } from "react-icons/io";
@@ -20,6 +20,8 @@ interface BackpackProps {
 
 const Backpack = memo(
   ({ characterData, isLoading, isError }: BackpackProps) => {
+    const reduceMotion = useReducedMotion();
+    const statusExit = { opacity: 0, y: reduceMotion ? 0 : 12 };
     const animatingSlotIds = useAtomValue(animatingSlotIdsAtom);
     const isSlotAnimating = animatingSlotIds.length > 0;
     const occupiedCount =
@@ -40,8 +42,8 @@ const Backpack = memo(
             <motion.div
               className={inheritMotionDiv}
               initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={statusExit}
               transition={{ type: "spring", duration: 0.45, bounce: 0 }}
               style={{ overflow: "hidden" }}
               key="backpackloading"
@@ -57,8 +59,8 @@ const Backpack = memo(
             <motion.div
               className={inheritMotionDiv}
               initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={statusExit}
               transition={{ type: "spring", duration: 0.45, bounce: 0 }}
               style={{ overflow: "hidden" }}
               key="backpackLoaderror"
