@@ -1,8 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { firstMissionNodeId, formatRaidTime } from "@webgame/types";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { motion } from "motion/react";
-import { useId, useMemo, useRef } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { RiCloseLine, RiCompass3Line } from "react-icons/ri";
 
 import {
@@ -44,6 +43,68 @@ import {
 } from "@/utils/recommendedDestinations";
 
 import * as styles from "./FieldNavTargetSection.css";
+
+type RollDirection = "up" | "down";
+
+function RollingDigit({
+  digit,
+  direction,
+}: {
+  digit: string;
+  direction: RollDirection;
+}) {
+  const [digits, setDigits] = useState({ current: digit, previous: digit });
+  if (digits.current !== digit) {
+    setDigits({ current: digit, previous: digits.current });
+  }
+
+  return (
+    <span className={styles.digitWindow}>
+      {digits.previous === digit ? (
+        digit
+      ) : (
+        <span key={digit} className={styles.digitRoll({ direction })}>
+          <span>{direction === "up" ? digits.previous : digit}</span>
+          <span>{direction === "up" ? digit : digits.previous}</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+function TelemetryValue({
+  value,
+  direction,
+}: {
+  value: string;
+  direction?: RollDirection;
+}) {
+  return (
+    <span className={styles.cellValue}>
+      {direction ? (
+        <>
+          <span className={styles.accessibleValue}>{value}</span>
+          <span aria-hidden="true" className={styles.digitRow}>
+            {Array.from(value, (character, index) => {
+              const place = value.length - index;
+              return /[0-9]/.test(character) ? (
+                <RollingDigit
+                  key={place}
+                  digit={character}
+                  direction={direction}
+                />
+              ) : (
+                <span key={place}>{character}</span>
+              );
+            })}
+          </span>
+        </>
+      ) : (
+        value
+      )}
+    </span>
+  );
+}
 
 const FieldNavTargetSection = () => {
   const navigate = useNavigate();
@@ -327,30 +388,22 @@ const FieldNavTargetSection = () => {
           <div className={styles.bodyContent}>
             <div className={styles.telemetryGrid}>
               <div className={styles.telemetryCell}>
-                <span className={styles.cellLabel}>현재 시간</span>
-                <motion.span
-                  key={isMoving ? `cur-${displayCurrentTime}` : "cur-idle"}
-                  className={styles.cellValue}
-                  initial={isMoving ? { y: 4, opacity: 0.45 } : false}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ duration: 0.14 }}
-                >
-                  {formatRaidTime(displayCurrentTime)}
-                </motion.span>
+                <span className={styles.cellLabel}>경과 시간</span>
+                <TelemetryValue
+                  value={formatRaidTime(displayCurrentTime)}
+                  direction={isMoving ? "up" : undefined}
+                />
               </div>
               <div className={styles.telemetryCell}>
                 <span className={styles.cellLabel}>예상 소모</span>
-                <motion.span
-                  key={isMoving ? `rem-${displayRemainingMinutes}` : "rem-idle"}
-                  className={styles.cellValue}
-                  initial={isMoving ? { y: -4, opacity: 0.45 } : false}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ duration: 0.14 }}
-                >
-                  {travelMinutes > 0
-                    ? `+${formatRaidTime(displayRemainingMinutes)}`
-                    : "—"}
-                </motion.span>
+                <TelemetryValue
+                  value={
+                    travelMinutes > 0
+                      ? `+${formatRaidTime(displayRemainingMinutes)}`
+                      : "—"
+                  }
+                  direction={isMoving && travelMinutes > 0 ? "down" : undefined}
+                />
               </div>
               <div className={styles.telemetryCell}>
                 <span className={styles.cellLabel}>예상 도착</span>
