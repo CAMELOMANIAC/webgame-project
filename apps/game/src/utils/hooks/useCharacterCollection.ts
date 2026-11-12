@@ -21,6 +21,7 @@ import {
 } from "@/atoms/raidAtom";
 
 import { API_BASE_URL, apiFetch } from "../api";
+import { createCharacterQueryOptions } from "../characterData";
 import { readApiResponse } from "../request";
 
 export interface CharacterVariant {
@@ -42,10 +43,9 @@ export interface CharacterRoster {
   selectedCharacterId: string | null;
   characters: OwnedCharacter[];
 }
-export const characterKey = (
-  userId: string | null | undefined,
-  characterId: string | null | undefined,
-) => ["character", userId, characterId] as const;
+export { characterKey } from "../characterData";
+export const characterSelectionKey = (userId: string | null | undefined) =>
+  ["select-character", userId] as const;
 
 export function useCharacterRoster(requestedUserId?: string) {
   const selectedUserId = useAtomValue(selectedUserIdAtom);
@@ -53,9 +53,9 @@ export function useCharacterRoster(requestedUserId?: string) {
   return useQuery<CharacterRoster>({
     queryKey: ["characters", userId],
     enabled: !!userId,
-    queryFn: async () =>
+    queryFn: async ({ signal }) =>
       readApiResponse(
-        await apiFetch(`${API_BASE_URL}/user/${userId}/characters`),
+        await apiFetch(`${API_BASE_URL}/user/${userId}/characters`, { signal }),
       ),
   });
 }
@@ -80,14 +80,26 @@ export function useCharacterCollectionActions() {
     await queryClient.invalidateQueries({ queryKey: ["characters", userId] });
   };
   const select = useMutation({
-    mutationFn: async (id: string) =>
-      readApiResponse(
+    mutationKey: characterSelectionKey(userId),
+    mutationFn: async (id: string) => {
+      await queryClient.ensureQueryData(
+        createCharacterQueryOptions(queryClient, userId, id),
+      );
+      if (getDefaultStore().get(selectedUserIdAtom) !== userId) {
+        throw new Error(
+          "개발 계정이 변경되었습니다. 생존자를 다시 선택하세요.",
+        );
+      }
+      return readApiResponse<{ selectedCharacterId: string }>(
         await apiFetch(
           `${API_BASE_URL}/user/${userId}/characters/${id}/select`,
           { method: "POST" },
         ),
-      ),
-    onSuccess: async () => {
+      );
+    },
+    onSuccess: async ({ selectedCharacterId }) => {
+      const rosterKey = ["characters", userId] as const;
+      await queryClient.cancelQueries({ queryKey: rosterKey, exact: true });
       if (getDefaultStore().get(selectedUserIdAtom) !== userId) return;
       setBattle(null);
       setTime(0);
@@ -102,8 +114,11 @@ export function useCharacterCollectionActions() {
       setPath([]);
       setCoords(null);
       setNotice(null);
-      await queryClient.invalidateQueries({ queryKey: ["character", userId] });
-      await refresh();
+      const roster = queryClient.setQueryData<CharacterRoster>(
+        rosterKey,
+        (current) => current && { ...current, selectedCharacterId },
+      );
+      if (!roster) await refresh();
     },
   });
   const recruit = useMutation({
