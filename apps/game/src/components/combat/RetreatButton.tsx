@@ -6,10 +6,10 @@ import { MdRadar } from "react-icons/md";
 import * as styles from "./RetreatButton.css";
 
 export const RETREAT_STATUS = {
-  DETECTED: "접적 : 적 개체 감지",
+  DETECTED: "조우 : 적 개체 감지",
   PREPARING: "경로 확보 : 퇴각 준비 중",
-  READY: "신호 확보 : 퇴각 가능",
-  EXPIRED: "작전 중단 : 퇴각 시간 만료",
+  READY: "준비 : 퇴각 가능",
+  EXPIRED: "퇴각 불가 : 시간 만료",
 } as const;
 
 export type RetreatStatus =
