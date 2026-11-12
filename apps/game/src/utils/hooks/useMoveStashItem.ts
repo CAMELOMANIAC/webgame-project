@@ -1,6 +1,15 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { StashMoveResponse } from "@webgame/types";
+import { useAtomValue } from "jotai";
 
-import { API_BASE_URL,apiFetch } from "../api";
+import { selectedUserIdAtom } from "@/atoms/authAtom";
+import { applyImmediateStashMove } from "@/utils/loadoutDraft";
+
+import { API_BASE_URL, apiFetch } from "../api";
+import { type CharacterData, characterKey } from "../characterData";
+import { inventoryMutationKey, setCachedInventory } from "../inventoryCache";
+import { readApiResponse } from "../request";
+import type { StashItemResponse } from "./useGetStash";
 
 interface MoveItemVariables {
   characterId: string;
@@ -11,41 +20,71 @@ interface MoveItemVariables {
 
 export const useMoveStashItem = () => {
   const queryClient = useQueryClient();
+  const userId = useAtomValue(selectedUserIdAtom);
 
   return useMutation({
-    mutationFn: async ({
-      characterId,
-      direction,
-      weaponMasterId,
-      slotIndex,
-    }: MoveItemVariables) => {
-      const response = await apiFetch(
-        `${API_BASE_URL}/character/${characterId}/inventory/move`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
+    mutationKey: inventoryMutationKey(userId),
+    mutationFn: async ({ characterId, ...move }: MoveItemVariables) =>
+      readApiResponse<StashMoveResponse>(
+        await apiFetch(
+          `${API_BASE_URL}/character/${characterId}/inventory/move`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(move),
           },
-          body: JSON.stringify({
-            direction,
-            weaponMasterId,
-            slotIndex,
-          }),
-        },
-      );
+        ),
+      ),
+    onMutate: async ({ characterId, ...move }) => {
+      if (!userId) return;
+      const charKey = characterKey(userId, characterId);
+      const stashKey = ["stash", userId] as const;
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: charKey, exact: true }),
+        queryClient.cancelQueries({ queryKey: stashKey, exact: true }),
+        queryClient.cancelQueries({
+          queryKey: ["characters", userId],
+          exact: true,
+        }),
+      ]);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to move item");
+      const previousCharacter =
+        queryClient.getQueryData<CharacterData>(charKey);
+      const previousStash =
+        queryClient.getQueryData<StashItemResponse[]>(stashKey);
+      if (previousCharacter && previousStash) {
+        const predicted = applyImmediateStashMove(
+          previousCharacter,
+          previousStash,
+          move,
+        );
+        if (predicted.ok) {
+          setCachedInventory(
+            queryClient,
+            userId,
+            characterId,
+            predicted.characterData.raw,
+          );
+          queryClient.setQueryData(stashKey, predicted.stash);
+          return { previousCharacter, previousStash };
+        }
       }
-
-      return response.json();
     },
-    onSuccess: () => {
-      // 캐릭터 정보(인벤토리) 및 창고 정보 쿼리 캐시 무효화하여 리로딩 유도
-      queryClient.invalidateQueries({ queryKey: ["character"] });
-      queryClient.invalidateQueries({ queryKey: ["characters"] });
-      queryClient.invalidateQueries({ queryKey: ["stash"] });
+    onError: (_error, { characterId }, context) => {
+      if (userId && context) {
+        setCachedInventory(
+          queryClient,
+          userId,
+          characterId,
+          context.previousCharacter.raw,
+        );
+        queryClient.setQueryData(["stash", userId], context.previousStash);
+      }
+    },
+    onSuccess: ({ stash, ...snapshot }, { characterId }) => {
+      if (!userId) return;
+      setCachedInventory(queryClient, userId, characterId, snapshot);
+      queryClient.setQueryData(["stash", userId], stash);
     },
   });
 };

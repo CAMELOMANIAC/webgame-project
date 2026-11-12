@@ -1,7 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { InventoryUpdateResponse } from "@webgame/types";
+import { useAtomValue } from "jotai";
 
-import { API_BASE_URL,apiFetch } from "../api";
-import type { CharacterData } from "./useGetCharacter";
+import { selectedUserIdAtom } from "@/atoms/authAtom";
+
+import { API_BASE_URL, apiFetch } from "../api";
+import { type CharacterData, characterKey } from "../characterData";
+import { inventoryMutationKey, setCachedInventory } from "../inventoryCache";
+import { readApiResponse } from "../request";
 
 interface SyncItemsParams {
   characterId: string;
@@ -13,8 +19,10 @@ interface SyncItemsParams {
  */
 export const useSyncItemsMutation = () => {
   const queryClient = useQueryClient();
+  const userId = useAtomValue(selectedUserIdAtom);
 
   return useMutation({
+    mutationKey: inventoryMutationKey(userId),
     mutationFn: async ({ characterId, data }: SyncItemsParams) => {
       // 1. 서버 전송용 데이터 가공 (빈 아이템 제외)
       const equipment = data.raw.equipment
@@ -43,19 +51,30 @@ export const useSyncItemsMutation = () => {
         },
       );
 
-      if (!response.ok) {
-        const errorData = (await response.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        throw new Error(errorData.error || "Failed to sync items with server");
-      }
-
-      return response.json();
+      return readApiResponse<InventoryUpdateResponse>(response);
     },
-    onSettled: () => {
-      // 동기화 완료/실패 시 최신 서버 상태로 정렬
-      void queryClient.invalidateQueries({ queryKey: ["character"] });
-      void queryClient.invalidateQueries({ queryKey: ["characters"] });
+    onMutate: async ({ characterId, data }) => {
+      if (!userId) return;
+      const queryKey = characterKey(userId, characterId);
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey, exact: true }),
+        queryClient.cancelQueries({
+          queryKey: ["characters", userId],
+          exact: true,
+        }),
+      ]);
+      const previous = queryClient.getQueryData<CharacterData>(queryKey);
+      setCachedInventory(queryClient, userId, characterId, data.raw);
+      return previous;
+    },
+    onError: (_error, { characterId }, previous) => {
+      if (userId && previous) {
+        setCachedInventory(queryClient, userId, characterId, previous.raw);
+      }
+    },
+    onSuccess: (snapshot, { characterId }) => {
+      if (userId)
+        setCachedInventory(queryClient, userId, characterId, snapshot);
     },
   });
 };

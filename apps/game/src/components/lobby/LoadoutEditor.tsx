@@ -27,7 +27,6 @@ import {
   activeDragIdAtom,
   animatingSlotIdsAtom,
   isCombatAtom,
-  isInventoryDirtyAtom,
   isNavigatingAtom,
 } from "@/atoms/raidAtom";
 import BackpackSlot from "@/components/itemSlot/BackpackSlot";
@@ -143,7 +142,6 @@ export function LoadoutEditor({
   const activeId = useAtomValue(activeDragIdAtom);
   const animatingSlotIds = useAtomValue(animatingSlotIdsAtom);
   const setActiveDragId = useSetAtom(activeDragIdAtom);
-  const setIsInventoryDirty = useSetAtom(isInventoryDirtyAtom);
   const setIsCombat = useSetAtom(isCombatAtom);
   const setIsNavigating = useSetAtom(isNavigatingAtom);
 
@@ -183,7 +181,7 @@ export function LoadoutEditor({
     handleDragStart: handleInventoryDragStart,
     handleDragEnd: handleInventoryDragEnd,
   } = useInventoryDrag(characterData, {
-    deferCacheWrite: commitMode === "deferred",
+    deferCacheWrite: true,
     ignoreCombatLock: true,
     onCommitted: (updated) => {
       setLocalError(null);
@@ -191,14 +189,7 @@ export function LoadoutEditor({
         onDraftChange?.(updated, stash);
         return;
       }
-      syncMutation.mutate(
-        { characterId: updated.raw.id, data: updated },
-        {
-          onSuccess: () => {
-            setIsInventoryDirty(false);
-          },
-        },
-      );
+      syncMutation.mutate({ characterId: updated.raw.id, data: updated });
     },
   });
 

@@ -243,3 +243,78 @@ export function moveSlotToStashDraft(
 
   return { ok: false, error: "창고로 보낼 수 있는 아이템이 아닙니다." };
 }
+
+export function applyImmediateStashMove(
+  characterData: CharacterData,
+  stash: StashItemResponse[],
+  {
+    direction,
+    weaponMasterId,
+    slotIndex,
+  }: {
+    direction: "to_backpack" | "to_stash";
+    weaponMasterId: string;
+    slotIndex: number;
+  },
+): DraftMoveResult {
+  const { newRaw, nextStash } = cloneDraft(characterData, stash);
+
+  if (direction === "to_backpack") {
+    const stashItem = nextStash.find(
+      (item) => item.weaponMasterId === weaponMasterId && item.quantity > 0,
+    );
+    if (!stashItem) {
+      return { ok: false, error: "창고에 해당 물품이 없습니다." };
+    }
+
+    const targetSlot = newRaw.inventory[slotIndex];
+    if (!targetSlot || targetSlot.weaponMaster) {
+      return { ok: false, error: "비어 있는 가방 슬롯이 필요합니다." };
+    }
+
+    const weightError = checkWeightLimit(
+      newRaw.weight,
+      stashItem.weaponMaster.weight,
+      newRaw.maxWeight,
+    );
+    if (weightError) return { ok: false, error: weightError };
+
+    adjustStashQuantity(nextStash, stashItem.weaponMaster, newRaw.userId, -1);
+    newRaw.inventory[slotIndex] = {
+      id: `local-inv-${crypto.randomUUID()}`,
+      slotIndex,
+      weaponMaster: { ...stashItem.weaponMaster },
+      quantity: 1,
+    };
+
+    return {
+      ok: true,
+      characterData: buildCharacterDataFromRaw(characterData, newRaw),
+      stash: nextStash,
+    };
+  }
+
+  const slot = newRaw.inventory[slotIndex];
+  if (!slot || slot.weaponMaster?.id !== weaponMasterId || slot.quantity < 1) {
+    return { ok: false, error: "창고로 보낼 물품을 찾을 수 없습니다." };
+  }
+
+  adjustStashQuantity(
+    nextStash,
+    slot.weaponMaster,
+    newRaw.userId,
+    slot.quantity,
+  );
+  newRaw.inventory[slotIndex] = {
+    id: `empty-inv-${slotIndex}`,
+    slotIndex,
+    weaponMaster: null,
+    quantity: 0,
+  };
+
+  return {
+    ok: true,
+    characterData: buildCharacterDataFromRaw(characterData, newRaw),
+    stash: nextStash,
+  };
+}
