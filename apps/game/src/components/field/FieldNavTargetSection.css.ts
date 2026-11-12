@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { keyframes, style } from "@vanilla-extract/css";
 import { recipe } from "@vanilla-extract/recipes";
 
 import { cornerBrackets, fieldWidget, vars } from "@/styles/theme.css";
@@ -83,12 +83,57 @@ export const cellLabel = style({
 });
 
 export const cellValue = style({
+  position: "relative",
   display: "inline-block",
   fontFamily: vars.font.mono,
   fontSize: "13px",
   fontWeight: 600,
   color: vars.text.primary,
   fontVariantNumeric: "tabular-nums",
+});
+
+export const accessibleValue = style({
+  position: "absolute",
+  width: "1px",
+  height: "1px",
+  overflow: "hidden",
+  clipPath: "inset(50%)",
+  whiteSpace: "nowrap",
+});
+
+export const digitRow = style({
+  display: "flex",
+});
+
+export const digitWindow = style({
+  width: "1ch",
+  height: "1lh",
+  overflow: "hidden",
+});
+
+const slideDigit = keyframes({
+  from: { transform: "translateY(0)" },
+  to: { transform: "translateY(-50%)" },
+});
+
+export const digitRoll = recipe({
+  base: {
+    display: "flex",
+    flexDirection: "column",
+    animationName: slideDigit,
+    animationDuration: "140ms",
+    animationTimingFunction: "ease-out",
+    animationFillMode: "both",
+    "@media": {
+      "(prefers-reduced-motion: reduce)": { animationDuration: "0ms" },
+    },
+  },
+  variants: {
+    direction: {
+      up: { animationDirection: "normal" },
+      down: { animationDirection: "reverse", animationTimingFunction: "ease-in" },
+    },
+  },
 });
 
 export const primaryAction = style({
