@@ -8,6 +8,42 @@ interface BackpackEntry<T> extends EquipmentEntry<T> {
   quantity: number;
 }
 
+interface InventoryWeapon {
+  id: string;
+  name: string;
+  iconKey: string;
+  attackType: "MELEE" | "RANGED";
+  weight: number;
+  value: number;
+  damage: number;
+  staminaCost: number;
+  cooldownTicks: number;
+  castTicks: number;
+  description: string | null;
+}
+
+export interface StashItemData {
+  id: string;
+  userId: string;
+  weaponMasterId: string;
+  quantity: number;
+  weaponMaster: InventoryWeapon;
+}
+
+export interface InventorySnapshot {
+  weight: number;
+  equipment: EquipmentEntry<InventoryWeapon>[];
+  inventory: BackpackEntry<InventoryWeapon>[];
+}
+
+export interface InventoryUpdateResponse extends InventorySnapshot {
+  status: "success";
+}
+
+export interface StashMoveResponse extends InventoryUpdateResponse {
+  stash: StashItemData[];
+}
+
 // 화면의 슬롯 교환에서도 여러 개짜리 묶음을 장착하며 수량이 사라지지 않게 한다.
 export function swapEquipmentBackpack<T extends { id: string }>(
   equipment: EquipmentEntry<T>[],

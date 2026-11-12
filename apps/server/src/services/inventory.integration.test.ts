@@ -18,7 +18,7 @@ test("실제 DB: 슬롯 동기화는 묶음 수량과 무게를 보존한다", a
     slotIndex: 0,
     quantity: 3,
   });
-  await syncSlots(db, character.id, {
+  const response = await syncSlots(db, character.id, {
     equipment: [{ weaponMasterId: weapon.id, slotIndex: 2 }],
     inventory: [{ weaponMasterId: weapon.id, slotIndex: 4, quantity: 2 }],
   });
@@ -26,6 +26,10 @@ test("실제 DB: 슬롯 동기화는 묶음 수량과 무게를 보존한다", a
   assert.equal(saved.equipment.length, 1);
   assert.equal(saved.inventory[0]?.quantity, 2);
   assert.equal(saved.character.weight, 6);
+  assert.equal(response.weight, saved.character.weight);
+  assert.equal(response.equipment[0]?.id, saved.equipment[0]?.id);
+  assert.equal(response.inventory[0]?.id, saved.inventory[0]?.id);
+  assert.equal(response.inventory[0]?.weaponMaster?.id, weapon.id);
 });
 
 test("실제 DB: 수량을 늘린 동기화 요청은 원본을 변경하지 않는다", async (t) => {
@@ -103,7 +107,7 @@ test("실제 DB: 기존 창고 중복 행은 수량을 합쳐 보존한다", asy
       quantity,
     })),
   );
-  await moveStashItem(db, character.id, {
+  const response = await moveStashItem(db, character.id, {
     direction: "to_backpack",
     weaponMasterId: weapon.id,
     slotIndex: 0,
@@ -112,6 +116,10 @@ test("실제 DB: 기존 창고 중복 행은 수량을 합쳐 보존한다", asy
   assert.equal(saved.stash.length, 1);
   assert.equal(saved.stash[0]?.quantity, 4);
   assert.equal(saved.inventory[0]?.quantity, 1);
+  assert.equal(response.stash[0]?.id, saved.stash[0]?.id);
+  assert.equal(response.stash[0]?.quantity, 4);
+  assert.equal(response.inventory[0]?.id, saved.inventory[0]?.id);
+  assert.equal(response.weight, saved.character.weight);
 });
 
 test("실제 DB: 무게 초과 시 창고·가방 변경을 모두 원복한다", async (t) => {

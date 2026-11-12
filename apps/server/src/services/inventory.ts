@@ -1,3 +1,7 @@
+import type {
+  InventoryUpdateResponse,
+  StashMoveResponse,
+} from "@webgame/types";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -114,7 +118,7 @@ export function countItems(
   return counts;
 }
 
-export async function calculateInventoryWeight(tx: Tx, characterId: string) {
+async function readInventorySnapshot(tx: Tx, characterId: string) {
   const equipment = await tx.query.characterWeapons.findMany({
     where: eq(characterWeapons.characterId, characterId),
     with: { weaponMaster: true },
@@ -123,27 +127,39 @@ export async function calculateInventoryWeight(tx: Tx, characterId: string) {
     where: eq(raidInventoryItems.characterId, characterId),
     with: { weaponMaster: true },
   });
-  return (
+  const weight =
     equipment.reduce((sum, item) => sum + item.weaponMaster.weight, 0) +
     inventory.reduce(
       (sum, item) => sum + item.weaponMaster.weight * item.quantity,
       0,
-    )
-  );
+    );
+  return { equipment, inventory, weight };
+}
+
+export async function calculateInventoryWeight(tx: Tx, characterId: string) {
+  return (await readInventorySnapshot(tx, characterId)).weight;
 }
 
 export async function updateInventoryWeight(
   tx: Tx,
   character: Pick<Character, "id" | "maxWeight">,
 ) {
-  const weight = await calculateInventoryWeight(tx, character.id);
+  return (await updateInventorySnapshot(tx, character)).weight;
+}
+
+async function updateInventorySnapshot(
+  tx: Tx,
+  character: Pick<Character, "id" | "maxWeight">,
+) {
+  const snapshot = await readInventorySnapshot(tx, character.id);
+  const { weight } = snapshot;
   if (weight > character.maxWeight)
     throw new InventoryError("Maximum carrying weight exceeded");
   await tx
     .update(characters)
     .set({ weight })
     .where(eq(characters.id, character.id));
-  return weight;
+  return snapshot;
 }
 
 export async function syncSlots(
@@ -160,7 +176,7 @@ export async function syncSlotsInTransaction(
   tx: Tx,
   characterId: string,
   input: SlotsInput,
-) {
+): Promise<InventoryUpdateResponse> {
   const data = SlotsSchema.parse(input);
   const character = await getCharacter(tx, characterId);
   const equipment = await tx.query.characterWeapons.findMany({
@@ -193,7 +209,7 @@ export async function syncSlotsInTransaction(
       .values(data.inventory.map((item) => ({ ...item, characterId })));
   return {
     status: "success",
-    weight: await updateInventoryWeight(tx, character),
+    ...(await updateInventorySnapshot(tx, character)),
   };
 }
 
@@ -373,7 +389,7 @@ export async function moveStashItem(
   database: Database,
   characterId: string,
   input: z.infer<typeof MoveItemSchema>,
-) {
+): Promise<StashMoveResponse> {
   const { direction, weaponMasterId, slotIndex } = MoveItemSchema.parse(input);
   return withInventoryTransaction(database, async (tx) => {
     const character = await getCharacter(tx, characterId);
@@ -434,7 +450,11 @@ export async function moveStashItem(
     }
     return {
       status: "success",
-      weight: await updateInventoryWeight(tx, character),
+      ...(await updateInventorySnapshot(tx, character)),
+      stash: await tx.query.stashItems.findMany({
+        where: eq(stashItems.userId, character.userId),
+        with: { weaponMaster: true },
+      }),
     };
   });
 }
