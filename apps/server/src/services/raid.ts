@@ -1,10 +1,16 @@
+import { randomUUID } from "node:crypto";
 import {
+  calculateEntryDelayMinutes,
   firstMissionNodeId,
   type RaidActionInput,
   type RaidNavigationInput,
   type RaidNavigationResult,
+  type RaidNoiseResult,
   type RaidView,
+  type RetreatDecisionResult,
+  type RetreatResolution,
   seopoMapVersion,
+  type StartRaidResult,
 } from "@webgame/types";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -22,8 +28,11 @@ import {
   users,
 } from "../db";
 import { hasRoad, pathTravelVisits } from "../logic/roadDistances";
+import { type PendingRetreat, retreatChoiceMs, retreatPlaybackLimitMs, sealBattleTimeline } from "../logic/retreat";
 import { gameRules } from "../logic/rules";
 import {
+  applyBattleSettlement,
+  type DeferBattle,
   executeGhostBattleInTransaction,
   executeHanlimBattleInTransaction,
   executePatrolGhostBattleInTransaction,
@@ -36,6 +45,7 @@ import {
 } from "./ghostRoster";
 import { recordGhosts } from "./ghosts";
 import {
+  calculateInventoryLoadout,
   calculateInventoryWeight,
   InventoryError,
   mergeIntoStash,
@@ -72,7 +82,7 @@ export const NavigateSchema = RaidActionSchema.extend({
   inventory: SlotsSchema.shape.inventory.optional(),
 }).refine(
   ({ path, destinationBuildingId }) =>
-    (path.length === 1) === (destinationBuildingId !== undefined),
+    path.length > 1 || destinationBuildingId !== undefined,
   { message: "A single-node path requires a destination building" },
 ).refine(
   (data) => (data.equipment === undefined) === (data.inventory === undefined),
@@ -87,6 +97,7 @@ function view(raid: RaidSession): RaidView {
     status: raid.status,
     version: raid.version,
     currentNodeId: raid.currentNodeId,
+    currentBuildingId: raid.currentBuildingId,
     time: raid.time,
   };
 }
@@ -142,18 +153,35 @@ export async function startRaid(
   characterId: string,
   loadout?: SlotsInput,
   entryNodeId = gameRules.startNodeId,
-) {
+): Promise<StartRaidResult> {
   return withInventoryTransaction(database, async (tx) => {
     await tx.execute(
       sql`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`,
     );
     const character = await ownedCharacter(tx, userId, characterId);
-    if (character.activeRaid?.status === "ACTIVE")
+    if (character.activeRaid?.status === "ACTIVE") {
+      const ghostRoster = await loadGhostRoster(tx, character.activeRaid);
+      const tracker = createGhostTracker(
+        tx,
+        ghostRoster,
+        userId,
+        character.activeRaid.time,
+        character.activeRaid,
+      );
+      if (!character.activeRaid.ghostRoster && character.activeRaid.time === 0) {
+        await tracker.initialize(character.activeRaid.entryNodeId);
+      }
+      const noiseSignals = await tracker.noiseSignalsAt(
+        character.activeRaid.currentNodeId,
+        character.activeRaid.time,
+      );
       return {
         status: "success",
         isRaiding: true,
         raid: view(character.activeRaid),
+        noiseSignals,
       };
+    }
     if (!gameRules.entryNodeIds.includes(entryNodeId))
       throw new InventoryError("선택할 수 없는 진입 지점입니다.");
     const otherActive = await tx.query.characters.findMany({
@@ -182,19 +210,24 @@ export async function startRaid(
         .where(eq(users.id, userId));
     if (character.hp <= 0 || character.isRaiding)
       throw new InventoryError("Character is not ready to start a raid", 409);
-    const weight = loadout
-      ? (
-          await syncLoadoutWithStashInTransaction(
-            tx,
-            userId,
-            characterId,
-            loadout,
-          )
-        ).weight
-      : await calculateInventoryWeight(tx, characterId);
+    const loadoutSnapshot = loadout
+      ? await syncLoadoutWithStashInTransaction(
+          tx,
+          userId,
+          characterId,
+          loadout,
+        )
+      : await calculateInventoryLoadout(tx, characterId);
+    const weight = loadoutSnapshot.weight;
+    const initialTime = calculateEntryDelayMinutes(loadoutSnapshot.value);
     const [raid] = await tx
       .insert(raidSessions)
-      .values({ characterId, entryNodeId, currentNodeId: entryNodeId })
+      .values({
+        characterId,
+        entryNodeId,
+        currentNodeId: entryNodeId,
+        time: initialTime,
+      })
       .returning();
     if (!raid) throw new InventoryError("Failed to create raid session", 500);
     await tx
@@ -203,14 +236,52 @@ export async function startRaid(
         isRaiding: true,
         activeRaidId: raid.id,
         currentNodeId: entryNodeId,
-        time: 0,
+        time: initialTime,
         weight,
       })
       .where(eq(characters.id, characterId));
     await recordGhosts(tx, characterId, raid.id, [
-      { nodeId: raid.currentNodeId, time: 0 },
+      { nodeId: raid.currentNodeId, time: initialTime },
     ]);
-    return { status: "success", isRaiding: true, raid: view(raid) };
+    const ghostRoster = await loadGhostRoster(tx, raid);
+    const tracker = createGhostTracker(tx, ghostRoster, userId, initialTime, raid);
+    await tracker.initialize(raid.entryNodeId);
+    const noiseSignals = await tracker.noiseSignalsAt(raid.currentNodeId, initialTime);
+    return {
+      status: "success",
+      isRaiding: true,
+      raid: view(raid),
+      noiseSignals,
+    };
+  });
+}
+
+export async function getRaidNoiseSignals(
+  database: Database,
+  userId: string,
+  characterId: string,
+): Promise<RaidNoiseResult> {
+  return withInventoryTransaction(database, async (tx) => {
+    const character = await ownedCharacter(tx, userId, characterId);
+    if (!character.activeRaid || character.activeRaid.status !== "ACTIVE") {
+      return { noiseSignals: [], raidId: null };
+    }
+    const ghostRoster = await loadGhostRoster(tx, character.activeRaid);
+    const tracker = createGhostTracker(
+      tx,
+      ghostRoster,
+      userId,
+      character.activeRaid.time,
+      character.activeRaid,
+    );
+    if (!character.activeRaid.ghostRoster && character.activeRaid.time === 0) {
+      await tracker.initialize(character.activeRaid.entryNodeId);
+    }
+    const noiseSignals = await tracker.noiseSignalsAt(
+      character.activeRaid.currentNodeId,
+      character.activeRaid.time,
+    );
+    return { noiseSignals, raidId: character.activeRaid.id };
   });
 }
 
@@ -220,6 +291,8 @@ interface ActionResult<T> {
   currentNodeId?: number;
   time?: number;
   ghostRoster?: GhostRoster;
+  currentBuildingId?: number | null;
+  pendingRetreat?: PendingRetreat;
 }
 
 async function performRaidAction<T>(
@@ -264,6 +337,8 @@ async function performRaidAction<T>(
     ) {
       throw new InventoryError("Raid is not active", 409);
     }
+    if (raid.pendingRetreat && !raid.pendingRetreat.resolution)
+      throw new InventoryError("전투 결과를 먼저 확정해야 합니다.", 409);
     if (raid.version !== input.expectedVersion)
       throw new InventoryError(
         "Raid state changed; refresh before retrying",
@@ -280,6 +355,8 @@ async function performRaidAction<T>(
         ...(result.currentNodeId !== undefined
           ? { currentNodeId: result.currentNodeId }
           : {}),
+        ...(result.currentBuildingId !== undefined ? { currentBuildingId: result.currentBuildingId } : {}),
+        pendingRetreat: result.pendingRetreat ?? null,
         ...(result.time !== undefined ? { time: result.time } : {}),
         ...(result.ghostRoster ? { ghostRoster: result.ghostRoster } : {}),
         ...(status === "ACTIVE" ? {} : { endedAt: new Date() }),
@@ -334,7 +411,8 @@ export async function getRaidNavigationResult(
     if (command) {
       const result = command.response as unknown as RaidNavigationResult;
       if (
-        result.raid.version === raid.version &&
+        (result.raid.version === raid.version ||
+          (result.battleLog?.retreat && result.battleLog.retreat.battleId === raid.pendingRetreat?.id)) &&
         (!character.activeRaidId || character.activeRaidId === raid.id)
       ) {
         return result;
@@ -376,13 +454,13 @@ export async function navigateRaid(
         throw new InventoryError("Raid map version is not supported", 409);
       if (parsed.path[0] !== raid.currentNodeId)
         throw new InventoryError("Path must start at the current node");
-      const isBuildingMove = parsed.destinationBuildingId !== undefined;
+      const isBuildingMove = parsed.path.length === 1;
       if (
-        isBuildingMove &&
+        parsed.destinationBuildingId !== undefined &&
         !mapData.buildings.some(
           (building) =>
             building.id === parsed.destinationBuildingId &&
-            building.roadNodeId === raid.currentNodeId,
+            building.roadNodeId === parsed.path.at(-1),
         )
       ) {
         throw new InventoryError("Destination building is not on the current node");
@@ -444,6 +522,10 @@ export async function navigateRaid(
               time: stopTime,
             })
             .where(eq(characters.id, characterId));
+          const previousNode = path[stopIndex - 1]!;
+          const retreat = prepareRetreat(
+            raid, previousNode, stopIndex === 1 ? raid.currentBuildingId : null, isMissionEncounter,
+          );
           const battleLog =
             encounter?.kind === "GHOST"
               ? await executeGhostBattleInTransaction(
@@ -451,6 +533,7 @@ export async function navigateRaid(
                   characterId,
                   raid.id,
                   encounter.ghost,
+                  retreat.defer,
                 )
               : encounter?.kind === "NPC_GHOST"
                 ? await executePatrolGhostBattleInTransaction(
@@ -458,8 +541,10 @@ export async function navigateRaid(
                     characterId,
                     encounter.patrolId,
                     encounter.time,
+                    retreat.defer,
                   )
-                : await executeHanlimBattleInTransaction(tx, characterId);
+                : await executeHanlimBattleInTransaction(tx, characterId, retreat.defer);
+          const pendingRetreat = retreat.finish(battleLog);
           if (
             battleLog.result.winnerTeamId === "TeamA" &&
             !battleLog.playerDied
@@ -474,6 +559,8 @@ export async function navigateRaid(
           return {
             payload: { encounterTriggered: true, stopNodeId, battleLog },
             currentNodeId: stopNodeId,
+            currentBuildingId: isBuildingMove ? parsed.destinationBuildingId ?? null : null,
+            pendingRetreat,
             time: stopTime,
             ghostRoster,
             status: battleLog.playerDied ? "DEAD" : "ACTIVE",
@@ -481,9 +568,12 @@ export async function navigateRaid(
         }
       }
       await recordGhosts(tx, characterId, raid.id, plannedVisits);
+      const currentNodeId = path.at(-1)!;
+      const noiseSignals = await tracker.noiseSignalsAt(currentNodeId, lastTravelTime);
       return {
-        payload: { encounterTriggered: false },
-        currentNodeId: path.at(-1),
+        payload: { encounterTriggered: false, noiseSignals },
+        currentNodeId,
+        currentBuildingId: parsed.destinationBuildingId ?? null,
         time: lastTravelTime,
         ghostRoster,
       };
@@ -549,16 +639,180 @@ export async function fightRaidMonster(
       await recordGhosts(tx, characterId, raid.id, [
         { nodeId: raid.currentNodeId, time: nextTime },
       ]);
+      const retreat = prepareRetreat(raid, raid.currentNodeId, raid.currentBuildingId, false);
       const battleLog = await executeMonsterBattleInTransaction(
         tx,
         characterId,
         level,
+        retreat.defer,
       );
       return {
         payload: battleLog,
+        pendingRetreat: retreat.finish(battleLog),
         time: nextTime,
         status: battleLog.playerDied ? "DEAD" : "ACTIVE",
       };
     },
   );
+}
+
+function prepareRetreat(
+  raid: RaidSession,
+  returnNodeId: number,
+  returnBuildingId: number | null,
+  missionEncounter: boolean,
+) {
+  let pending: PendingRetreat | undefined;
+  const defer: DeferBattle = (log, rewardIds, checkpoint) => {
+    const first = [];
+    const second = [];
+    let split = false;
+    for (const entry of log.timeline) {
+      const index = entry.events.findIndex((event) => event.id === checkpoint.eventId);
+      if (index >= 0) {
+        first.push({ ...entry, events: entry.events.slice(0, index + 1) });
+        const remaining = entry.events.slice(index + 1);
+        if (remaining.length) second.push({ ...entry, events: remaining });
+        split = true;
+      } else {
+        (split ? second : first).push(entry);
+      }
+    }
+    const player = checkpoint.players.find((unit) => unit.id === raid.characterId);
+    if (!player || !split) throw new Error("Missing retreat checkpoint");
+    const { key, iv, ciphertext } = sealBattleTimeline({ timeline: second, finalState: log.finalState, result: log.result });
+    const id = randomUUID();
+    const openingLog = {
+      initialState: log.initialState,
+      timeline: first,
+      finalState: { players: checkpoint.players },
+      result: {
+        winnerTeamId: null,
+        reason: "RETREAT_PENDING" as const,
+        durationTicks: first.at(-1)!.timestamp,
+      },
+      playerDied: false,
+      rewardItemName: null,
+      retreat: { battleId: id, raidId: raid.id, iv, ciphertext },
+    };
+    pending = {
+      id, openingLog, fullLog: { ...log, timeline: [] }, key, rewardIds,
+      hp: player.hp, stamina: player.stamina, returnNodeId, returnBuildingId,
+      missionEncounter, ready: false,
+      deadline: Date.now() + retreatPlaybackLimitMs +
+        openingLog.result.durationTicks * 1_000 +
+        first.reduce((count, entry) => count + entry.events.length, 0) * 250,
+    };
+    return openingLog;
+  };
+  return {
+    defer,
+    finish(openingLog: PendingRetreat["openingLog"]) {
+      if (pending) {
+        pending.openingLog = openingLog;
+        pending.fullLog.encounter = openingLog.encounter;
+      }
+      return pending;
+    },
+  };
+}
+
+export async function getPendingRaidBattle(database: Database, userId: string, characterId: string) {
+  return withInventoryTransaction(database, async (tx) => {
+    const character = await ownedCharacter(tx, userId, characterId);
+    const pending = character.activeRaid?.pendingRetreat;
+    return { battleLog: pending && !pending.resolution ? pending.openingLog : null };
+  });
+}
+
+export async function decideRaidBattle(
+  database: Database,
+  userId: string,
+  characterId: string,
+  raidId: string,
+  battleId: string,
+  action: "OPEN" | "RETREAT" | "CONTINUE" | "EXPIRE",
+): Promise<RetreatDecisionResult> {
+  return withInventoryTransaction(database, async (tx) => {
+    const character = await ownedCharacter(tx, userId, characterId);
+    const raid = await tx.query.raidSessions.findFirst({
+      where: and(eq(raidSessions.id, raidId), eq(raidSessions.characterId, characterId)),
+    });
+    const pending = raid?.pendingRetreat;
+    if (!raid || !pending || pending.id !== battleId)
+      throw new InventoryError("전투 결과를 찾을 수 없습니다.", 404);
+    if (pending.resolution) return { resolution: pending.resolution };
+    const now = Date.now();
+    if (now < pending.deadline) {
+      if (action === "OPEN" && !pending.ready) {
+        pending.ready = true;
+        pending.deadline = now + retreatChoiceMs;
+        await tx.update(raidSessions).set({ pendingRetreat: pending }).where(eq(raidSessions.id, raid.id));
+      }
+      if (action !== "RETREAT" || !pending.ready)
+        return { remainingMs: Math.max(0, pending.deadline - now), windowMs: retreatChoiceMs };
+    }
+    const retreated = action === "RETREAT" && now < pending.deadline;
+    let status: RaidStatus = "ACTIVE";
+    let currentNodeId = raid.currentNodeId;
+    let currentBuildingId = raid.currentBuildingId;
+    let ghostRoster = raid.ghostRoster;
+    let settled: PendingRetreat["fullLog"] | undefined;
+    if (retreated) {
+      currentNodeId = pending.returnNodeId;
+      currentBuildingId = pending.returnBuildingId;
+      await tx.update(characters).set({
+        hp: pending.hp, stamina: pending.stamina, currentNodeId,
+      }).where(eq(characters.id, characterId));
+    } else {
+      settled = await applyBattleSettlement(tx, character, pending.fullLog, pending.rewardIds);
+      if (settled.playerDied) {
+        status = "DEAD";
+        currentBuildingId = null;
+        await tx.update(characters).set({ activeRaidId: null }).where(eq(characters.id, characterId));
+        await finishMissionRaid(tx, userId, raid.id, status);
+      } else if (settled.result.winnerTeamId === "TeamA") {
+        const roster = await loadGhostRoster(tx, raid);
+        const tracker = createGhostTracker(tx, roster, userId, raid.time, raid);
+        const encounter = settled.encounter;
+        if (encounter?.sourceCharacterId) tracker.defeat(encounter.sourceCharacterId);
+        if (encounter?.patrolId) tracker.defeatPatrol(encounter.patrolId);
+        ghostRoster = roster;
+        if (pending.missionEncounter) await recoverMissionRecord(tx, userId, raid.id);
+      }
+    }
+    const nextRaid = {
+      ...raid, currentNodeId, currentBuildingId, status, version: raid.version + 1,
+    };
+    const resolution: RetreatResolution = settled
+      ? {
+          decision: "CONTINUE", raid: view(nextRaid), key: pending.key,
+          rewardItemName: settled.rewardItemName,
+        }
+      : { decision: "RETREAT", raid: view(nextRaid), hp: pending.hp, stamina: pending.stamina };
+    await tx.update(raidSessions).set({
+      currentNodeId, currentBuildingId, status, version: nextRaid.version, ghostRoster,
+      pendingRetreat: { ...pending, resolution },
+      ...(status === "DEAD" && { endedAt: new Date(now) }),
+    }).where(eq(raidSessions.id, raid.id));
+    return { resolution };
+  });
+}
+
+export async function expireRaidBattles(database: Database) {
+  const expired = await database.query.raidSessions.findMany({
+    columns: { id: true, pendingRetreat: true },
+    with: { character: { columns: { id: true, userId: true } } },
+    where: and(
+      eq(raidSessions.status, "ACTIVE"),
+      sql`${raidSessions.pendingRetreat}->'resolution' IS NULL
+        AND (${raidSessions.pendingRetreat}->>'deadline')::bigint <= ${Date.now()}`,
+    ),
+    limit: 20,
+  });
+  for (const { id, character, pendingRetreat } of expired) {
+    if (pendingRetreat) {
+      await decideRaidBattle(database, character.userId, character.id, id, pendingRetreat.id, "EXPIRE");
+    }
+  }
 }

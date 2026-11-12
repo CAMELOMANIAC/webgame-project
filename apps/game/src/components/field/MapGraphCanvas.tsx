@@ -1,7 +1,7 @@
 import type { UseMutationResult } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
-import type { BattleLog } from "@webgame/types";
-import { getDefaultStore, useAtom, useAtomValue } from "jotai";
+import type { BattleLog, MapBuilding } from "@webgame/types";
+import { getDefaultStore, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Application, Container, Graphics, Sprite, Text, TextStyle } from "pixi.js";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
@@ -10,13 +10,18 @@ import { selectedUserIdAtom } from "@/atoms/authAtom";
 import { pendingNavigationAtom, pendingNavigationKey } from "@/atoms/pendingNavigationAtom";
 import {
   currentNodeIdAtom,
+  enemyNoiseSignalsAtom,
   focusPlayerTriggerAtom,
   focusRouteTargetAtom,
   followPlayerAtom,
   isInventoryDirtyAtom,
   isNavigatingAtom,
+  navigationProgressAtom,
+  navigationStartTimeAtom,
   playerCoordsAtom,
   playerRotationAtom,
+  raidNoiseState,
+  requestedBuildingIdAtom,
   requestedNodeIdAtom,
   shortestPathAtom,
   startNavigationTriggerAtom,
@@ -28,6 +33,7 @@ import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import type { NavigateRaidParams, NavigateRaidResponse } from "@/utils/hooks/useNavigateRaid";
 import { useRaidRules } from "@/utils/hooks/useRaidRules";
 import { findShortestPath } from "@/utils/pathfinding";
+import { createNoiseRipple } from "@/utils/pixiNoiseRipple";
 import { getFogOfWarTexture, loadCompassTexture } from "@/utils/pixiTextures";
 import { Easings, runTween, type TweenHandle } from "@/utils/pixiTween";
 import { createRTreeIndex, searchRTreeIndex } from "@/utils/rtreeCulling";
@@ -52,12 +58,8 @@ interface Edge {
   type: "minor" | "major" | "main";
 }
 
-interface Building {
-  id: number;
-  height: number;
-  coordinates: { x: number; y: number }[];
+interface Building extends MapBuilding {
   flatPoints: number[]; // 렌더링 성능 최적화를 위해 플랫화된 정점 캐시
-  roadNodeId: number;
 }
 
 interface WaterPoint {
@@ -72,6 +74,10 @@ const edges = mapData.edges as unknown as Edge[];
 const MIN_ZOOM_SCALE = 0.2;
 const MAX_ZOOM_SCALE = 10;
 const FOG_VISIBLE_MIN_SCALE = 1.0;
+const NOISE_PULSE_SECONDS = 1.35;
+const NOISE_ECHO_DELAY_SECONDS = 0.3;
+const NOISE_ECHO_STRENGTH = 0.55;
+const NOISE_PULSE_INTERVAL_MS = 3000;
 
 function syncFogVisibility(
   sightMaskSprite: Sprite | null,
@@ -252,6 +258,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const targetMarkerGroupRef = useRef<Container | null>(null);
   const sightMaskSpriteRef = useRef<Sprite | null>(null);
   const playerMarkerSpriteRef = useRef<Sprite | null>(null);
+  const noiseRippleRef = useRef<ReturnType<typeof createNoiseRipple>>(null);
 
   const [isPixiReady, setIsPixiReady] = useState(false);
   const focusTweenRef = useRef<TweenHandle | null>(null);
@@ -260,6 +267,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const startNavigationTrigger = useAtomValue(startNavigationTriggerAtom);
 
   const { data: characterData } = useGetCharacter();
+  const [noiseSignals, setNoiseSignals] = useAtom(enemyNoiseSignalsAtom);
+  const activeRaidId = characterData?.raw.activeRaid?.id;
   const queryClient = useQueryClient();
   const [isInventoryDirty, setIsInventoryDirty] = useAtom(isInventoryDirtyAtom);
 
@@ -327,6 +336,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const [targetNodeId, setTargetNodeId] = useAtom(targetNodeIdAtom);
   const [, setTargetBuildingId] = useAtom(targetBuildingIdAtom);
   const [requestedNodeId, setRequestedNodeId] = useAtom(requestedNodeIdAtom);
+  const [requestedBuildingId, setRequestedBuildingId] = useAtom(requestedBuildingIdAtom);
   const { data: raidRules } = useRaidRules();
   const raidRulesRef = useRef(raidRules);
   useEffect(() => {
@@ -336,6 +346,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const selectTargetRef = useRef<(nodeId: number, targetB?: Building) => void>(() => {});
   const [shortestPath, setShortestPath] = useAtom(shortestPathAtom);
   const [isNavigating, setIsNavigating] = useAtom(isNavigatingAtom);
+  const setNavigationProgress = useSetAtom(navigationProgressAtom);
+  const setNavigationStartTime = useSetAtom(navigationStartTimeAtom);
   const [playerRotation, setPlayerRotation] = useAtom(playerRotationAtom);
 
   useEffect(() => {
@@ -421,10 +433,14 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     const coords = buildCoordPath(path, startPos, tBuilding);
     if (coords.length <= 1) return;
 
+    focusTweenRef.current?.destroy();
+    focusTweenRef.current = null;
     navigateRaidResponseRef.current = null;
+    setNoiseSignals(null);
     navigationPathCoordsRef.current = coords;
     setTargetNodeId(path[path.length - 1]);
     setShortestPath(path);
+    setNavigationStartTime(characterData.raw.activeRaid?.time ?? 0);
     setIsNavigating(true);
 
     let reqEquipment: { weaponMasterId: string; slotIndex: number }[] | undefined = undefined;
@@ -454,7 +470,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       {
         characterId: characterData.raw.id,
         path,
-        destinationBuildingId: path.length === 1 ? tBuilding?.id : undefined,
+        destinationBuildingId: tBuilding?.id,
         equipment: reqEquipment,
         inventory: reqInventory,
       },
@@ -498,9 +514,21 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   selectTargetRef.current = handleTargetSelect;
   useEffect(() => {
     if (requestedNodeId === null || isNavigating || isCombat) return;
+    const requestedBuilding =
+      requestedBuildingId !== null
+        ? (buildings.find((b) => b.id === requestedBuildingId) ?? undefined)
+        : undefined;
     setRequestedNodeId(null);
-    selectTargetRef.current(requestedNodeId);
-  }, [requestedNodeId, isNavigating, isCombat, setRequestedNodeId]);
+    setRequestedBuildingId(null);
+    selectTargetRef.current(requestedNodeId, requestedBuilding);
+  }, [
+    requestedNodeId,
+    requestedBuildingId,
+    isNavigating,
+    isCombat,
+    setRequestedNodeId,
+    setRequestedBuildingId,
+  ]);
 
   useEffect(() => {
     if (startNavigationTrigger === 0) return;
@@ -577,6 +605,9 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         app.stage.addChild(worldContainer);
         worldContainerRef.current = worldContainer;
 
+        const mapLayer = new Container();
+        worldContainer.addChild(mapLayer);
+
         // --- 1.1 Water Backdrop ---
         if (waterPoints.length > 0) {
           const waterGraphics = new Graphics();
@@ -584,7 +615,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
             .poly(waterPoints, true)
             .fill({ color: 0x1e1e20, alpha: 0.35 })
             .stroke({ width: 1.5, color: 0x787880, alpha: 0.2 });
-          worldContainer.addChild(waterGraphics);
+          mapLayer.addChild(waterGraphics);
         }
 
         // --- 1.2 Edges (도로망 3종 일괄 드로잉) ---
@@ -624,7 +655,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         });
         edgesGraphics.stroke({ width: 1, color: 0x6e6e78, alpha: 0.15 });
 
-        worldContainer.addChild(edgesGraphics);
+        mapLayer.addChild(edgesGraphics);
         edgesGraphicsRef.current = edgesGraphics;
 
         // --- 1.3 Buildings (4,187개 폴리곤 청크 배칭 GPU 정점 업로드) ---
@@ -644,7 +675,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
             .stroke({ width: 1, color: 0x787880, alpha: 0.12 });
           buildingsContainer.addChild(bGraphics);
         }
-        worldContainer.addChild(buildingsContainer);
+        mapLayer.addChild(buildingsContainer);
         buildingsContainerRef.current = buildingsContainer;
 
         // --- 1.4 Nodes (1,131개 교차점 일괄 드로잉) ---
@@ -656,23 +687,23 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         nodesGraphics
           .fill({ color: DEFAULT_NODE_COLOR_NUM })
           .stroke({ width: 1, color: 0x0a0a0c, alpha: 0.8 });
-        worldContainer.addChild(nodesGraphics);
+        mapLayer.addChild(nodesGraphics);
         nodesGraphicsRef.current = nodesGraphics;
 
         // --- 1.5 Hover Highlight Graphics (단일 동적 하이라이트 레이어) ---
         const hoverHighlightGraphics = new Graphics();
-        worldContainer.addChild(hoverHighlightGraphics);
+        mapLayer.addChild(hoverHighlightGraphics);
         hoverHighlightGraphicsRef.current = hoverHighlightGraphics;
 
         // --- 1.6 Exit Nodes Container ---
         const exitContainer = new Container();
         exitContainer.visible = !isCombatRef.current;
-        worldContainer.addChild(exitContainer);
+        mapLayer.addChild(exitContainer);
         exitContainerRef.current = exitContainer;
 
         // --- 2. Navigation & Path Layer ---
         const pathLineGraphics = new Graphics();
-        worldContainer.addChild(pathLineGraphics);
+        mapLayer.addChild(pathLineGraphics);
         pathLineGraphicsRef.current = pathLineGraphics;
 
         const targetMarkerGroup = new Container();
@@ -684,7 +715,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
           .circle(0, 0, 3)
           .fill({ color: 0xffffff });
         targetMarkerGroup.addChild(targetGlow);
-        worldContainer.addChild(targetMarkerGroup);
+        mapLayer.addChild(targetMarkerGroup);
         targetMarkerGroupRef.current = targetMarkerGroup;
 
         // --- 3. Fog of War & Player Marker Layer ---
@@ -694,8 +725,10 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         sightMaskSprite.width = 4000;
         sightMaskSprite.height = 4000;
         sightMaskSprite.visible = false;
-        worldContainer.addChild(sightMaskSprite);
+        mapLayer.addChild(sightMaskSprite);
         sightMaskSpriteRef.current = sightMaskSprite;
+
+        noiseRippleRef.current = createNoiseRipple(worldContainer, mapLayer);
 
         const compassTex = await loadCompassTexture(compass);
         if (disposed || worldContainer.destroyed) return;
@@ -728,6 +761,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       targetMarkerGroupRef.current = null;
       sightMaskSpriteRef.current = null;
       playerMarkerSpriteRef.current = null;
+      noiseRippleRef.current?.destroy();
+      noiseRippleRef.current = null;
       if (initialized) {
         app.destroy(true, { children: true, texture: false });
       }
@@ -1454,21 +1489,9 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
   // 5.2. 드로잉을 위한 최단 경로 플랫 좌표 배열
   const shortestPathPoints = useMemo(() => {
-    if (shortestPath.length === 1) {
-      const startPos = playerCoords ?? nodes[currentNodeId];
-      return startPos
-        ? buildCoordPath(shortestPath, startPos, targetBuilding).flatMap(({ x, y }) => [x, y])
-        : [];
-    }
-    const pts = shortestPath.flatMap((nodeIdx) => {
-      const node = nodes[nodeIdx];
-      return node ? [node.x, node.y] : [];
-    });
-    if (targetBuilding && pts.length > 0) {
-      const center = getBuildingCenter(targetBuilding);
-      pts.push(center.x, center.y);
-    }
-    return pts;
+    const startPos = playerCoords ?? nodes[currentNodeId];
+    if (!startPos) return [];
+    return buildCoordPath(shortestPath, startPos, targetBuilding).flatMap(({ x, y }) => [x, y]);
   }, [currentNodeId, playerCoords, shortestPath, targetBuilding]);
 
   // 5.2.5. 최단 경로 라인 및 타겟 비콘 Pixi Graphics 동기화
@@ -1540,7 +1563,10 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
           setCurrentNodeId(serverNodeId);
 
           const allBuildings = (mapData.buildings || []) as Building[];
-          const matchedBuilding = allBuildings.find((b) => b.roadNodeId === serverNodeId);
+          const buildingId = characterData.raw.activeRaid?.currentBuildingId;
+          const matchedBuilding = allBuildings.find((b) =>
+            b.roadNodeId === serverNodeId && (buildingId === undefined || b.id === buildingId),
+          );
           const initPos = matchedBuilding
             ? getBuildingCenter(matchedBuilding)
             : { x: nodes[serverNodeId].x, y: nodes[serverNodeId].y };
@@ -1555,6 +1581,65 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       }
     }
   }, [characterData, isNavigating, isCombat, currentNodeId, setCurrentNodeId, setPlayerCoords]);
+
+  useEffect(() => {
+    const ripple = noiseRippleRef.current;
+    if (
+      !isPixiReady ||
+      !ripple ||
+      !noiseSignals ||
+      noiseSignals.raidId !== activeRaidId ||
+      isCombat ||
+      isNavigating
+    )
+      return;
+
+    ripple.setAreas(noiseSignals.areas);
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      ripple.show({ radiusScale: 1, strength: 0.45 });
+      return ripple.hide;
+    }
+
+    const duration = NOISE_PULSE_SECONDS + NOISE_ECHO_DELAY_SECONDS;
+    const waveAt = (elapsed: number, strength: number) => {
+      const progress = Math.min(elapsed / NOISE_PULSE_SECONDS, 1);
+      return {
+        radiusScale: 0.25 + 0.75 * Easings.EaseOut(progress),
+        strength: strength * (1 - progress),
+      };
+    };
+    let tween: TweenHandle | undefined;
+    let nextPulse: number | undefined;
+    const pulse = () => {
+      ripple.show(waveAt(0, 1));
+      tween = runTween({
+        duration,
+        onUpdate: (progress) => {
+          const elapsed = progress * duration;
+          const echoElapsed = elapsed - NOISE_ECHO_DELAY_SECONDS;
+          ripple.show(
+            waveAt(elapsed, 1),
+            echoElapsed >= 0 ? waveAt(echoElapsed, NOISE_ECHO_STRENGTH) : undefined,
+          );
+        },
+        onFinish: () => {
+          ripple.hide();
+          nextPulse = window.setTimeout(
+            pulse,
+            NOISE_PULSE_INTERVAL_MS - duration * 1000,
+          );
+        },
+      });
+    };
+
+    pulse();
+    return () => {
+      window.clearTimeout(nextPulse);
+      tween?.destroy();
+      ripple.hide();
+    };
+  }, [activeRaidId, isCombat, isNavigating, isPixiReady, noiseSignals]);
 
   // 5.5. requestAnimationFrame 기반 등속(Constant Speed) 부드러운 네비게이션 보간 루프
   useEffect(() => {
@@ -1593,6 +1678,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     }
 
     let accumulatedDistance = 0;
+    let lastReportedProgress = 0;
+    setNavigationProgress(0);
     let animId: number;
     let lastTime = performance.now();
     let hopGateWaitStart: number | null = null;
@@ -1618,20 +1705,19 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
       const currentScale = world.scale.x;
       const targetScale = 3.0;
+      const safeCurrentScale = currentScale > 0 ? currentScale : targetScale;
 
-      const scaleLerpFactor = 1 - Math.exp(-5 * deltaTime);
-      const posLerpFactor = 1 - Math.exp(-5 * deltaTime);
+      const lerpFactor = 1 - Math.exp(-5 * deltaTime);
+      const newScale = currentScale + (targetScale - currentScale) * lerpFactor;
 
-      const newScale = currentScale + (targetScale - currentScale) * scaleLerpFactor;
+      const currentFocusX = (dimensions.width / 2 - world.x) / safeCurrentScale;
+      const currentFocusY = (dimensions.height / 2 - world.y) / safeCurrentScale;
 
-      const targetStageX = dimensions.width / 2 - px * newScale;
-      const targetStageY = dimensions.height / 2 - py * newScale;
+      const nextFocusX = currentFocusX + (px - currentFocusX) * lerpFactor;
+      const nextFocusY = currentFocusY + (py - currentFocusY) * lerpFactor;
 
-      const currentX = world.x;
-      const currentY = world.y;
-
-      const newStageX = currentX + (targetStageX - currentX) * posLerpFactor;
-      const newStageY = currentY + (targetStageY - currentY) * posLerpFactor;
+      const newStageX = dimensions.width / 2 - nextFocusX * newScale;
+      const newStageY = dimensions.height / 2 - nextFocusY * newScale;
 
       world.scale.set(newScale);
       world.position.set(newStageX, newStageY);
@@ -1651,7 +1737,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       const targetStageY = dimensions.height / 2 - py * scale;
       const dx = world.x - targetStageX;
       const dy = world.y - targetStageY;
-      return Math.sqrt(dx * dx + dy * dy) < 0.5;
+      return Math.sqrt(dx * dx + dy * dy) < 0.5 && Math.abs(scale - 3.0) < 0.01;
     };
 
     const tick = (time: number) => {
@@ -1727,6 +1813,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         if (res && res.encounterTriggered && res.stopNodeId === finalNodeId && res.battleLog) {
           console.log("[Arrival Check] Triggering combat now!");
           triggerCombat(res.battleLog);
+        } else if (res && !res.encounterTriggered) {
+          setNoiseSignals(raidNoiseState(res.raid.id, res));
         }
         return;
       }
@@ -1758,6 +1846,10 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
       const progress =
         totalDistance > 0 ? Math.min(1.0, Math.max(0.0, accumulatedDistance / totalDistance)) : 1.0;
+      if (progress - lastReportedProgress >= 0.01 || (progress >= 1.0 && lastReportedProgress < 1.0)) {
+        lastReportedProgress = progress;
+        setNavigationProgress(progress);
+      }
       const speedFactor = Math.sin(progress * Math.PI);
       const currentSpeed = minSpeed + (maxSpeed - minSpeed) * speedFactor;
 
@@ -1872,6 +1964,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
     return () => {
       cancelAnimationFrame(animId);
+      setNavigationProgress(0);
+      setNavigationStartTime(null);
       const pathLine = pathLineGraphicsRef.current;
       if (pathLine && !pathLine.destroyed) pathLine.clear();
     };

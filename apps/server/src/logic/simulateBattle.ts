@@ -8,6 +8,12 @@ import type {
 } from "@webgame/types";
 
 interface SimulationOptions {
+  retreat?: {
+    playerId: string;
+    multiplier: number;
+    onReady: (damageEventId: string, state: PlayerState[]) => void;
+  };
+
   random?: () => number;
   maxTicks?: number;
 }
@@ -94,7 +100,7 @@ function findTarget(
 /** 서버가 실행하는 전투 규칙. 입력과 난수 원본을 변경하지 않는다. */
 export function simulateBattle(
   players: BattleCombatant[],
-  { random = Math.random, maxTicks = 5000 }: SimulationOptions = {},
+  { random = Math.random, maxTicks = 5000, retreat }: SimulationOptions = {},
 ): BattleLog {
   if (!Number.isInteger(maxTicks) || maxTicks < 1)
     throw new Error("Invalid tick limit");
@@ -122,6 +128,8 @@ export function simulateBattle(
   const timeline: BattleLogEntry[] = [];
   let eventCounter = 0;
   let currentTick = 0;
+  let retreatGauge = 0;
+  let retreatDamage = 0;
   const generateId = () => `event-${eventCounter++}`;
 
   while (aliveTeams(simPlayers).size > 1 && currentTick < maxTicks) {
@@ -164,7 +172,15 @@ export function simulateBattle(
           const amount = isCritical
             ? Math.floor(weapon.damage * 1.5)
             : weapon.damage;
+          const previousHp = target.hp;
           target.hp = Math.max(0, target.hp - amount);
+          const tracksRetreat = retreat?.playerId === target.id;
+          const wasReady = retreatGauge >= 100;
+          if (tracksRetreat) {
+            retreatDamage += previousHp - target.hp;
+            retreatGauge = Math.min(100,
+              retreatDamage * retreat.multiplier * 100 / (target.maxHp * 0.4));
+          }
           emit({
             id: generateId(),
             type: "ATTACK",
@@ -173,15 +189,20 @@ export function simulateBattle(
             weaponIndex,
             timestamp: currentTick,
           });
+          const damageEventId = generateId();
           emit({
-            id: generateId(),
+            id: damageEventId,
             type: "DAMAGE",
             targetId: target.id,
             amount,
             remainingHp: target.hp,
             isCritical,
+            ...(tracksRetreat && { retreatGauge }),
             timestamp: currentTick,
           });
+          if (tracksRetreat && !wasReady && retreatGauge >= 100 && target.hp > 0) {
+            retreat.onReady(damageEventId, capturePlayers(simPlayers));
+          }
           if (target.hp <= 0) {
             emit({
               id: generateId(),

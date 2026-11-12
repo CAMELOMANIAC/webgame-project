@@ -20,6 +20,7 @@ import {
   type RaidSession,
   type TransactionClient,
 } from "../db";
+import { findEnemyNoiseSignals } from "../logic/ghostNoise";
 import { patrolsForRaid } from "../logic/ghostPatrols";
 import { nodesCloserThan } from "../logic/roadDistances";
 import { gameRules } from "../logic/rules";
@@ -317,6 +318,13 @@ export function createGhostTracker(
     }
   }
 
+  function activePatrols() {
+    const vacancies = trackedCount - roster.tracks.length;
+    return patrols
+      .filter((patrol) => !roster.defeatedPatrolIds?.includes(patrol.id))
+      .slice(0, Math.max(0, vacancies));
+  }
+
   return {
     initialize(entryNodeId: number) {
       return fill(0, entryNodeId, true);
@@ -342,11 +350,7 @@ export function createGhostTracker(
         if (ghost) return { kind: "GHOST", ghost };
       }
 
-      const vacancies = trackedCount - roster.tracks.length;
-      const activePatrols = patrols
-        .filter((patrol) => !roster.defeatedPatrolIds?.includes(patrol.id))
-        .slice(0, Math.max(0, vacancies));
-      for (const patrol of activePatrols) {
+      for (const patrol of activePatrols()) {
         const active = findClosestStep(patrol.stepsNear(time), time);
         if (active && crosses(active, from, to))
           return {
@@ -356,6 +360,18 @@ export function createGhostTracker(
           };
       }
       return null;
+    },
+    async noiseSignalsAt(playerNodeId: number, time: number) {
+      const positions = new Set<string>();
+      for (const track of roster.tracks) {
+        const active = findClosestStep(await routeFor(track), time);
+        if (active) positions.add(active.step.nodeId);
+      }
+      for (const patrol of activePatrols()) {
+        const active = findClosestStep(patrol.stepsNear(time), time);
+        if (active) positions.add(active.step.nodeId);
+      }
+      return findEnemyNoiseSignals(playerNodeId, positions);
     },
     defeatPatrol(patrolId: string) {
       (roster.defeatedPatrolIds ??= []).push(patrolId);

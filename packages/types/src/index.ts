@@ -55,7 +55,7 @@ export interface BattleCombatant extends Omit<User, "weapons"> {
   weapons: WeaponSlots;
 }
 
-export type BattleEndReason = "VICTORY" | "DRAW" | "MAX_TICKS";
+export type BattleEndReason = "VICTORY" | "DRAW" | "MAX_TICKS" | "RETREAT_PENDING";
 
 export interface BattleSummary {
   winnerTeamId: string | null;
@@ -139,6 +139,7 @@ export type BattleEvent = { id: string; timestamp: number } & (
       amount: number;
       remainingHp: number;
       isCritical: boolean;
+      retreatGauge?: number;
     }
   | { type: "HEAL"; targetId: string; amount: number; remainingHp: number }
   | { type: "STAMINA_CHANGE"; playerId: string; currentStamina: number }
@@ -166,6 +167,8 @@ export interface BattleLogEntry {
 }
 
 export interface BattleLog {
+  retreat?: { battleId: string; raidId: string; iv: string; ciphertext: string };
+
   encounter?: {
     kind: "NPC" | "GHOST" | "NPC_GHOST";
     name: string;
@@ -193,11 +196,25 @@ export interface RaidBattleResult extends BattleLog {
   rewardItemName: string | null;
 }
 
+export type RetreatResolution =
+  | { decision: "RETREAT"; raid: RaidView; hp: number; stamina: number }
+  | {
+      decision: "CONTINUE";
+      raid: RaidView;
+      key: string;
+      rewardItemName: string | null;
+    };
+
+export type RetreatDecisionResult =
+  | { remainingMs: number; windowMs: number; resolution?: never }
+  | { resolution: RetreatResolution; remainingMs?: never; windowMs?: never };
+
 export interface RaidView {
   id: string;
   status: "ACTIVE" | "EXTRACTED" | "DEAD";
   version: number;
   currentNodeId: number;
+  currentBuildingId?: number | null;
   time: number;
 }
 
@@ -214,7 +231,29 @@ export interface RaidNavigationInput extends RaidActionInput {
   inventory?: { weaponMasterId: string; slotIndex: number; quantity: number }[];
 }
 
-export interface RaidNavigationResult {
+export interface EnemyNoiseSignal {
+  x: number;
+  y: number;
+  radius: number;
+}
+
+export interface RaidNoiseSignals {
+  noiseSignals?: EnemyNoiseSignal[];
+  /** Legacy response stored with earlier navigation commands. */
+  noiseSignal?: EnemyNoiseSignal;
+}
+
+export interface RaidNoiseResult extends RaidNoiseSignals {
+  raidId: string | null;
+}
+
+export interface StartRaidResult extends RaidNoiseSignals {
+  status: string;
+  isRaiding: boolean;
+  raid: RaidView;
+}
+
+export interface RaidNavigationResult extends RaidNoiseSignals {
   encounterTriggered: boolean;
   stopNodeId?: number;
   battleLog?: RaidBattleResult;

@@ -1,5 +1,7 @@
 import type {
   BattleCombatant,
+  BattleLog,
+  PlayerState,
   GhostMatch,
   RaidBattleResult,
   WeaponData,
@@ -20,11 +22,18 @@ import {
 import { patrolCombat } from "../logic/ghostPatrols";
 import { hanlimNpcs } from "../logic/npcs";
 import { recoveryVitals } from "../logic/rules";
+import { retreatDamageMultiplier } from "../logic/retreat";
 import { simulateBattle } from "../logic/simulateBattle";
 import {
   calculateInventoryWeight,
   withInventoryTransaction,
 } from "./inventory";
+
+export type DeferBattle = (
+  log: RaidBattleResult,
+  rewardIds: string[],
+  checkpoint: { eventId: string; players: PlayerState[] },
+) => RaidBattleResult;
 
 export function toBattleWeapon(weapon: WeaponMaster): WeaponData {
   const effect = z
@@ -55,6 +64,7 @@ export async function executeMonsterBattleInTransaction(
   tx: TransactionClient,
   characterId: string,
   level = 1,
+  defer?: DeferBattle,
 ): Promise<RaidBattleResult> {
   const { character, player } = await loadBattlePlayer(tx, characterId);
   const monsters = await tx.query.monsterMasters.findMany({
@@ -99,6 +109,7 @@ export async function executeMonsterBattleInTransaction(
     player,
     enemies,
     match.weapons.map((weapon) => weapon.weaponMasterId),
+    defer,
   );
   return { ...result, encounter: { kind: "NPC", name: match.name } };
 }
@@ -106,6 +117,7 @@ export async function executeMonsterBattleInTransaction(
 export async function executeHanlimBattleInTransaction(
   tx: TransactionClient,
   characterId: string,
+  defer?: DeferBattle,
 ): Promise<RaidBattleResult> {
   const npc = hanlimNpcs.control;
   const weapon = await tx.query.weaponMasters.findFirst({
@@ -118,7 +130,7 @@ export async function executeHanlimBattleInTransaction(
     faction: npc.faction,
     role: npc.role,
     reason: npc.reason,
-  });
+  }, defer);
 }
 
 export async function executePatrolGhostBattleInTransaction(
@@ -126,6 +138,7 @@ export async function executePatrolGhostBattleInTransaction(
   characterId: string,
   patrolId: string,
   recordedTime: number,
+  defer?: DeferBattle,
 ): Promise<RaidBattleResult> {
   return executeNpcCombat(
     tx,
@@ -134,6 +147,7 @@ export async function executePatrolGhostBattleInTransaction(
     patrolCombat,
     patrolCombat.weapon,
     { kind: "NPC_GHOST", name: patrolCombat.name, patrolId, recordedTime },
+    defer,
   );
 }
 
@@ -144,6 +158,7 @@ async function executeNpcCombat(
   npc: { name: string; hp: number; stamina: number; staminaRegen: number },
   weapon: WeaponData,
   encounter: NonNullable<RaidBattleResult["encounter"]>,
+  defer?: DeferBattle,
 ): Promise<RaidBattleResult> {
   const { character, player } = await loadBattlePlayer(tx, characterId);
   const enemy: BattleCombatant = {
@@ -161,7 +176,7 @@ async function executeNpcCombat(
     currentWeaponIndex: 0,
     weapons: [weapon, null, null, null, null, null],
   };
-  const result = await settleBattle(tx, character, player, [enemy], [weapon.id]);
+  const result = await settleBattle(tx, character, player, [enemy], [weapon.id], defer);
   return { ...result, encounter };
 }
 
@@ -212,12 +227,13 @@ export async function executeGhostBattleInTransaction(
   characterId: string,
   raidId: string,
   ghost: GhostMatch,
+  defer?: DeferBattle,
 ): Promise<RaidBattleResult> {
   const { character, player } = await loadBattlePlayer(tx, characterId);
   await tx.insert(raidGhostEncounters).values({
     raidId,
     snapshotId: ghost.id,
-  });
+  }).onConflictDoNothing();
   const opponent = {
     ...ghost.combatant,
     id: `ghost:${ghost.id}`,
@@ -230,6 +246,7 @@ export async function executeGhostBattleInTransaction(
     player,
     [opponent],
     opponent.weapons.flatMap((weapon) => (weapon ? [weapon.id] : [])),
+    defer,
   );
   return {
     ...result,
@@ -250,9 +267,37 @@ async function settleBattle(
   player: BattleCombatant,
   enemies: BattleCombatant[],
   rewardIds: string[],
+  defer?: DeferBattle,
+): Promise<RaidBattleResult> {
+  const checkpoints: { eventId: string; players: PlayerState[] }[] = [];
+  const log = simulateBattle([player, ...enemies], defer ? {
+    retreat: {
+      playerId: player.id,
+      multiplier: retreatDamageMultiplier(player, enemies),
+      onReady: (eventId, players) => checkpoints.push({ eventId, players }),
+    },
+  } : undefined);
+  const checkpoint = checkpoints[0];
+  if (defer && checkpoint) {
+    const rewardId = rewardIds[Math.floor(Math.random() * rewardIds.length)];
+    return defer({
+      ...log,
+      playerDied: log.finalState.players.find((unit) => unit.id === player.id)!.hp <= 0,
+      rewardItemName: null,
+    }, rewardId ? [rewardId] : [], checkpoint);
+  }
+  return applyBattleSettlement(tx, character, log, rewardIds);
+}
+
+export async function applyBattleSettlement(
+  tx: TransactionClient,
+  character: Character,
+  log: BattleLog,
+  rewardIds: string[],
 ): Promise<RaidBattleResult> {
   const characterId = character.id;
-  const log = simulateBattle([player, ...enemies]);
+  const player = log.initialState.players.find((unit) => unit.id === characterId);
+  if (!player) throw new Error("Missing player battle state");
   const finalPlayer = log.finalState.players.find(
     (participant) => participant.id === player.id,
   );

@@ -10,10 +10,12 @@ import {
 } from "@/atoms/pendingNavigationAtom";
 import {
   currentNodeIdAtom,
+  enemyNoiseSignalsAtom,
   isCombatAtom,
   isInventoryDirtyAtom,
   isNavigatingAtom,
   playerCoordsAtom,
+  raidNoiseState,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
 import { API_BASE_URL, apiFetch } from "@/utils/api";
@@ -41,6 +43,7 @@ export default function NavigationRecovery({
   const isMoving = useAtomValue(isNavigatingAtom);
   const isCombat = useAtomValue(isCombatAtom);
   const setNode = useSetAtom(currentNodeIdAtom);
+  const setNoiseSignals = useSetAtom(enemyNoiseSignalsAtom);
   const setCoords = useSetAtom(playerCoordsAtom);
   const setTarget = useSetAtom(targetNodeIdAtom);
   const setDirty = useSetAtom(isInventoryDirtyAtom);
@@ -48,7 +51,7 @@ export default function NavigationRecovery({
   const characterId = character?.raw.id;
   const key = pendingNavigationKey(userId, characterId);
   const params = pending[key]?.params;
-  const { raidId, expectedVersion, requestId, destinationBuildingId } = params ?? {};
+  const { raidId, expectedVersion, requestId } = params ?? {};
   const canRecover =
     !!params && character?.raw.userId === userId && !isMoving && !isCombat;
   const lookup = useQuery({
@@ -89,23 +92,27 @@ export default function NavigationRecovery({
       (currentRequest && currentRequest.params.requestId !== requestId)
     ) return;
     const nodeId = result.stopNodeId ?? result.raid.currentNodeId;
-    const building = destinationBuildingId === undefined
+    const destinationBuildingId = result.raid.currentBuildingId;
+    const building = destinationBuildingId == null
       ? undefined
       : mapData.buildings.find(
           (entry) => entry.id === destinationBuildingId && entry.roadNodeId === nodeId,
         );
     setNode(nodeId);
-    setCoords(building ? getBuildingCenter(building) : null);
+    const node = mapData.nodes[nodeId];
+    setCoords(building ? getBuildingCenter(building) :
+      node ? { x: node.x, y: node.y } : null);
     setTarget(null);
     setDirty(false);
     void queryClient.invalidateQueries({ queryKey: ["journal", userId] });
     if (result.battleLog) {
       triggerCombat(result.battleLog);
     } else {
+      setNoiseSignals(raidNoiseState(result.raid.id, result));
       clearRequest();
       void queryClient.invalidateQueries({ queryKey: ["character", userId] });
     }
-  }, [clearRequest, destinationBuildingId, key, queryClient, requestId, setCoords, setDirty, setNode, setTarget, triggerCombat, userId]);
+  }, [clearRequest, key, queryClient, requestId, setCoords, setDirty, setNode, setNoiseSignals, setTarget, triggerCombat, userId]);
 
   const result = lookup.data?.result;
   useEffect(() => {

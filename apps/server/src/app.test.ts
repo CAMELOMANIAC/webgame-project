@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { buildApp } from "./app";
 import { createDatabase } from "./db";
+import { findEnemyNoiseSignals } from "./logic/ghostNoise";
 import {
   pathTravelMinutes,
   pathTravelVisits,
@@ -81,4 +82,12 @@ test("도로 이동 시간은 실제 간선 길이에 비례해 10분~60분 단�
     { nodeId: 28, time: 60 },
   ]);
   assert.equal(pathTravelMinutes([0, 1, 26, 28]), 60);
+});
+
+test("적 소음은 감지 범위 안의 서로 다른 구역을 모두 반환한다", () => {
+  const east = { x: 192, y: 448, radius: 91 };
+  const west = { x: 64, y: 448, radius: 91 };
+  assert.deepEqual(findEnemyNoiseSignals(1, ["26"]), [east]);
+  assert.deepEqual(findEnemyNoiseSignals(1, ["26", "28", "1130", "7", "8"]), [west, east]);
+  assert.deepEqual(findEnemyNoiseSignals(1, ["1130"]), []);
 });

@@ -73,6 +73,7 @@ export const telemetryCell = style({
   flexDirection: "column",
   alignItems: "flex-start",
   gap: "2px",
+  overflow: "hidden",
 });
 
 export const cellLabel = style({
@@ -82,6 +83,7 @@ export const cellLabel = style({
 });
 
 export const cellValue = style({
+  display: "inline-block",
   fontFamily: vars.font.mono,
   fontSize: "13px",
   fontWeight: 600,
@@ -205,7 +207,7 @@ export const bodySection = recipe({
     display: "grid",
     minHeight: 0,
     transition:
-      "grid-template-rows 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease",
+      "grid-template-rows 450ms cubic-bezier(0.4, 0, 0.2, 1), opacity 450ms ease-in-out",
     "@media": {
       "(prefers-reduced-motion: reduce)": { transition: "none" },
     },
@@ -257,9 +259,9 @@ export const recommendItem = recipe({
   variants: {
     active: {
       true: [
-        cornerBrackets({ tone: "positive" }),
+        cornerBrackets({ tone: "default" }),
         {
-          borderColor: vars.border.positive,
+          borderColor: vars.text.primary,
           backgroundColor: vars.surface.high,
         },
       ],
@@ -271,7 +273,28 @@ export const recommendItem = recipe({
   },
 });
 
+export const recommendBackdrop = style({
+  position: "absolute",
+  top: 0,
+  right: 0,
+  bottom: 0,
+  width: "68%",
+  borderRadius: vars.radius.control,
+  backgroundSize: "cover",
+  backgroundPosition: "right center",
+  backgroundRepeat: "no-repeat",
+  opacity: 0.45,
+  pointerEvents: "none",
+  zIndex: 0,
+  maskImage:
+    "linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.35) 38%, black 100%)",
+  WebkitMaskImage:
+    "linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.35) 38%, black 100%)",
+});
+
 export const recommendInfo = style({
+  position: "relative",
+  zIndex: 1,
   display: "flex",
   flexDirection: "column",
   gap: "3px",
@@ -326,6 +349,8 @@ export const recommendName = style({
 });
 
 export const recommendTime = style({
+  position: "relative",
+  zIndex: 1,
   flexShrink: 0,
   fontFamily: vars.font.mono,
   fontSize: "12px",

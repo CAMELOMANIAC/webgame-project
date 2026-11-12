@@ -220,3 +220,34 @@ test("중복 참가자 ID와 잘못된 최대 틱을 거부한다", () => {
   );
   assert.throws(() => simulateBattle([], { maxTicks: -1 }), /Invalid/);
 });
+
+test("퇴각 게이지는 실제 피해로 차며 생존한 첫 충족 시점만 보관한다", () => {
+  for (const multiplier of [1, 2]) {
+    const checkpoints: number[] = [];
+    const log = simulateBattle([
+      player("p", "A"),
+      player("e", "B", { weapons: [weapon({ damage: 20, cooldownTicks: 1 }), null, null, null, null, null] }),
+    ], {
+      ...options,
+      retreat: {
+        playerId: "p",
+        multiplier,
+        onReady: (_eventId, state) => checkpoints.push(state[0]!.hp),
+      },
+    });
+    assert.deepEqual(checkpoints, [100 - 40 / multiplier]);
+    assert.equal(log.finalState.players[0]?.hp, 0);
+  }
+  const lethal = simulateBattle([
+    player("p", "A", { hp: 10 }),
+    player("e", "B", { weapons: [weapon({ damage: 100 }), null, null, null, null, null] }),
+  ], {
+    ...options,
+    retreat: {
+      playerId: "p",
+      multiplier: 2,
+      onReady: () => assert.fail("A dead player cannot retreat"),
+    },
+  });
+  assert.equal(lethal.finalState.players[0]?.hp, 0);
+});

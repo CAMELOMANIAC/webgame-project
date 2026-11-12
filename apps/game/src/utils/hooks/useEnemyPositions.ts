@@ -16,15 +16,14 @@ const MIN_ENEMY_DIST = 18;   // 적 마커끼리의 최소 이격 거리
 const SEPARATION_ITERATIONS = 3;
 
 export function useEnemyPositions(battleLog: BattleLog | null | undefined, characterId: string | undefined) {
+  const initialPlayers = battleLog?.initialState.players;
   return useMemo(() => {
-    if (!battleLog) return new Map<string, { x: number; y: number }>();
+    if (!initialPlayers) return new Map<string, { x: number; y: number }>();
     const map = new Map<string, { x: number; y: number }>();
 
     const rotationOffset = Math.random() * 2 * Math.PI;
-    const enemies = battleLog.initialState.players.filter(
-      (p: PlayerState) =>
-        p.teamId !== battleLog.initialState.players.find((player: PlayerState) => player.id === characterId)?.teamId,
-    );
+    const playerTeam = initialPlayers.find((player) => player.id === characterId)?.teamId;
+    const enemies = initialPlayers.filter((player) => player.teamId !== playerTeam);
 
     if (enemies.length === 0) return map;
 
@@ -87,5 +86,5 @@ export function useEnemyPositions(battleLog: BattleLog | null | undefined, chara
     }
 
     return map;
-  }, [battleLog, characterId]);
+  }, [initialPlayers, characterId]);
 }

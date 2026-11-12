@@ -11,7 +11,7 @@ import {
 import { InventoryError, withInventoryTransaction } from "./inventory";
 
 export const characterDetails = {
-  activeRaid: { columns: { encounterTravel: false, ghostRoster: false } },
+  activeRaid: { columns: { encounterTravel: false, ghostRoster: false, pendingRetreat: false } },
   user: { columns: { nickname: true } },
   variant: { with: { definition: true } },
   weapons: {

@@ -7,6 +7,7 @@ import { registerGhostRoutes } from "./routes/ghosts";
 import { registerCharacterRoutes } from "./routes/characters";
 import { registerInventoryRoutes } from "./routes/inventory";
 import { registerRaidRoutes } from "./routes/raid";
+import { expireRaidBattles } from "./services/raid";
 import { registerQuestRoutes } from "./routes/quests";
 import { registerSimulationRoutes } from "./routes/simulation";
 
@@ -43,7 +44,22 @@ export function buildApp({
   registerRaidRoutes(fastify, database);
   registerQuestRoutes(fastify, database);
   fastify.get("/health", async () => ({ status: "ok" }));
-  fastify.addHook("onClose", async () => database.$disconnect());
+  let expiryTimer: ReturnType<typeof setInterval> | undefined;
+  let expiryCheck: Promise<void> | undefined;
+  fastify.addHook("onListen", async () => {
+    expiryTimer = setInterval(() => {
+      if (expiryCheck) return;
+      expiryCheck = expireRaidBattles(database)
+        .catch((error: unknown) => fastify.log.error(error))
+        .finally(() => { expiryCheck = undefined; });
+    }, 1_000);
+    expiryTimer.unref();
+  });
+  fastify.addHook("onClose", async () => {
+    clearInterval(expiryTimer);
+    await expiryCheck;
+    await database.$disconnect();
+  });
 
   return fastify;
 }

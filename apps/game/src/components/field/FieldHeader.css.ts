@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 
 export const topLayout = style({
   display: "flex",
@@ -11,3 +11,5 @@ export const topLayout = style({
   gap: "12px",
   padding: "16px 16px 12px",
 });
+
+globalStyle(`${topLayout} > *`, { pointerEvents: "auto" });

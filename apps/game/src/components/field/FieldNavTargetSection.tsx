@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
-import { firstMissionNodeId } from "@webgame/types";
+import { firstMissionNodeId, formatRaidTime } from "@webgame/types";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { motion } from "motion/react";
 import { useId, useMemo, useRef } from "react";
 import { RiCloseLine, RiCompass3Line } from "react-icons/ri";
 
@@ -14,7 +15,10 @@ import {
   isCombatAtom,
   isNavigatingAtom,
   isRecommendDestinationsOpenAtom,
+  navigationProgressAtom,
+  navigationStartTimeAtom,
   playerCoordsAtom,
+  requestedBuildingIdAtom,
   requestedNodeIdAtom,
   shortestPathAtom,
   startNavigationTriggerAtom,
@@ -30,18 +34,16 @@ import {
   findShortestPath,
 } from "@/utils/pathfinding";
 import {
+  ALL_BUILDINGS_BY_ID,
+  BUILDING_CATEGORY_IMAGES,
+  BUILDING_CATEGORY_LABELS,
+  LANDMARK_BUILDING_BY_ID,
+  LANDMARK_BUILDING_BY_ROAD_NODE,
   type RecommendedDestination,
   STATIC_RECOMMENDED_DESTINATIONS,
 } from "@/utils/recommendedDestinations";
 
 import * as styles from "./FieldNavTargetSection.css";
-
-const formatRaidTime = (minutes: number) => {
-  const safeMinutes = Math.max(0, Math.floor(minutes));
-  const hours = String(Math.floor(safeMinutes / 60)).padStart(2, "0");
-  const mins = String(safeMinutes % 60).padStart(2, "0");
-  return `${hours}:${mins}`;
-};
 
 const FieldNavTargetSection = () => {
   const navigate = useNavigate();
@@ -56,9 +58,13 @@ const FieldNavTargetSection = () => {
   const targetBuildingId = useAtomValue(targetBuildingIdAtom);
   const shortestPath = useAtomValue(shortestPathAtom);
   const isMoving = useAtomValue(isNavigatingAtom);
+  const navigationProgress = useAtomValue(navigationProgressAtom);
+  const navigationStartTime = useAtomValue(navigationStartTimeAtom);
   const isCombat = useAtomValue(isCombatAtom);
   const pending = useAtomValue(pendingNavigationAtom);
+  const playerCoords = useAtomValue(playerCoordsAtom);
   const setRequestedNode = useSetAtom(requestedNodeIdAtom);
+  const setRequestedBuilding = useSetAtom(requestedBuildingIdAtom);
   const setFocusRouteTarget = useSetAtom(focusRouteTargetAtom);
   const [isRecommendOpen, setIsRecommendOpen] = useAtom(
     isRecommendDestinationsOpenAtom,
@@ -86,12 +92,45 @@ const FieldNavTargetSection = () => {
     targetNodeId !== null &&
     (shortestPath.length > 1 ||
       (shortestPath.length === 1 && targetBuildingId !== null));
-  const currentTime = character?.activeRaid?.time ?? 0;
+  const currentTime =
+    isMoving && navigationStartTime !== null
+      ? navigationStartTime
+      : (character?.activeRaid?.time ?? 0);
   const travelMinutes = canMove
     ? estimatePathTravelMinutes(shortestPath, targetBuildingId !== null)
     : 0;
   const estimatedTime = currentTime + travelMinutes;
+  const elapsedMinutes = isMoving
+    ? Math.min(travelMinutes, Math.floor(travelMinutes * navigationProgress))
+    : 0;
+  const displayCurrentTime = currentTime + elapsedMinutes;
+  const displayRemainingMinutes = Math.max(0, travelMinutes - elapsedMinutes);
   const atExtraction = rules?.extractionNodeIds.includes(nodeId) ?? false;
+
+  const currentLandmark = useMemo(() => {
+    if (playerCoords) {
+      for (const entry of LANDMARK_BUILDING_BY_ID.values()) {
+        if (
+          Math.hypot(
+            playerCoords.x - entry.center.x,
+            playerCoords.y - entry.center.y,
+          ) <= 2
+        ) {
+          return entry.building;
+        }
+      }
+    }
+    return LANDMARK_BUILDING_BY_ROAD_NODE.get(nodeId);
+  }, [playerCoords, nodeId]);
+
+  const targetBuilding =
+    targetBuildingId !== null ? ALL_BUILDINGS_BY_ID.get(targetBuildingId) : undefined;
+  const targetLandmark =
+    targetBuilding?.name !== undefined
+      ? targetBuilding
+      : targetNodeId !== null
+        ? LANDMARK_BUILDING_BY_ROAD_NODE.get(targetNodeId)
+        : undefined;
 
   const recommendedDestinations = useMemo(() => {
     const candidates: RecommendedDestination[] = [];
@@ -117,26 +156,38 @@ const FieldNavTargetSection = () => {
     for (const staticDest of STATIC_RECOMMENDED_DESTINATIONS) {
       candidates.push(staticDest);
     }
-    return candidates.map((dest) => {
-      const path =
-        dest.nodeId === nodeId ? [] : findShortestPath(nodeId, dest.nodeId);
-      return {
-        ...dest,
-        travelMinutes:
-          path.length > 1 ? estimatePathTravelMinutes(path, false) : 0,
-      };
-    });
+    return candidates
+      .map((dest) => {
+        const isCurrent =
+          dest.buildingId !== undefined
+            ? currentLandmark?.id === dest.buildingId
+            : dest.nodeId === nodeId;
+        const path =
+          dest.nodeId === nodeId
+            ? [nodeId]
+            : findShortestPath(nodeId, dest.nodeId);
+        return {
+          ...dest,
+          isCurrent,
+          travelMinutes: isCurrent
+            ? 0
+            : estimatePathTravelMinutes(path, dest.buildingId !== undefined),
+        };
+      })
+      .sort((a, b) => a.travelMinutes - b.travelMinutes);
   }, [
     journal.data?.mission,
     rules?.extractionNodeIds,
     rules?.startNodeId,
     nodeId,
+    currentLandmark?.id,
   ]);
 
-  const handleSelectRecommendation = (destNodeId: number) => {
-    setRequestedNode(destNodeId);
+  const handleSelectRecommendation = (dest: RecommendedDestination) => {
+    setRequestedBuilding(dest.buildingId ?? null);
+    setRequestedNode(dest.nodeId);
     setFocusRouteTarget((prev) => ({
-      nodeId: destNodeId,
+      nodeId: dest.nodeId,
       seq: (prev?.seq ?? 0) + 1,
     }));
     recommendToggleRef.current?.focus({ preventScroll: true });
@@ -158,9 +209,11 @@ const FieldNavTargetSection = () => {
       <div className={styles.destinationHeader}>
         <div className={styles.destinationRow}>
           <strong className={styles.destinationText}>
-            {targetNodeId !== null
-              ? `목적지 #${targetNodeId}`
-              : `${locationName} #${nodeId}`}
+            {targetBuilding !== undefined
+              ? (targetBuilding.name ?? `건물 #${targetBuilding.id}`)
+              : targetNodeId !== null
+                ? (targetLandmark?.name ?? `목적지 #${targetNodeId}`)
+                : (currentLandmark?.name ?? `${locationName} #${nodeId}`)}
           </strong>
           <p
             className={styles.statusHint({
@@ -203,14 +256,22 @@ const FieldNavTargetSection = () => {
                 </p>
               ) : (
                 recommendedDestinations.map((dest) => {
-                  const isCurrent = dest.nodeId === nodeId;
-                  const isSelected = targetNodeId === dest.nodeId;
+                  const isCurrent = dest.isCurrent;
+                  const isSelected =
+                    dest.buildingId !== undefined
+                      ? targetBuildingId === dest.buildingId
+                      : targetBuildingId === null && targetNodeId === dest.nodeId;
                   const categoryLabel =
                     dest.category === "MISSION"
                       ? "임무"
                       : dest.category === "EXTRACTION"
                         ? "탈출"
-                        : "거점";
+                        : dest.buildingCategory
+                          ? BUILDING_CATEGORY_LABELS[dest.buildingCategory]
+                          : "거점";
+                  const backdropImage = dest.buildingCategory
+                    ? BUILDING_CATEGORY_IMAGES[dest.buildingCategory]
+                    : undefined;
                   return (
                     <button
                       key={dest.id}
@@ -218,8 +279,15 @@ const FieldNavTargetSection = () => {
                       className={styles.recommendItem({ active: isSelected })}
                       aria-pressed={isSelected}
                       disabled={!canAct || isCurrent}
-                      onClick={() => handleSelectRecommendation(dest.nodeId)}
+                      onClick={() => handleSelectRecommendation(dest)}
                     >
+                      {backdropImage && (
+                        <span
+                          aria-hidden="true"
+                          className={styles.recommendBackdrop}
+                          style={{ backgroundImage: `url(${backdropImage})` }}
+                        />
+                      )}
                       <div className={styles.recommendInfo}>
                         <div className={styles.recommendMeta}>
                           <span
@@ -260,17 +328,29 @@ const FieldNavTargetSection = () => {
             <div className={styles.telemetryGrid}>
               <div className={styles.telemetryCell}>
                 <span className={styles.cellLabel}>현재 시간</span>
-                <span className={styles.cellValue}>
-                  {formatRaidTime(currentTime)}
-                </span>
+                <motion.span
+                  key={isMoving ? `cur-${displayCurrentTime}` : "cur-idle"}
+                  className={styles.cellValue}
+                  initial={isMoving ? { y: 4, opacity: 0.45 } : false}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ duration: 0.14 }}
+                >
+                  {formatRaidTime(displayCurrentTime)}
+                </motion.span>
               </div>
               <div className={styles.telemetryCell}>
                 <span className={styles.cellLabel}>예상 소모</span>
-                <span className={styles.cellValue}>
+                <motion.span
+                  key={isMoving ? `rem-${displayRemainingMinutes}` : "rem-idle"}
+                  className={styles.cellValue}
+                  initial={isMoving ? { y: -4, opacity: 0.45 } : false}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ duration: 0.14 }}
+                >
                   {travelMinutes > 0
-                    ? `+${formatRaidTime(travelMinutes)}`
+                    ? `+${formatRaidTime(displayRemainingMinutes)}`
                     : "—"}
-                </span>
+                </motion.span>
               </div>
               <div className={styles.telemetryCell}>
                 <span className={styles.cellLabel}>예상 도착</span>
@@ -302,9 +382,13 @@ const FieldNavTargetSection = () => {
                 >
                   <span>{isMoving ? "이동 중…" : "이동"}</span>
                   <span className={styles.actionCode}>
-                    {targetNodeId !== null
-                      ? `NODE #${targetNodeId} →`
-                      : "MOVE →"}
+                    {targetBuilding !== undefined
+                      ? (targetBuilding.name !== undefined
+                          ? `${targetBuilding.name} →`
+                          : `BLDG #${targetBuilding.id} →`)
+                      : targetNodeId !== null
+                        ? `NODE #${targetNodeId} →`
+                        : "MOVE →"}
                   </span>
                 </button>
               )

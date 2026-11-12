@@ -1,9 +1,10 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import type { BattleEvent, BattleLog } from "@webgame/types";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import type { BattleEvent, BattleLog, RetreatDecisionResult, RetreatResolution } from "@webgame/types";
+import { getDefaultStore, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { selectedUserIdAtom } from "@/atoms/authAtom";
 import {
   battleLogAtom,
   currentTimeAtom,
@@ -24,10 +25,15 @@ import {
   targetNodeIdAtom,
   unacknowledgedRaidResultsAtom,
 } from "@/atoms/raidAtom";
+import { API_BASE_URL, apiFetch } from "@/utils/api";
+import { getBuildingCenter } from "@/utils/getBuildingCenter";
 import { useBattleData } from "@/utils/hooks/useBattleData";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 import { useNavigateRaid } from "@/utils/hooks/useNavigateRaid";
+import { requestJsonWithTimeout } from "@/utils/request";
+import { openBattleTimeline } from "@/utils/retreatBattle";
 
+import mapData from "../../../../../packages/types/src/assets/map_graph.json";
 import { characterKey } from "./useCharacterCollection";
 
 export function useFieldCombat(characterData: CharacterData | undefined) {
@@ -39,7 +45,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
   const [battleLog] = useAtom(battleLogAtom);
   const timeline = useAtomValue(flattenedTimelineAtom);
   const setDisplayEvents = useSetAtom(displayEventsAtom);
-  const setProcessedEvents = useSetAtom(processedEventsAtom);
+  const [processedEvents, setProcessedEvents] = useAtom(processedEventsAtom);
 
   const setCurrentNodeId = useSetAtom(currentNodeIdAtom);
   const setIsNavigating = useSetAtom(isNavigatingAtom);
@@ -47,7 +53,15 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
   const setShortestPath = useSetAtom(shortestPathAtom);
   const setPlayerCoords = useSetAtom(playerCoordsAtom);
   const setRaidResults = useSetAtom(unacknowledgedRaidResultsAtom);
-  const setPendingNavigation = useSetAtom(pendingNavigationAtom);
+  const [pendingNavigation, setPendingNavigation] = useAtom(pendingNavigationAtom);
+  const isMoving = useAtomValue(isNavigatingAtom);
+  const [retreatExpired, setRetreatExpired] = useState(false);
+  const [retreatWindow, setRetreatWindow] = useState<{ endsAt: number; durationMs: number }>();
+  const [retreatOutcome, setRetreatOutcome] = useState<{
+    battleId: string;
+    resolution: RetreatResolution;
+    continuation: Awaited<ReturnType<typeof openBattleTimeline>> | null;
+  }>();
 
   const [isProcessing, setIsProcessing] = useState(false);
   const pendingEventsRef = useRef<BattleEvent[]>([]);
@@ -55,10 +69,111 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
 
   const queryClient = useQueryClient();
   const userId = characterData?.raw.userId;
+  const characterId = characterData?.raw.id;
+  const retreat = battleLog?.retreat;
+  const retreatGauge = processedEvents.reduce((value, event) =>
+    event.type === "DAMAGE" ? event.retreatGauge ?? value : value, 0);
+  const lastTimestamp = timeline[timeline.length - 1]?.timestamp ?? 0;
+  const waitingForRetreat = isCombat && !!retreat && time > lastTimestamp && !isProcessing;
+  const atRetreatCheckpoint = isCombat && !!retreat && (retreatGauge >= 100 || waitingForRetreat);
+  const battleEndpoint = `${API_BASE_URL}/character/${characterId}/raid/battle`;
+
+  const decision = useMutation({
+    mutationFn: (action: "OPEN" | "RETREAT" | "CONTINUE") =>
+      requestJsonWithTimeout<RetreatDecisionResult>(
+        (signal) => apiFetch(`${battleEndpoint}/decision`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ raidId: retreat?.raidId, battleId: retreat?.battleId, action }),
+          signal,
+        }),
+      ),
+    onSuccess: async (decisionResult) => {
+      const store = getDefaultStore();
+      const isCurrentBattle = () =>
+        store.get(selectedUserIdAtom) === userId &&
+        store.get(battleLogAtom)?.retreat?.battleId === retreat?.battleId;
+      if (!retreat || !isCurrentBattle()) return;
+      if (!decisionResult.resolution) {
+        setRetreatWindow({
+          endsAt: performance.now() + decisionResult.remainingMs,
+          durationMs: decisionResult.windowMs,
+        });
+        return;
+      }
+      const continuation = decisionResult.resolution.decision === "CONTINUE"
+        ? await openBattleTimeline(retreat, decisionResult.resolution.key)
+        : null;
+      if (isCurrentBattle()) {
+        setRetreatOutcome({ battleId: retreat.battleId, resolution: decisionResult.resolution, continuation });
+      }
+    },
+  });
+
+  useEffect(() => {
+    // Let the hit that filled the gauge finish animating before applying the decision.
+    if (!waitingForRetreat || !battleLog || !retreatOutcome ||
+        retreatOutcome.battleId !== retreat?.battleId ||
+        getDefaultStore().get(selectedUserIdAtom) !== userId) return;
+    const { resolution, continuation } = retreatOutcome;
+    const { raid } = resolution;
+    queryClient.setQueryData(characterKey(userId, characterId), (old: CharacterData | undefined) =>
+      old ? { ...old, raw: {
+        ...old.raw,
+        // The field stays mounted until the final death animation finishes.
+        activeRaid: raid.status === "ACTIVE" ? raid : old.raw.activeRaid,
+        currentNodeId: raid.currentNodeId,
+      } } : old,
+    );
+    void queryClient.invalidateQueries({ queryKey: ["journal", userId] });
+    if (resolution.decision === "RETREAT") {
+      const building = raid.currentBuildingId == null ? undefined :
+        mapData.buildings.find(({ id }) => id === raid.currentBuildingId);
+      const node = mapData.nodes[raid.currentNodeId];
+      setCurrentNodeId(raid.currentNodeId);
+      setPlayerCoords(building ? getBuildingCenter(building) : node ? { x: node.x, y: node.y } : null);
+      setBattleLog({ ...battleLog, retreat: undefined, timeline: [] });
+      return;
+    }
+    if (!continuation) return;
+    setRetreatExpired(true);
+    const firstTick = continuation.timeline[0];
+    if (firstTick) {
+      pendingEventsRef.current = [...firstTick.events];
+      setTime(firstTick.timestamp);
+      setIsProcessing(true);
+    }
+    setBattleLog({
+      ...battleLog,
+      retreat: undefined,
+      ...continuation,
+    });
+  }, [battleLog, characterId, queryClient, retreat?.battleId, retreatOutcome, setBattleLog,
+    setCurrentNodeId, setPlayerCoords, setTime, userId, waitingForRetreat]);
+  const { mutate: sendDecision, isPending: sendingDecision, isError: decisionFailed } = decision;
+  useEffect(() => {
+    if (!atRetreatCheckpoint || sendingDecision || retreatOutcome) return;
+    const delay = retreatWindow ? Math.max(0, retreatWindow.endsAt - performance.now()) : 0;
+    const timer = setTimeout(
+      () => sendDecision(retreatWindow ? "CONTINUE" : "OPEN"),
+      Math.max(delay, decisionFailed ? 1_000 : 0),
+    );
+    return () => clearTimeout(timer);
+  }, [atRetreatCheckpoint, decisionFailed, retreatOutcome, retreatWindow, sendDecision, sendingDecision]);
+
+  const pendingBattle = useQuery({
+    queryKey: ["pending-battle", userId, characterId],
+    enabled: !!characterId && !!characterData?.raw.isRaiding && !isCombat && !isMoving &&
+      !pendingNavigation[pendingNavigationKey(userId, characterId)],
+    refetchOnWindowFocus: false,
+    queryFn: () => requestJsonWithTimeout<{ battleLog: BattleLog | null }>(
+      (signal) => apiFetch(battleEndpoint, { signal }),
+    ),
+  });
 
   // 전투 타이머 로직: 1초마다 다음 틱으로 넘어가려 시도
   useEffect(() => {
-    if (!isCombat || !battleLog || isProcessing) return;
+    if (!isCombat || !battleLog || isProcessing || waitingForRetreat) return;
 
     const maxTimestamp =
       timeline.length > 0
@@ -165,6 +280,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     time,
     timeline,
     isProcessing,
+    waitingForRetreat,
     characterData,
     userId,
     setPendingNavigation,
@@ -219,6 +335,9 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
 
   const triggerCombat = useCallback(
     (log: BattleLog) => {
+      setRetreatWindow(undefined);
+      setRetreatOutcome(undefined);
+      setRetreatExpired(false);
       setBattleLog(log);
       setTime(0);
       setDisplayEvents([]);
@@ -228,6 +347,16 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     },
     [setBattleLog, setTime, setDisplayEvents, setProcessedEvents, setIsCombat],
   );
+
+  useEffect(() => {
+    const log = pendingBattle.data?.battleLog;
+    if (characterData?.raw.isRaiding && !isCombat && !isMoving && !pendingBattle.isFetching && !pendingBattle.isError &&
+        log && !pendingNavigation[pendingNavigationKey(userId, characterId)]) {
+      queryClient.setQueryData(["pending-battle", userId, characterId], { battleLog: null });
+      triggerCombat(log);
+    }
+  }, [characterData?.raw.isRaiding, characterId, isCombat, isMoving, pendingBattle.data, pendingBattle.isError, pendingBattle.isFetching,
+    pendingNavigation, queryClient, triggerCombat, userId]);
 
   const navigateRaid = useNavigateRaid();
 
@@ -243,5 +372,11 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     battleLog,
     navigateRaid,
     triggerCombat,
+    retreatGauge,
+    retreatExpired,
+    retreatWindow: retreat ? retreatWindow : undefined,
+    retreatReady: atRetreatCheckpoint && !!retreatWindow &&
+      retreatWindow.endsAt > performance.now() && !sendingDecision && !retreatOutcome,
+    chooseRetreat: () => sendDecision("RETREAT"),
   };
 }

@@ -5,10 +5,13 @@ import type { Database } from "../db";
 import { gameRules } from "../logic/rules";
 import { InventoryError, SlotsSchema } from "../services/inventory";
 import {
+  decideRaidBattle,
+  getPendingRaidBattle,
   extractionNodeIds,
   extractRaid,
   fightRaidMonster,
   getRaidNavigationResult,
+  getRaidNoiseSignals,
   NavigateSchema,
   navigateRaid,
   RaidActionSchema,
@@ -33,6 +36,33 @@ export function registerRaidRoutes(
   fastify: FastifyInstance,
   database: Database,
 ) {
+  fastify.get<{ Params: { characterId: string } }>(
+    "/character/:characterId/raid/battle",
+    async (request, reply) => {
+      try {
+        reply.header("Cache-Control", "no-store");
+        return await getPendingRaidBattle(database, actor(request), request.params.characterId);
+      } catch (error) {
+        return sendInventoryError(reply, error);
+      }
+    },
+  );
+  fastify.post<{ Params: { characterId: string } }>(
+    "/character/:characterId/raid/battle/decision",
+    async (request, reply) => {
+      try {
+        const { raidId, battleId, action } = z.object({
+          raidId: z.string().uuid(),
+          battleId: z.string().uuid(),
+          action: z.enum(["OPEN", "RETREAT", "CONTINUE"]),
+        }).parse(request.body);
+        reply.header("Cache-Control", "no-store");
+        return await decideRaidBattle(database, actor(request), request.params.characterId, raidId, battleId, action);
+      } catch (error) {
+        return sendInventoryError(reply, error);
+      }
+    },
+  );
   fastify.get("/raid/rules", async () => ({
     extractionNodeIds,
     entryNodeIds: gameRules.entryNodeIds,
@@ -52,6 +82,18 @@ export function registerRaidRoutes(
       return sendInventoryError(reply, error);
     }
   });
+  fastify.get<{ Params: { characterId: string } }>(
+    "/character/:characterId/raid/noise",
+    async (request, reply) => {
+      try {
+        const { characterId } = request.params;
+        return await getRaidNoiseSignals(database, actor(request), characterId);
+      } catch (error) {
+        fastify.log.error(error);
+        return sendInventoryError(reply, error);
+      }
+    },
+  );
   fastify.post<{ Params: { characterId: string } }>(
     "/character/:characterId/raid/recover",
     async (request, reply) => {

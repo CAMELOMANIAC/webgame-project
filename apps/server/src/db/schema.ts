@@ -14,6 +14,8 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import type { PendingRetreat } from "../logic/retreat";
+
 export const attackTypeEnum = pgEnum("AttackType", ["MELEE", "RANGED"]);
 export const raidStatusEnum = pgEnum("RaidStatus", [
   "ACTIVE",
@@ -263,6 +265,8 @@ export const raidSessions = pgTable(
     entryNodeId: integer("entryNodeId").notNull().default(0),
     currentNodeId: integer("currentNodeId").notNull().default(0),
     time: integer("time").notNull().default(0),
+    currentBuildingId: integer("currentBuildingId"),
+    pendingRetreat: jsonb("pendingRetreat").$type<PendingRetreat>(),
     // 이전 거리 기반 판정으로 저장된 탐사 데이터를 보존한다.
     encounterTravel: jsonb("encounterTravel").$type<{
       visitedEdges: string[];

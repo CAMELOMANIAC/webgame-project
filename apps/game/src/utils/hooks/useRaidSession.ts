@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { RaidActionInput, RaidView } from "@webgame/types";
+import type { RaidActionInput, RaidView, StartRaidResult } from "@webgame/types";
 import { useAtomValue, useSetAtom } from "jotai";
 
 import { selectedUserIdAtom } from "@/atoms/authAtom";
-import { unacknowledgedRaidResultsAtom } from "@/atoms/raidAtom";
+import { enemyNoiseSignalsAtom, raidNoiseState, unacknowledgedRaidResultsAtom } from "@/atoms/raidAtom";
 
 import { API_BASE_URL, apiFetch } from "../api";
 import { readApiResponse } from "../request";
@@ -47,6 +47,7 @@ export const useRaidSession = () => {
   const queryClient = useQueryClient();
   const userId = useAtomValue(selectedUserIdAtom);
   const setRaidResults = useSetAtom(unacknowledgedRaidResultsAtom);
+  const setNoiseSignals = useSetAtom(enemyNoiseSignalsAtom);
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["character", userId] });
     void queryClient.invalidateQueries({ queryKey: ["stash", userId] });
@@ -58,7 +59,7 @@ export const useRaidSession = () => {
       const characterId = typeof input === "string" ? input : input.characterId;
       const loadout = typeof input === "string" ? undefined : input.loadout;
       const entryNodeId = typeof input === "string" ? undefined : input.entryNodeId;
-      return readApiResponse<{ status: string; isRaiding: boolean; raid: RaidView }>(
+      return readApiResponse<StartRaidResult>(
         await apiFetch(`${API_BASE_URL}/character/${characterId}/raid/start`, {
           method: "POST",
           ...(loadout || entryNodeId !== undefined
@@ -72,6 +73,7 @@ export const useRaidSession = () => {
     },
     onSuccess: (result, input) => {
       const characterId = typeof input === "string" ? input : input.characterId;
+      setNoiseSignals(raidNoiseState(result.raid.id, result));
       queryClient.setQueryData(
         characterKey(userId, characterId),
         (old: CharacterData | undefined) =>
@@ -109,6 +111,7 @@ export const useRaidSession = () => {
       );
     },
     onSuccess: (_result, characterId) => {
+      setNoiseSignals(null);
       if (userId) {
         setRaidResults((results) => ({ ...results, [userId]: "EXTRACTED" }));
       }
