@@ -70,7 +70,10 @@ function RouteComponent() {
     characterData?.inventory.find((item) => item.id === activeId);
 
   return (
-    <div className={page}>
+    <div
+      className={page}
+      style={tab === "backpack" ? { paddingBottom: 0 } : undefined}
+    >
       <NavigationRecovery
         character={characterData}
         navigation={navigateRaid}

@@ -73,6 +73,6 @@ export const gridContainer = style({
   gridTemplateColumns: `repeat(auto-fill, ${itemSlotSize})`,
   alignContent: "start",
   gap: "8px",
-  padding: "12px 16px 16px",
+  padding: "12px 16px 94px",
   overflowY: "auto",
 });
