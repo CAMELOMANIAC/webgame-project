@@ -21,6 +21,13 @@ import { useRaidSession } from "@/utils/hooks/useRaidSession";
 
 import * as styles from "./FieldNavTargetSection.css";
 
+const formatRaidTime = (minutes: number) => {
+  const safeMinutes = Math.max(0, Math.floor(minutes));
+  const hours = String(Math.floor(safeMinutes / 60)).padStart(2, "0");
+  const mins = String(safeMinutes % 60).padStart(2, "0");
+  return `${hours}:${mins}`;
+};
+
 const FieldNavTargetSection = () => {
   const navigate = useNavigate();
   const { data } = useGetCharacter();
@@ -96,9 +103,9 @@ const FieldNavTargetSection = () => {
 
       <div className={styles.telemetryGrid}>
         <div className={styles.telemetryCell}>
-          <span className={styles.cellLabel}>진행 라운드</span>
+          <span className={styles.cellLabel}>경과 시간</span>
           <span className={styles.cellValue}>
-            {character?.activeRaid?.round ?? 0}
+            {formatRaidTime(character?.activeRaid?.time ?? 0)}
           </span>
         </div>
         <div className={styles.telemetryCell}>
