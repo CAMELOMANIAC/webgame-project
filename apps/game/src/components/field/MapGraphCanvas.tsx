@@ -19,6 +19,7 @@ import {
   shortestPathAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
+import { getBuildingCenter } from "@/utils/getBuildingCenter";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import type { NavigateRaidParams, NavigateRaidResponse } from "@/utils/hooks/useNavigateRaid";
 import { useRaidRules } from "@/utils/hooks/useRaidRules";
@@ -75,20 +76,6 @@ const water = (mapData.water || []) as unknown as Water;
 // 폴리곤 렌더링에 적합하도록 통합된 물 좌표 배열을 1차원 플랫 구조로 변환
 const waterPoints = water.flatMap((p) => [p.x, p.y]);
 
-const getBuildingCenter = (building: Building) => {
-  if (!building.coordinates || building.coordinates.length === 0) return { x: 0, y: 0 };
-  let sumX = 0;
-  let sumY = 0;
-  building.coordinates.forEach((p) => {
-    sumX += p.x;
-    sumY += p.y;
-  });
-  return {
-    x: sumX / building.coordinates.length,
-    y: sumY / building.coordinates.length,
-  };
-};
-
 function isPointInPolygon(x: number, y: number, polygon: { x: number; y: number }[]): boolean {
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -137,7 +124,15 @@ const buildCoordPath = (
   targetB: Building | null,
 ) => {
   const coordPath: { x: number; y: number }[] = [];
-  if (path.length === 0) return coordPath;
+  if (path.length <= 1) {
+    if (path.length !== 1 || !targetB || targetB.roadNodeId !== path[0]) {
+      return coordPath;
+    }
+    const destination = getBuildingCenter(targetB);
+    return Math.hypot(destination.x - startPos.x, destination.y - startPos.y) > 0.1
+      ? [startPos, destination]
+      : coordPath;
+  }
 
   const startNode = nodes[path[0]];
   if (startNode) {
@@ -352,20 +347,30 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     characterData?.raw.isRaiding && characterData.raw.activeRaid?.status === "ACTIVE";
 
   const startNavigation = (path: number[], targetB?: Building | null) => {
-    if (!hasActiveRaid) return;
+    if (!hasActiveRaid || isNavigating || isCombat) return;
     if (
       characterData &&
       pendingNavigations[pendingNavigationKey(characterData.raw.userId, characterData.raw.id)]
     ) {
       return;
     }
-    if (path.length <= 1) return;
     if (!characterData?.raw.id) {
       console.warn("[Navigation] characterData not ready, skipping navigation start.");
       return;
     }
 
     const tBuilding = targetB !== undefined ? targetB : targetBuilding;
+    const startPos = playerCoordsRef.current ?? nodes[currentNodeId];
+    if (!startPos || path[0] !== currentNodeId) return;
+
+    const coords = buildCoordPath(path, startPos, tBuilding);
+    if (coords.length <= 1) return;
+
+    navigateRaidResponseRef.current = null;
+    navigationPathCoordsRef.current = coords;
+    setTargetNodeId(path[path.length - 1]);
+    setShortestPath(path);
+    setIsNavigating(true);
 
     let reqEquipment: { weaponMasterId: string; slotIndex: number }[] | undefined = undefined;
     let reqInventory: { weaponMasterId: string; slotIndex: number; quantity: number }[] | undefined =
@@ -390,12 +395,11 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         }));
     }
 
-    navigateRaidResponseRef.current = null;
-
     navigateRaid.mutate(
       {
         characterId: characterData.raw.id,
         path,
+        destinationBuildingId: path.length === 1 ? tBuilding?.id : undefined,
         equipment: reqEquipment,
         inventory: reqInventory,
       },
@@ -415,15 +419,6 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         },
       },
     );
-
-    const startPos = playerCoordsRef.current || {
-      x: nodes[path[0]]?.x ?? 0,
-      y: nodes[path[0]]?.y ?? 0,
-    };
-    const coords = buildCoordPath(path, startPos, tBuilding);
-    navigationPathCoordsRef.current = coords;
-
-    setIsNavigating(true);
   };
 
   // 대상 노드 선택 시 네비게이션 트리거
@@ -435,12 +430,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     if (showDevPanel) {
       setTargetNodeId(targetId);
     } else {
-      const path = findShortestPath(currentNodeId, targetId);
-      if (path.length > 1) {
-        setTargetNodeId(targetId);
-        setShortestPath(path);
-        startNavigation(path, targetB);
-      }
+      startNavigation(findShortestPath(currentNodeId, targetId), targetB ?? null);
     }
   };
 
@@ -1235,6 +1225,12 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
   // 5.2. 드로잉을 위한 최단 경로 플랫 좌표 배열
   const shortestPathPoints = useMemo(() => {
+    if (shortestPath.length === 1) {
+      const startPos = playerCoords ?? nodes[currentNodeId];
+      return startPos
+        ? buildCoordPath(shortestPath, startPos, targetBuilding).flatMap(({ x, y }) => [x, y])
+        : [];
+    }
     const pts = shortestPath.flatMap((nodeIdx) => {
       const node = nodes[nodeIdx];
       return node ? [node.x, node.y] : [];
@@ -1244,7 +1240,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       pts.push(center.x, center.y);
     }
     return pts;
-  }, [shortestPath, targetBuilding]);
+  }, [currentNodeId, playerCoords, shortestPath, targetBuilding]);
 
   // 5.2.5. 최단 경로 라인 및 타겟 비콘 Pixi Graphics 동기화
   useEffect(() => {
@@ -1330,12 +1326,13 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
   // 5.5. requestAnimationFrame 기반 등속(Constant Speed) 부드러운 네비게이션 보간 루프
   useEffect(() => {
-    if (!isNavigating || targetNodeId === null || shortestPath.length <= 1 || isCombat) {
+    if (!isNavigating || targetNodeId === null || shortestPath.length === 0 || isCombat) {
       return;
     }
 
     let coords = navigationPathCoordsRef.current;
     let path = shortestPath;
+    const hasRoadHops = path.length > 1;
     if (coords.length <= 1) {
       return;
     }
@@ -1530,10 +1527,10 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       const speedFactor = Math.sin(progress * Math.PI);
       const currentSpeed = minSpeed + (maxSpeed - minSpeed) * speedFactor;
 
-      const firstRoadHopStepIdx = hasStartPos ? 2 : 1;
+      const responseGateStepIdx = hasRoadHops && hasStartPos ? 2 : 1;
 
       let finalSpeed = currentSpeed;
-      if (stepIdx === firstRoadHopStepIdx) {
+      if (hasRoadHops && stepIdx === responseGateStepIdx) {
         finalSpeed = currentSpeed * 0.3;
 
         if (navigateRaidResponseRef.current === null) {
@@ -1560,7 +1557,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       const step = finalSpeed * deltaTime;
 
       if (distance <= step) {
-        if (stepIdx === firstRoadHopStepIdx) {
+        if (stepIdx === responseGateStepIdx) {
           if (navigateRaidResponseRef.current === null) {
             if (hopGateWaitStart === null) {
               hopGateWaitStart = performance.now();
@@ -1586,7 +1583,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
           }
 
           const res = navigateRaidResponseRef.current;
-          if (res?.encounterTriggered && res.stopNodeId !== undefined) {
+          if (hasRoadHops && res?.encounterTriggered && res.stopNodeId !== undefined) {
             const stopIndex = path.indexOf(res.stopNodeId, 1);
             if (stopIndex !== -1) {
               path = path.slice(0, stopIndex + 1);
@@ -1819,7 +1816,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
             <button
               type="button"
               className={styles.navButton({ primary: true })}
-              disabled={shortestPath.length <= 1 || isNavigating}
+              disabled={shortestPathPoints.length < 4 || isNavigating}
               onClick={() => startNavigation(shortestPath, targetBuilding)}
             >
               {isNavigating ? "IN TRANSIT..." : "START NAVIGATION"}

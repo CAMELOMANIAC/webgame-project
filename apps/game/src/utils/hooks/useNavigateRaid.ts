@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { RaidActionInput, RaidNavigationResult } from "@webgame/types";
+import type { RaidActionInput, RaidNavigationInput, RaidNavigationResult } from "@webgame/types";
 import { getDefaultStore, useAtomValue } from "jotai";
 
 import { selectedUserIdAtom } from "@/atoms/authAtom";
@@ -14,11 +14,9 @@ import { characterKey } from "./useCharacterCollection";
 import type { CharacterData } from "./useGetCharacter";
 import { raidActionInput } from "./useRaidSession";
 
-export interface NavigateRaidParams extends Partial<RaidActionInput> {
+export interface NavigateRaidParams
+  extends Omit<RaidNavigationInput, keyof RaidActionInput>, Partial<RaidActionInput> {
   characterId: string;
-  path: number[];
-  equipment?: { weaponMasterId: string; slotIndex: number }[];
-  inventory?: { weaponMasterId: string; slotIndex: number; quantity: number }[];
 }
 export type NavigateRaidResponse = RaidNavigationResult;
 
