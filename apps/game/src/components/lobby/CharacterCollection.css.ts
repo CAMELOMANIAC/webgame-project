@@ -136,6 +136,12 @@ export const characterButton = recipe({
       ],
     },
   },
+  compoundVariants: [
+    {
+      variants: { readOnly: true, state: "selected" },
+      style: cornerBrackets({ tone: "none" }),
+    },
+  ],
   defaultVariants: {
     state: "idle",
     readOnly: false,

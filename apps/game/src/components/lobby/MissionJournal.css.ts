@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { recipe } from "@vanilla-extract/recipes";
 
-import { cornerBrackets, vars } from "@/styles/theme.css";
+import { vars } from "@/styles/theme.css";
 
 export const journal = style({
   width: "100%",
@@ -72,24 +72,12 @@ export const panel = style({
   gap: "12px",
 });
 
-export const missionSection = recipe({
-  base: [
-    panel,
-    {
-      borderRadius: "8px",
-    },
-  ],
-  variants: {
-    bracketTone: {
-      default: cornerBrackets({ tone: "default" }),
-      positive: cornerBrackets({ tone: "positive" }),
-      negative: cornerBrackets({ tone: "negative" }),
-    },
+export const missionSection = style([
+  panel,
+  {
+    borderRadius: "8px",
   },
-  defaultVariants: {
-    bracketTone: "default",
-  },
-});
+]);
 
 export const sectionTopRow = style({
   display: "flex",

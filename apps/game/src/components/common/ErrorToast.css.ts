@@ -1,6 +1,6 @@
 import { keyframes, style } from "@vanilla-extract/css";
 
-import { cornerBrackets, vars } from "@/styles/theme.css";
+import { vars } from "@/styles/theme.css";
 
 const toastEnter = keyframes({
   from: {
@@ -72,21 +72,18 @@ export const toastPopover = style({
   },
 });
 
-export const toastCard = style([
-  cornerBrackets({ tone: "negative" }),
-  {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "10px",
-    padding: "10px 12px",
-    borderRadius: vars.radius.control,
-    border: `1px solid ${vars.border.negative}`,
-    backgroundColor: "rgba(16, 16, 19, 0.94)",
-    backdropFilter: "blur(12px)",
-    boxShadow: "0 12px 28px rgba(0, 0, 0, 0.48)",
-  },
-]);
+export const toastCard = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "10px",
+  padding: "10px 12px",
+  borderRadius: vars.radius.control,
+  border: `1px solid ${vars.border.negative}`,
+  backgroundColor: "rgba(16, 16, 19, 0.94)",
+  backdropFilter: "blur(12px)",
+  boxShadow: "0 12px 28px rgba(0, 0, 0, 0.48)",
+});
 
 export const messageText = style({
   margin: 0,

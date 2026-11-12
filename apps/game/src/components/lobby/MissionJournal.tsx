@@ -65,15 +65,7 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
         )}
 
         {mission && (
-          <section
-            className={styles.missionSection({
-              bracketTone: isUrgent
-                ? "negative"
-                : mission.status === "COMPLETE"
-                  ? "default"
-                  : "positive",
-            })}
-          >
+          <section className={styles.missionSection}>
             <div className={styles.sectionTopRow}>
               <small
                 className={styles.statusBadge({

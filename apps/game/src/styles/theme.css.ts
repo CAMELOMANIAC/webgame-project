@@ -155,24 +155,15 @@ export const fieldWidget = recipe({
   },
   variants: {
     tone: {
-      default: [
-        cornerBrackets({ tone: "default" }),
-        {
-          border: "1px solid rgba(255, 255, 255, 0.12)",
-        },
-      ],
-      positive: [
-        cornerBrackets({ tone: "positive" }),
-        {
-          border: `1px solid ${vars.border.positive}`,
-        },
-      ],
-      negative: [
-        cornerBrackets({ tone: "negative" }),
-        {
-          border: `1px solid ${vars.border.negative}`,
-        },
-      ],
+      default: {
+        border: "1px solid rgba(255, 255, 255, 0.12)",
+      },
+      positive: {
+        border: `1px solid ${vars.border.positive}`,
+      },
+      negative: {
+        border: `1px solid ${vars.border.negative}`,
+      },
     },
   },
   defaultVariants: {

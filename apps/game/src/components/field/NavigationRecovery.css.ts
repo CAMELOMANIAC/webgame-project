@@ -1,20 +1,17 @@
 import { style } from "@vanilla-extract/css";
 
-import { cornerBrackets, vars } from "@/styles/theme.css";
+import { vars } from "@/styles/theme.css";
 
-export const recovery = style([
-  cornerBrackets({ tone: "positive" }),
-  {
-    position: "absolute",
-    inset: "20px 16px auto",
-    zIndex: 1000,
-    padding: "16px",
-    borderRadius: vars.radius.card,
-    backgroundColor: vars.surface.mid,
-    border: `1px solid ${vars.border.positive}`,
-    color: vars.text.primary,
-  },
-]);
+export const recovery = style({
+  position: "absolute",
+  inset: "20px 16px auto",
+  zIndex: 1000,
+  padding: "16px",
+  borderRadius: vars.radius.card,
+  backgroundColor: vars.surface.mid,
+  border: `1px solid ${vars.border.positive}`,
+  color: vars.text.primary,
+});
 
 export const title = style({
   fontSize: "14px",
