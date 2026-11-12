@@ -8,6 +8,7 @@ import {
   extractionNodeIds,
   extractRaid,
   fightRaidMonster,
+  getRaidNavigationResult,
   NavigateSchema,
   navigateRaid,
   RaidActionSchema,
@@ -15,6 +16,12 @@ import {
   startRaid,
 } from "../services/raid";
 import { sendInventoryError } from "./inventory";
+
+const startRaidSchema = SlotsSchema.partial()
+  .extend({ entryNodeId: z.number().int().nonnegative().optional() })
+  .refine((data) => (data.equipment === undefined) === (data.inventory === undefined), {
+    message: "Equipment and inventory must be sent together",
+  });
 
 function actor(request: FastifyRequest) {
   if (!request.actorUserId)
@@ -28,17 +35,18 @@ export function registerRaidRoutes(
 ) {
   fastify.get("/raid/rules", async () => ({
     extractionNodeIds,
+    entryNodeIds: gameRules.entryNodeIds,
     startNodeId: gameRules.startNodeId,
     mapVersion: seopoMapVersion,
   }));
   fastify.post("/character/:characterId/raid/start", async (request, reply) => {
     try {
       const { characterId } = request.params as { characterId: string };
-      const loadout =
-        request.body !== undefined && request.body !== null
-          ? SlotsSchema.parse(request.body)
-          : undefined;
-      return await startRaid(database, actor(request), characterId, loadout);
+      const { entryNodeId, equipment, inventory } = startRaidSchema.parse(
+        request.body ?? {},
+      );
+      const loadout = equipment && inventory ? { equipment, inventory } : undefined;
+      return await startRaid(database, actor(request), characterId, loadout, entryNodeId);
     } catch (error) {
       fastify.log.error(error);
       return sendInventoryError(reply, error);
@@ -56,6 +64,26 @@ export function registerRaidRoutes(
         return reply.status(204).send();
       } catch (error) {
         fastify.log.error(error);
+        return sendInventoryError(reply, error);
+      }
+    },
+  );
+  fastify.get<{ Params: { characterId: string } }>(
+    "/character/:characterId/raid/navigate/result",
+    async (request, reply) => {
+      try {
+        const input = RaidActionSchema.extend({
+          expectedVersion: z.coerce.number().int().nonnegative(),
+        }).parse(request.query);
+        reply.header("Cache-Control", "no-store");
+        const result = await getRaidNavigationResult(
+          database,
+          actor(request),
+          request.params.characterId,
+          input,
+        );
+        return reply.send({ result });
+      } catch (error) {
         return sendInventoryError(reply, error);
       }
     },

@@ -9,6 +9,7 @@ import {
   raidSessions,
   weaponMasters,
 } from "../db";
+import { gameRules } from "../logic/rules";
 import { integrationFixture } from "../testing/integrationFixture";
 import { pathToNode } from "../testing/mapRoute";
 import { recordGhosts } from "./ghosts";
@@ -29,20 +30,43 @@ test("실제 DB: 임무를 수락하지 않은 개체는 중계 시설에서 통
   assert.equal(result.raid.round, path.length - 1);
 });
 
-test("실제 DB: 같은 라운드의 역방향 이동과 조우하고 다음 이동에서 빈자리만 보충한다", async (t) => {
+test("실제 DB: 먼 진입 기록을 추적하고 빈자리는 현재 위치에서 떨어진 고스트만 채운다", async (t) => {
   const player = await integrationFixture(t);
   const source = await integrationFixture(t);
   const ended = await integrationFixture(t);
   const retained = await integrationFixture(t);
   const replacement = await integrationFixture(t);
+  const nearby = await integrationFixture(t);
+  const farEntry = gameRules.entryNodeIds[1]!;
   const sourceRaid = (
-    await startRaid(source.db, source.user.id, source.character.id)
+    await startRaid(
+      source.db,
+      source.user.id,
+      source.character.id,
+      undefined,
+      farEntry,
+    )
   ).raid;
   const endedRaid = (
-    await startRaid(ended.db, ended.user.id, ended.character.id)
+    await startRaid(
+      ended.db,
+      ended.user.id,
+      ended.character.id,
+      undefined,
+      farEntry,
+    )
   ).raid;
   const retainedRaid = (
-    await startRaid(retained.db, retained.user.id, retained.character.id)
+    await startRaid(
+      retained.db,
+      retained.user.id,
+      retained.character.id,
+      undefined,
+      farEntry,
+    )
+  ).raid;
+  const nearbyRaid = (
+    await startRaid(nearby.db, nearby.user.id, nearby.character.id)
   ).raid;
   const replacementRaid = (
     await startRaid(
@@ -71,9 +95,16 @@ test("실제 DB: 같은 라운드의 역방향 이동과 조우하고 다음 이
   await putSteps(ended, endedRaid.id, [{ nodeId: 47, round: 1 }]);
   await putSteps(retained, retainedRaid.id, [
     { nodeId: 47, round: 1 },
-    { nodeId: 49, round: 3 },
+    { nodeId: 49, round: 4 },
   ]);
-  await putSteps(replacement, replacementRaid.id, [{ nodeId: 28, round: 3 }]);
+  await putSteps(replacement, replacementRaid.id, [
+    { nodeId: 93, round: 3 },
+    { nodeId: 94, round: 4 },
+  ]);
+  await putSteps(nearby, nearbyRaid.id, [
+    { nodeId: 1, round: 1 },
+    { nodeId: 28, round: 3 },
+  ]);
 
   await player.db
     .update(characters)
@@ -106,7 +137,10 @@ test("실제 DB: 같은 라운드의 역방향 이동과 조우하고 다음 이
     )?.ghostRoster;
   const first = await move(0, path.slice(0, 2));
   assert.equal(first.encounterTriggered, false);
-  assert.equal((await roster())?.tracks.length, 3);
+  assert.deepEqual(
+    new Set((await roster())?.tracks.map((track) => track.sourceRaidId)),
+    new Set([sourceRaid.id, endedRaid.id, retainedRaid.id]),
+  );
 
   const second = await move(1, path.slice(1));
   assert.equal(second.stopNodeId, 26);
@@ -124,18 +158,13 @@ test("실제 DB: 같은 라운드의 역방향 이동과 조우하고 다음 이
   );
 
   const third = await move(2, path.slice(2));
-  assert.equal(third.stopNodeId, 28);
-  assert.equal(third.raid.round, 3);
-  assert.equal(
-    third.battleLog?.encounter?.sourceCharacterId,
-    replacement.character.id,
-  );
+  assert.equal(third.encounterTriggered, false);
+  assert.equal(third.raid.currentNodeId, 27);
   assert.deepEqual((await roster())?.defeatedCharacterIds, [
     source.character.id,
-    replacement.character.id,
   ]);
   assert.deepEqual(
     (await roster())?.tracks.map((track) => track.sourceRaidId),
-    [retainedRaid.id],
+    [retainedRaid.id, replacementRaid.id],
   );
 });

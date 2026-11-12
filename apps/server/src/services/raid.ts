@@ -1,6 +1,7 @@
 import {
   firstMissionNodeId,
   type RaidActionInput,
+  type RaidNavigationInput,
   type RaidNavigationResult,
   type RaidView,
   seopoMapVersion,
@@ -62,11 +63,16 @@ export const NavigateSchema = RaidActionSchema.extend({
         .min(0)
         .max(mapData.nodes.length - 1),
     )
-    .min(2)
+    .min(1)
     .max(2000),
+  destinationBuildingId: z.number().int().nonnegative().optional(),
   equipment: SlotsSchema.shape.equipment.optional(),
   inventory: SlotsSchema.shape.inventory.optional(),
 }).refine(
+  ({ path, destinationBuildingId }) =>
+    (path.length === 1) === (destinationBuildingId !== undefined),
+  { message: "A single-node path requires a destination building" },
+).refine(
   (data) => (data.equipment === undefined) === (data.inventory === undefined),
   { message: "Equipment and inventory must be sent together" },
 );
@@ -133,6 +139,7 @@ export async function startRaid(
   userId: string,
   characterId: string,
   loadout?: SlotsInput,
+  entryNodeId = gameRules.startNodeId,
 ) {
   return withInventoryTransaction(database, async (tx) => {
     await tx.execute(
@@ -145,6 +152,8 @@ export async function startRaid(
         isRaiding: true,
         raid: view(character.activeRaid),
       };
+    if (!gameRules.entryNodeIds.includes(entryNodeId))
+      throw new InventoryError("선택할 수 없는 진입 지점입니다.");
     const otherActive = await tx.query.characters.findMany({
       where: and(
         eq(characters.userId, userId),
@@ -183,7 +192,7 @@ export async function startRaid(
       : await calculateInventoryWeight(tx, characterId);
     const [raid] = await tx
       .insert(raidSessions)
-      .values({ characterId, currentNodeId: gameRules.startNodeId })
+      .values({ characterId, entryNodeId, currentNodeId: entryNodeId })
       .returning();
     if (!raid) throw new InventoryError("Failed to create raid session", 500);
     await tx
@@ -191,7 +200,7 @@ export async function startRaid(
       .set({
         isRaiding: true,
         activeRaidId: raid.id,
-        currentNodeId: gameRules.startNodeId,
+        currentNodeId: entryNodeId,
         time: 0,
         weight,
       })
@@ -304,15 +313,59 @@ const connectedRoads = new Set(
   mapData.edges.map(({ source, target }) => roadKey(source, target)),
 );
 
+export async function getRaidNavigationResult(
+  database: Database,
+  userId: string,
+  characterId: string,
+  input: RaidActionInput,
+): Promise<RaidNavigationResult | null> {
+  return withInventoryTransaction(database, async (tx) => {
+    const character = await ownedCharacter(tx, userId, characterId);
+    const raid = await tx.query.raidSessions.findFirst({
+      where: and(
+        eq(raidSessions.id, input.raidId),
+        eq(raidSessions.characterId, characterId),
+      ),
+    });
+    if (!raid) throw new InventoryError("Raid not found", 404);
+
+    const command = await tx.query.raidCommands.findFirst({
+      where: and(
+        eq(raidCommands.raidId, raid.id),
+        eq(raidCommands.requestId, input.requestId),
+        eq(raidCommands.kind, "NAVIGATE"),
+      ),
+    });
+    if (command) {
+      const result = command.response as unknown as RaidNavigationResult;
+      if (
+        result.raid.version === raid.version &&
+        (!character.activeRaidId || character.activeRaidId === raid.id)
+      ) {
+        return result;
+      }
+    } else if (
+      raid.status === "ACTIVE" &&
+      character.activeRaidId === raid.id &&
+      character.isRaiding &&
+      raid.version === input.expectedVersion
+    ) {
+      return null;
+    }
+    throw new InventoryError("탐사 상태가 변경되었습니다.", 409);
+  });
+}
+
 export async function navigateRaid(
   database: Database,
   userId: string,
   characterId: string,
-  input: z.infer<typeof NavigateSchema>,
+  input: RaidNavigationInput,
 ): Promise<RaidNavigationResult> {
   const parsed = NavigateSchema.parse(input);
   const payload = {
     path: parsed.path,
+    destinationBuildingId: parsed.destinationBuildingId,
     equipment: parsed.equipment,
     inventory: parsed.inventory,
   };
@@ -328,6 +381,17 @@ export async function navigateRaid(
         throw new InventoryError("Raid map version is not supported", 409);
       if (parsed.path[0] !== raid.currentNodeId)
         throw new InventoryError("Path must start at the current node");
+      const isBuildingMove = parsed.destinationBuildingId !== undefined;
+      if (
+        isBuildingMove &&
+        !mapData.buildings.some(
+          (building) =>
+            building.id === parsed.destinationBuildingId &&
+            building.roadNodeId === raid.currentNodeId,
+        )
+      ) {
+        throw new InventoryError("Destination building is not on the current node");
+      }
       for (let index = 1; index < parsed.path.length; index++) {
         if (
           !connectedRoads.has(roadKey(parsed.path[index - 1]!, parsed.path[index]!))
@@ -339,8 +403,12 @@ export async function navigateRaid(
           equipment: parsed.equipment,
           inventory: parsed.inventory,
         });
-      const path = parsed.path;
+      // A building move records one round at the same road node.
+      const path = isBuildingMove
+        ? [raid.currentNodeId, raid.currentNodeId]
+        : parsed.path;
       const missionActive =
+        !isBuildingMove &&
         path.indexOf(firstMissionNodeId, 1) !== -1 &&
         (await missionNeedsRecovery(tx, userId));
       const ghostRoster = await loadGhostRoster(tx, raid);
@@ -350,6 +418,8 @@ export async function navigateRaid(
         userId,
         raid.round + path.length - 1,
       );
+      if (!raid.ghostRoster && raid.round === 0)
+        await tracker.initialize(raid.entryNodeId);
       for (let stopIndex = 1; stopIndex < path.length; stopIndex++) {
         const stopNodeId = path[stopIndex]!;
         const stopRound = raid.round + stopIndex;
@@ -362,7 +432,7 @@ export async function navigateRaid(
           stopNodeId === gameRules.startNodeId,
         );
         if (ghost || isMissionEncounter) {
-          const visitedPath = parsed.path.slice(1, stopIndex + 1);
+          const visitedPath = path.slice(1, stopIndex + 1);
           await recordGhosts(
             tx,
             characterId,
@@ -409,14 +479,14 @@ export async function navigateRaid(
         tx,
         characterId,
         raid.id,
-        parsed.path
+        path
           .slice(1)
           .map((nodeId, index) => ({ nodeId, round: raid.round + index + 1 })),
       );
       return {
         payload: { encounterTriggered: false },
-        currentNodeId: parsed.path.at(-1),
-        round: raid.round + parsed.path.length - 1,
+        currentNodeId: path.at(-1),
+        round: raid.round + path.length - 1,
         ghostRoster,
       };
     },

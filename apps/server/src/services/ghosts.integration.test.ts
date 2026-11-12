@@ -68,6 +68,57 @@ test("실제 DB: 위치·라운드 기록은 서버 장비를 복사하고 재�
   assert.equal(await matchGhost(db, user.id, node, 1), null);
 });
 
+test("실제 DB: 같은 도로 노드의 건물 이동은 1라운드 뒤 같은 노드의 고스트와 조우한다", async (t) => {
+  const player = await integrationFixture(t);
+  const source = await integrationFixture(t);
+  const nodeId = 28;
+  const path = pathToNode(nodeId);
+  const destination = mapData.buildings.find((building) => building.roadNodeId === nodeId)!;
+  const otherBuilding = mapData.buildings.find((building) => building.roadNodeId !== nodeId)!;
+  const { raid: sourceRaid } = await startRaid(
+    source.db,
+    source.user.id,
+    source.character.id,
+    undefined,
+    gameRules.entryNodeIds[1],
+  );
+  await source.db.transaction((tx) =>
+    recordGhosts(tx, source.character.id, sourceRaid.id, [
+      { nodeId, round: path.length },
+    ]),
+  );
+
+  const { raid } = await startRaid(player.db, player.user.id, player.character.id);
+  const arrival = await navigateRaid(player.db, player.user.id, player.character.id, {
+    raidId: raid.id,
+    expectedVersion: raid.version,
+    requestId: randomUUID(),
+    path,
+  });
+  assert.equal(arrival.encounterTriggered, false);
+
+  const input = {
+    raidId: raid.id,
+    expectedVersion: arrival.raid.version,
+    requestId: randomUUID(),
+    path: [nodeId],
+    destinationBuildingId: destination.id,
+  };
+  await assert.rejects(
+    () => navigateRaid(player.db, player.user.id, player.character.id, {
+      ...input,
+      destinationBuildingId: otherBuilding.id,
+    }),
+    /not on the current node/,
+  );
+  const result = await navigateRaid(player.db, player.user.id, player.character.id, input);
+  assert.equal(result.stopNodeId, nodeId);
+  assert.equal(result.raid.round, arrival.raid.round + 1);
+  assert.equal(result.raid.version, arrival.raid.version + 1);
+  assert.equal(result.battleLog?.encounter?.sourceCharacterId, source.character.id);
+  assert.deepEqual(await navigateRaid(player.db, player.user.id, player.character.id, input), result);
+});
+
 for (const lethal of [false, true])
   test(`실제 DB: 고스트 ${lethal ? "패배·사망" : "승리·탈출"}를 중복 없이 정산하고 원본 개체는 변경하지 않는다`, async (t) => {
     const player = await integrationFixture(t);
@@ -88,7 +139,13 @@ for (const lethal of [false, true])
       .set({ displayName: "같은 이름" })
       .where(eq(characters.id, source.character.id));
     const sourceRaid = (
-      await startRaid(source.db, source.user.id, source.character.id)
+      await startRaid(
+        source.db,
+        source.user.id,
+        source.character.id,
+        undefined,
+        gameRules.entryNodeIds[1],
+      )
     ).raid;
     await source.db.transaction((tx) =>
       recordGhosts(tx, source.character.id, sourceRaid.id, [

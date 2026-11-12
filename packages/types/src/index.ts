@@ -206,6 +206,13 @@ export interface RaidActionInput {
   requestId: string;
 }
 
+export interface RaidNavigationInput extends RaidActionInput {
+  path: number[];
+  destinationBuildingId?: number;
+  equipment?: { weaponMasterId: string; slotIndex: number }[];
+  inventory?: { weaponMasterId: string; slotIndex: number; quantity: number }[];
+}
+
 export interface RaidNavigationResult {
   encounterTriggered: boolean;
   stopNodeId?: number;

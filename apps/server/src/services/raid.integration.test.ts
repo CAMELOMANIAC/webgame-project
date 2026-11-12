@@ -16,7 +16,7 @@ import {
   weaponMasters,
 } from "../db";
 import { integrationFixture } from "../testing/integrationFixture";
-import { extractRaid, fightRaidMonster, navigateRaid, startRaid } from "./raid";
+import { extractRaid, fightRaidMonster, getRaidNavigationResult, navigateRaid, startRaid } from "./raid";
 
 function command(raid: { id: string; version: number }) {
   return {
@@ -97,6 +97,7 @@ test("실제 DB: 같은 이동 요청은 위치·버전을 한 번만 변경한�
   const { db, user, character } = await integrationFixture(t);
   const { raid } = await startRaid(db, user.id, character.id);
   const input = { ...command(raid), path: [0, nextNode] };
+  assert.equal(await getRaidNavigationResult(db, user.id, character.id, input), null);
   const first = await navigateRaid(
     db,
     user.id,
@@ -105,6 +106,7 @@ test("실제 DB: 같은 이동 요청은 위치·버전을 한 번만 변경한�
   );
   const again = await navigateRaid(db, user.id, character.id, input);
   assert.deepEqual(again, first);
+  assert.deepEqual(await getRaidNavigationResult(db, user.id, character.id, input), first);
   const saved = await db.query.raidSessions.findFirst({
     where: eq(raidSessions.id, raid.id),
   });
@@ -288,4 +290,63 @@ test("실제 DB: API 계정 선택과 소유권 검증을 적용한다", async (
     payload: { isRaiding: false },
   });
   assert.equal(disabled.statusCode, 405);
+});
+
+test("실제 DB: 선택한 진입 지점에서 배치하고 중복 배치는 원래 탐사를 반환한다", async (t) => {
+  const { db, user, character, weapon, snapshot } = await integrationFixture(t);
+  const app = buildApp({ database: db, logger: false });
+  t.after(() => app.close());
+  const rules = await app.inject({
+    method: "GET",
+    url: "/raid/rules",
+    headers: { "x-dev-user-id": user.id },
+  });
+  assert.equal(rules.statusCode, 200);
+  const { entryNodeIds, extractionNodeIds } = rules.json<{
+    entryNodeIds: number[];
+    extractionNodeIds: number[];
+  }>();
+  assert.deepEqual(entryNodeIds, [0, 37, 93]);
+  assert.deepEqual(extractionNodeIds, [0]);
+
+  await db.insert(stashItems).values({
+    userId: user.id,
+    weaponMasterId: weapon.id,
+    quantity: 1,
+  });
+  const deploy = (entryNodeId: number, withLoadout = false) =>
+    app.inject({
+      method: "POST",
+      url: `/character/${character.id}/raid/start`,
+      headers: { "x-dev-user-id": user.id },
+      payload: {
+        entryNodeId,
+        ...(withLoadout
+          ? {
+              equipment: [{ weaponMasterId: weapon.id, slotIndex: 0 }],
+              inventory: [],
+            }
+          : {}),
+      },
+    });
+  assert.equal((await deploy(26, true)).statusCode, 400);
+  const before = await snapshot();
+  assert.equal(before.character.isRaiding, false);
+  assert.equal(before.stash[0]?.quantity, 1);
+  const result = await deploy(37, true);
+  assert.equal(result.statusCode, 200);
+  const { raid } = result.json<{ raid: { id: string; currentNodeId: number; round: number } }>();
+  assert.equal(raid.currentNodeId, 37);
+  assert.equal(raid.round, 0);
+  assert.deepEqual((await deploy(93)).json().raid, raid);
+  const deployed = await snapshot();
+  assert.equal(deployed.character.currentNodeId, 37);
+  assert.equal(deployed.equipment[0]?.weaponMasterId, weapon.id);
+  assert.equal(deployed.stash.length, 0);
+  const saved = await db.query.raidSessions.findFirst({
+    where: eq(raidSessions.id, raid.id),
+    with: { snapshots: true },
+  });
+  assert.equal(saved?.entryNodeId, 37);
+  assert.deepEqual(saved?.snapshots.map(({ nodeId, round }) => [nodeId, round]), [["37", 0]]);
 });

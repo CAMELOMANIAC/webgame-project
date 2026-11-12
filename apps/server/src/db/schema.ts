@@ -260,6 +260,7 @@ export const raidSessions = pgTable(
       }),
     status: raidStatusEnum("status").notNull().default("ACTIVE"),
     version: integer("version").notNull().default(0),
+    entryNodeId: integer("entryNodeId").notNull().default(0),
     currentNodeId: integer("currentNodeId").notNull().default(0),
     round: integer("round").notNull().default(0),
     // 이전 거리 기반 판정으로 저장된 탐사 데이터를 보존한다.

@@ -5,6 +5,7 @@ import {
   asc,
   desc,
   eq,
+  exists,
   gt,
   gte,
   isNotNull,
@@ -12,12 +13,14 @@ import {
   ne,
   notInArray,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import {
   ghostSnapshots,
   raidCommands,
   type RaidSession,
   type TransactionClient,
 } from "../db";
+import { nodesCloserThan } from "../logic/roadDistances";
 import { gameRules } from "../logic/rules";
 import { toGhostMatch } from "./ghosts";
 
@@ -85,12 +88,14 @@ export function createGhostTracker(
     gte(ghostSnapshots.createdAt, oldest),
     lte(ghostSnapshots.createdAt, now),
   ];
+  const laterStep = alias(ghostSnapshots, "later_step");
+  const nearby = new Map<string, string[]>();
   const routes = new Map<string, Map<number, { id: string; nodeId: string }>>();
   let nextRecruitRound = 0;
 
-  async function fill(round: number) {
+  async function fill(round: number, playerNode: number, initial = false) {
     const vacancies = trackedCount - roster.tracks.length;
-    if (vacancies <= 0 || round < nextRecruitRound) return;
+    if (vacancies <= 0 || (!initial && round < nextRecruitRound)) return;
 
     const excluded = [
       ...roster.defeatedCharacterIds,
@@ -104,21 +109,33 @@ export function createGhostTracker(
         ? notInArray(ghostSnapshots.characterId, excluded)
         : undefined,
     );
-    const [next] = await tx
-      .select({ round: ghostSnapshots.round })
-      .from(ghostSnapshots)
-      .where(
-        and(
-          available,
-          gte(ghostSnapshots.round, round),
-          lte(ghostSnapshots.round, lastTravelRound),
-        ),
-      )
-      .orderBy(asc(ghostSnapshots.round))
-      .limit(1);
-    if (next?.round !== round) {
-      nextRecruitRound = next?.round ?? lastTravelRound + 1;
-      return;
+    if (!initial) {
+      const [next] = await tx
+        .select({ round: ghostSnapshots.round })
+        .from(ghostSnapshots)
+        .where(
+          and(
+            available,
+            gte(ghostSnapshots.round, round),
+            lte(ghostSnapshots.round, lastTravelRound),
+          ),
+        )
+        .orderBy(asc(ghostSnapshots.round))
+        .limit(1);
+      if (next?.round !== round) {
+        nextRecruitRound = next?.round ?? lastTravelRound + 1;
+        return;
+      }
+    }
+
+    const minimumDistance = initial
+      ? gameRules.ghost.minimumEntryDistance
+      : gameRules.ghost.minimumRefillDistance;
+    const distanceKey = `${playerNode}:${minimumDistance}`;
+    let nearbyNodes = nearby.get(distanceKey);
+    if (!nearbyNodes) {
+      nearbyNodes = nodesCloserThan(playerNode, minimumDistance);
+      nearby.set(distanceKey, nearbyNodes);
     }
 
     const distinct = tx
@@ -128,7 +145,32 @@ export function createGhostTracker(
         createdAt: ghostSnapshots.createdAt,
       })
       .from(ghostSnapshots)
-      .where(and(available, eq(ghostSnapshots.round, round)))
+      .where(
+        and(
+          available,
+          eq(ghostSnapshots.round, round),
+          notInArray(ghostSnapshots.nodeId, nearbyNodes),
+          initial
+            ? exists(
+                tx
+                  .select({ id: laterStep.id })
+                  .from(laterStep)
+                  .where(
+                    and(
+                      eq(laterStep.raidId, ghostSnapshots.raidId),
+                      gt(laterStep.round, round),
+                      eq(laterStep.rulesVersion, rulesVersion),
+                      eq(laterStep.mapVersion, seopoMapVersion),
+                      gt(laterStep.hp, 0),
+                      isNotNull(laterStep.combatant),
+                      gte(laterStep.createdAt, oldest),
+                      lte(laterStep.createdAt, now),
+                    ),
+                  ),
+              )
+            : undefined,
+        ),
+      )
       .orderBy(
         asc(ghostSnapshots.characterId),
         desc(ghostSnapshots.createdAt),
@@ -184,9 +226,12 @@ export function createGhostTracker(
   }
 
   return {
+    initialize(entryNodeId: number) {
+      return fill(0, entryNodeId, true);
+    },
     async match(from: number, to: number, round: number, safeArrival: boolean) {
       roster.tracks = roster.tracks.filter((track) => track.lastRound >= round);
-      await fill(round);
+      await fill(round, to);
       if (safeArrival) return null;
 
       for (const track of roster.tracks) {
@@ -195,6 +240,7 @@ export function createGhostTracker(
         if (!step) continue;
         const sameNode = step.nodeId === String(to);
         const oppositeDirection =
+          from !== to &&
           step.nodeId === String(from) &&
           route.get(round - 1)?.nodeId === String(to);
         if (!sameNode && !oppositeDirection) continue;
