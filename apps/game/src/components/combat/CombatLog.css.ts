@@ -2,6 +2,8 @@ import { style } from "@vanilla-extract/css";
 
 import { fieldWidget, vars } from "@/styles/theme.css";
 
+import portrait from "../../assets/portrait.png";
+
 export const combatWidget = style([
   fieldWidget({ tone: "default" }),
   {
@@ -19,56 +21,11 @@ export const headerRow = style({
   borderBottom: `1px solid ${vars.border.subtle}`,
 });
 
-export const titleGroup = style({
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
-});
-
-export const hostileDot = style({
-  width: "6px",
-  height: "6px",
-  borderRadius: "50%",
-  backgroundColor: vars.color.negative,
-});
-
 export const subTitle = style({
   fontSize: "13px",
   fontWeight: 700,
   color: vars.text.primary,
   margin: 0,
-});
-
-export const statusBadge = style({
-  fontFamily: vars.font.mono,
-  fontSize: "11px",
-  fontWeight: 600,
-  padding: "2px 6px",
-  borderRadius: vars.radius.badge,
-  backgroundColor: vars.color.negativeBg,
-  border: "1px solid rgba(255, 255, 255, 0.12)",
-  color: vars.color.negative,
-});
-
-export const encounter = style({
-  color: vars.text.primary,
-  fontSize: "12px",
-  margin: 0,
-});
-
-export const encounterName = style({
-  fontWeight: 600,
-  color: vars.color.positive,
-});
-
-export const encounterMeta = style({
-  display: "block",
-  fontFamily: vars.font.mono,
-  fontSize: "11px",
-  color: vars.text.secondary,
-  lineHeight: 1.45,
-  marginTop: "3px",
-  fontVariantNumeric: "tabular-nums",
 });
 
 export const actionLogList = style({
@@ -85,16 +42,48 @@ export const actionLogList = style({
 export const actionLogItem = style({
   display: "flex",
   flexDirection: "column",
-  justifyContent: "center",
-  alignItems: "flex-start",
-  minWidth: "84px",
-  padding: "6px 8px",
-  gap: "2px",
+  position: "relative",
+  width: "96px",
+  height: "44px",
   flex: "none",
   backgroundColor: vars.surface.low,
   border: "1px solid rgba(255, 255, 255, 0.08)",
   borderLeft: `2px solid ${vars.color.negative}`,
   borderRadius: vars.radius.badge,
+  overflow: "hidden",
+});
+
+export const actionLogPortrait = style({
+  width: "46px",
+  height: "46px",
+  backgroundImage: `url(${portrait})`,
+  backgroundSize: "cover",
+  backgroundPosition: "center",
+  backgroundRepeat: "no-repeat",
+  position: "relative",
+  left: "-6px",
+  flexShrink: 0,
+  selectors: {
+    "&::after": {
+      content: '""',
+      position: "absolute",
+      inset: 0,
+      background: `linear-gradient(to right, rgba(12, 12, 15, 0) 0%, ${vars.surface.low} 100%)`,
+    },
+  },
+});
+
+export const actionLogText = style({
+  position: "absolute",
+  inset: 0,
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+  alignItems: "flex-end",
+  paddingRight: "8px",
+  paddingLeft: "32px",
+  gap: "2px",
+  overflow: "hidden",
 });
 
 export const actionLogType = style({
@@ -102,6 +91,10 @@ export const actionLogType = style({
   fontSize: "11px",
   fontWeight: 600,
   color: vars.text.primary,
+  maxWidth: "100%",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
 });
 
 export const actionLogActor = style({
