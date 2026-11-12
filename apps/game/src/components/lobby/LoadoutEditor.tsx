@@ -13,6 +13,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
+import type { RecoveredStashDelta } from "@webgame/types";
 import { useAtomValue, useSetAtom } from "jotai";
 import { LayoutGroup, motion } from "motion/react";
 import {
@@ -29,21 +30,28 @@ import {
   isCombatAtom,
   isNavigatingAtom,
 } from "@/atoms/raidAtom";
+import { ErrorToast } from "@/components/common/ErrorToast";
 import BackpackSlot from "@/components/itemSlot/BackpackSlot";
 import Equipment from "@/components/itemSlot/Equipment";
 import * as slotStyles from "@/components/itemSlot/ItemSlot.css";
 import ItemSlotContent from "@/components/itemSlot/ItemSlotContent";
 import SlotManager from "@/components/itemSlot/SlotManager";
 import * as baseStyles from "@/components/lobby/BaseScreen.css";
+import { useCharacterRoster } from "@/utils/hooks/useCharacterCollection";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 import type { StashItemResponse } from "@/utils/hooks/useGetStash";
 import { useInventoryDrag } from "@/utils/hooks/useInventoryDrag";
 import { useMoveStashItem } from "@/utils/hooks/useMoveStashItem";
 import { useSyncItemsMutation } from "@/utils/hooks/useSyncItemsMutation";
 import {
+  useUnequipAllEquipment,
+  useUnequipOtherEquipment,
+} from "@/utils/hooks/useUnequipEquipment";
+import {
   moveSlotToStashDraft,
   moveStashToBackpackDraft,
   moveStashToEquipmentDraft,
+  unequipAllDraft,
 } from "@/utils/loadoutDraft";
 
 import * as styles from "./LoadoutEditor.css";
@@ -88,6 +96,7 @@ interface LoadoutEditorProps {
     nextCharacterData: CharacterData,
     nextStash: StashItemResponse[],
   ) => void;
+  onRecoveredToStash?: (recoveredItems: RecoveredStashDelta[]) => void;
 }
 
 function StashItemCard({
@@ -134,6 +143,7 @@ export function LoadoutEditor({
   disabled = false,
   commitMode = "immediate",
   onDraftChange,
+  onRecoveredToStash,
 }: LoadoutEditorProps) {
   const [localError, setLocalError] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -145,8 +155,11 @@ export function LoadoutEditor({
   const setIsCombat = useSetAtom(isCombatAtom);
   const setIsNavigating = useSetAtom(isNavigatingAtom);
 
+  const roster = useCharacterRoster();
   const moveItemMutation = useMoveStashItem();
   const syncMutation = useSyncItemsMutation();
+  const unequipAllMutation = useUnequipAllEquipment();
+  const unequipOthersMutation = useUnequipOtherEquipment();
 
   const character = characterData?.raw;
   const equipment = character?.equipment ?? [];
@@ -156,6 +169,7 @@ export function LoadoutEditor({
   );
   const equippedCount =
     equipment.filter((slot) => slot.weaponMaster).length ?? 0;
+  const hasOtherSurvivors = (roster.data?.characters.length ?? 0) > 1;
 
   useEffect(() => {
     if (character && !character.isRaiding) {
@@ -167,9 +181,20 @@ export function LoadoutEditor({
   const isBusy = Boolean(
     disabled ||
     !character ||
+    unequipOthersMutation.isPending ||
     (commitMode === "immediate" &&
-      (moveItemMutation.isPending || syncMutation.isPending)),
+      (moveItemMutation.isPending ||
+        syncMutation.isPending ||
+        unequipAllMutation.isPending)),
   );
+
+  const clearErrors = () => {
+    setLocalError(null);
+    moveItemMutation.reset();
+    syncMutation.reset();
+    unequipAllMutation.reset();
+    unequipOthersMutation.reset();
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -184,7 +209,7 @@ export function LoadoutEditor({
     deferCacheWrite: true,
     ignoreCombatLock: true,
     onCommitted: (updated) => {
-      setLocalError(null);
+      clearErrors();
       if (commitMode === "deferred") {
         onDraftChange?.(updated, stash);
         return;
@@ -226,10 +251,11 @@ export function LoadoutEditor({
         preferredSlotIndex,
       );
       if (!result.ok) {
+        clearErrors();
         setLocalError(result.error);
         return;
       }
-      setLocalError(null);
+      clearErrors();
       onDraftChange?.(result.characterData, result.stash);
       return;
     }
@@ -241,10 +267,11 @@ export function LoadoutEditor({
         : firstEmptySlot;
 
     if (!targetSlot) {
+      clearErrors();
       setLocalError("가방 슬롯이 가득 찼습니다.");
       return;
     }
-    setLocalError(null);
+    clearErrors();
     moveItemMutation.mutate({
       characterId: character.id,
       direction: "to_backpack",
@@ -265,10 +292,11 @@ export function LoadoutEditor({
       equipSlotIndex,
     );
     if (!result.ok) {
+      clearErrors();
       setLocalError(result.error);
       return;
     }
-    setLocalError(null);
+    clearErrors();
     onDraftChange?.(result.characterData, result.stash);
   };
 
@@ -281,21 +309,52 @@ export function LoadoutEditor({
     if (commitMode === "deferred") {
       const result = moveSlotToStashDraft(characterData, stash, slotId);
       if (!result.ok) {
+        clearErrors();
         setLocalError(result.error);
         return;
       }
-      setLocalError(null);
+      clearErrors();
       onDraftChange?.(result.characterData, result.stash);
       return;
     }
 
     if (weaponMasterId === undefined || slotIndex === undefined) return;
-    setLocalError(null);
+    clearErrors();
     moveItemMutation.mutate({
       characterId: character.id,
       direction: "to_stash",
       weaponMasterId,
       slotIndex,
+    });
+  };
+
+  const handleUnequipAll = () => {
+    if (!characterData || !character || isBusy || equippedCount === 0) return;
+    if (commitMode === "deferred") {
+      const result = unequipAllDraft(characterData, stash);
+      if (!result.ok) {
+        clearErrors();
+        setLocalError(result.error);
+        return;
+      }
+      clearErrors();
+      onDraftChange?.(result.characterData, result.stash);
+      return;
+    }
+
+    clearErrors();
+    unequipAllMutation.mutate(character.id);
+  };
+
+  const handleUnequipOthers = () => {
+    if (!character || isBusy || !hasOtherSurvivors) return;
+    clearErrors();
+    unequipOthersMutation.mutate(character.id, {
+      onSuccess: (data) => {
+        if (commitMode === "deferred" && data.recoveredItems.length > 0) {
+          onRecoveredToStash?.(data.recoveredItems);
+        }
+      },
     });
   };
 
@@ -437,8 +496,12 @@ export function LoadoutEditor({
   const isSlotAnimating = animatingSlotIds.length > 0;
   const errorMessage =
     localError ??
+    unequipOthersMutation.error?.message ??
     (commitMode === "immediate"
-      ? (moveItemMutation.error?.message ?? syncMutation.error?.message ?? null)
+      ? (moveItemMutation.error?.message ??
+        syncMutation.error?.message ??
+        unequipAllMutation.error?.message ??
+        null)
       : null);
 
   return (
@@ -451,14 +514,10 @@ export function LoadoutEditor({
       onDragCancel={handleDragCancel}
     >
       <LayoutGroup id="base-inventory-group">
-        {errorMessage && (
-          <p className={baseStyles.banner({ tone: "negative" })} role="alert">
-            {errorMessage}
-          </p>
-        )}
+        <ErrorToast message={errorMessage} onDismiss={clearErrors} />
 
         <div className={baseStyles.inventoryStashArea}>
-          {/* 1. 배치 장비 (6슬롯 고정) */}
+          {/* 1. 배치 장비 (6슬롯 고정, 3×2 + 일괄 해제 액션) */}
           <div className={baseStyles.sectionPanel}>
             <h2 className={baseStyles.sectionHeader}>
               <span>배치 장비</span>
@@ -467,11 +526,33 @@ export function LoadoutEditor({
                 {character?.weight ?? 0}/{character?.maxWeight ?? 0}kg
               </span>
             </h2>
-            <Equipment
-              characterData={characterData}
-              isLoading={isLoading}
-              className={styles.equipmentStrip}
-            />
+            <div className={styles.equipmentRow}>
+              <Equipment
+                characterData={characterData}
+                isLoading={isLoading}
+                layout="grid"
+              />
+              <div className={styles.equipmentActions}>
+                <button
+                  type="button"
+                  className={styles.equipmentActionButton}
+                  disabled={isBusy || equippedCount === 0}
+                  onClick={handleUnequipAll}
+                >
+                  장비 일괄 해제
+                </button>
+                <button
+                  type="button"
+                  className={styles.equipmentActionButton}
+                  disabled={isBusy || !hasOtherSurvivors}
+                  onClick={handleUnequipOthers}
+                >
+                  {unequipOthersMutation.isPending
+                    ? "해제 중…"
+                    : "타 생존자 장비 해제"}
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* 2. 배치 가방 (아이템에 따라 동적 확장) */}

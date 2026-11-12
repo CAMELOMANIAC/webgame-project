@@ -3,6 +3,61 @@ import { recipe } from "@vanilla-extract/recipes";
 
 import { cornerBrackets, vars } from "@/styles/theme.css";
 
+export const equipmentRow = style({
+  display: "flex",
+  alignItems: "stretch",
+  gap: "12px",
+  paddingTop: "4px",
+  "@media": {
+    "(max-width: 359px)": {
+      flexDirection: "column",
+    },
+  },
+});
+
+export const equipmentActions = style({
+  flex: 1,
+  minWidth: 0,
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+  gap: "8px",
+});
+
+export const equipmentActionButton = style({
+  flex: 1,
+  minHeight: "44px",
+  padding: "8px 12px",
+  borderRadius: vars.radius.control,
+  border: `1px solid ${vars.border.strong}`,
+  backgroundColor: vars.surface.low,
+  color: vars.text.primary,
+  fontSize: "12px",
+  fontWeight: 600,
+  lineHeight: 1.25,
+  textAlign: "center",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  cursor: "pointer",
+  transition: "background-color 0.15s ease, border-color 0.15s ease",
+  selectors: {
+    "&:hover:not(:disabled)": {
+      backgroundColor: vars.surface.high,
+      borderColor: vars.text.primary,
+    },
+    "&:focus-visible": {
+      outline: "2px solid rgba(250, 250, 250, 0.72)",
+      outlineOffset: "2px",
+    },
+    "&:disabled": {
+      opacity: 0.4,
+      cursor: "default",
+      borderColor: vars.border.subtle,
+    },
+  },
+});
+
 export const equipmentStrip = style({
   padding: "4px 0 0",
   flexWrap: "wrap",

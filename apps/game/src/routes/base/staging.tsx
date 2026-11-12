@@ -1,4 +1,9 @@
-import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  skipToken,
+  useIsMutating,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAtomValue, useSetAtom } from "jotai";
 import { AnimatePresence, motion } from "motion/react";
@@ -31,6 +36,8 @@ import {
 } from "@/utils/hooks/useGetCharacter";
 import { type StashItemResponse, useGetStash } from "@/utils/hooks/useGetStash";
 import { useRaidSession } from "@/utils/hooks/useRaidSession";
+import { inventoryMutationKey } from "@/utils/inventoryCache";
+import { mergeRecoveredIntoStash } from "@/utils/loadoutDraft";
 
 import * as styles from "./staging.css";
 
@@ -152,10 +159,12 @@ function ExpeditionStagingScreen() {
     );
   };
 
+  const isMutatingInventory =
+    useIsMutating({ mutationKey: inventoryMutationKey(selectedUserId) }) > 0;
   const isStep1Pending = select.isPending || isPreparingStep2;
 
   const handleBack = () => {
-    if (startRaid.isPending || isStep1Pending) return;
+    if (startRaid.isPending || isStep1Pending || isMutatingInventory) return;
     if (step === 2) {
       setStep(1);
     } else {
@@ -214,7 +223,9 @@ function ExpeditionStagingScreen() {
               type="button"
               className={styles.backButton}
               onClick={handleBack}
-              disabled={startRaid.isPending || isStep1Pending}
+              disabled={
+                startRaid.isPending || isStep1Pending || isMutatingInventory
+              }
               aria-label="이전 화면으로 이동"
             >
               <span className={styles.backArrow}>←</span>
@@ -292,13 +303,29 @@ function ExpeditionStagingScreen() {
               characterData={effectiveCharacterData}
               isLoading={characterQuery.isLoading}
               stash={effectiveStash}
-              disabled={!canEditLoadout || startRaid.isPending}
+              disabled={
+                !canEditLoadout || startRaid.isPending || isMutatingInventory
+              }
               commitMode="deferred"
               onDraftChange={(nextCharacterData, nextStash) => {
                 queryClient.setQueryData<StagingLoadoutDraft>(draftKey, {
                   characterData: nextCharacterData,
                   stash: nextStash,
                 });
+              }}
+              onRecoveredToStash={(recoveredItems) => {
+                queryClient.setQueryData<StagingLoadoutDraft>(
+                  draftKey,
+                  (current) =>
+                    current && {
+                      ...current,
+                      stash: mergeRecoveredIntoStash(
+                        current.stash,
+                        current.characterData.raw.userId,
+                        recoveredItems,
+                      ),
+                    },
+                );
               }}
             />
           </div>
@@ -346,7 +373,7 @@ function ExpeditionStagingScreen() {
             >
               <button
                 type="button"
-                disabled={startRaid.isPending}
+                disabled={startRaid.isPending || isMutatingInventory}
                 className={styles.floatingCtaButton}
                 onClick={handleConfirmDeploy}
               >

@@ -10,13 +10,18 @@ interface EquipmentProps {
   characterData: CharacterData | undefined;
   isLoading: boolean;
   className?: string;
+  layout?: "row" | "grid";
 }
 
 const Equipment = memo(
-  ({ characterData, isLoading, className }: EquipmentProps) => {
-    const containerClass = className
-      ? `${styles.container} ${className}`
-      : styles.container;
+  ({
+    characterData,
+    isLoading,
+    className,
+    layout = "row",
+  }: EquipmentProps) => {
+    const baseClass = styles.container({ layout });
+    const containerClass = className ? `${baseClass} ${className}` : baseClass;
 
     if (isLoading) {
       return <div className={containerClass} />;
