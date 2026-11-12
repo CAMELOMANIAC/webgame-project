@@ -1,3 +1,5 @@
+import type { RecoveredStashDelta } from "@webgame/types";
+
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 import type { StashItemResponse } from "@/utils/hooks/useGetStash";
 import { buildCharacterDataFromRaw } from "@/utils/hooks/useInventoryDrag";
@@ -317,4 +319,50 @@ export function applyImmediateStashMove(
     characterData: buildCharacterDataFromRaw(characterData, newRaw),
     stash: nextStash,
   };
+}
+
+export function unequipAllDraft(
+  characterData: CharacterData,
+  stash: StashItemResponse[],
+): DraftMoveResult {
+  const { newRaw, nextStash } = cloneDraft(characterData, stash);
+  let unequippedCount = 0;
+
+  newRaw.equipment.forEach((slot, index) => {
+    if (!slot.weaponMaster) return;
+    unequippedCount += 1;
+    adjustStashQuantity(nextStash, slot.weaponMaster, newRaw.userId, 1);
+    newRaw.equipment[index] = {
+      id: `empty-wpn-${index}`,
+      slotIndex: index,
+      weaponMaster: null,
+    };
+  });
+
+  if (unequippedCount === 0) {
+    return { ok: false, error: "해제할 장착 장비가 없습니다." };
+  }
+
+  return {
+    ok: true,
+    characterData: buildCharacterDataFromRaw(characterData, newRaw),
+    stash: nextStash,
+  };
+}
+
+export function mergeRecoveredIntoStash(
+  stash: StashItemResponse[],
+  userId: string,
+  recoveredItems: RecoveredStashDelta[],
+): StashItemResponse[] {
+  const nextStash = stash.map((entry) => ({
+    ...entry,
+    weaponMaster: { ...entry.weaponMaster },
+  }));
+  for (const item of recoveredItems) {
+    if (item.quantity > 0) {
+      adjustStashQuantity(nextStash, item.weaponMaster, userId, item.quantity);
+    }
+  }
+  return nextStash;
 }

@@ -6,10 +6,12 @@ import { selectedUserIdAtom } from "@/atoms/authAtom";
 import { applyImmediateStashMove } from "@/utils/loadoutDraft";
 
 import { API_BASE_URL, apiFetch } from "../api";
-import { type CharacterData, characterKey } from "../characterData";
-import { inventoryMutationKey, setCachedInventory } from "../inventoryCache";
+import {
+  applyInventoryAndStashSnapshot,
+  inventoryMutationKey,
+  prepareOptimisticInventoryStash,
+} from "../inventoryCache";
 import { readApiResponse } from "../request";
-import type { StashItemResponse } from "./useGetStash";
 
 interface MoveItemVariables {
   characterId: string;
@@ -35,56 +37,34 @@ export const useMoveStashItem = () => {
           },
         ),
       ),
-    onMutate: async ({ characterId, ...move }) => {
-      if (!userId) return;
-      const charKey = characterKey(userId, characterId);
-      const stashKey = ["stash", userId] as const;
-      await Promise.all([
-        queryClient.cancelQueries({ queryKey: charKey, exact: true }),
-        queryClient.cancelQueries({ queryKey: stashKey, exact: true }),
-        queryClient.cancelQueries({
-          queryKey: ["characters", userId],
-          exact: true,
-        }),
-      ]);
-
-      const previousCharacter =
-        queryClient.getQueryData<CharacterData>(charKey);
-      const previousStash =
-        queryClient.getQueryData<StashItemResponse[]>(stashKey);
-      if (previousCharacter && previousStash) {
-        const predicted = applyImmediateStashMove(
-          previousCharacter,
-          previousStash,
-          move,
-        );
-        if (predicted.ok) {
-          setCachedInventory(
-            queryClient,
-            userId,
-            characterId,
-            predicted.characterData.raw,
-          );
-          queryClient.setQueryData(stashKey, predicted.stash);
-          return { previousCharacter, previousStash };
-        }
-      }
-    },
+    onMutate: async ({ characterId, ...move }) =>
+      prepareOptimisticInventoryStash(
+        queryClient,
+        userId,
+        characterId,
+        (characterData, stash) =>
+          applyImmediateStashMove(characterData, stash, move),
+      ),
     onError: (_error, { characterId }, context) => {
       if (userId && context) {
-        setCachedInventory(
+        applyInventoryAndStashSnapshot(
           queryClient,
           userId,
           characterId,
           context.previousCharacter.raw,
+          context.previousStash,
         );
-        queryClient.setQueryData(["stash", userId], context.previousStash);
       }
     },
     onSuccess: ({ stash, ...snapshot }, { characterId }) => {
       if (!userId) return;
-      setCachedInventory(queryClient, userId, characterId, snapshot);
-      queryClient.setQueryData(["stash", userId], stash);
+      applyInventoryAndStashSnapshot(
+        queryClient,
+        userId,
+        characterId,
+        snapshot,
+        stash,
+      );
     },
   });
 };
