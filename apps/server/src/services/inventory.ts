@@ -98,8 +98,11 @@ export async function withInventoryTransaction<T>(
 async function getCharacter(tx: Tx, characterId: string) {
   const character = await tx.query.characters.findFirst({
     where: eq(characters.id, characterId),
+    with: { activeRaid: { columns: { pendingRetreat: true } } },
   });
   if (!character) throw new InventoryError("Character not found", 404);
+  if (character.activeRaid?.pendingRetreat && !character.activeRaid.pendingRetreat.resolution)
+    throw new InventoryError("전투 결과를 먼저 확정해야 합니다.", 409);
   return character;
 }
 
@@ -136,11 +139,22 @@ async function readInventorySnapshot(tx: Tx, characterId: string) {
       (sum, item) => sum + item.weaponMaster.weight * item.quantity,
       0,
     );
-  return { equipment, inventory, weight };
+  const value =
+    equipment.reduce((sum, item) => sum + item.weaponMaster.value, 0) +
+    inventory.reduce(
+      (sum, item) => sum + item.weaponMaster.value * item.quantity,
+      0,
+    );
+  return { equipment, inventory, weight, value };
 }
 
 export async function calculateInventoryWeight(tx: Tx, characterId: string) {
   return (await readInventorySnapshot(tx, characterId)).weight;
+}
+
+export async function calculateInventoryLoadout(tx: Tx, characterId: string) {
+  const { weight, value } = await readInventorySnapshot(tx, characterId);
+  return { weight, value };
 }
 
 export async function updateInventoryWeight(
@@ -319,9 +333,11 @@ export async function syncLoadoutWithStashInTransaction(
     );
   }
 
+  const snapshot = await updateInventorySnapshot(tx, character);
   return {
     status: "success",
-    weight: await updateInventoryWeight(tx, character),
+    weight: snapshot.weight,
+    value: snapshot.value,
   };
 }
 

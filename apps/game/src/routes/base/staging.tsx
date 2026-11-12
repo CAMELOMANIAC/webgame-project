@@ -5,9 +5,14 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+  calculateEntryDelayMinutes,
+  calculateLoadoutTotalValue,
+  formatRaidTime,
+} from "@webgame/types";
 import { useAtomValue, useSetAtom } from "jotai";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { selectedUserIdAtom } from "@/atoms/authAtom";
 import { battleLogAtom } from "@/atoms/globalAtom";
@@ -103,6 +108,21 @@ function ExpeditionStagingScreen() {
   const effectiveStash = draft?.stash ?? stashQuery.data ?? [];
   const canEditLoadout = stashQuery.data !== undefined;
   const character = effectiveCharacterData?.raw;
+
+  const totalLoadoutValue = useMemo(() => {
+    if (!effectiveCharacterData) return 0;
+    return calculateLoadoutTotalValue(
+      effectiveCharacterData.raw.equipment,
+      effectiveCharacterData.raw.inventory,
+    );
+  }, [effectiveCharacterData]);
+
+  const entryDelayMinutes = useMemo(
+    () => calculateEntryDelayMinutes(totalLoadoutValue),
+    [totalLoadoutValue],
+  );
+
+  const formattedEntryTime = formatRaidTime(entryDelayMinutes);
 
   // 최종 배치 실행 (이동/장착 변경사항을 배치 시작 요청과 함께 한 번에 전송)
   const handleConfirmDeploy = () => {
@@ -442,7 +462,9 @@ function ExpeditionStagingScreen() {
                 className={styles.floatingCtaButton}
                 onClick={() => setStep(3)}
               >
-                진입 지점 선택 →
+                {isMutatingInventory
+                  ? "저장 중…"
+                  : `진입 지점 선택 → · ${formattedEntryTime} 투입`}
               </button>
             </motion.div>
           )}
@@ -466,7 +488,9 @@ function ExpeditionStagingScreen() {
                 className={styles.floatingCtaButton}
                 onClick={handleConfirmDeploy}
               >
-                {startRaid.isPending ? "배치 중…" : "탐사 배치"}
+                {startRaid.isPending
+                  ? "배치 중…"
+                  : `탐사 배치 · ${formattedEntryTime} 투입`}
               </button>
             </motion.div>
           )}

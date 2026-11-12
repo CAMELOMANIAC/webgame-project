@@ -112,3 +112,42 @@ export function swapEquipmentBackpack<T extends { id: string }>(
   }
   return true;
 }
+
+/**
+ * 소지품 총 가치(Value)에 따른 탐사 투입 지연 시간(분)을 계산합니다.
+ * 규칙: 가치 100당 10분 지연
+ */
+export function calculateEntryDelayMinutes(totalValue: number): number {
+  if (!Number.isFinite(totalValue) || totalValue <= 0) return 0;
+  return Math.floor(totalValue / 100) * 10;
+}
+
+/**
+ * 장비 및 가방 슬롯의 총 가치를 계산합니다.
+ */
+export function calculateLoadoutTotalValue(
+  equipment: { weaponMaster?: { value: number } | null }[],
+  inventory: { weaponMaster?: { value: number } | null; quantity?: number }[],
+): number {
+  const equipValue = equipment.reduce(
+    (sum, item) => sum + (item.weaponMaster?.value ?? 0),
+    0,
+  );
+  const invValue = inventory.reduce(
+    (sum, item) =>
+      sum + (item.weaponMaster?.value ?? 0) * (item.quantity ?? 1),
+    0,
+  );
+  return equipValue + invValue;
+}
+
+/**
+ * 탐사 경과 시간(분)을 HH:mm 형식으로 포맷합니다.
+ */
+export function formatRaidTime(minutes: number): string {
+  const safeMinutes = Math.max(0, Math.floor(minutes));
+  const hours = String(Math.floor(safeMinutes / 60)).padStart(2, "0");
+  const mins = String(safeMinutes % 60).padStart(2, "0");
+  return `${hours}:${mins}`;
+}
+
