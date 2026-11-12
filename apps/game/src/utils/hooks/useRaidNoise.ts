@@ -4,11 +4,19 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { useEffect } from "react";
 
 import { selectedUserIdAtom } from "@/atoms/authAtom";
-import { enemyNoiseSignalsAtom, isNavigatingAtom, raidNoiseState } from "@/atoms/raidAtom";
+import { enemyNoiseSignalsAtom, isCombatAtom, isNavigatingAtom, raidNoiseState } from "@/atoms/raidAtom";
 
 import { API_BASE_URL, apiFetch } from "../api";
 import { readApiResponse } from "../request";
 import { useGetCharacter } from "./useGetCharacter";
+
+export function raidNoiseKey(
+  userId: string | null | undefined,
+  characterId: string | undefined,
+  raidId: string | undefined,
+) {
+  return ["raid-noise", userId, characterId, raidId] as const;
+}
 
 export function useRaidNoise() {
   const userId = useAtomValue(selectedUserIdAtom);
@@ -18,19 +26,20 @@ export function useRaidNoise() {
   const activeRaidVersion = characterData?.raw.activeRaid?.version;
   const isRaiding = characterData?.raw.isRaiding;
   const isNavigating = useAtomValue(isNavigatingAtom);
+  const isCombat = useAtomValue(isCombatAtom);
 
   const setNoiseSignals = useSetAtom(enemyNoiseSignalsAtom);
 
   const query = useQuery({
-    queryKey: ["raid-noise", userId, characterId, activeRaidId],
-    queryFn: async () => {
+    queryKey: raidNoiseKey(userId, characterId, activeRaidId),
+    queryFn: async ({ signal }) => {
       if (!characterId) return null;
       const response = await readApiResponse<RaidNoiseResult>(
-        await apiFetch(`${API_BASE_URL}/character/${characterId}/raid/noise`),
+        await apiFetch(`${API_BASE_URL}/character/${characterId}/raid/noise`, { signal }),
       );
       return { ...response, requestedVersion: activeRaidVersion };
     },
-    enabled: Boolean(userId && characterId && activeRaidId && isRaiding),
+    enabled: Boolean(userId && characterId && activeRaidId && isRaiding && !isCombat),
     staleTime: 5000,
   });
 
@@ -40,7 +49,7 @@ export function useRaidNoise() {
       !activeRaidId ||
       data?.raidId !== activeRaidId ||
       data.requestedVersion !== activeRaidVersion ||
-      isNavigating
+      isNavigating || isCombat
     )
       return;
 
@@ -55,7 +64,7 @@ export function useRaidNoise() {
         ? current
         : next,
     );
-  }, [activeRaidId, activeRaidVersion, isNavigating, query.data, setNoiseSignals]);
+  }, [activeRaidId, activeRaidVersion, isCombat, isNavigating, query.data, setNoiseSignals]);
 
   return query;
 }

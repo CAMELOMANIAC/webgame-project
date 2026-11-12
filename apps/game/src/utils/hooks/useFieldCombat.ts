@@ -18,6 +18,7 @@ import {
 } from "@/atoms/pendingNavigationAtom";
 import {
   currentNodeIdAtom,
+  enemyNoiseSignalsAtom,
   isCombatAtom,
   isNavigatingAtom,
   playerCoordsAtom,
@@ -30,6 +31,7 @@ import { getBuildingCenter } from "@/utils/getBuildingCenter";
 import { useBattleData } from "@/utils/hooks/useBattleData";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 import { useNavigateRaid } from "@/utils/hooks/useNavigateRaid";
+import { raidNoiseKey } from "@/utils/hooks/useRaidNoise";
 import { requestJsonWithTimeout } from "@/utils/request";
 import { openBattleTimeline } from "@/utils/retreatBattle";
 
@@ -53,6 +55,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
   const setShortestPath = useSetAtom(shortestPathAtom);
   const setPlayerCoords = useSetAtom(playerCoordsAtom);
   const setRaidResults = useSetAtom(unacknowledgedRaidResultsAtom);
+  const setNoiseSignals = useSetAtom(enemyNoiseSignalsAtom);
   const [pendingNavigation, setPendingNavigation] = useAtom(pendingNavigationAtom);
   const isMoving = useAtomValue(isNavigatingAtom);
   const [retreatExpired, setRetreatExpired] = useState(false);
@@ -190,6 +193,9 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
         setRaidResults((results) => ({ ...results, [userId]: "DEAD" }));
       }
 
+      const raid = characterData?.raw.activeRaid;
+      const noiseQuery = { queryKey: raidNoiseKey(userId, characterId, raid?.id), exact: true };
+      if (raid) void queryClient.resetQueries(noiseQuery);
       setIsCombat(false);
       if (characterData)
         setPendingNavigation((pending) => {
@@ -223,7 +229,15 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       setProcessedEvents([]);
 
       // 캐릭터 정보 및 창고 정보 갱신
-      queryClient.invalidateQueries({ queryKey: ["character", userId] });
+      void queryClient.invalidateQueries({ queryKey: ["character", userId] }).then(() => {
+        // 복구한 전투는 재생이 끝난 뒤에야 클라이언트의 탐사 버전이 갱신될 수 있다.
+        const updatedRaid = queryClient.getQueryData<CharacterData>(
+          characterKey(userId, characterId),
+        )?.raw.activeRaid;
+        if (!playerDied && raid && updatedRaid?.id === raid.id && updatedRaid.version !== raid.version) {
+          void queryClient.resetQueries(noiseQuery);
+        }
+      });
       queryClient.invalidateQueries({ queryKey: ["characters", userId] });
       queryClient.invalidateQueries({ queryKey: ["stash", userId] });
 
@@ -282,6 +296,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     isProcessing,
     waitingForRetreat,
     characterData,
+    characterId,
     userId,
     setPendingNavigation,
     setRaidResults,
@@ -343,9 +358,10 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       setDisplayEvents([]);
       setProcessedEvents([]);
       setIsProcessing(false);
+      setNoiseSignals(null);
       setIsCombat(true);
     },
-    [setBattleLog, setTime, setDisplayEvents, setProcessedEvents, setIsCombat],
+    [setBattleLog, setTime, setDisplayEvents, setProcessedEvents, setNoiseSignals, setIsCombat],
   );
 
   useEffect(() => {
