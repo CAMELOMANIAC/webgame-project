@@ -7,6 +7,7 @@ import {
   type RaidStatus,
   type TransactionClient,
   users,
+  weaponMasters,
 } from "../db";
 import { disclosedStory, firstMission } from "../logic/story";
 import { requireUserAtBase } from "./characters";
@@ -45,6 +46,38 @@ export async function journalView(
   };
 }
 
+export async function ensureMissionWeapons(tx: TransactionClient) {
+  await tx
+    .insert(weaponMasters)
+    .values([
+      {
+        id: "hanlim-relief-carbine",
+        name: "기업 구호용 카빈",
+        damage: 16,
+        staminaCost: 4,
+        cooldownTicks: 2,
+        castTicks: 0,
+        weight: 3,
+        value: 40,
+        attackType: "RANGED",
+        iconKey: "RIFLE",
+      },
+      {
+        id: "hanlim-control-baton",
+        name: "기업 제식 충격봉",
+        damage: 6,
+        staminaCost: 3,
+        cooldownTicks: 3,
+        castTicks: 0,
+        weight: 2,
+        value: 30,
+        attackType: "MELEE",
+        iconKey: "STAFF",
+      },
+    ])
+    .onConflictDoNothing();
+}
+
 export async function acceptFirstMission(db: Database, userId: string) {
   return withInventoryTransaction(db, async (tx) => {
     await requireUserAtBase(tx, userId);
@@ -55,6 +88,7 @@ export async function acceptFirstMission(db: Database, userId: string) {
       ),
     });
     if (!existing) {
+      await ensureMissionWeapons(tx);
       await tx.insert(questProgresses).values({
         userId,
         questId: firstMission.id,
@@ -138,6 +172,7 @@ export async function reportFirstMission(db: Database, userId: string) {
         "Recover the record and extract before reporting",
         409,
       );
+    await ensureMissionWeapons(tx);
     await mergeIntoStash(tx, userId, firstMission.rewardWeaponId, 1);
     await tx
       .update(questProgresses)

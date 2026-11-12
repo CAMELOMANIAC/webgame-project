@@ -22,6 +22,7 @@ export function registerQuestRoutes(app: FastifyInstance, db: Database) {
         try {
           return await handler(db, request.params.userId);
         } catch (error) {
+          app.log.error(error);
           return sendInventoryError(reply, error);
         }
       },

@@ -1,8 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
+import { useEffect, useState } from "react";
 
 import { selectedUserIdAtom } from "@/atoms/authAtom";
 import { pendingNavigationAtom } from "@/atoms/pendingNavigationAtom";
+import { ErrorToast } from "@/components/common/ErrorToast";
 import { page } from "@/styles/theme.css";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useJournal, useMissionAction } from "@/utils/hooks/useJournal";
@@ -33,11 +35,27 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
     resultPending ||
     accept.isPending ||
     report.isPending;
-  const error = journal.error ?? accept.error ?? report.error;
+  const rawError = journal.error ?? accept.error ?? report.error;
+  const [toastDismissed, setToastDismissed] = useState(false);
+
+  useEffect(() => {
+    if (rawError) {
+      setToastDismissed(false);
+    }
+  }, [rawError]);
+
+  const handleDismissToast = () => {
+    setToastDismissed(true);
+    accept.reset();
+    report.reset();
+  };
+
+  const toastMessage = !toastDismissed && rawError ? rawError.message : null;
   const isUrgent = mission?.status === "RECOVERED" || resultPending;
 
   return (
     <div className={page} style={{ overflowY: "auto" }}>
+      <ErrorToast message={toastMessage} onDismiss={handleDismissToast} />
       <div className={styles.journal}>
         <header className={styles.pageHeader}>
           <div className={styles.telemetryTop}>
@@ -49,11 +67,6 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
         </header>
 
         {journal.isPending && <p>임무 통신을 불러오는 중입니다.</p>}
-        {error && (
-          <p className={styles.alert} role="alert">
-            {error.message}
-          </p>
-        )}
         {journal.isError && (
           <button
             type="button"
