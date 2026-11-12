@@ -19,9 +19,14 @@ import * as baseStyles from "@/components/lobby/BaseScreen.css";
 import CharacterCollection from "@/components/lobby/CharacterCollection";
 import { LoadoutEditor } from "@/components/lobby/LoadoutEditor";
 import { page } from "@/styles/theme.css";
-import { characterKey } from "@/utils/hooks/useCharacterCollection";
+import {
+  characterKey,
+  useCharacterCollectionActions,
+  useCharacterRoster,
+} from "@/utils/hooks/useCharacterCollection";
 import {
   type CharacterData,
+  createCharacterQueryOptions,
   useGetCharacter,
 } from "@/utils/hooks/useGetCharacter";
 import { type StashItemResponse, useGetStash } from "@/utils/hooks/useGetStash";
@@ -43,7 +48,24 @@ function ExpeditionStagingScreen() {
   const queryClient = useQueryClient();
   const selectedUserId = useAtomValue(selectedUserIdAtom);
   const [step, setStep] = useState<1 | 2>(1);
-  const characterQuery = useGetCharacter();
+  const [isPreparingStep2, setIsPreparingStep2] = useState(false);
+  const [step1Error, setStep1Error] = useState<string | null>(null);
+  const rosterQuery = useCharacterRoster();
+  const { select } = useCharacterCollectionActions();
+  const stagingSelectionKey = [
+    "staging-selected-character",
+    selectedUserId,
+  ] as const;
+  const { data: draftSelectedCharacterId } = useQuery<string>({
+    queryKey: stagingSelectionKey,
+    queryFn: skipToken,
+    gcTime: 0,
+  });
+  const effectiveSelectedId =
+    draftSelectedCharacterId ?? rosterQuery.data?.selectedCharacterId ?? null;
+  const characterQuery = useGetCharacter(undefined, effectiveSelectedId, {
+    enabled: step === 2,
+  });
   const stashQuery = useGetStash();
   const { startRaid } = useRaidSession();
 
@@ -130,17 +152,57 @@ function ExpeditionStagingScreen() {
     );
   };
 
+  const isStep1Pending = select.isPending || isPreparingStep2;
+
   const handleBack = () => {
-    if (startRaid.isPending) return;
+    if (startRaid.isPending || isStep1Pending) return;
     if (step === 2) {
       setStep(1);
     } else {
+      queryClient.removeQueries({ queryKey: stagingSelectionKey, exact: true });
       void navigate({ to: "/base" });
     }
   };
 
-  const canProceedStep1 = Boolean(character && character.hp > 0);
+  const handleProceedToStep2 = async () => {
+    if (!selectedUserId || !effectiveSelectedId || isStep1Pending) return;
+    setStep1Error(null);
+    select.reset();
+    setIsPreparingStep2(true);
+    try {
+      await queryClient.ensureQueryData(
+        createCharacterQueryOptions(
+          queryClient,
+          selectedUserId,
+          effectiveSelectedId,
+        ),
+      );
+      if (effectiveSelectedId !== rosterQuery.data?.selectedCharacterId) {
+        await select.mutateAsync(effectiveSelectedId);
+      }
+      queryClient.removeQueries({ queryKey: stagingSelectionKey, exact: true });
+      setStep(2);
+    } catch (error) {
+      setStep1Error(
+        error instanceof Error
+          ? error.message
+          : "생존자 정보를 불러오지 못했습니다.",
+      );
+    } finally {
+      setIsPreparingStep2(false);
+    }
+  };
+
+  const selectedRosterCharacter = rosterQuery.data?.characters.find(
+    (entry) => entry.id === effectiveSelectedId,
+  );
+  const canProceedStep1 = Boolean(
+    effectiveSelectedId &&
+      ((character && character.hp > 0) ||
+        (selectedRosterCharacter && selectedRosterCharacter.hp > 0)),
+  );
   const canDeploy = Boolean(character && canEditLoadout);
+  const step1ErrorMessage = step1Error ?? select.error?.message;
 
   return (
     <div className={`${page} ${baseStyles.scrollPage}`}>
@@ -152,7 +214,7 @@ function ExpeditionStagingScreen() {
               type="button"
               className={styles.backButton}
               onClick={handleBack}
-              disabled={startRaid.isPending}
+              disabled={startRaid.isPending || isStep1Pending}
               aria-label="이전 화면으로 이동"
             >
               <span className={styles.backArrow}>←</span>
@@ -173,36 +235,34 @@ function ExpeditionStagingScreen() {
         <div className={styles.headerArea}>
           <p className={styles.stepDescription}>
             {step === 1
-              ? "1단계: 이번 탐사에 투입할 대원을 선택하세요."
-              : "2단계: 배치할 대원의 무기를 장착하고 공용 창고에서 물품을 보급하세요."}
+              ? "1단계: 이번 탐사에 투입할 생존자를 선택하세요."
+              : "2단계: 배치할 생존자의 무기를 장착하고 공용 창고에서 물품을 보급하세요."}
           </p>
         </div>
 
-        {/* STEP 1: 배치 대원 선택 (Character Selection) */}
+        {/* STEP 1: 배치 생존자 선택 (Character Selection) */}
         {step === 1 && (
           <div className={styles.contentArea}>
-            <CharacterCollection readOnly={false} />
-
-            {character && (
-              <div className={styles.summaryCard}>
-                <div className={styles.summaryHeader}>
-                  <h2 className={styles.summaryTitle}>선택된 배치 대원</h2>
-                  <span className={styles.telemetryCode}>
-                    OPERATOR // #{character.id.slice(0, 8)}
-                  </span>
-                </div>
-                <div className={styles.operatorBanner}>
-                  <span className={styles.operatorName}>
-                    {character.displayName}
-                  </span>
-                  <span className={styles.operatorStatus}>
-                    체력 {character.hp}/{character.maxHp} · 기력{" "}
-                    {character.stamina}/{character.maxStamina} · 적재{" "}
-                    {character.weight}/{character.maxWeight}kg
-                  </span>
-                </div>
-              </div>
+            {step1ErrorMessage && (
+              <p className={baseStyles.banner({ tone: "negative" })} role="alert">
+                {step1ErrorMessage}
+              </p>
             )}
+            <CharacterCollection
+              readOnly={false}
+              title="준비된 생존자"
+              commitMode="deferred"
+              disabled={isStep1Pending}
+              selectedCharacterId={effectiveSelectedId}
+              onSelectCharacter={(characterId) => {
+                setStep1Error(null);
+                select.reset();
+                queryClient.setQueryData<string>(
+                  stagingSelectionKey,
+                  characterId,
+                );
+              }}
+            />
           </div>
         )}
 
@@ -246,7 +306,7 @@ function ExpeditionStagingScreen() {
 
         {/* 플로팅 하단 CTA 버튼 */}
         <AnimatePresence mode="wait">
-          {step === 1 && canProceedStep1 && character && (
+          {step === 1 && canProceedStep1 && (
             <motion.div
               key="staging-cta-step1"
               className={styles.floatingCtaContainer}
@@ -262,10 +322,11 @@ function ExpeditionStagingScreen() {
             >
               <button
                 type="button"
+                disabled={isStep1Pending}
                 className={styles.floatingCtaButton}
-                onClick={() => setStep(2)}
+                onClick={() => void handleProceedToStep2()}
               >
-                장비 선택 →
+                {isStep1Pending ? "선택 반영 중…" : "장비 선택 →"}
               </button>
             </motion.div>
           )}
