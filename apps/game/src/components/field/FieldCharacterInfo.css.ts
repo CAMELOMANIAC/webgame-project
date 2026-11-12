@@ -23,48 +23,58 @@ export const container = recipe({
 });
 
 export const headerRow = style({
+  position: "relative",
   display: "flex",
   flexDirection: "row",
-  justifyContent: "space-between",
+  justifyContent: "flex-end",
   alignItems: "center",
   width: "100%",
-  gap: "8px",
+  paddingLeft: "90px",
   paddingBottom: "6px",
   borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+});
+
+export const portraitWrap = style({
+  position: "absolute",
+  left: "-4px",
+  bottom: 0,
+  width: "90px",
+  height: "90px",
+  overflow: "hidden",
+  pointerEvents: "none",
+});
+
+export const portraitImage = recipe({
+  base: {
+    width: "100%",
+    height: "100%",
+    display: "block",
+    objectFit: "cover",
+    objectPosition: "top center",
+    userSelect: "none",
+  },
+  variants: {
+    dead: {
+      true: {
+        filter: "grayscale(100%) contrast(0.95)",
+        opacity: 0.72,
+      },
+      false: {},
+    },
+  },
+  defaultVariants: {
+    dead: false,
+  },
 });
 
 export const name = style({
   fontSize: "13px",
   fontWeight: 700,
   color: vars.text.primary,
+  textAlign: "right",
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
-});
-
-export const statusTag = recipe({
-  base: {
-    fontFamily: vars.font.mono,
-    fontSize: "10px",
-    fontWeight: 600,
-    padding: "2px 5px",
-    borderRadius: vars.radius.badge,
-  },
-  variants: {
-    danger: {
-      true: {
-        color: vars.color.negative,
-        backgroundColor: vars.color.negativeBg,
-      },
-      false: {
-        color: vars.color.positive,
-        backgroundColor: vars.color.positiveBg,
-      },
-    },
-  },
-  defaultVariants: {
-    danger: false,
-  },
 });
 
 export const gaugeSection = style({

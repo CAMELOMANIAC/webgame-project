@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { battleLogAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 
+import defaultSurvivorPortrait from "../../assets/survivor-portrait-tranparent.png";
 import * as styles from "./FieldCharacterInfo.css";
 
 const SEGMENT_COUNT = 10;
@@ -65,23 +66,19 @@ const FieldCharacterInfo = () => {
   return (
     <div className={styles.container({ critical: isCritical })}>
       <div className={styles.headerRow}>
+        <div className={styles.portraitWrap} aria-hidden="true">
+          <img
+            src={defaultSurvivorPortrait}
+            alt=""
+            className={styles.portraitImage({ dead: stats.hp <= 0 })}
+          />
+        </div>
         <p className={styles.name}>{stats.name}</p>
-        <span
-          className={styles.statusTag({
-            danger: !!battleLog || stats.hp <= 0,
-          })}
-        >
-          {battleLog
-            ? stats.hp <= 0
-              ? "DEFEATED"
-              : "IN COMBAT"
-            : "STANDBY"}
-        </span>
       </div>
 
       <div className={styles.gaugeSection}>
         <div className={styles.labelRow}>
-          <p className={styles.metricLabel}>VIT // HP</p>
+          <p className={styles.metricLabel}>HP</p>
           <p className={styles.metricValue({ critical: hpRatio <= 0.3 })}>
             {stats.hp}/{stats.maxHp}
           </p>
@@ -100,7 +97,7 @@ const FieldCharacterInfo = () => {
 
       <div className={styles.gaugeSection}>
         <div className={styles.labelRow}>
-          <p className={styles.metricLabel}>STM // 기력</p>
+          <p className={styles.metricLabel}>STM</p>
           <p className={styles.metricValue({ critical: false })}>
             {stats.stamina}/{stats.maxStamina}
           </p>

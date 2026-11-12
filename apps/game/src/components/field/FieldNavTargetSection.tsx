@@ -54,7 +54,6 @@ const FieldNavTargetSection = () => {
     !hasPending &&
     !extractRaid.isPending;
   const atExtraction = rules?.extractionNodeIds.includes(nodeId) ?? false;
-  const isStable = region.overlap === "STABLE";
 
   const leave = () => {
     if (!character || !canAct) return;
@@ -67,18 +66,7 @@ const FieldNavTargetSection = () => {
   };
 
   return (
-    <div className={styles.container({ stable: isStable })}>
-      <div className={styles.topTelemetryBar}>
-        <div className={styles.telemetryLeft}>
-          <span className={styles.statusDot({ positive: isStable })} />
-          <h3 className={styles.subTitle}>도시 탐사</h3>
-          <span className={styles.nodeCode}>[NODE #{nodeId}]</span>
-        </div>
-        <span className={styles.overlapBadge({ positive: isStable })}>
-          중첩 {isStable ? "안정" : "불안정 · 통제 강화"}
-        </span>
-      </div>
-
+    <div className={styles.container}>
       <div className={styles.destinationRow}>
         <strong className={styles.destinationText}>
           {isMoving && targetNodeId !== null
@@ -128,13 +116,13 @@ const FieldNavTargetSection = () => {
 
       <div className={styles.telemetryGrid}>
         <div className={styles.telemetryCell}>
-          <span className={styles.cellLabel}>ROUND // 진행 라운드</span>
+          <span className={styles.cellLabel}>진행 라운드</span>
           <span className={styles.cellValue}>
             {character?.activeRaid?.round ?? 0}
           </span>
         </div>
         <div className={styles.telemetryCell}>
-          <span className={styles.cellLabel}>EXTRACT // 탈출 구역</span>
+          <span className={styles.cellLabel}>탈출 구역</span>
           <span className={styles.cellValue}>
             #{rules?.extractionNodeIds.join(", #") ?? "—"}
           </span>

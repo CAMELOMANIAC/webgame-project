@@ -33,7 +33,7 @@ const FieldStatusSection = () => {
       <div className={styles.sideCol}>
         <div className={styles.compactWidget}>
           <div className={styles.cellHeader}>
-            <p className={styles.widgetLabel}>ENERGY // 기력</p>
+            <p className={styles.widgetLabel}>ENG</p>
             <span className={styles.metricDot({ tone: "positive" })} />
           </div>
           <p className={styles.capacityText}>
@@ -43,7 +43,7 @@ const FieldStatusSection = () => {
         </div>
         <div className={styles.compactWidget}>
           <div className={styles.cellHeader}>
-            <p className={styles.widgetLabel}>WEIGHT // 중량</p>
+            <p className={styles.widgetLabel}>WGT</p>
             <span className={styles.metricDot({ tone: "neutral" })} />
           </div>
           <p className={styles.capacityText}>

@@ -3,8 +3,9 @@ import { recipe } from "@vanilla-extract/recipes";
 
 import { fieldWidget, vars } from "@/styles/theme.css";
 
-export const container = recipe({
-  base: {
+export const container = style([
+  fieldWidget({ tone: "default" }),
+  {
     height: "auto",
     width: "100%",
     flexDirection: "column",
@@ -14,89 +15,7 @@ export const container = recipe({
     flex: 0,
     gap: "10px",
   },
-  variants: {
-    stable: {
-      true: fieldWidget({ tone: "default" }),
-      false: fieldWidget({ tone: "negative" }),
-    },
-  },
-  defaultVariants: {
-    stable: true,
-  },
-});
-
-export const topTelemetryBar = style({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "8px",
-  paddingBottom: "8px",
-  borderBottom: `1px solid ${vars.border.subtle}`,
-});
-
-export const telemetryLeft = style({
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
-});
-
-export const statusDot = recipe({
-  base: {
-    width: "6px",
-    height: "6px",
-    borderRadius: "50%",
-  },
-  variants: {
-    positive: {
-      true: { backgroundColor: vars.color.positive },
-      false: { backgroundColor: vars.color.negative },
-    },
-  },
-  defaultVariants: {
-    positive: true,
-  },
-});
-
-export const subTitle = style({
-  fontSize: "12px",
-  fontWeight: 600,
-  color: vars.text.primary,
-  margin: 0,
-});
-
-export const nodeCode = style({
-  fontFamily: vars.font.mono,
-  fontSize: "11px",
-  color: vars.text.secondary,
-  fontVariantNumeric: "tabular-nums",
-});
-
-export const overlapBadge = recipe({
-  base: {
-    fontFamily: vars.font.mono,
-    fontSize: "11px",
-    fontWeight: 600,
-    padding: "2px 6px",
-    borderRadius: vars.radius.badge,
-  },
-  variants: {
-    positive: {
-      true: {
-        color: vars.color.positive,
-        backgroundColor: vars.color.positiveBg,
-        border: `1px solid ${vars.border.positive}`,
-      },
-      false: {
-        color: vars.color.negative,
-        backgroundColor: vars.color.negativeBg,
-        border: `1px solid ${vars.border.negative}`,
-      },
-    },
-  },
-  defaultVariants: {
-    positive: true,
-  },
-});
+]);
 
 export const destinationRow = style({
   display: "flex",
