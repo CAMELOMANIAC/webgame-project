@@ -20,7 +20,7 @@
 | --------------------------- | ----------------------------------------------------------------------------------- |
 | `apps/game`                 | React 19·Vite·TanStack Router·Jotai·React Query·Vanilla Extract·Konva 화면          |
 | `apps/server`               | Fastify·Drizzle ORM·PostgreSQL (Supabase), 전투 계산과 탐사·아이템·임무 정산        |
-| `packages/types`            | 공통 통신 타입·장비 처리·구역 규칙·단일 원본 지도                                   |
+| `packages/types`            | 공통 통신 타입·장비 처리·단일 원본 지도                                             |
 | `packages/ui`               | 공통 UI 패키지                                                                      |
 | `apps/server/src/db/schema.ts` | Drizzle ORM 기반 PostgreSQL 테이블·인덱스·관계 스키마 정의                       |
 
@@ -93,4 +93,4 @@ docker stop webgame-test
 
 ## 현재 범위
 
-실제 로그인·외부 DB 적용·배포·정식 수집 경제·균형 조정은 후속 작업이다. 오너의 단계별 정보 공개 구조는 준비했지만, 첫 임무에서는 오너를 언급하지 않는다. 구역명·인물 표식·임무명·대사·보상·중첩 주기는 기획 제안으로 관리한다.
+실제 로그인·외부 DB 적용·배포·정식 수집 경제·균형 조정은 후속 작업이다. 오너의 단계별 정보 공개 구조는 준비했지만, 첫 임무에서는 오너를 언급하지 않는다. 인물 표식·임무명·대사·보상은 기획 제안으로 관리한다.
