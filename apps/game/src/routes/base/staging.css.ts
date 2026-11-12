@@ -1,6 +1,7 @@
 import { style } from "@vanilla-extract/css";
+import { recipe } from "@vanilla-extract/recipes";
 
-import { vars } from "@/styles/theme.css";
+import { cornerBrackets, vars } from "@/styles/theme.css";
 
 export const container = style({
   display: "flex",
@@ -164,4 +165,89 @@ export const floatingCtaButton = style({
       cursor: "default",
     },
   },
+});
+
+export const entryGrid = style({
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
+  gap: "8px",
+});
+
+export const entryCard = recipe({
+  base: {
+    width: "100%",
+    padding: "14px 16px",
+    borderRadius: vars.radius.control,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: "6px",
+    textAlign: "left",
+    cursor: "pointer",
+    transition: "background-color 0.15s ease, border-color 0.15s ease",
+    selectors: {
+      "&:hover:not(:disabled)": {
+        backgroundColor: vars.surface.high,
+        borderColor: "rgba(250, 250, 250, 0.24)",
+      },
+      "&:disabled": {
+        opacity: 0.55,
+        cursor: "default",
+      },
+    },
+  },
+  variants: {
+    selected: {
+      true: [
+        cornerBrackets({ tone: "default" }),
+        {
+          border: "1px solid rgba(250, 250, 250, 0.36)",
+          backgroundColor: vars.surface.high,
+        },
+      ],
+      false: [
+        cornerBrackets({ tone: "none" }),
+        {
+          border: `1px solid ${vars.border.subtle}`,
+          backgroundColor: vars.surface.low,
+        },
+      ],
+    },
+  },
+  defaultVariants: {
+    selected: false,
+  },
+});
+
+export const entryHeader = style({
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "8px",
+});
+
+export const entryCode = style({
+  fontFamily: vars.font.mono,
+  fontSize: "11px",
+  fontWeight: 600,
+  color: vars.text.secondary,
+  fontVariantNumeric: "tabular-nums",
+});
+
+export const entryBadge = style({
+  fontFamily: vars.font.mono,
+  fontSize: "10px",
+  fontWeight: 600,
+  padding: "2px 6px",
+  borderRadius: vars.radius.badge,
+  color: vars.color.positive,
+  backgroundColor: vars.color.positiveBg,
+});
+
+export const entryName = style({
+  fontSize: "15px",
+  fontWeight: 700,
+  color: vars.text.primary,
+  letterSpacing: "-0.01em",
 });

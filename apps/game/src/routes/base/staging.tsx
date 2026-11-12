@@ -16,7 +16,6 @@ import {
   isCombatAtom,
   isNavigatingAtom,
   playerCoordsAtom,
-  raidNoticeAtom,
   shortestPathAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
@@ -35,6 +34,7 @@ import {
   useGetCharacter,
 } from "@/utils/hooks/useGetCharacter";
 import { type StashItemResponse, useGetStash } from "@/utils/hooks/useGetStash";
+import { useRaidRules } from "@/utils/hooks/useRaidRules";
 import { useRaidSession } from "@/utils/hooks/useRaidSession";
 import { inventoryMutationKey } from "@/utils/inventoryCache";
 import { mergeRecoveredIntoStash } from "@/utils/loadoutDraft";
@@ -54,7 +54,10 @@ function ExpeditionStagingScreen() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const selectedUserId = useAtomValue(selectedUserIdAtom);
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [selectedStartNodeId, setSelectedStartNodeId] = useState<number | null>(
+    null,
+  );
   const [isPreparingStep2, setIsPreparingStep2] = useState(false);
   const [step1Error, setStep1Error] = useState<string | null>(null);
   const rosterQuery = useCharacterRoster();
@@ -71,12 +74,12 @@ function ExpeditionStagingScreen() {
   const effectiveSelectedId =
     draftSelectedCharacterId ?? rosterQuery.data?.selectedCharacterId ?? null;
   const characterQuery = useGetCharacter(undefined, effectiveSelectedId, {
-    enabled: step === 2,
+    enabled: step >= 2,
   });
   const stashQuery = useGetStash();
+  const rulesQuery = useRaidRules();
   const { startRaid } = useRaidSession();
 
-  const setNotice = useSetAtom(raidNoticeAtom);
   const setNode = useSetAtom(currentNodeIdAtom);
   const setIsCombat = useSetAtom(isCombatAtom);
   const setIsNavigating = useSetAtom(isNavigatingAtom);
@@ -145,7 +148,6 @@ function ExpeditionStagingScreen() {
             },
           );
           queryClient.removeQueries({ queryKey: draftKey, exact: true });
-          setNotice(null);
           setNode(raid.currentNodeId);
           setIsCombat(false);
           setIsNavigating(false);
@@ -165,7 +167,9 @@ function ExpeditionStagingScreen() {
 
   const handleBack = () => {
     if (startRaid.isPending || isStep1Pending || isMutatingInventory) return;
-    if (step === 2) {
+    if (step === 3) {
+      setStep(2);
+    } else if (step === 2) {
       setStep(1);
     } else {
       queryClient.removeQueries({ queryKey: stagingSelectionKey, exact: true });
@@ -210,6 +214,19 @@ function ExpeditionStagingScreen() {
       ((character && character.hp > 0) ||
         (selectedRosterCharacter && selectedRosterCharacter.hp > 0)),
   );
+  const defaultStartNodeId = rulesQuery.data?.startNodeId ?? 0;
+  const startNodeCandidates = Array.from(
+    new Set([
+      defaultStartNodeId,
+      ...(rulesQuery.data?.extractionNodeIds ?? []),
+    ]),
+  );
+  const effectiveStartNodeId =
+    selectedStartNodeId !== null &&
+    startNodeCandidates.includes(selectedStartNodeId)
+      ? selectedStartNodeId
+      : defaultStartNodeId;
+
   const canDeploy = Boolean(character && canEditLoadout);
   const step1ErrorMessage = step1Error ?? select.error?.message;
 
@@ -239,7 +256,7 @@ function ExpeditionStagingScreen() {
           </div>
           <div className={styles.stepBadge}>
             <span className={styles.stepNumber}>0{step}</span>
-            <span className={styles.stepTotal}>/ 02</span>
+            <span className={styles.stepTotal}>/ 03</span>
           </div>
         </header>
 
@@ -247,7 +264,9 @@ function ExpeditionStagingScreen() {
           <p className={styles.stepDescription}>
             {step === 1
               ? "1단계: 이번 탐사에 투입할 생존자를 선택하세요."
-              : "2단계: 배치할 생존자의 무기를 장착하고 공용 창고에서 물품을 보급하세요."}
+              : step === 2
+                ? "2단계: 배치할 생존자의 무기를 장착하고 공용 창고에서 물품을 보급하세요."
+                : "3단계: 서포시 진입 지점을 선택하세요."}
           </p>
         </div>
 
@@ -331,6 +350,45 @@ function ExpeditionStagingScreen() {
           </div>
         )}
 
+        {/* STEP 3: 진입 지점 선택 (Entry Point Selection) */}
+        {step === 3 && character && (
+          <div className={styles.contentArea}>
+            {startRaid.error && (
+              <p className={baseStyles.banner({ tone: "negative" })} role="alert">
+                {startRaid.error.message}
+              </p>
+            )}
+            <div className={styles.entryGrid} role="radiogroup" aria-label="진입 지점 선택">
+              {startNodeCandidates.map((nodeId) => {
+                const isSelected = effectiveStartNodeId === nodeId;
+                return (
+                  <button
+                    key={nodeId}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    disabled={startRaid.isPending}
+                    className={styles.entryCard({ selected: isSelected })}
+                    onClick={() => setSelectedStartNodeId(nodeId)}
+                  >
+                    <div className={styles.entryHeader}>
+                      <span className={styles.entryCode}>NODE #{nodeId}</span>
+                      {nodeId === defaultStartNodeId && (
+                        <span className={styles.entryBadge}>기본 진입</span>
+                      )}
+                    </div>
+                    <span className={styles.entryName}>
+                      {nodeId === defaultStartNodeId
+                        ? `기본 진입 지점 #${nodeId}`
+                        : `진입 지점 #${nodeId}`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* 플로팅 하단 CTA 버튼 */}
         <AnimatePresence mode="wait">
           {step === 1 && canProceedStep1 && (
@@ -360,6 +418,30 @@ function ExpeditionStagingScreen() {
           {step === 2 && canDeploy && character && (
             <motion.div
               key="staging-cta-step2"
+              className={styles.floatingCtaContainer}
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{
+                type: "spring",
+                stiffness: 420,
+                damping: 32,
+                mass: 0.8,
+              }}
+            >
+              <button
+                type="button"
+                disabled={isMutatingInventory}
+                className={styles.floatingCtaButton}
+                onClick={() => setStep(3)}
+              >
+                진입 지점 선택 →
+              </button>
+            </motion.div>
+          )}
+          {step === 3 && canDeploy && character && (
+            <motion.div
+              key="staging-cta-step3"
               className={styles.floatingCtaContainer}
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
