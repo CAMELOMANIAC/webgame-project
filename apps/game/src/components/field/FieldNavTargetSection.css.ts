@@ -47,32 +47,6 @@ export const statusHint = recipe({
   },
 });
 
-export const noticeBanner = recipe({
-  base: {
-    padding: "8px 10px",
-    borderRadius: vars.radius.badge,
-    fontSize: "12px",
-    margin: 0,
-  },
-  variants: {
-    tone: {
-      positive: {
-        color: vars.color.positive,
-        backgroundColor: vars.color.positiveBg,
-        border: `1px solid ${vars.border.positive}`,
-      },
-      negative: {
-        color: vars.color.negative,
-        backgroundColor: vars.color.negativeBg,
-        border: `1px solid ${vars.border.negative}`,
-      },
-    },
-  },
-  defaultVariants: {
-    tone: "positive",
-  },
-});
-
 export const telemetryGrid = style({
   display: "grid",
   gridTemplateColumns: "repeat(2, minmax(0, 1fr))",

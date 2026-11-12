@@ -11,7 +11,6 @@ import {
   isCombatAtom,
   isNavigatingAtom,
   playerCoordsAtom,
-  raidNoticeAtom,
   requestedNodeIdAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
@@ -37,7 +36,6 @@ const FieldNavTargetSection = () => {
   const setRequestedNode = useSetAtom(requestedNodeIdAtom);
   const setNode = useSetAtom(currentNodeIdAtom);
   const setCoords = useSetAtom(playerCoordsAtom);
-  const notice = useAtomValue(raidNoticeAtom);
   const character = data?.raw;
   const region = seopoRegion(
     nodeId,
@@ -82,12 +80,6 @@ const FieldNavTargetSection = () => {
         </p>
       </div>
 
-      {notice && (
-        <p className={styles.noticeBanner({ tone: "positive" })} role="status">
-          {notice}
-        </p>
-      )}
-
       {journal.data?.mission.status === "ACTIVE" && (
         <button
           type="button"
@@ -101,18 +93,6 @@ const FieldNavTargetSection = () => {
           </span>
         </button>
       )}
-
-      {journal.data?.mission.status === "RECOVERED" &&
-        !isMoving &&
-        !isCombat &&
-        !hasPending && (
-          <p
-            className={styles.noticeBanner({ tone: "positive" })}
-            role="status"
-          >
-            임무 기록을 확보했습니다. 살아서 탈출하세요.
-          </p>
-        )}
 
       <div className={styles.telemetryGrid}>
         <div className={styles.telemetryCell}>
@@ -168,12 +148,6 @@ const FieldNavTargetSection = () => {
             <span className={styles.actionCode}>BASE →</span>
           </button>
         )
-      )}
-
-      {extractRaid.error && (
-        <p className={styles.noticeBanner({ tone: "negative" })} role="alert">
-          {extractRaid.error.message}
-        </p>
       )}
     </div>
   );
