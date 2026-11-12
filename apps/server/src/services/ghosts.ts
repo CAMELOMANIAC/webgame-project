@@ -18,6 +18,7 @@ import {
 import {
   characters,
   type DbOrTx,
+  type GhostSnapshot,
   ghostSnapshots,
   raidGhostEncounters,
   type TransactionClient,
@@ -104,14 +105,13 @@ export async function matchGhost(
   now = new Date(),
   raidId?: string,
 ): Promise<GhostMatch | null> {
-  const { roundTolerance, maxAgeDays, rulesVersion } = gameRules.ghost;
+  const { maxAgeDays, rulesVersion } = gameRules.ghost;
   const conditions = [
     ne(ghostSnapshots.userId, userId),
     eq(ghostSnapshots.nodeId, String(nodeId)),
     eq(ghostSnapshots.rulesVersion, rulesVersion),
     eq(ghostSnapshots.mapVersion, seopoMapVersion),
-    gte(ghostSnapshots.round, Math.max(0, round - roundTolerance)),
-    lte(ghostSnapshots.round, round + roundTolerance),
+    eq(ghostSnapshots.round, round),
     gt(ghostSnapshots.hp, 0),
     isNotNull(ghostSnapshots.combatant),
     gte(
@@ -135,22 +135,24 @@ export async function matchGhost(
       ),
     );
   }
-  const snapshots = await db
+  const [match] = await db
     .select()
     .from(ghostSnapshots)
     .where(and(...conditions))
-    .orderBy(desc(ghostSnapshots.createdAt), asc(ghostSnapshots.id));
-  const match = snapshots.sort(
-    (a, b) => Math.abs(a.round - round) - Math.abs(b.round - round),
-  )[0];
-  if (!match?.combatant) return null;
+    .orderBy(desc(ghostSnapshots.createdAt), asc(ghostSnapshots.id))
+    .limit(1);
+  return match ? toGhostMatch(match) : null;
+}
+
+export function toGhostMatch(match: GhostSnapshot): GhostMatch | null {
+  if (!match.combatant) return null;
   const combatant = match.combatant as unknown as BattleCombatant;
   return {
     id: match.id,
     nodeId: Number(match.nodeId),
     round: match.round,
     createdAt: match.createdAt.toISOString(),
-    rulesVersion,
+    rulesVersion: match.rulesVersion,
     source: {
       characterId: match.characterId,
       displayName: combatant.displayName ?? "고스트",

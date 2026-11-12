@@ -15,8 +15,8 @@ import {
 } from "../db";
 import { gameRules } from "../logic/rules";
 import { integrationFixture } from "../testing/integrationFixture";
-import { nearestBuildingPath } from "../testing/mapRoute";
-import { matchGhost } from "./ghosts";
+import { pathToNode } from "../testing/mapRoute";
+import { matchGhost, recordGhosts } from "./ghosts";
 import { extractRaid, navigateRaid, startRaid } from "./raid";
 
 test("실제 DB: 위치·라운드 기록은 서버 장비를 복사하고 재시도해도 한 번만 남는다", async (t) => {
@@ -47,8 +47,8 @@ test("실제 DB: 위치·라운드 기록은 서버 장비를 복사하고 재�
     requestId: randomUUID(),
     path: [0, node],
   };
-  await navigateRaid(db, user.id, character.id, input, () => 0.99);
-  await navigateRaid(db, user.id, character.id, input, () => 0.99);
+  await navigateRaid(db, user.id, character.id, input);
+  await navigateRaid(db, user.id, character.id, input);
   assert.equal(
     (
       await db.query.ghostSnapshots.findMany({
@@ -72,7 +72,7 @@ for (const lethal of [false, true])
   test(`실제 DB: 고스트 ${lethal ? "패배·사망" : "승리·탈출"}를 중복 없이 정산하고 원본 개체는 변경하지 않는다`, async (t) => {
     const player = await integrationFixture(t);
     const source = await integrationFixture(t);
-    const path = nearestBuildingPath();
+    const path = pathToNode(28);
     const node = path.at(-1)!;
     await source.db
       .update(weaponMasters)
@@ -90,17 +90,11 @@ for (const lethal of [false, true])
     const sourceRaid = (
       await startRaid(source.db, source.user.id, source.character.id)
     ).raid;
-    await navigateRaid(
-      source.db,
-      source.user.id,
-      source.character.id,
-      {
-        raidId: sourceRaid.id,
-        expectedVersion: 0,
-        requestId: randomUUID(),
-        path,
-      },
-      () => 0.99,
+    await source.db.transaction((tx) =>
+      recordGhosts(tx, source.character.id, sourceRaid.id, [
+        { nodeId: node, round: path.length - 1 },
+        { nodeId: 27, round: path.length },
+      ]),
     );
     await player.db
       .update(characters)
@@ -124,16 +118,23 @@ for (const lethal of [false, true])
       raidId: raid.id,
       expectedVersion: 0,
       requestId: randomUUID(),
-      path,
+      path: [...path, 27],
     };
     const result = await navigateRaid(
       player.db,
       player.user.id,
       player.character.id,
       command,
-      () => 0,
     );
     assert.equal(result.battleLog?.encounter?.kind, "GHOST");
+    assert.equal(result.stopNodeId, node);
+    const unvisited = await player.db.query.ghostSnapshots.findFirst({
+      where: and(
+        eq(ghostSnapshots.raidId, raid.id),
+        eq(ghostSnapshots.nodeId, "27"),
+      ),
+    });
+    assert.equal(unvisited, undefined);
     assert.equal(
       result.battleLog?.encounter?.sourceCharacterId,
       source.character.id,
@@ -145,8 +146,7 @@ for (const lethal of [false, true])
         player.user.id,
         player.character.id,
         command,
-        () => 0,
-      ),
+        ),
       result,
     );
     assert.equal(
@@ -206,8 +206,7 @@ for (const lethal of [false, true])
           requestId: randomUUID(),
           path: [...path].reverse(),
         },
-        () => 0.99,
-      );
+        );
       await extractRaid(player.db, player.user.id, player.character.id, {
         raidId: raid.id,
         expectedVersion: back.raid.version,
@@ -227,28 +226,24 @@ for (const lethal of [false, true])
     }
   });
 
-test("실제 DB: 허용 라운드 밖·만료·이전 규칙·다른 위치의 기록은 매칭되지 않는다", async (t) => {
+test("실제 DB: 동일 위치·동일 라운드의 유효한 기록만 매칭한다", async (t) => {
   const { db, user, character } = await integrationFixture(t);
   const other = await integrationFixture(t);
   const { raid } = await startRaid(db, user.id, character.id);
   const where = and(
     eq(ghostSnapshots.raidId, raid.id),
-    eq(ghostSnapshots.round, 0),
     eq(ghostSnapshots.nodeId, "0"),
   );
-  assert.ok(
-    await matchGhost(db, other.user.id, 0, gameRules.ghost.roundTolerance),
-  );
-  assert.equal(
-    await matchGhost(db, other.user.id, 0, gameRules.ghost.roundTolerance + 1),
-    null,
-  );
-  assert.equal(await matchGhost(db, other.user.id, 999, 0), null);
+  await db.update(ghostSnapshots).set({ round: 1 }).where(where);
+  assert.equal((await matchGhost(db, other.user.id, 0, 1))?.round, 1);
+  assert.equal(await matchGhost(db, other.user.id, 0, 0), null);
+  assert.equal(await matchGhost(db, other.user.id, 0, 2), null);
+  assert.equal(await matchGhost(db, other.user.id, 999, 1), null);
   await db
     .update(ghostSnapshots)
     .set({ rulesVersion: 0 })
     .where(where);
-  assert.equal(await matchGhost(db, other.user.id, 0, 0), null);
+  assert.equal(await matchGhost(db, other.user.id, 0, 1), null);
   await db
     .update(ghostSnapshots)
     .set({
@@ -256,7 +251,7 @@ test("실제 DB: 허용 라운드 밖·만료·이전 규칙·다른 위치의 �
       createdAt: new Date(Date.now() - 8 * 86400000),
     })
     .where(where);
-  assert.equal(await matchGhost(db, other.user.id, 0, 0), null);
+  assert.equal(await matchGhost(db, other.user.id, 0, 1), null);
 });
 
 test("실제 DB: 임의 능력치 저장과 day 입력을 거부하고 개인정보 없이 기록을 반환한다", async (t) => {
@@ -295,4 +290,10 @@ test("실제 DB: 임의 능력치 저장과 day 입력을 거부하고 개인정
   assert.equal(result.statusCode, 200);
   assert.equal(result.json().user, undefined);
   assert.equal(result.json().source.characterId, character.id);
+  const differentRound = await app.inject({
+    method: "GET",
+    url: "/ghost/match?nodeId=0&round=1",
+    headers,
+  });
+  assert.equal(differentRound.statusCode, 404);
 });

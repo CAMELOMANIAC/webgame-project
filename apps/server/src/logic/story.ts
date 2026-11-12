@@ -6,7 +6,7 @@ export const firstMission = {
   version: 1,
   title: "중계 시설 기록 회수",
   briefing:
-    "기업 구호 담당자: 도시 운영에 필요한 중계 기록을 회수해 주세요. 제한 구역의 통제 요원은 회수 허가를 확인하지 못할 수 있습니다. 기록을 확보한 뒤 살아서 복귀하세요.",
+    "기업 구호 담당자: 도시 운영에 필요한 중계 기록을 회수해 주세요. 중계 시설의 통제 요원은 회수 허가를 확인하지 못할 수 있습니다. 기록을 확보한 뒤 살아서 복귀하세요.",
   targetNodeId: firstMissionNodeId,
   supplyWeaponId: "hanlim-relief-carbine",
   rewardWeaponId: "hanlim-relief-carbine",

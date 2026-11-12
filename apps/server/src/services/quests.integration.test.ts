@@ -72,10 +72,12 @@ test("실제 DB: 임무 수락·회수·탈출·보고는 재시도해도 지원
     user.id,
     character.id,
     input,
-    () => 0.99,
   );
   assert.equal(result.stopNodeId, firstMission.targetNodeId);
+  assert.equal(result.battleLog?.encounter?.kind, "NPC");
   assert.equal(result.battleLog?.encounter?.faction, "기업");
+  assert.equal(result.battleLog?.encounter?.role, "시설 통제");
+  assert.ok(result.battleLog?.encounter?.reason);
   assert.equal((await journalView(db, user.id)).mission.status, "RECOVERED");
   assert.deepEqual(
     await navigateRaid(db, user.id, character.id, input),
@@ -89,7 +91,6 @@ test("실제 DB: 임무 수락·회수·탈출·보고는 재시도해도 지원
       ...command({ id: raid.id, version: result.raid.version }),
       path: [...path].reverse(),
     },
-    () => 0.99,
   );
   await extractRaid(
     db,
@@ -140,7 +141,6 @@ test("실제 DB: 기록을 확보한 탐사에서 사망하면 다시 회수해�
     user.id,
     character.id,
     { ...command(raid), path: pathToNode(firstMission.targetNodeId) },
-    () => 0.99,
   );
   assert.equal((await journalView(db, user.id)).mission.status, "RECOVERED");
   await db

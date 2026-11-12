@@ -4,7 +4,6 @@ import {
   type RaidNavigationResult,
   type RaidView,
   seopoMapVersion,
-  seopoRegion,
 } from "@webgame/types";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -21,14 +20,18 @@ import {
   type TransactionClient,
   users,
 } from "../db";
-import { hanlimNpcs } from "../logic/npcs";
 import { gameRules } from "../logic/rules";
 import {
   executeGhostBattleInTransaction,
   executeHanlimBattleInTransaction,
   executeMonsterBattleInTransaction,
 } from "./battle";
-import { matchGhost, recordGhosts } from "./ghosts";
+import {
+  createGhostTracker,
+  type GhostRoster,
+  loadGhostRoster,
+} from "./ghostRoster";
+import { recordGhosts } from "./ghosts";
 import {
   calculateInventoryWeight,
   InventoryError,
@@ -205,6 +208,7 @@ interface ActionResult<T> {
   status?: RaidStatus;
   currentNodeId?: number;
   round?: number;
+  ghostRoster?: GhostRoster;
 }
 
 async function performRaidAction<T>(
@@ -266,6 +270,7 @@ async function performRaidAction<T>(
           ? { currentNodeId: result.currentNodeId }
           : {}),
         ...(result.round !== undefined ? { round: result.round } : {}),
+        ...(result.ghostRoster ? { ghostRoster: result.ghostRoster } : {}),
         ...(status === "ACTIVE" ? {} : { endedAt: new Date() }),
       })
       .where(eq(raidSessions.id, raid.id))
@@ -292,14 +297,11 @@ async function performRaidAction<T>(
   });
 }
 
-const connected = new Set(
-  mapData.edges.flatMap((edge) => [
-    `${edge.source}:${edge.target}`,
-    `${edge.target}:${edge.source}`,
-  ]),
-);
-const buildingNodes = new Set(
-  mapData.buildings.map((building) => building.roadNodeId),
+const roadKey = (a: number, b: number) =>
+  `${Math.min(a, b)}:${Math.max(a, b)}`;
+
+const connectedRoads = new Set(
+  mapData.edges.map(({ source, target }) => roadKey(source, target)),
 );
 
 export async function navigateRaid(
@@ -307,7 +309,6 @@ export async function navigateRaid(
   userId: string,
   characterId: string,
   input: z.infer<typeof NavigateSchema>,
-  random: () => number = Math.random,
 ): Promise<RaidNavigationResult> {
   const parsed = NavigateSchema.parse(input);
   const payload = {
@@ -328,7 +329,9 @@ export async function navigateRaid(
       if (parsed.path[0] !== raid.currentNodeId)
         throw new InventoryError("Path must start at the current node");
       for (let index = 1; index < parsed.path.length; index++) {
-        if (!connected.has(`${parsed.path[index - 1]}:${parsed.path[index]}`))
+        if (
+          !connectedRoads.has(roadKey(parsed.path[index - 1]!, parsed.path[index]!))
+        )
           throw new InventoryError("Path contains disconnected nodes");
       }
       if (parsed.equipment && parsed.inventory)
@@ -336,40 +339,30 @@ export async function navigateRaid(
           equipment: parsed.equipment,
           inventory: parsed.inventory,
         });
-      const candidates = parsed.path
-        .slice(1)
-        .filter((nodeId) => nodeId !== 0 && buildingNodes.has(nodeId));
-      const forcedNode =
-        (await missionNeedsRecovery(tx, userId)) &&
-        parsed.path.slice(1).includes(firstMissionNodeId)
-          ? firstMissionNodeId
-          : undefined;
-      const stopNodeId =
-        forcedNode ??
-        (candidates.length && random() < gameRules.monsterEncounterChance
-          ? candidates[Math.floor(random() * candidates.length)]
-          : undefined);
-      if (stopNodeId !== undefined) {
-        const ghost = await matchGhost(
-          tx,
-          userId,
+      const path = parsed.path;
+      const missionActive =
+        path.indexOf(firstMissionNodeId, 1) !== -1 &&
+        (await missionNeedsRecovery(tx, userId));
+      const ghostRoster = await loadGhostRoster(tx, raid);
+      const tracker = createGhostTracker(
+        tx,
+        ghostRoster,
+        userId,
+        raid.round + path.length - 1,
+      );
+      for (let stopIndex = 1; stopIndex < path.length; stopIndex++) {
+        const stopNodeId = path[stopIndex]!;
+        const stopRound = raid.round + stopIndex;
+        const isMissionEncounter =
+          missionActive && stopNodeId === firstMissionNodeId;
+        const ghost = await tracker.match(
+          path[stopIndex - 1]!,
           stopNodeId,
-          raid.round + parsed.path.indexOf(stopNodeId),
-          new Date(),
-          raid.id,
+          stopRound,
+          stopNodeId === gameRules.startNodeId,
         );
-        const region = seopoRegion(
-          stopNodeId,
-          raid.round + parsed.path.indexOf(stopNodeId),
-          mapData.nodes[stopNodeId]!,
-        );
-        if (ghost || region.encounter === "HOSTILE") {
-          const visitedPath = parsed.path.slice(
-            1,
-            stopNodeId === undefined
-              ? undefined
-              : parsed.path.indexOf(stopNodeId) + 1,
-          );
+        if (ghost || isMissionEncounter) {
+          const visitedPath = parsed.path.slice(1, stopIndex + 1);
           await recordGhosts(
             tx,
             characterId,
@@ -383,7 +376,7 @@ export async function navigateRaid(
             .update(characters)
             .set({
               currentNodeId: stopNodeId,
-              time: raid.round + parsed.path.indexOf(stopNodeId),
+              time: stopRound,
             })
             .where(eq(characters.id, characterId));
           const battleLog = ghost
@@ -395,15 +388,19 @@ export async function navigateRaid(
               )
             : await executeHanlimBattleInTransaction(tx, characterId);
           if (
-            stopNodeId === firstMissionNodeId &&
             battleLog.result.winnerTeamId === "TeamA" &&
             !battleLog.playerDied
-          )
-            await recoverMissionRecord(tx, userId, raid.id);
+          ) {
+            if (ghost?.source.characterId)
+              tracker.defeat(ghost.source.characterId);
+            if (isMissionEncounter)
+              await recoverMissionRecord(tx, userId, raid.id);
+          }
           return {
             payload: { encounterTriggered: true, stopNodeId, battleLog },
             currentNodeId: stopNodeId,
-            round: raid.round + parsed.path.indexOf(stopNodeId),
+            round: stopRound,
+            ghostRoster,
             status: battleLog.playerDied ? "DEAD" : "ACTIVE",
           };
         }
@@ -416,21 +413,11 @@ export async function navigateRaid(
           .slice(1)
           .map((nodeId, index) => ({ nodeId, round: raid.round + index + 1 })),
       );
-      const region = seopoRegion(
-        parsed.path.at(-1)!,
-        raid.round + parsed.path.length - 1,
-        mapData.nodes[parsed.path.at(-1)!]!,
-      );
       return {
-        payload: {
-          encounterTriggered: false,
-          notice:
-            region.encounter === "SUPPORT"
-              ? `${hanlimNpcs.relief.name}: ${hanlimNpcs.relief.reason}`
-              : undefined,
-        },
+        payload: { encounterTriggered: false },
         currentNodeId: parsed.path.at(-1),
         round: raid.round + parsed.path.length - 1,
+        ghostRoster,
       };
     },
   );

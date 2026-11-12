@@ -11,7 +11,8 @@ import {
   weaponMasters,
 } from "../db";
 import { firstMission } from "../logic/story";
-import { extractRaid, navigateRaid, startRaid } from "../services/raid";
+import { recordGhosts } from "../services/ghosts";
+import { extractRaid, startRaid } from "../services/raid";
 import { pathToNode } from "./mapRoute";
 import { localTestDatabaseUrl } from "./testDatabase";
 
@@ -123,26 +124,17 @@ async function main() {
     const characterId = source.characters[0]!.id;
     const raid = (await startRaid(db, source.id, characterId)).raid;
     const path = pathToNode(firstMission.targetNodeId);
-    const command = (version: number) => ({
+    // 임무 시설에서 고스트 전투를 검증할 수 있도록 해당 라운드의 기록을 준비한다.
+    await db.transaction((tx) =>
+      recordGhosts(tx, characterId, raid.id, [
+        { nodeId: firstMission.targetNodeId, round: path.length - 1 },
+      ]),
+    );
+    await extractRaid(db, source.id, characterId, {
       raidId: raid.id,
-      expectedVersion: version,
+      expectedVersion: raid.version,
       requestId: randomUUID(),
     });
-    const outward = await navigateRaid(
-      db,
-      source.id,
-      characterId,
-      { ...command(0), path },
-      () => 0.99,
-    );
-    const back = await navigateRaid(
-      db,
-      source.id,
-      characterId,
-      { ...command(outward.raid.version), path: [...path].reverse() },
-      () => 0.99,
-    );
-    await extractRaid(db, source.id, characterId, command(back.raid.version));
     await app.listen({ host: "127.0.0.1", port: 3001 });
   } catch (error) {
     await cleanup();

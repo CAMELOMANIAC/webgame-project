@@ -207,7 +207,6 @@ export interface RaidActionInput {
 }
 
 export interface RaidNavigationResult {
-  notice?: string;
   encounterTriggered: boolean;
   stopNodeId?: number;
   battleLog?: RaidBattleResult;

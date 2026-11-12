@@ -262,6 +262,20 @@ export const raidSessions = pgTable(
     version: integer("version").notNull().default(0),
     currentNodeId: integer("currentNodeId").notNull().default(0),
     round: integer("round").notNull().default(0),
+    // 이전 거리 기반 판정으로 저장된 탐사 데이터를 보존한다.
+    encounterTravel: jsonb("encounterTravel").$type<{
+      visitedEdges: string[];
+      remainingDistance: number;
+    }>(),
+    ghostRoster: jsonb("ghostRoster").$type<{
+      tracks: {
+        sourceRaidId: string;
+        characterId: string;
+        lastRound: number;
+        recordedThrough: string;
+      }[];
+      defeatedCharacterIds: string[];
+    }>(),
     startedAt: timestamp("startedAt", { precision: 3, mode: "date" })
       .notNull()
       .defaultNow(),
@@ -352,6 +366,12 @@ export const ghostSnapshots = pgTable(
       table.nodeId,
       table.rulesVersion,
       table.round,
+      table.createdAt,
+    ),
+    index("GhostSnapshot_round_rulesVersion_mapVersion_createdAt_idx").on(
+      table.round,
+      table.rulesVersion,
+      table.mapVersion,
       table.createdAt,
     ),
   ],

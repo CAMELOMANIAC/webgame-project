@@ -1,8 +1,7 @@
 export const gameRules = {
   startNodeId: 0,
   extractionNodeIds: [0] as number[],
-  monsterEncounterChance: 0.7,
-  ghost: { rulesVersion: 1, roundTolerance: 2, maxAgeDays: 7 },
+  ghost: { rulesVersion: 1, maxAgeDays: 7, trackedCount: 3 },
 };
 
 export function recoveryVitals(character: {

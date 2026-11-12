@@ -102,11 +102,8 @@ test("실제 DB: 같은 이동 요청은 위치·버전을 한 번만 변경한�
     user.id,
     character.id,
     input,
-    () => 0.99,
   );
-  const again = await navigateRaid(db, user.id, character.id, input, () => {
-    throw new Error("Must not repeat an encounter roll");
-  });
+  const again = await navigateRaid(db, user.id, character.id, input);
   assert.deepEqual(again, first);
   const saved = await db.query.raidSessions.findFirst({
     where: eq(raidSessions.id, raid.id),

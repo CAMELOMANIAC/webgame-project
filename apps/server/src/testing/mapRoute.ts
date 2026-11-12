@@ -27,11 +27,3 @@ export function pathToNode(target: number) {
   }
   return path;
 }
-
-export function nearestBuildingPath() {
-  const buildingNodes = new Set(
-    mapData.buildings.map((building) => building.roadNodeId),
-  );
-  const paths = [...buildingNodes].filter((node) => node !== 0).map(pathToNode);
-  return paths.sort((a, b) => a.length - b.length)[0]!;
-}
