@@ -14,9 +14,7 @@ const CombatLog = () => {
   return (
     <div className={styles.combatWidget}>
       <div className={styles.headerRow}>
-        <h3 className={styles.subTitle}>
-          {battle?.encounter?.kind === "GHOST" ? "고스트 조우" : "교전 기록"}
-        </h3>
+        <h3 className={styles.subTitle}>전투 로그</h3>
       </div>
 
       <ul className={styles.actionLogList}>
