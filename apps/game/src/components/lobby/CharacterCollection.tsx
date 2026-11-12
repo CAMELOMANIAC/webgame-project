@@ -1,35 +1,40 @@
-import { useQuery } from "@tanstack/react-query";
 import { useAtomValue } from "jotai";
 
 import { pendingNavigationAtom } from "@/atoms/pendingNavigationAtom";
-import { API_BASE_URL, apiFetch } from "@/utils/api";
 import {
-  type CharacterVariant,
   useCharacterCollectionActions,
   useCharacterRoster,
 } from "@/utils/hooks/useCharacterCollection";
-import { readApiResponse } from "@/utils/request";
 
+import defaultSurvivorPortrait from "../../assets/survivor-portrait-tranparent.png";
 import * as styles from "./CharacterCollection.css";
 
 export default function CharacterCollection({
   readOnly = false,
+  title = "보유 개체",
+  commitMode = "immediate",
+  disabled = false,
+  selectedCharacterId,
+  onSelectCharacter,
 }: {
   readOnly?: boolean;
+  title?: string;
+  commitMode?: "immediate" | "deferred";
+  disabled?: boolean;
+  selectedCharacterId?: string | null;
+  onSelectCharacter?: (characterId: string) => void;
 }) {
   const roster = useCharacterRoster();
-  const { select, recruit } = useCharacterCollectionActions();
+  const { select } = useCharacterCollectionActions();
   const pending = useAtomValue(pendingNavigationAtom);
-  const variants = useQuery<CharacterVariant[]>({
-    queryKey: ["character-variants"],
-    enabled: !readOnly,
-    queryFn: async () =>
-      readApiResponse(await apiFetch(`${API_BASE_URL}/dev/character-variants`)),
-  });
   const characters = roster.data?.characters ?? [];
+  const activeSelectedCharacterId =
+    selectedCharacterId !== undefined
+      ? selectedCharacterId
+      : roster.data?.selectedCharacterId;
   const locked =
+    disabled ||
     select.isPending ||
-    recruit.isPending ||
     characters.some(
       (character) =>
         character.isRaiding ||
@@ -37,18 +42,17 @@ export default function CharacterCollection({
           (entry) => entry.params.characterId === character.id,
         ),
     );
-  const error =
-    roster.error ??
-    (readOnly ? null : (variants.error ?? select.error ?? recruit.error));
+  const error = roster.error ?? (readOnly ? null : select.error);
   const Card = readOnly ? "div" : "button";
   return (
-    <section className={styles.collection} aria-label="보유 개체">
+    <section className={styles.collection} aria-label={title}>
       <div className={styles.collectionHeader}>
-        <h2 className={styles.title}>보유 개체 · {characters.length}</h2>
-        <span className={styles.rosterCode}>ROSTER // ACTIVE-01</span>
+        <h2 className={styles.title}>
+          {title} · {characters.length}
+        </h2>
       </div>
       {roster.isPending && (
-        <p className={styles.description}>개체를 불러오는 중입니다.</p>
+        <p className={styles.description}>목록을 불러오는 중입니다.</p>
       )}
       {error && (
         <p className={styles.alert} role="alert">
@@ -64,72 +68,87 @@ export default function CharacterCollection({
           다시 불러오기
         </button>
       )}
-      <div className={styles.list}>
+      <div
+        className={styles.list}
+        {...(!readOnly && {
+          role: "radiogroup" as const,
+          "aria-label": title,
+        })}
+      >
         {characters.map((character) => {
-          const isSelected = roster.data?.selectedCharacterId === character.id;
+          const isSelected = activeSelectedCharacterId === character.id;
           const cardState = character.isRaiding
             ? "raiding"
             : isSelected
               ? "selected"
               : "idle";
+          const isExpanded = cardState === "selected";
           return (
             <Card
               key={character.id}
               className={styles.characterButton({ state: cardState, readOnly })}
               {...(!readOnly && {
                 type: "button" as const,
+                role: "radio" as const,
+                "aria-checked": isSelected,
                 disabled: locked || isSelected,
-                "aria-pressed": isSelected,
-                onClick: () => select.mutate(character.id),
+                onClick: () => {
+                  if (commitMode === "deferred") {
+                    onSelectCharacter?.(character.id);
+                    return;
+                  }
+                  select.mutate(character.id);
+                },
               })}
             >
-              <div className={styles.cardTopRow}>
+              <div className={styles.portraitLayer} aria-hidden="true">
+                <div className={styles.portraitWrap({ expanded: isExpanded })}>
+                  <img
+                    src={defaultSurvivorPortrait}
+                    alt=""
+                    className={styles.portraitImage({ state: cardState })}
+                  />
+                </div>
+              </div>
+              <div
+                className={styles.cardContent({
+                  expanded: isExpanded,
+                  readOnly,
+                })}
+              >
+                {!readOnly && (
+                  <span
+                    className={styles.radioIndicator({
+                      state: cardState,
+                      expanded: isExpanded,
+                    })}
+                    aria-hidden="true"
+                  />
+                )}
                 <strong className={styles.cardName}>
                   {character.displayName ??
                     character.variant?.definition?.name ??
                     "생존자"}
                 </strong>
-                <span className={styles.stateTag({ state: cardState })}>
-                  {character.isRaiding
-                    ? "탐사 중"
-                    : isSelected
-                      ? "선택됨"
-                      : readOnly
-                        ? "대기 중"
-                        : "선택"}
-                </span>
+                <div className={styles.statBlock({ expanded: isExpanded })}>
+                  <span>
+                    HP {character.hp}/{character.maxHp}
+                  </span>
+                  <span
+                    className={styles.statDivider({ expanded: isExpanded })}
+                    aria-hidden="true"
+                  >
+                    ·
+                  </span>
+                  <span className={styles.statWeight}>
+                    무게 {character.weight}kg
+                  </span>
+                </div>
               </div>
-              <span className={styles.metaRow}>
-                개체 {character.id.slice(0, 8)}
-              </span>
-              <span className={styles.statRow}>
-                HP {character.hp}/{character.maxHp} · 무게 {character.weight}kg
-              </span>
             </Card>
           );
         })}
       </div>
-      {!readOnly && (
-        <details className={styles.details}>
-          <summary className={styles.summary}>개발용 개체 추가</summary>
-          <p className={styles.description}>
-            수집 기능 검증용입니다. 인물 명칭과 획득 방식은 기획 제안입니다.
-          </p>
-          <div className={styles.variantActions}>
-            {variants.data?.map((variant) => (
-              <button
-                key={variant.id}
-                type="button"
-                className={styles.variantButton}
-                disabled={locked}
-                onClick={() => recruit.mutate(variant.id)}
-              >
-                {variant.definition?.name ?? "생존자"} · {variant.id} 추가
-              </button>
-            ))}
-          </div>
-        </details>
-      )}
     </section>
   );
 }

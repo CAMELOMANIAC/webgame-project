@@ -28,13 +28,6 @@ export const title = style({
   fontVariantNumeric: "tabular-nums",
 });
 
-export const rosterCode = style({
-  fontFamily: vars.font.mono,
-  fontSize: "11px",
-  color: vars.text.muted,
-  fontVariantNumeric: "tabular-nums",
-});
-
 export const description = style({
   margin: 0,
   color: vars.text.secondary,
@@ -54,21 +47,34 @@ export const alert = style({
 
 export const list = style({
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))",
+  gridTemplateColumns: "minmax(0, 1fr)",
   gap: "8px",
 });
 
 export const characterButton = recipe({
   base: {
+    position: "relative",
+    width: "100%",
     display: "flex",
     flexDirection: "column",
-    gap: "6px",
     padding: "12px",
     borderRadius: vars.radius.control,
     color: vars.text.primary,
     cursor: "pointer",
     textAlign: "left",
-    transition: "background-color 0.15s ease, border-color 0.15s ease",
+    transition:
+      "min-height 0.2s ease, background-color 0.15s ease, border-color 0.15s ease",
+    "@media": {
+      "(prefers-reduced-motion: reduce)": {
+        transition: "none",
+      },
+    },
+    selectors: {
+      "&:focus-visible": {
+        outline: "2px solid rgba(250, 250, 250, 0.72)",
+        outlineOffset: "2px",
+      },
+    },
   },
   variants: {
     readOnly: {
@@ -77,29 +83,33 @@ export const characterButton = recipe({
         selectors: {
           "&:hover:not(:disabled)": {
             backgroundColor: vars.surface.high,
-            borderColor: vars.border.strong,
+            borderColor: "rgba(250, 250, 250, 0.24)",
           },
         },
       },
     },
     state: {
       raiding: [
-        cornerBrackets({ tone: "default" }),
+        cornerBrackets({ tone: "none" }),
         {
-          border: "1px solid rgba(255, 255, 255, 0.16)",
-          backgroundColor: vars.surface.high,
+          minHeight: "68px",
+          justifyContent: "center",
+          border: "1px solid rgba(255, 255, 255, 0.14)",
+          backgroundColor: vars.surface.low,
           selectors: {
             "&:disabled": {
               cursor: "default",
-              opacity: 1,
+              opacity: 0.72,
             },
           },
         },
       ],
       selected: [
-        cornerBrackets({ tone: "positive" }),
+        cornerBrackets({ tone: "default" }),
         {
-          border: `1px solid ${vars.border.positive}`,
+          minHeight: "120px",
+          justifyContent: "space-between",
+          border: "1px solid rgba(250, 250, 250, 0.36)",
           backgroundColor: vars.surface.high,
           selectors: {
             "&:disabled": {
@@ -112,12 +122,14 @@ export const characterButton = recipe({
       idle: [
         cornerBrackets({ tone: "none" }),
         {
+          minHeight: "68px",
+          justifyContent: "center",
           border: `1px solid ${vars.border.subtle}`,
           backgroundColor: vars.surface.low,
           selectors: {
             "&:disabled": {
               cursor: "default",
-              opacity: 0.6,
+              opacity: 0.55,
             },
           },
         },
@@ -130,86 +142,277 @@ export const characterButton = recipe({
   },
 });
 
-export const cardTopRow = style({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "6px",
-  width: "100%",
+export const cardContent = recipe({
+  base: {
+    position: "relative",
+    zIndex: 1,
+    flex: 1,
+    display: "grid",
+    width: "100%",
+    height: "100%",
+    paddingRight: "62px",
+    alignItems: "center",
+  },
+  variants: {
+    readOnly: {
+      true: {},
+      false: {},
+    },
+    expanded: {
+      true: {},
+      false: {},
+    },
+  },
+  compoundVariants: [
+    {
+      variants: { expanded: false, readOnly: false },
+      style: {
+        gridTemplateColumns: "auto minmax(0, 1fr)",
+        gridTemplateRows: "auto auto",
+        gridTemplateAreas: '"radio name" "radio stats"',
+        columnGap: "8px",
+        rowGap: "4px",
+        alignContent: "center",
+      },
+    },
+    {
+      variants: { expanded: false, readOnly: true },
+      style: {
+        gridTemplateColumns: "minmax(0, 1fr)",
+        gridTemplateRows: "auto auto",
+        gridTemplateAreas: '"name" "stats"',
+        rowGap: "4px",
+        alignContent: "center",
+      },
+    },
+    {
+      variants: { expanded: true, readOnly: false },
+      style: {
+        gridTemplateColumns: "auto minmax(0, 1fr)",
+        gridTemplateRows: "auto 1fr",
+        gridTemplateAreas: '"radio name" "stats stats"',
+        columnGap: "7px",
+        rowGap: "12px",
+        alignContent: "space-between",
+      },
+    },
+    {
+      variants: { expanded: true, readOnly: true },
+      style: {
+        gridTemplateColumns: "minmax(0, 1fr)",
+        gridTemplateRows: "auto 1fr",
+        gridTemplateAreas: '"name" "stats"',
+        rowGap: "12px",
+        alignContent: "space-between",
+      },
+    },
+  ],
+  defaultVariants: {
+    expanded: false,
+    readOnly: false,
+  },
+});
+
+export const radioIndicator = recipe({
+  base: {
+    gridArea: "radio",
+    alignSelf: "center",
+    position: "relative",
+    width: "16px",
+    height: "16px",
+    borderRadius: "9999px",
+    flexShrink: 0,
+    boxSizing: "border-box",
+    transition: "border-color 0.15s ease, background-color 0.15s ease",
+  },
+  variants: {
+    expanded: {
+      true: {
+        marginRight: 0,
+      },
+      false: {
+        marginRight: "4px",
+      },
+    },
+    state: {
+      selected: {
+        border: `1.5px solid ${vars.text.primary}`,
+        backgroundColor: "rgba(250, 250, 250, 0.12)",
+        selectors: {
+          "&::after": {
+            content: '""',
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            width: "7px",
+            height: "7px",
+            borderRadius: "9999px",
+            backgroundColor: vars.text.primary,
+            transform: "translate(-50%, -50%)",
+          },
+        },
+      },
+      idle: {
+        border: "1.5px solid rgba(255, 255, 255, 0.24)",
+        backgroundColor: "transparent",
+      },
+      raiding: {
+        border: "1.5px solid rgba(255, 255, 255, 0.14)",
+        backgroundColor: "transparent",
+        selectors: {
+          "&::after": {
+            content: '""',
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            width: "8px",
+            height: "1.5px",
+            backgroundColor: vars.text.muted,
+            transform: "translate(-50%, -50%)",
+          },
+        },
+      },
+    },
+  },
+  defaultVariants: {
+    expanded: false,
+    state: "idle",
+  },
 });
 
 export const cardName = style({
+  gridArea: "name",
   fontSize: "13px",
   fontWeight: 600,
   color: vars.text.primary,
+  minWidth: 0,
+  maxWidth: "100%",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
 });
 
-export const stateTag = recipe({
+export const statBlock = recipe({
   base: {
+    gridArea: "stats",
+    display: "flex",
     fontFamily: vars.font.mono,
     fontSize: "11px",
-    fontWeight: 600,
-    padding: "2px 6px",
-    borderRadius: vars.radius.badge,
+    fontWeight: 500,
+    fontVariantNumeric: "tabular-nums",
+  },
+  variants: {
+    expanded: {
+      true: {
+        flexDirection: "column",
+        gap: "2px",
+        alignSelf: "end",
+        marginTop: "6px",
+        color: "#d4d4d8",
+      },
+      false: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: "6px",
+        flexWrap: "wrap",
+        color: vars.text.secondary,
+      },
+    },
+  },
+  defaultVariants: {
+    expanded: false,
+  },
+});
+
+export const statDivider = recipe({
+  base: {
+    color: vars.text.muted,
+  },
+  variants: {
+    expanded: {
+      true: { display: "none" },
+      false: { display: "inline" },
+    },
+  },
+  defaultVariants: {
+    expanded: false,
+  },
+});
+
+export const statWeight = style({
+  color: vars.text.muted,
+});
+
+export const portraitLayer = style({
+  position: "absolute",
+  inset: 0,
+  borderRadius: vars.radius.control,
+  overflow: "hidden",
+  pointerEvents: "none",
+});
+
+export const portraitWrap = recipe({
+  base: {
+    position: "absolute",
+    top: "4px",
+    bottom: "0",
+    overflow: "hidden",
+    WebkitMaskImage:
+      "linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.85) 38%, #000 58%)",
+    maskImage:
+      "linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.85) 38%, #000 58%)",
+    transition: "width 0.2s ease, right 0.2s ease",
+    "@media": {
+      "(prefers-reduced-motion: reduce)": {
+        transition: "none",
+      },
+    },
+  },
+  variants: {
+    expanded: {
+      true: {
+        width: "92px",
+        right: "-6px",
+      },
+      false: {
+        width: "76px",
+        right: "0px",
+      },
+    },
+  },
+  defaultVariants: {
+    expanded: false,
+  },
+});
+
+export const portraitImage = recipe({
+  base: {
+    width: "100%",
+    height: "100%",
+    display: "block",
+    objectFit: "cover",
+    objectPosition: "top center",
+    userSelect: "none",
+    transition: "opacity 0.15s ease, filter 0.15s ease",
   },
   variants: {
     state: {
-      raiding: {
-        color: vars.text.primary,
-        backgroundColor: "rgba(255, 255, 255, 0.08)",
-        border: "1px solid rgba(255, 255, 255, 0.18)",
-      },
       selected: {
-        color: vars.color.positive,
-        backgroundColor: vars.color.positiveBg,
+        opacity: 0.92,
       },
       idle: {
-        color: vars.text.muted,
-        backgroundColor: "rgba(255, 255, 255, 0.04)",
+        opacity: 0.38,
+        filter: "grayscale(45%)",
+      },
+      raiding: {
+        opacity: 0.3,
+        filter: "grayscale(65%)",
       },
     },
   },
   defaultVariants: {
     state: "idle",
   },
-});
-
-export const metaRow = style({
-  fontFamily: vars.font.mono,
-  fontSize: "11px",
-  color: vars.text.muted,
-  fontVariantNumeric: "tabular-nums",
-});
-
-export const statRow = style({
-  fontFamily: vars.font.mono,
-  fontSize: "12px",
-  fontWeight: 500,
-  color: "#d4d4d8",
-  fontVariantNumeric: "tabular-nums",
-  paddingTop: "6px",
-  borderTop: "1px solid rgba(255, 255, 255, 0.05)",
-});
-
-export const details = style({
-  marginTop: "4px",
-  paddingTop: "10px",
-  borderTop: "1px solid rgba(255, 255, 255, 0.06)",
-});
-
-export const summary = style({
-  cursor: "pointer",
-  fontSize: "12px",
-  fontWeight: 500,
-  color: vars.color.positive,
-  marginBottom: "6px",
-});
-
-export const variantActions = style({
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "6px",
-  marginTop: "8px",
 });
 
 export const variantButton = style({
