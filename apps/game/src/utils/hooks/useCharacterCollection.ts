@@ -14,7 +14,6 @@ import {
   isInventoryDirtyAtom,
   isNavigatingAtom,
   playerCoordsAtom,
-  raidNoticeAtom,
   requestedNodeIdAtom,
   shortestPathAtom,
   targetNodeIdAtom,
@@ -75,7 +74,6 @@ export function useCharacterCollectionActions() {
   const setRequested = useSetAtom(requestedNodeIdAtom);
   const setPath = useSetAtom(shortestPathAtom);
   const setCoords = useSetAtom(playerCoordsAtom);
-  const setNotice = useSetAtom(raidNoticeAtom);
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ["characters", userId] });
   };
@@ -113,7 +111,6 @@ export function useCharacterCollectionActions() {
       setRequested(null);
       setPath([]);
       setCoords(null);
-      setNotice(null);
       const roster = queryClient.setQueryData<CharacterRoster>(
         rosterKey,
         (current) => current && { ...current, selectedCharacterId },

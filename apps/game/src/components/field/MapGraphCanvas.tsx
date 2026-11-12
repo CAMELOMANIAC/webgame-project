@@ -216,7 +216,6 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
   // 1-Hop Gate 를 위한 서버 응답 저장 Ref 및 비주얼 상 경로 단절 스포일러 방지용 원본 경로 Ref
   const navigateRaidResponseRef = useRef<NavigateRaidResponse | null>(null);
-  const originalPathRef = useRef<number[]>([]);
 
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [stageTransform, setStageTransform] = useState({
@@ -317,12 +316,10 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const zoomTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 네비게이션 경로 및 현재 도달 스텝을 추적하는 Ref (단일 requestAnimationFrame 유지용)
-  const navigationPathRef = useRef<number[]>([]);
   const currentPathStepRef = useRef<number>(1);
 
   const [targetBuilding, setTargetBuilding] = useState<Building | null>(null);
   const navigationPathCoordsRef = useRef<{ x: number; y: number }[]>([]);
-  const originalCoordsRef = useRef<{ x: number; y: number }[]>([]);
 
   // 2D R-Tree (rbush) 벤치마크 수치 자동 기록용 Ref
   const benchmarkStatsRef = useRef<{
@@ -412,8 +409,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         onError: (err) => {
           if (getDefaultStore().get(selectedUserIdAtom) !== characterData.raw.userId) return;
           console.error("Failed to pre-roll encounters:", err);
-          setIsNavigating(false);
           setTargetNodeId(null);
+          setIsNavigating(false);
           void queryClient.invalidateQueries({ queryKey: ["character"] });
         },
       },
@@ -425,7 +422,6 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     };
     const coords = buildCoordPath(path, startPos, tBuilding);
     navigationPathCoordsRef.current = coords;
-    originalCoordsRef.current = coords;
 
     setIsNavigating(true);
   };
@@ -1253,8 +1249,14 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   // 5.2.5. 최단 경로 라인 및 타겟 비콘 Pixi Graphics 동기화
   useEffect(() => {
     if (!isPixiReady) return;
-    if (pathLineGraphicsRef.current && !pathLineGraphicsRef.current.destroyed) {
-      drawPathLineGraphics(pathLineGraphicsRef.current, shortestPathPoints);
+    const pathLine = pathLineGraphicsRef.current;
+    // 이동 중 남은 경로는 프레임 루프에서만 그린다.
+    if (!isNavigating && pathLine && !pathLine.destroyed) {
+      if (targetNodeId === null || isCombat || !showDevPanel) {
+        pathLine.clear();
+      } else {
+        drawPathLineGraphics(pathLine, shortestPathPoints);
+      }
     }
     if (targetMarkerGroupRef.current && !targetMarkerGroupRef.current.destroyed) {
       if (targetNodeId !== null) {
@@ -1270,7 +1272,15 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         targetMarkerGroupRef.current.visible = false;
       }
     }
-  }, [isPixiReady, shortestPathPoints, targetNodeId, targetBuilding]);
+  }, [
+    isPixiReady,
+    isNavigating,
+    isCombat,
+    showDevPanel,
+    shortestPathPoints,
+    targetNodeId,
+    targetBuilding,
+  ]);
 
   // 5.3. playerCoords 및 playerRotation 상태값에 맞춰 Pixi Sprite 및 ref 동기화
   useEffect(() => {
@@ -1324,13 +1334,12 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       return;
     }
 
-    const coords = navigationPathCoordsRef.current;
+    let coords = navigationPathCoordsRef.current;
+    let path = shortestPath;
     if (coords.length <= 1) {
       return;
     }
 
-    navigationPathRef.current = shortestPath;
-    originalPathRef.current = shortestPath;
     currentPathStepRef.current = 1;
 
     const startC = coords[0];
@@ -1419,7 +1428,6 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       const deltaTime = (time - lastTime) / 1000;
       lastTime = time;
 
-      const path = navigationPathRef.current;
       const stepIdx = currentPathStepRef.current;
 
       const hasStartPos =
@@ -1461,9 +1469,9 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
             }
           }
         }
-        setIsNavigating(false);
         setTargetNodeId(null);
         setTargetBuilding(null);
+        setIsNavigating(false);
         void queryClient.invalidateQueries({ queryKey: ["character"] });
 
         if (worldContainerRef.current) {
@@ -1523,7 +1531,6 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       const currentSpeed = minSpeed + (maxSpeed - minSpeed) * speedFactor;
 
       const firstRoadHopStepIdx = hasStartPos ? 2 : 1;
-      const nextNodeId = path[hasStartPos ? stepIdx - 1 : stepIdx];
 
       let finalSpeed = currentSpeed;
       if (stepIdx === firstRoadHopStepIdx) {
@@ -1561,8 +1568,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
             const waitedMs = performance.now() - hopGateWaitStart;
             if (waitedMs > 5000) {
               console.warn("[1-Hop Gate] Server response timed out; stopping navigation.");
-              setIsNavigating(false);
               setTargetNodeId(null);
+              setIsNavigating(false);
               void queryClient.invalidateQueries({ queryKey: ["character"] });
               hopGateWaitStart = null;
               return;
@@ -1579,68 +1586,11 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
           }
 
           const res = navigateRaidResponseRef.current;
-
           if (res?.encounterTriggered && res.stopNodeId !== undefined) {
-            const stopNodeId = res.stopNodeId;
-
-            if (stopNodeId === nextNodeId) {
-              const arrivedPos = { x: nextPos.x, y: nextPos.y };
-
-              if (cameraCatchUpStart === null) {
-                cameraCatchUpStart = performance.now();
-              }
-              const waitedMs = performance.now() - cameraCatchUpStart;
-              const forceArrived = waitedMs > 1500;
-
-              if (!hasCameraArrived(nextPos.x, nextPos.y) && !forceArrived) {
-                playerCoordsRef.current = arrivedPos;
-                updatePlayerMarkerAndFog(arrivedPos.x, arrivedPos.y, angleDeg);
-                updateCameraFollow(arrivedPos.x, arrivedPos.y, deltaTime);
-                animId = requestAnimationFrame(tick);
-                return;
-              }
-
-              cameraCatchUpStart = null;
-              playerCoordsRef.current = arrivedPos;
-              updatePlayerMarkerAndFog(arrivedPos.x, arrivedPos.y, angleDeg);
-              updateCameraFollow(arrivedPos.x, arrivedPos.y, deltaTime);
-
-              setIsNavigating(false);
-              setTargetNodeId(null);
-              setTargetBuilding(null);
-              setCurrentNodeId(nextNodeId);
-              setPlayerCoords(arrivedPos);
-
-              if (worldContainerRef.current) {
-                const world = worldContainerRef.current;
-                setStageTransform({
-                  x: world.x,
-                  y: world.y,
-                  scale: world.scale.x,
-                });
-              }
-
-              console.log("[1st Node Encounter Check] Triggering combat now at first node:", {
-                stopNodeId,
-                nextNodeId,
-                hasBattleLog: !!res.battleLog,
-              });
-              if (res.battleLog) {
-                triggerCombat(res.battleLog);
-              }
-              return;
-            } else {
-              const stopIdx = path.indexOf(stopNodeId);
-              if (stopIdx !== -1) {
-                const truncatedPath = path.slice(0, stopIdx + 1);
-                navigationPathRef.current = truncatedPath;
-
-                const stopCoordIdx = hasStartPos ? stopIdx + 1 : stopIdx;
-                navigationPathCoordsRef.current = navigationPathCoordsRef.current.slice(
-                  0,
-                  stopCoordIdx + 1,
-                );
-              }
+            const stopIndex = path.indexOf(res.stopNodeId, 1);
+            if (stopIndex !== -1) {
+              path = path.slice(0, stopIndex + 1);
+              coords = coords.slice(0, stopIndex + (hasStartPos ? 2 : 1));
             }
           }
         }
@@ -1653,7 +1603,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         updateCameraFollow(arrivedPos.x, arrivedPos.y, deltaTime);
 
         if (pathLineGraphicsRef.current) {
-          const remainingPoints = originalCoordsRef.current
+          const remainingPoints = coords
             .slice(stepIdx)
             .flatMap((c) => [c.x, c.y]);
           drawPathLineGraphics(pathLineGraphicsRef.current, remainingPoints);
@@ -1678,7 +1628,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
           const remainingPoints = [
             newPos.x,
             newPos.y,
-            ...originalCoordsRef.current.slice(stepIdx).flatMap((c) => [c.x, c.y]),
+            ...coords.slice(stepIdx).flatMap((c) => [c.x, c.y]),
           ];
           drawPathLineGraphics(pathLineGraphicsRef.current, remainingPoints);
         }
@@ -1691,6 +1641,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
     return () => {
       cancelAnimationFrame(animId);
+      const pathLine = pathLineGraphicsRef.current;
+      if (pathLine && !pathLine.destroyed) pathLine.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNavigating, isCombat]);

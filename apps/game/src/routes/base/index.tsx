@@ -1,7 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useAtomValue } from "jotai";
 
-import { raidNoticeAtom } from "@/atoms/raidAtom";
 import { BaseScreen } from "@/components/lobby/BaseScreen";
 import * as styles from "@/components/lobby/BaseScreen.css";
 import { CharacterCard } from "@/components/lobby/CharacterCard";
@@ -14,7 +12,6 @@ function BaseHome() {
   const navigate = useNavigate();
   const { data } = useGetCharacter();
   const { startRaid } = useRaidSession();
-  const notice = useAtomValue(raidNoticeAtom);
   const character = data?.raw;
 
   const handleRaidAction = () => {
@@ -31,11 +28,6 @@ function BaseHome() {
       title="임시 대피 구역"
       description="선택한 개체의 배치 상태와 임무 통신을 확인합니다."
     >
-      {notice && (
-        <p className={styles.banner({ tone: "neutral" })} role="status">
-          {notice}
-        </p>
-      )}
       {startRaid.error && (
         <p className={styles.banner({ tone: "negative" })} role="alert">
           {startRaid.error.message}

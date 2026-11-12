@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { seopoRegion } from "@webgame/types";
+import { firstMissionNodeId } from "@webgame/types";
 import { useAtomValue, useSetAtom } from "jotai";
 
 import {
@@ -19,7 +19,6 @@ import { useJournal } from "@/utils/hooks/useJournal";
 import { useRaidRules } from "@/utils/hooks/useRaidRules";
 import { useRaidSession } from "@/utils/hooks/useRaidSession";
 
-import mapData from "../../../../../packages/types/src/assets/map_graph.json";
 import * as styles from "./FieldNavTargetSection.css";
 
 const FieldNavTargetSection = () => {
@@ -37,11 +36,12 @@ const FieldNavTargetSection = () => {
   const setNode = useSetAtom(currentNodeIdAtom);
   const setCoords = useSetAtom(playerCoordsAtom);
   const character = data?.raw;
-  const region = seopoRegion(
-    nodeId,
-    character?.activeRaid?.round ?? 0,
-    mapData.nodes[nodeId] ?? { x: 0, y: 0 },
-  );
+  const locationName =
+    nodeId === (rules?.startNodeId ?? 0)
+      ? "임시 대피 구역"
+      : nodeId === firstMissionNodeId
+        ? "기록 중계 시설"
+        : "현재 위치";
   const hasPending =
     !!pending[pendingNavigationKey(character?.userId, character?.id)];
   const canAct =
@@ -69,7 +69,7 @@ const FieldNavTargetSection = () => {
         <strong className={styles.destinationText}>
           {isMoving && targetNodeId !== null
             ? `목적지 #${targetNodeId}`
-            : `${region.name} #${nodeId}`}
+            : `${locationName} #${nodeId}`}
         </strong>
         <p className={styles.statusHint({ positive: atExtraction })}>
           {isMoving

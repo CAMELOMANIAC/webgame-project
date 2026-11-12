@@ -18,7 +18,6 @@ import {
   isInventoryDirtyAtom,
   isNavigatingAtom,
   playerCoordsAtom,
-  raidNoticeAtom,
   requestedNodeIdAtom,
   shortestPathAtom,
   targetNodeIdAtom,
@@ -65,7 +64,6 @@ export default function DevelopmentAccountGate({
     store.set(currentNodeIdAtom, 0);
     store.set(targetNodeIdAtom, null);
     store.set(requestedNodeIdAtom, null);
-    store.set(raidNoticeAtom, null);
     store.set(shortestPathAtom, []);
     store.set(playerCoordsAtom, null);
     store.set(isInventoryDirtyAtom, false);

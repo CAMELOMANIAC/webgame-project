@@ -3,7 +3,6 @@ import { atomWithStorage, createJSONStorage } from "jotai/utils";
 
 // 현재 전투(전투 애니메이션 재생) 중인지 여부
 export const isCombatAtom = atom<boolean>(false);
-export const raidNoticeAtom = atom<string | null>(null);
 
 export type RaidEndStatus = "EXTRACTED" | "DEAD";
 type UnacknowledgedRaidResults = Partial<Record<string, RaidEndStatus>>;

@@ -7,7 +7,6 @@ import {
   pendingNavigationAtom,
   pendingNavigationKey,
 } from "@/atoms/pendingNavigationAtom";
-import { raidNoticeAtom } from "@/atoms/raidAtom";
 
 import { API_BASE_URL, apiFetch } from "../api";
 import { requestJsonWithTimeout } from "../request";
@@ -62,7 +61,6 @@ export const useNavigateRaid = () => {
     },
     onSuccess: (result, params) => {
       void queryClient.invalidateQueries({ queryKey: ["journal", userId] });
-      if (getDefaultStore().get(selectedUserIdAtom) === userId) getDefaultStore().set(raidNoticeAtom, result.notice ?? null);
       if (!result.encounterTriggered) {
         const key = pendingNavigationKey(userId, params.characterId);
         getDefaultStore().set(pendingNavigationAtom, (pending) => {
