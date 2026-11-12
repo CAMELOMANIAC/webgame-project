@@ -5,6 +5,7 @@ import { readApiResponse } from "../request";
 
 interface RaidRules {
   extractionNodeIds: number[];
+  entryNodeIds: number[];
   startNodeId: number;
 }
 

@@ -39,6 +39,7 @@ export type StartRaidInput =
   | string
   | {
       characterId: string;
+      entryNodeId?: number;
       loadout?: StartRaidLoadoutInput;
     };
 
@@ -56,13 +57,14 @@ export const useRaidSession = () => {
     mutationFn: async (input: StartRaidInput) => {
       const characterId = typeof input === "string" ? input : input.characterId;
       const loadout = typeof input === "string" ? undefined : input.loadout;
+      const entryNodeId = typeof input === "string" ? undefined : input.entryNodeId;
       return readApiResponse<{ status: string; isRaiding: boolean; raid: RaidView }>(
         await apiFetch(`${API_BASE_URL}/character/${characterId}/raid/start`, {
           method: "POST",
-          ...(loadout
+          ...(loadout || entryNodeId !== undefined
             ? {
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(loadout),
+                body: JSON.stringify({ ...loadout, entryNodeId }),
               }
             : {}),
         }),

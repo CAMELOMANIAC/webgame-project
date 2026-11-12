@@ -110,6 +110,7 @@ function ExpeditionStagingScreen() {
       !character ||
       !effectiveCharacterData ||
       !canEditLoadout ||
+      !rulesQuery.data ||
       startRaid.isPending
     )
       return;
@@ -130,6 +131,7 @@ function ExpeditionStagingScreen() {
     startRaid.mutate(
       {
         characterId: character.id,
+        entryNodeId: effectiveStartNodeId,
         loadout: draft ? { equipment, inventory } : undefined,
       },
       {
@@ -215,12 +217,7 @@ function ExpeditionStagingScreen() {
         (selectedRosterCharacter && selectedRosterCharacter.hp > 0)),
   );
   const defaultStartNodeId = rulesQuery.data?.startNodeId ?? 0;
-  const startNodeCandidates = Array.from(
-    new Set([
-      defaultStartNodeId,
-      ...(rulesQuery.data?.extractionNodeIds ?? []),
-    ]),
-  );
+  const startNodeCandidates = rulesQuery.data?.entryNodeIds ?? [];
   const effectiveStartNodeId =
     selectedStartNodeId !== null &&
     startNodeCandidates.includes(selectedStartNodeId)
@@ -353,6 +350,16 @@ function ExpeditionStagingScreen() {
         {/* STEP 3: 진입 지점 선택 (Entry Point Selection) */}
         {step === 3 && character && (
           <div className={styles.contentArea}>
+            {rulesQuery.isPending && <p>진입 지점을 불러오는 중입니다.</p>}
+            {rulesQuery.isError && (
+              <button
+                type="button"
+                className={baseStyles.smallAction}
+                onClick={() => void rulesQuery.refetch()}
+              >
+                진입 지점 다시 불러오기
+              </button>
+            )}
             {startRaid.error && (
               <p className={baseStyles.banner({ tone: "negative" })} role="alert">
                 {startRaid.error.message}
@@ -455,7 +462,7 @@ function ExpeditionStagingScreen() {
             >
               <button
                 type="button"
-                disabled={startRaid.isPending || isMutatingInventory}
+                disabled={!rulesQuery.data || startRaid.isPending || isMutatingInventory}
                 className={styles.floatingCtaButton}
                 onClick={handleConfirmDeploy}
               >
