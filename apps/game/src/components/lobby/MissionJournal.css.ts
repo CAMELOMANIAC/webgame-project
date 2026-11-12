@@ -57,7 +57,7 @@ export const telemetryTop = style({
 export const alert = style({
   padding: "10px 12px",
   borderRadius: "6px",
-  border: "1px solid rgba(255, 113, 98, 0.3)",
+  border: "1px solid rgba(255, 255, 255, 0.12)",
   background: "rgba(255, 113, 98, 0.12)",
   color: `${vars.color.negative} !important`,
 });
@@ -101,12 +101,12 @@ export const statusBadge = recipe({
       positive: {
         color: vars.color.positive,
         background: vars.color.positiveBg,
-        border: "1px solid rgba(133, 173, 255, 0.28)",
+        border: "1px solid rgba(255, 255, 255, 0.12)",
       },
       negative: {
         color: vars.color.negative,
         background: vars.color.negativeBg,
-        border: "1px solid rgba(255, 113, 98, 0.3)",
+        border: "1px solid rgba(255, 255, 255, 0.12)",
       },
       neutral: {
         color: vars.text.secondary,
@@ -166,12 +166,12 @@ export const noticeText = recipe({
       positive: {
         color: `${vars.color.positive} !important`,
         background: "rgba(133, 173, 255, 0.1)",
-        border: "1px solid rgba(133, 173, 255, 0.25)",
+        border: "1px solid rgba(255, 255, 255, 0.12)",
       },
       negative: {
         color: `${vars.color.negative} !important`,
         background: "rgba(255, 113, 98, 0.12)",
-        border: "1px solid rgba(255, 113, 98, 0.28)",
+        border: "1px solid rgba(255, 255, 255, 0.12)",
       },
     },
   },

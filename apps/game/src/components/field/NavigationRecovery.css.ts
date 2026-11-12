@@ -9,7 +9,7 @@ export const recovery = style({
   padding: "16px",
   borderRadius: vars.radius.card,
   backgroundColor: vars.surface.mid,
-  border: `1px solid ${vars.border.positive}`,
+  border: "1px solid rgba(255, 255, 255, 0.12)",
   color: vars.text.primary,
 });
 

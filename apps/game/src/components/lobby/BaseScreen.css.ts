@@ -92,12 +92,12 @@ export const banner = recipe({
       positive: {
         color: vars.color.positive,
         background: "rgba(133, 173, 255, 0.1)",
-        border: "1px solid rgba(133, 173, 255, 0.28)",
+        border: "1px solid rgba(255, 255, 255, 0.12)",
       },
       negative: {
         color: vars.color.negative,
         background: "rgba(255, 113, 98, 0.12)",
-        border: "1px solid rgba(255, 113, 98, 0.3)",
+        border: "1px solid rgba(255, 255, 255, 0.12)",
       },
       neutral: {
         color: vars.text.secondary,

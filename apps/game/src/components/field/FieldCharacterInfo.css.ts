@@ -3,24 +3,16 @@ import { recipe } from "@vanilla-extract/recipes";
 
 import { fieldWidget, vars } from "@/styles/theme.css";
 
-export const container = recipe({
-  base: {
+export const container = style([
+  fieldWidget({ tone: "default" }),
+  {
     flex: 1,
     flexDirection: "column",
     justifyContent: "space-between",
     gap: "8px",
     padding: "12px",
   },
-  variants: {
-    critical: {
-      true: fieldWidget({ tone: "negative" }),
-      false: fieldWidget({ tone: "default" }),
-    },
-  },
-  defaultVariants: {
-    critical: false,
-  },
-});
+]);
 
 export const headerRow = style({
   position: "relative",

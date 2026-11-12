@@ -39,7 +39,7 @@ export const alert = style({
   margin: 0,
   padding: "8px 10px",
   borderRadius: vars.radius.control,
-  border: `1px solid ${vars.border.negative}`,
+  border: "1px solid rgba(255, 255, 255, 0.12)",
   backgroundColor: vars.color.negativeBg,
   color: vars.color.negative,
   fontSize: "12px",

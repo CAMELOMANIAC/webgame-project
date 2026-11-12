@@ -3,7 +3,7 @@ import { style } from "@vanilla-extract/css";
 import { fieldWidget, vars } from "@/styles/theme.css";
 
 export const combatWidget = style([
-  fieldWidget({ tone: "negative" }),
+  fieldWidget({ tone: "default" }),
   {
     gap: "10px",
     padding: "14px",
@@ -46,7 +46,7 @@ export const statusBadge = style({
   padding: "2px 6px",
   borderRadius: vars.radius.badge,
   backgroundColor: vars.color.negativeBg,
-  border: `1px solid ${vars.border.negative}`,
+  border: "1px solid rgba(255, 255, 255, 0.12)",
   color: vars.color.negative,
 });
 

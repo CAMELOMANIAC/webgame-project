@@ -26,6 +26,6 @@ export const nameLabel = style({
   padding: "1px 4px",
   color: vars.color.negative,
   backgroundColor: vars.surface.base,
-  border: `1px solid ${vars.border.negative}`,
+  border: "1px solid rgba(255, 255, 255, 0.12)",
   whiteSpace: "nowrap",
 });

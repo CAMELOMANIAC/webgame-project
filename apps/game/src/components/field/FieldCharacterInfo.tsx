@@ -60,11 +60,10 @@ const FieldCharacterInfo = () => {
     stats.maxStamina > 0 ? Math.max(0, stats.stamina / stats.maxStamina) : 0;
   const filledHpSegments = Math.ceil(hpRatio * SEGMENT_COUNT);
   const filledStaminaSegments = Math.ceil(staminaRatio * SEGMENT_COUNT);
-  const isCritical = !!battleLog || hpRatio <= 0.3;
   const hpTone = hpRatio <= 0.3 || battleLog ? "negative" : "positive";
 
   return (
-    <div className={styles.container({ critical: isCritical })}>
+    <div className={styles.container}>
       <div className={styles.headerRow}>
         <div className={styles.portraitWrap} aria-hidden="true">
           <img

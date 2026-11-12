@@ -79,7 +79,7 @@ export const toastCard = style({
   gap: "10px",
   padding: "10px 12px",
   borderRadius: vars.radius.control,
-  border: `1px solid ${vars.border.negative}`,
+  border: "1px solid rgba(255, 255, 255, 0.12)",
   backgroundColor: "rgba(16, 16, 19, 0.94)",
   backdropFilter: "blur(12px)",
   boxShadow: "0 12px 28px rgba(0, 0, 0, 0.48)",
