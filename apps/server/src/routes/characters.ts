@@ -9,6 +9,38 @@ import {
   selectedCharacterId,
 } from "../services/characters";
 import { InventoryError } from "../services/inventory";
+import { extractRaidExploration } from "../services/raid";
+
+function formatCharacterResponse<
+  T extends {
+    weapons: unknown[];
+    displayName?: string | null;
+    variant?: { definition?: { name?: string | null } | null } | null;
+    activeRaid?: {
+      encounterTravel?: Parameters<typeof extractRaidExploration>[0];
+      [key: string]: unknown;
+    } | null;
+  },
+>(character: T) {
+  const { weapons, activeRaid, ...rest } = character;
+  const formattedRaid = activeRaid
+    ? (() => {
+        const { encounterTravel, ...raidRest } = activeRaid;
+        const exploration = extractRaidExploration(encounterTravel);
+        return {
+          ...raidRest,
+          ...(exploration ? { exploration } : {}),
+        };
+      })()
+    : activeRaid;
+  return {
+    ...rest,
+    activeRaid: formattedRaid,
+    displayName:
+      rest.displayName ?? rest.variant?.definition?.name ?? "생존자",
+    equipment: weapons,
+  };
+}
 
 export function registerCharacterRoutes(
   app: FastifyInstance,
@@ -40,13 +72,7 @@ export function registerCharacterRoutes(
         : null;
       if (!character)
         return reply.status(404).send({ error: "Character not found" });
-      const { weapons, ...rest } = character;
-      return {
-        ...rest,
-        displayName:
-          rest.displayName ?? rest.variant?.definition?.name ?? "생존자",
-        equipment: weapons,
-      };
+      return formatCharacterResponse(character);
     },
   );
   app.get<{ Params: { characterId: string } }>(
@@ -58,13 +84,7 @@ export function registerCharacterRoutes(
       });
       if (!character)
         return reply.status(404).send({ error: "Character not found" });
-      const { weapons, ...rest } = character;
-      return {
-        ...rest,
-        displayName:
-          rest.displayName ?? rest.variant?.definition?.name ?? "생존자",
-        equipment: weapons,
-      };
+      return formatCharacterResponse(character);
     },
   );
   app.get("/dev/character-variants", async () =>

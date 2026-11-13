@@ -5,7 +5,9 @@ import type { Database } from "../db";
 import { gameRules } from "../logic/rules";
 import { InventoryError, SlotsSchema } from "../services/inventory";
 import {
+  BuildingActionSchema,
   decideRaidBattle,
+  executeRaidBuildingAction,
   getPendingRaidBattle,
   extractionNodeIds,
   extractRaid,
@@ -140,6 +142,23 @@ export function registerRaidRoutes(
           actor(request),
           characterId,
           NavigateSchema.parse(request.body),
+        );
+      } catch (error) {
+        fastify.log.error(error);
+        return sendInventoryError(reply, error);
+      }
+    },
+  );
+  fastify.post(
+    "/character/:characterId/raid/building/action",
+    async (request, reply) => {
+      try {
+        const { characterId } = request.params as { characterId: string };
+        return await executeRaidBuildingAction(
+          database,
+          actor(request),
+          characterId,
+          BuildingActionSchema.parse(request.body),
         );
       } catch (error) {
         fastify.log.error(error);

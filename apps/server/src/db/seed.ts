@@ -1,3 +1,4 @@
+import { ALL_CATALOG_ITEMS } from "@webgame/types";
 import { eq } from "drizzle-orm";
 import {
   characters,
@@ -108,6 +109,20 @@ async function main() {
       attackType: "MELEE",
       iconKey: "STAFF",
     },
+    ...ALL_CATALOG_ITEMS.map((item) => ({
+      id: item.id,
+      name: item.name,
+      damage: item.damage,
+      staminaCost: item.staminaCost,
+      cooldownTicks: item.cooldownTicks,
+      castTicks: item.castTicks,
+      weight: item.weight,
+      value: item.value,
+      description: item.description,
+      attackType: item.attackType,
+      iconKey: item.iconKey,
+      effect: item.effect,
+    })),
   ];
 
   console.log("Clearing existing data...");

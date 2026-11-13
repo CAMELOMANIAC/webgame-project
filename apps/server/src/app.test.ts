@@ -8,6 +8,7 @@ import {
   pathTravelVisits,
   roadTravelMinutes,
 } from "./logic/roadDistances";
+import { extractRaidExploration } from "./services/raid";
 
 // 실제 접속은 하지 않는다. DB 의존 API는 주입한 클라이언트의 메서드로 대체한다.
 function createTestDb() {
@@ -90,4 +91,49 @@ test("적 소음은 감지 범위 안의 서로 다른 구역을 모두 반환�
   assert.deepEqual(findEnemyNoiseSignals(1, ["26"]), [east]);
   assert.deepEqual(findEnemyNoiseSignals(1, ["26", "28", "1130", "7", "8"]), [west, east]);
   assert.deepEqual(findEnemyNoiseSignals(1, ["1130"]), []);
+});
+
+test("건물 이벤트 API는 잘못된 액션을 거부하고 exploration 추출은 비어 있으면 undefined를 반환한다", async (t) => {
+  assert.equal(extractRaidExploration(null), undefined);
+  assert.equal(
+    extractRaidExploration({ visitedEdges: ["0-1"], remainingDistance: 0 }),
+    undefined,
+  );
+  assert.deepEqual(
+    extractRaidExploration({
+      visitedEdges: [],
+      remainingDistance: 0,
+      lootedBuildingIds: [42],
+      districtLootCounts: { "west-res-1": 1 },
+    }),
+    {
+      lootedBuildingIds: [42],
+      districtLootCounts: { "west-res-1": 1 },
+      usedCraftBuildingIds: [],
+      buildingEvents: {},
+    },
+  );
+
+  const database = createTestDb();
+  Reflect.set(database.query.users, "findFirst", async () => ({
+    id: "test-user",
+  }));
+  Reflect.set(database.query.characters, "findFirst", async () => ({
+    userId: "test-user",
+  }));
+  const app = buildApp({ database, logger: false });
+  t.after(() => app.close());
+
+  const invalid = await app.inject({
+    method: "POST",
+    url: "/character/char-1/raid/building/action",
+    headers: { "x-dev-user-id": "test-user" },
+    payload: {
+      raidId: "00000000-0000-0000-0000-000000000001",
+      expectedVersion: 0,
+      requestId: "00000000-0000-0000-0000-000000000002",
+      action: "INVALID",
+    },
+  });
+  assert.equal(invalid.statusCode, 400);
 });

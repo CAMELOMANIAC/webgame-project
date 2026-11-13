@@ -14,6 +14,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import type { BuildingEventState, WeaponEffect } from "@webgame/types";
 import type { PendingRetreat } from "../logic/retreat";
 
 export const attackTypeEnum = pgEnum("AttackType", ["MELEE", "RANGED"]);
@@ -137,7 +138,7 @@ export const weaponMasters = pgTable("WeaponMaster", {
   description: text("description"),
   attackType: attackTypeEnum("attackType").notNull().default("MELEE"),
   iconKey: text("iconKey").notNull().default("WEAPON"),
-  effect: jsonb("effect"),
+  effect: jsonb("effect").$type<WeaponEffect | null>(),
 });
 
 export const characterWeapons = pgTable(
@@ -271,6 +272,10 @@ export const raidSessions = pgTable(
     encounterTravel: jsonb("encounterTravel").$type<{
       visitedEdges: string[];
       remainingDistance: number;
+      lootedBuildingIds?: number[];
+      districtLootCounts?: Record<string, number>;
+      usedCraftBuildingIds?: number[];
+      buildingEvents?: Record<string, BuildingEventState>;
     }>(),
     ghostRoster: jsonb("ghostRoster").$type<{
       tracks: {

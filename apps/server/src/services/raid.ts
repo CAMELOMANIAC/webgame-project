@@ -1,8 +1,17 @@
 import { randomUUID } from "node:crypto";
 import {
+  type BuildingActionInput,
+  type BuildingActionResult,
+  type BuildingEventState,
   calculateEntryDelayMinutes,
   firstMissionNodeId,
+  getBuildingDistrict,
+  getCatalogItemById,
+  getRecipeById,
+  type MapBuilding,
+  matchesRecipeBase,
   type RaidActionInput,
+  type RaidExplorationState,
   type RaidNavigationInput,
   type RaidNavigationResult,
   type RaidNoiseResult,
@@ -12,12 +21,13 @@ import {
   seopoMapVersion,
   type StartRaidResult,
 } from "@webgame/types";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import mapData from "../../../../packages/types/src/assets/map_graph.json";
 import {
   type Character,
   characters,
+  characterWeapons,
   type Database,
   raidCommands,
   raidInventoryItems,
@@ -26,7 +36,9 @@ import {
   type RaidStatus,
   type TransactionClient,
   users,
+  weaponMasters,
 } from "../db";
+import { hanlimNpcs } from "../logic/npcs";
 import { hasRoad, pathTravelVisits } from "../logic/roadDistances";
 import { type PendingRetreat, retreatChoiceMs, retreatPlaybackLimitMs, sealBattleTimeline } from "../logic/retreat";
 import { gameRules } from "../logic/rules";
@@ -49,6 +61,7 @@ import {
   calculateInventoryWeight,
   InventoryError,
   mergeIntoStash,
+  putInBackpack,
   type SlotsInput,
   SlotsSchema,
   syncLoadoutWithStashInTransaction,
@@ -89,9 +102,39 @@ export const NavigateSchema = RaidActionSchema.extend({
   { message: "Equipment and inventory must be sent together" },
 );
 
+export const BuildingActionSchema = RaidActionSchema.extend({
+  action: z.enum(["INVESTIGATE", "SEARCH", "CRAFT"]),
+  recipeId: z.string().min(1).optional(),
+});
+
 export const extractionNodeIds = gameRules.extractionNodeIds;
 
+export function extractRaidExploration(
+  encounterTravel: RaidSession["encounterTravel"] | null | undefined,
+): RaidExplorationState | undefined {
+  if (!encounterTravel) return undefined;
+  const lootedBuildingIds = encounterTravel.lootedBuildingIds ?? [];
+  const districtLootCounts = encounterTravel.districtLootCounts ?? {};
+  const usedCraftBuildingIds = encounterTravel.usedCraftBuildingIds ?? [];
+  const buildingEvents = encounterTravel.buildingEvents ?? {};
+  if (
+    lootedBuildingIds.length === 0 &&
+    usedCraftBuildingIds.length === 0 &&
+    Object.keys(districtLootCounts).length === 0 &&
+    Object.keys(buildingEvents).length === 0
+  ) {
+    return undefined;
+  }
+  return {
+    lootedBuildingIds,
+    districtLootCounts,
+    usedCraftBuildingIds,
+    buildingEvents,
+  };
+}
+
 function view(raid: RaidSession): RaidView {
+  const exploration = extractRaidExploration(raid.encounterTravel);
   return {
     id: raid.id,
     status: raid.status,
@@ -99,6 +142,7 @@ function view(raid: RaidSession): RaidView {
     currentNodeId: raid.currentNodeId,
     currentBuildingId: raid.currentBuildingId,
     time: raid.time,
+    ...(exploration ? { exploration } : {}),
   };
 }
 
@@ -293,6 +337,7 @@ interface ActionResult<T> {
   ghostRoster?: GhostRoster;
   currentBuildingId?: number | null;
   pendingRetreat?: PendingRetreat;
+  encounterTravel?: RaidSession["encounterTravel"];
 }
 
 async function performRaidAction<T>(
@@ -359,6 +404,9 @@ async function performRaidAction<T>(
         pendingRetreat: result.pendingRetreat ?? null,
         ...(result.time !== undefined ? { time: result.time } : {}),
         ...(result.ghostRoster ? { ghostRoster: result.ghostRoster } : {}),
+        ...(result.encounterTravel !== undefined
+          ? { encounterTravel: result.encounterTravel }
+          : {}),
         ...(status === "ACTIVE" ? {} : { endedAt: new Date() }),
       })
       .where(eq(raidSessions.id, raid.id))
@@ -815,4 +863,415 @@ export async function expireRaidBattles(database: Database) {
       await decideRaidBattle(database, character.userId, character.id, id, pendingRetreat.id, "EXPIRE");
     }
   }
+}
+
+function readExplorationState(raid: RaidSession): RaidExplorationState {
+  const raw = raid.encounterTravel;
+  return {
+    lootedBuildingIds: [...(raw?.lootedBuildingIds ?? [])],
+    districtLootCounts: { ...(raw?.districtLootCounts ?? {}) },
+    usedCraftBuildingIds: [...(raw?.usedCraftBuildingIds ?? [])],
+    buildingEvents: { ...(raw?.buildingEvents ?? {}) },
+  };
+}
+
+function writeExplorationState(
+  raid: RaidSession,
+  next: RaidExplorationState,
+): NonNullable<RaidSession["encounterTravel"]> {
+  return {
+    visitedEdges: raid.encounterTravel?.visitedEdges ?? [],
+    remainingDistance: raid.encounterTravel?.remainingDistance ?? 0,
+    lootedBuildingIds: next.lootedBuildingIds,
+    districtLootCounts: next.districtLootCounts,
+    usedCraftBuildingIds: next.usedCraftBuildingIds,
+    buildingEvents: next.buildingEvents,
+  };
+}
+
+async function ensureCatalogItemsInTransaction(
+  tx: TransactionClient,
+  itemIds: string[],
+) {
+  const uniqueIds = [...new Set(itemIds)];
+  const rows = uniqueIds
+    .map((id) => getCatalogItemById(id))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      damage: item.damage,
+      staminaCost: item.staminaCost,
+      cooldownTicks: item.cooldownTicks,
+      castTicks: item.castTicks,
+      weight: item.weight,
+      value: item.value,
+      description: item.description,
+      attackType: item.attackType,
+      iconKey: item.iconKey,
+      effect: item.effect,
+    }));
+  if (rows.length > 0) {
+    await tx.insert(weaponMasters).values(rows).onConflictDoNothing();
+  }
+}
+
+async function consumeBackpackItemsInTransaction(
+  tx: TransactionClient,
+  characterId: string,
+  requirements: { itemId: string; quantity: number }[],
+) {
+  const rows = await tx.query.raidInventoryItems.findMany({
+    where: eq(raidInventoryItems.characterId, characterId),
+    orderBy: [asc(raidInventoryItems.slotIndex)],
+  });
+
+  const remainingById = new Map<string, number>();
+  for (const row of rows) {
+    remainingById.set(
+      row.weaponMasterId,
+      (remainingById.get(row.weaponMasterId) ?? 0) + row.quantity,
+    );
+  }
+  for (const req of requirements) {
+    if ((remainingById.get(req.itemId) ?? 0) < req.quantity) {
+      throw new InventoryError("필요한 재료가 부족합니다.", 409);
+    }
+    remainingById.set(req.itemId, remainingById.get(req.itemId)! - req.quantity);
+  }
+
+  for (const req of requirements) {
+    let needed = req.quantity;
+    for (const row of rows) {
+      if (row.weaponMasterId !== req.itemId || needed <= 0) continue;
+      if (row.quantity <= needed) {
+        await tx
+          .delete(raidInventoryItems)
+          .where(eq(raidInventoryItems.id, row.id));
+        needed -= row.quantity;
+        row.quantity = 0;
+      } else {
+        await tx
+          .update(raidInventoryItems)
+          .set({ quantity: row.quantity - needed })
+          .where(eq(raidInventoryItems.id, row.id));
+        row.quantity -= needed;
+        needed = 0;
+      }
+    }
+  }
+}
+
+export async function executeRaidBuildingAction(
+  database: Database,
+  userId: string,
+  characterId: string,
+  input: BuildingActionInput,
+  options: { random?: () => number } = {},
+): Promise<BuildingActionResult> {
+  const parsed = BuildingActionSchema.parse(input);
+  const random = options.random ?? Math.random;
+
+  return performRaidAction(
+    database,
+    userId,
+    characterId,
+    parsed,
+    "BUILDING_ACTION",
+    { action: parsed.action, recipeId: parsed.recipeId ?? null },
+    async (tx, raid, character) => {
+      if (raid.currentBuildingId === null || raid.currentBuildingId === undefined) {
+        throw new InventoryError("현재 건물 내부에 있지 않습니다.", 409);
+      }
+      const building = (mapData.buildings as unknown as MapBuilding[]).find(
+        (b) => b.id === raid.currentBuildingId,
+      );
+      if (!building) {
+        throw new InventoryError("건물 정보를 찾을 수 없습니다.", 404);
+      }
+
+      const district = getBuildingDistrict(building);
+      const exp = readExplorationState(raid);
+      const nextTime = raid.time + 10;
+      const buildingKey = String(building.id);
+      const prevEvent: BuildingEventState = exp.buildingEvents[buildingKey] ?? {
+        stage: "INTRO",
+        text: "방금 전까지 사람이 있었던 흔적이 보입니다. 아직 내부에 가치 있는 것들이 남아 있을지도 모릅니다.",
+      };
+
+      if (parsed.action === "INVESTIGATE") {
+        if (prevEvent.stage !== "INTRO") {
+          throw new InventoryError("이미 건물 내부 상황을 확인했습니다.", 409);
+        }
+        const combatTriggered = random() < 0.3;
+        if (combatTriggered) {
+          const retreat = prepareRetreat(
+            raid,
+            raid.currentNodeId,
+            raid.currentBuildingId,
+            false,
+          );
+          const prefersHanlim =
+            building.category === "PUBLIC" ||
+            building.category === "INFRA" ||
+            building.category === "MEDICAL";
+          const [hasHanlimWeapon, hasMonster] = await Promise.all([
+            tx.query.weaponMasters.findFirst({
+              where: eq(weaponMasters.id, hanlimNpcs.control.weaponId),
+            }),
+            tx.query.monsterMasters.findFirst(),
+          ]);
+
+          const enemyLevel =
+            district.kind === "INDUSTRIAL" || district.kind === "MEDICAL"
+              ? 3
+              : 1;
+          const battleLog =
+            prefersHanlim && hasHanlimWeapon
+              ? await executeHanlimBattleInTransaction(
+                  tx,
+                  characterId,
+                  retreat.defer,
+                )
+              : hasMonster
+                ? await executeMonsterBattleInTransaction(
+                    tx,
+                    characterId,
+                    enemyLevel,
+                    retreat.defer,
+                  )
+                : hasHanlimWeapon
+                  ? await executeHanlimBattleInTransaction(
+                      tx,
+                      characterId,
+                      retreat.defer,
+                    )
+                  : await executePatrolGhostBattleInTransaction(
+                      tx,
+                      characterId,
+                      `npc-building-${building.id}`,
+                      nextTime,
+                      retreat.defer,
+                    );
+
+          exp.buildingEvents[buildingKey] = {
+            stage: "READY",
+            text: "건물 내부 수색 중 적대 개체와 교전했습니다.",
+          };
+
+          const payload: Omit<BuildingActionResult, "raid"> = {
+            action: "INVESTIGATE",
+            encounterTriggered: true,
+            battleLog,
+            message: "건물 내부에서 적대 NPC/변이 개체와 조우했습니다!",
+          };
+          return {
+            payload,
+            pendingRetreat: retreat.finish(battleLog),
+            time: nextTime,
+            encounterTravel: writeExplorationState(raid, exp),
+            status: battleLog.playerDied ? "DEAD" : "ACTIVE",
+          };
+        }
+
+        exp.buildingEvents[buildingKey] = {
+          stage: "READY",
+          text: "내부는 조용합니다. 남은 물자를 수색할 수 있습니다.",
+        };
+        const payload: Omit<BuildingActionResult, "raid"> = {
+          action: "INVESTIGATE",
+          encounterTriggered: false,
+          message:
+            "방금 전까지 누군가 머문 흔적만 남아 있습니다. 주변을 수색할 수 있습니다.",
+        };
+        return {
+          payload,
+          time: nextTime,
+          encounterTravel: writeExplorationState(raid, exp),
+        };
+      }
+
+      if (parsed.action === "SEARCH") {
+        if (exp.lootedBuildingIds.includes(building.id)) {
+          throw new InventoryError("이미 수색을 완료한 건물입니다.", 409);
+        }
+        const currentDistrictCount = exp.districtLootCounts[district.id] ?? 0;
+        if (currentDistrictCount >= district.maxLoot) {
+          throw new InventoryError("이 지역에서 얻을 건 다 얻은 것 같다", 409);
+        }
+        const pool = district.materialIds;
+        if (pool.length === 0) {
+          throw new InventoryError("수색할 수 있는 자재가 없는 구역입니다.", 409);
+        }
+
+        const pickCount = random() < 0.45 ? 2 : 1;
+        const pickedIds: string[] = [];
+        for (let i = 0; i < pickCount; i++) {
+          const picked = pool[Math.floor(random() * pool.length) % pool.length];
+          if (picked) pickedIds.push(picked);
+        }
+        await ensureCatalogItemsInTransaction(tx, pickedIds);
+
+        let runningWeight = await calculateInventoryWeight(tx, characterId);
+        const obtainedMap = new Map<
+          string,
+          { weaponMasterId: string; name: string; quantity: number }
+        >();
+        for (const itemId of pickedIds) {
+          const catalogItem = getCatalogItemById(itemId);
+          if (!catalogItem) continue;
+          if (runningWeight + catalogItem.weight > character.maxWeight) {
+            if (obtainedMap.size === 0) {
+              throw new InventoryError(
+                "소지 중량이 한계를 초과해 아이템을 회수할 수 없습니다.",
+                409,
+              );
+            }
+            break;
+          }
+          await putInBackpack(tx, characterId, itemId, 1);
+          runningWeight += catalogItem.weight;
+          const prev = obtainedMap.get(itemId);
+          if (prev) prev.quantity += 1;
+          else
+            obtainedMap.set(itemId, {
+              weaponMasterId: itemId,
+              name: catalogItem.name,
+              quantity: 1,
+            });
+        }
+
+        const obtainedItems = [...obtainedMap.values()];
+        await tx
+          .update(characters)
+          .set({ weight: await calculateInventoryWeight(tx, characterId) })
+          .where(eq(characters.id, characterId));
+
+        exp.lootedBuildingIds.push(building.id);
+        exp.districtLootCounts[district.id] = currentDistrictCount + 1;
+        exp.buildingEvents[buildingKey] = {
+          stage: "CLEARED",
+          text: `${obtainedItems.map((i) => `${i.name} x${i.quantity}`).join(", ")} 확보`,
+        };
+
+        const payload: Omit<BuildingActionResult, "raid"> = {
+          action: "SEARCH",
+          encounterTriggered: false,
+          obtainedItems,
+          message: `건물을 수색해 ${obtainedItems.map((i) => `${i.name} x${i.quantity}`).join(", ")}을(를) 확보했습니다.`,
+        };
+        return {
+          payload,
+          time: nextTime,
+          encounterTravel: writeExplorationState(raid, exp),
+        };
+      }
+
+      if (!parsed.recipeId) {
+        throw new InventoryError("조합할 레시피 ID가 필요합니다.", 400);
+      }
+      const recipe = getRecipeById(parsed.recipeId);
+      if (!recipe) {
+        throw new InventoryError("존재하지 않는 조합식입니다.", 400);
+      }
+      if (building.category !== recipe.buildingCategory) {
+        throw new InventoryError(
+          "현재 건물 카테고리에서는 이 조합을 실행할 수 없습니다.",
+          409,
+        );
+      }
+      if (exp.usedCraftBuildingIds.includes(building.id)) {
+        throw new InventoryError("이미 조합 설비를 사용한 건물입니다.", 409);
+      }
+
+      const [equippedList, backpackList] = await Promise.all([
+        tx.query.characterWeapons.findMany({
+          where: eq(characterWeapons.characterId, characterId),
+          with: { weaponMaster: true },
+          orderBy: [asc(characterWeapons.slotIndex)],
+        }),
+        tx.query.raidInventoryItems.findMany({
+          where: eq(raidInventoryItems.characterId, characterId),
+          with: { weaponMaster: true },
+          orderBy: [asc(raidInventoryItems.slotIndex)],
+        }),
+      ]);
+
+      const baseEquipped = equippedList.find((slot) =>
+        matchesRecipeBase(recipe, slot.weaponMaster),
+      );
+      const baseBackpack = baseEquipped
+        ? undefined
+        : backpackList.find((slot) =>
+            matchesRecipeBase(recipe, slot.weaponMaster),
+          );
+      if (!baseEquipped && !baseBackpack) {
+        throw new InventoryError("조합에 필요한 기반 장비가 없습니다.", 409);
+      }
+
+      const materialCountMap = new Map<string, number>();
+      for (const matId of recipe.materialIds) {
+        materialCountMap.set(matId, (materialCountMap.get(matId) ?? 0) + 1);
+      }
+      const materialReqs = [...materialCountMap.entries()].map(
+        ([itemId, quantity]) => ({ itemId, quantity }),
+      );
+      if (baseBackpack) {
+        materialReqs.push({ itemId: baseBackpack.weaponMasterId, quantity: 1 });
+      }
+      await consumeBackpackItemsInTransaction(tx, characterId, materialReqs);
+
+      let equippedSlotIndex: number | undefined;
+      await ensureCatalogItemsInTransaction(tx, [recipe.resultEquipmentId]);
+      if (baseEquipped) {
+        await tx
+          .delete(characterWeapons)
+          .where(eq(characterWeapons.id, baseEquipped.id));
+        await tx.insert(characterWeapons).values({
+          characterId,
+          weaponMasterId: recipe.resultEquipmentId,
+          slotIndex: baseEquipped.slotIndex,
+        });
+        equippedSlotIndex = baseEquipped.slotIndex;
+      } else {
+        await putInBackpack(tx, characterId, recipe.resultEquipmentId, 1);
+      }
+
+      const nextWeight = await calculateInventoryWeight(tx, characterId);
+      if (nextWeight > character.maxWeight) {
+        throw new InventoryError(
+          "조합 완성품 중량이 허용 한계를 초과합니다.",
+          409,
+        );
+      }
+      await tx
+        .update(characters)
+        .set({ weight: nextWeight })
+        .where(eq(characters.id, characterId));
+
+      const resultCatalog = getCatalogItemById(recipe.resultEquipmentId);
+      const resultName = resultCatalog?.name ?? recipe.resultEquipmentId;
+      exp.usedCraftBuildingIds.push(building.id);
+      exp.buildingEvents[buildingKey] = {
+        stage: "CLEARED",
+        text: `${resultName} 조합 완료`,
+      };
+
+      const payload: Omit<BuildingActionResult, "raid"> = {
+        action: "CRAFT",
+        encounterTriggered: false,
+        craftedItem: {
+          weaponMasterId: recipe.resultEquipmentId,
+          name: resultName,
+          ...(equippedSlotIndex !== undefined ? { equippedSlotIndex } : {}),
+        },
+        message: `${resultName} 조합을 완료했습니다. (해당 건물 설비 소진)`,
+      };
+      return {
+        payload,
+        time: nextTime,
+        encounterTravel: writeExplorationState(raid, exp),
+      };
+    },
+  );
 }
