@@ -1,6 +1,12 @@
 import type { UseMutationResult } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
-import type { BattleLog, MapBuilding } from "@webgame/types";
+import {
+  type BattleLog,
+  type DistrictKind,
+  getBuildingDistrict,
+  MAP_DISTRICTS,
+  type MapBuilding,
+} from "@webgame/types";
 import { getDefaultStore, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Application, Container, Graphics, Sprite, Text, TextStyle } from "pixi.js";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
@@ -66,6 +72,23 @@ interface WaterPoint {
   x: number;
   y: number;
 }
+
+const DISTRICT_COLORS: Record<DistrictKind, number> = {
+  RESIDENTIAL: 0x5c80b8,
+  COMMERCIAL: 0x85adff,
+  INDUSTRIAL: 0xd98e5f,
+  MEDICAL: 0xff7162,
+  INFRA: 0x7c9eb2,
+};
+
+const BUILDING_CATEGORY_KO: Record<string, string> = {
+  COMMERCIAL: "상업",
+  PUBLIC: "공공",
+  MEDICAL: "의료",
+  LOGISTICS: "물류",
+  INFRA: "기반",
+  CULTURAL: "문화",
+};
 type Water = WaterPoint[];
 
 const nodes = mapData.nodes as Node[];
@@ -253,6 +276,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const buildingsContainerRef = useRef<Container | null>(null);
   const nodesGraphicsRef = useRef<Graphics | null>(null);
   const hoverHighlightGraphicsRef = useRef<Graphics | null>(null);
+  const explorationGraphicsRef = useRef<Graphics | null>(null);
   const exitContainerRef = useRef<Container | null>(null);
   const pathLineGraphicsRef = useRef<Graphics | null>(null);
   const targetMarkerGroupRef = useRef<Container | null>(null);
@@ -267,6 +291,11 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const startNavigationTrigger = useAtomValue(startNavigationTriggerAtom);
 
   const { data: characterData } = useGetCharacter();
+  const exploration = characterData?.raw.activeRaid?.exploration;
+  const explorationRef = useRef(exploration);
+  useEffect(() => {
+    explorationRef.current = exploration;
+  }, [exploration]);
   const [noiseSignals, setNoiseSignals] = useAtom(enemyNoiseSignalsAtom);
   const activeRaidId = characterData?.raw.activeRaid?.id;
   const queryClient = useQueryClient();
@@ -618,6 +647,40 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
           mapLayer.addChild(waterGraphics);
         }
 
+        // --- 1.15 Districts (14개 지적도 권역 폴리곤 및 지명 라벨) ---
+        const districtsContainer = new Container();
+        const districtGraphics = new Graphics();
+        for (const district of MAP_DISTRICTS) {
+          if (district.hull.length < 3) continue;
+          const flatHull = district.hull.flatMap((pt) => [pt.x, pt.y]);
+          const tint = DISTRICT_COLORS[district.kind];
+          districtGraphics
+            .poly(flatHull, true)
+            .fill({ color: tint, alpha: 0.045 })
+            .stroke({ width: 1.2, color: tint, alpha: 0.28, join: "round" });
+        }
+        districtsContainer.addChild(districtGraphics);
+
+        const districtLabelStyle = new TextStyle({
+          fontFamily: "monospace",
+          fontSize: 11,
+          fontWeight: "700",
+          fill: 0xb0b7c4,
+          letterSpacing: 1,
+          stroke: { color: 0x0a0a0c, width: 3 },
+        });
+        for (const district of MAP_DISTRICTS) {
+          const label = new Text({
+            text: district.name,
+            style: districtLabelStyle,
+          });
+          label.anchor.set(0.5);
+          label.position.set(district.labelX, district.labelY);
+          label.alpha = 0.65;
+          districtsContainer.addChild(label);
+        }
+        mapLayer.addChild(districtsContainer);
+
         // --- 1.2 Edges (도로망 3종 일괄 드로잉) ---
         const edgesGraphics = new Graphics();
         edgesGraphics.visible = showEdges;
@@ -690,6 +753,11 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         mapLayer.addChild(nodesGraphics);
         nodesGraphicsRef.current = nodesGraphics;
 
+        // --- 1.45 Exploration Status Overlay (조합 가능/소진 및 수색 완료 건물 표시) ---
+        const explorationGraphics = new Graphics();
+        mapLayer.addChild(explorationGraphics);
+        explorationGraphicsRef.current = explorationGraphics;
+
         // --- 1.5 Hover Highlight Graphics (단일 동적 하이라이트 레이어) ---
         const hoverHighlightGraphics = new Graphics();
         mapLayer.addChild(hoverHighlightGraphics);
@@ -756,6 +824,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       buildingsContainerRef.current = null;
       nodesGraphicsRef.current = null;
       hoverHighlightGraphicsRef.current = null;
+      explorationGraphicsRef.current = null;
       exitContainerRef.current = null;
       pathLineGraphicsRef.current = null;
       targetMarkerGroupRef.current = null;
@@ -1030,14 +1099,31 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
           const el = document.getElementById("hud-hover-detail");
           if (el) {
+            const district = getBuildingDistrict(b);
+            const exp = explorationRef.current;
+            const isCrafted = exp?.usedCraftBuildingIds.includes(b.id) ?? false;
+            const isLooted = exp?.lootedBuildingIds.includes(b.id) ?? false;
+            const categoryKo = b.category
+              ? (BUILDING_CATEGORY_KO[b.category] ?? b.category)
+              : null;
+            const districtLoot = exp?.districtLootCounts[district.id] ?? 0;
+            const title = b.name
+              ? `${b.name}${categoryKo ? ` · ${categoryKo}` : ""}`
+              : `BUILDING #${b.id}`;
+            const statusFlags = [
+              isLooted ? "수색완료" : null,
+              b.category ? (isCrafted ? "조합소진" : "조합가능") : null,
+            ]
+              .filter(Boolean)
+              .join(" / ");
             el.style.display = "block";
             el.innerHTML = `
-              <div style="color: #2bcbba; font-size: 11px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">
-                BUILDING #${b.id}
+              <div style="color: #85adff; font-size: 11px; font-weight: 700; margin-bottom: 2px; letter-spacing: 0.4px;">
+                ${title}
               </div>
-              <div style="font-size: 10px; color: #8a8d98; font-family: monospace; line-height: 1.4;">
-                Height: ${b.height.toFixed(2)}m<br />
-                Connected Road: Node #${b.roadNodeId}
+              <div style="font-size: 10px; color: #b0b3be; font-family: monospace; line-height: 1.4;">
+                ${district.name} (${districtLoot}/${district.maxLoot})<br />
+                Height: ${b.height.toFixed(1)}m · Road #${b.roadNodeId}${statusFlags ? `<br /><span style="color: #e2e4ea;">${statusFlags}</span>` : ""}
               </div>
             `;
           }
@@ -1468,6 +1554,32 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     setCullingTimeMs(totalMs);
     benchmarkStatsRef.current.rTreeSearchTimes.push(totalMs);
   }, [visibleNodeData, visibleBuildingData]);
+
+  useEffect(() => {
+    const g = explorationGraphicsRef.current;
+    if (!isPixiReady || !g || g.destroyed) return;
+    g.clear();
+    g.visible = !isCombat;
+
+    const lootedSet = new Set(exploration?.lootedBuildingIds ?? []);
+    const usedCraftSet = new Set(exploration?.usedCraftBuildingIds ?? []);
+
+    for (const b of buildings) {
+      if (b.flatPoints.length < 6) continue;
+      if (b.category) {
+        const isUsed = usedCraftSet.has(b.id);
+        g.poly(b.flatPoints, true)
+          .fill({ color: isUsed ? 0x45454d : 0x85adff, alpha: isUsed ? 0.16 : 0.24 })
+          .stroke({
+            width: 1.4,
+            color: isUsed ? 0x60606b : 0x85adff,
+            alpha: isUsed ? 0.45 : 0.85,
+          });
+      } else if (lootedSet.has(b.id)) {
+        g.poly(b.flatPoints, true).fill({ color: 0x0a0a0c, alpha: 0.48 });
+      }
+    }
+  }, [isPixiReady, isCombat, exploration]);
 
   // 5.1. 실시간 최단 경로 연산 (A* 알고리즘 연동)
   useEffect(() => {

@@ -30,7 +30,11 @@ const CombatLog = () => {
             >
               <div className={styles.actionLogPortrait} aria-hidden="true" />
               <div className={styles.actionLogText}>
-                <p className={styles.actionLogType}>{event.type}</p>
+                <p className={styles.actionLogType}>
+                  {event.type === "SYNERGY"
+                    ? `SYNERGY [${event.sourceSlotIndex + 1}→${event.targetSlotIndices.map((idx) => idx + 1).join(",")}]`
+                    : event.type}
+                </p>
                 <p className={styles.actionLogActor}>
                   {"actorId" in event
                     ? (battle?.initialState.players.find(

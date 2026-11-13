@@ -1,4 +1,8 @@
-import type { EnemyNoiseSignal, RaidNoiseSignals } from "@webgame/types";
+import type {
+  BattleLog,
+  EnemyNoiseSignal,
+  RaidNoiseSignals,
+} from "@webgame/types";
 import { atom } from "jotai";
 import { atomWithStorage, createJSONStorage } from "jotai/utils";
 
@@ -78,4 +82,13 @@ export const activeDragIdAtom = atom<string | number | null>(null);
 
 // 슬롯 간 이동 애니메이션이 진행 중인 아이템 ID 목록 (z-index 및 overflow 클리핑 해제용)
 export const animatingSlotIdsAtom = atom<string[]>([]);
+
+// 필드 네비게이터에서 목표 조합으로 고정(Pin)한 레시피 ID
+export const pinnedRecipeIdAtom = atom<string | null>(null);
+
+// 최근 건물 이벤트 액션 결과 메시지
+export const lastBuildingMessageAtom = atom<string | null>(null);
+
+// 건물 이벤트에서 발생한 NPC 전투 로그 (FieldCombat 훅이 감지하여 즉시 재생)
+export const pendingBuildingCombatAtom = atom<BattleLog | null>(null);
 

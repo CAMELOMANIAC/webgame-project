@@ -1,5 +1,15 @@
 import { useNavigate } from "@tanstack/react-router";
-import { firstMissionNodeId, formatRaidTime } from "@webgame/types";
+import {
+  CRAFTING_RECIPES,
+  findMaterialDistricts,
+  firstMissionNodeId,
+  formatRaidTime,
+  getBuildingDistrict,
+  getCatalogItemById,
+  getCraftingRecipesForCategory,
+  getRecipeChainForTarget,
+  matchesRecipeBase,
+} from "@webgame/types";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useId, useMemo, useRef, useState } from "react";
 import { RiCloseLine, RiCompass3Line } from "react-icons/ri";
@@ -16,6 +26,8 @@ import {
   isRecommendDestinationsOpenAtom,
   navigationProgressAtom,
   navigationStartTimeAtom,
+  pendingBuildingCombatAtom,
+  pinnedRecipeIdAtom,
   playerCoordsAtom,
   requestedBuildingIdAtom,
   requestedNodeIdAtom,
@@ -24,6 +36,7 @@ import {
   targetBuildingIdAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
+import { useBuildingAction } from "@/utils/hooks/useBuildingAction";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useJournal } from "@/utils/hooks/useJournal";
 import { useRaidRules } from "@/utils/hooks/useRaidRules";
@@ -133,6 +146,13 @@ const FieldNavTargetSection = () => {
   const triggerStartNavigation = useSetAtom(startNavigationTriggerAtom);
   const setNode = useSetAtom(currentNodeIdAtom);
   const setCoords = useSetAtom(playerCoordsAtom);
+  const [pinnedRecipeId, setPinnedRecipeId] = useAtom(pinnedRecipeIdAtom);
+  const setPendingBuildingCombat = useSetAtom(pendingBuildingCombatAtom);
+  const buildingAction = useBuildingAction();
+  const [lastBuildingMsg, setLastBuildingMsg] = useState<{
+    buildingId: number;
+    text: string;
+  } | null>(null);
   const character = data?.raw;
   const locationName =
     nodeId === (rules?.startNodeId ?? 0)
@@ -148,7 +168,82 @@ const FieldNavTargetSection = () => {
     !isMoving &&
     !isCombat &&
     !hasPending &&
-    !extractRaid.isPending;
+    !extractRaid.isPending &&
+    !buildingAction.isPending;
+
+  const ownedItemCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const eqItem of character?.equipment ?? []) {
+      if (eqItem.weaponMaster?.id) {
+        counts.set(
+          eqItem.weaponMaster.id,
+          (counts.get(eqItem.weaponMaster.id) ?? 0) + 1,
+        );
+      }
+    }
+    for (const invItem of character?.inventory ?? []) {
+      if (invItem.weaponMaster?.id) {
+        counts.set(
+          invItem.weaponMaster.id,
+          (counts.get(invItem.weaponMaster.id) ?? 0) + invItem.quantity,
+        );
+      }
+    }
+    return counts;
+  }, [character?.equipment, character?.inventory]);
+
+  const pinnedChain = useMemo(
+    () => (pinnedRecipeId ? getRecipeChainForTarget(pinnedRecipeId) : []),
+    [pinnedRecipeId],
+  );
+
+  const missingPinnedMaterials = useMemo(() => {
+    const needed = new Map<string, number>();
+    for (const recipe of pinnedChain) {
+      for (const matId of recipe.materialIds) {
+        needed.set(matId, (needed.get(matId) ?? 0) + 1);
+      }
+    }
+    const missing: { id: string; name: string }[] = [];
+    for (const [matId, qty] of needed.entries()) {
+      if ((ownedItemCounts.get(matId) ?? 0) < qty) {
+        missing.push({
+          id: matId,
+          name: getCatalogItemById(matId)?.name ?? matId,
+        });
+      }
+    }
+    return missing;
+  }, [pinnedChain, ownedItemCounts]);
+
+  const exploration = character?.activeRaid?.exploration;
+  const activeBuildingId = character?.activeRaid?.currentBuildingId ?? null;
+  const activeBuilding =
+    activeBuildingId !== null
+      ? ALL_BUILDINGS_BY_ID.get(activeBuildingId)
+      : undefined;
+  const activeDistrict = activeBuilding
+    ? getBuildingDistrict(activeBuilding)
+    : undefined;
+  const activeEventState =
+    activeBuilding && exploration
+      ? exploration.buildingEvents[String(activeBuilding.id)]
+      : undefined;
+  const activeDistrictLoot = activeDistrict
+    ? (exploration?.districtLootCounts[activeDistrict.id] ?? 0)
+    : 0;
+  const isDistrictExhausted = activeDistrict
+    ? activeDistrictLoot >= activeDistrict.maxLoot
+    : false;
+  const isActiveBuildingLooted = activeBuilding
+    ? (exploration?.lootedBuildingIds.includes(activeBuilding.id) ?? false)
+    : false;
+  const isActiveCraftUsed = activeBuilding
+    ? (exploration?.usedCraftBuildingIds.includes(activeBuilding.id) ?? false)
+    : false;
+  const activeCategoryRecipes = activeBuilding?.category
+    ? getCraftingRecipesForCategory(activeBuilding.category)
+    : [];
   const canMove =
     targetNodeId !== null &&
     (shortestPath.length > 1 ||
@@ -195,6 +290,30 @@ const FieldNavTargetSection = () => {
 
   const recommendedDestinations = useMemo(() => {
     const candidates: RecommendedDestination[] = [];
+    const targetCategories = new Set(
+      pinnedChain.map((recipe) => recipe.buildingCategory),
+    );
+    const usedCraftSet = new Set(exploration?.usedCraftBuildingIds ?? []);
+    const districtLootMap = exploration?.districtLootCounts ?? {};
+
+    if (missingPinnedMaterials.length > 0) {
+      const seenDistrictIds = new Set<string>();
+      for (const mat of missingPinnedMaterials) {
+        for (const district of findMaterialDistricts(mat.id)) {
+          if (seenDistrictIds.has(district.id)) continue;
+          const looted = districtLootMap[district.id] ?? 0;
+          if (looted >= district.maxLoot) continue;
+          seenDistrictIds.add(district.id);
+          candidates.push({
+            id: `district-${district.id}`,
+            nodeId: district.centerNodeId,
+            name: `${district.name} (${mat.name})`,
+            category: "DISTRICT",
+          });
+        }
+      }
+    }
+
     if (journal.data?.mission.status === "ACTIVE") {
       candidates.push({
         id: `mission-${journal.data.mission.targetNodeId}`,
@@ -215,6 +334,13 @@ const FieldNavTargetSection = () => {
       });
     }
     for (const staticDest of STATIC_RECOMMENDED_DESTINATIONS) {
+      if (
+        staticDest.buildingId !== undefined &&
+        usedCraftSet.has(staticDest.buildingId) &&
+        targetCategories.size > 0
+      ) {
+        continue;
+      }
       candidates.push(staticDest);
     }
     return candidates
@@ -227,22 +353,53 @@ const FieldNavTargetSection = () => {
           dest.nodeId === nodeId
             ? [nodeId]
             : findShortestPath(nodeId, dest.nodeId);
+        const matchesPinnedCategory =
+          dest.category === "DISTRICT" ||
+          (dest.buildingCategory !== undefined &&
+            targetCategories.has(dest.buildingCategory));
         return {
           ...dest,
           isCurrent,
+          matchesPinnedCategory,
           travelMinutes: isCurrent
             ? 0
             : estimatePathTravelMinutes(path, dest.buildingId !== undefined),
         };
       })
-      .sort((a, b) => a.travelMinutes - b.travelMinutes);
+      .sort((a, b) => {
+        if (a.matchesPinnedCategory !== b.matchesPinnedCategory) {
+          return a.matchesPinnedCategory ? -1 : 1;
+        }
+        return a.travelMinutes - b.travelMinutes;
+      });
   }, [
+    pinnedChain,
+    missingPinnedMaterials,
+    exploration,
     journal.data?.mission,
     rules?.extractionNodeIds,
     rules?.startNodeId,
     nodeId,
     currentLandmark?.id,
   ]);
+
+  const handleBuildingAction = (
+    action: "INVESTIGATE" | "SEARCH" | "CRAFT",
+    recipeId?: string,
+  ) => {
+    if (!character || !activeBuilding || !canAct) return;
+    buildingAction.mutate(
+      { characterId: character.id, action, recipeId },
+      {
+        onSuccess: (res) => {
+          setLastBuildingMsg({ buildingId: activeBuilding.id, text: res.message });
+          if (res.battleLog) {
+            setPendingBuildingCombat(res.battleLog);
+          }
+        },
+      },
+    );
+  };
 
   const handleSelectRecommendation = (dest: RecommendedDestination) => {
     setRequestedBuilding(dest.buildingId ?? null);
@@ -310,6 +467,34 @@ const FieldNavTargetSection = () => {
           inert={!isRecommendOpen}
         >
           <div className={styles.bodyContent}>
+            <div className={styles.recipePinRow}>
+              <select
+                aria-label="목표 조합 아이템 지정"
+                className={styles.recipeSelect}
+                value={pinnedRecipeId ?? ""}
+                onChange={(e) =>
+                  setPinnedRecipeId(e.target.value ? e.target.value : null)
+                }
+              >
+                <option value="">목표 조합 없음</option>
+                {CRAFTING_RECIPES.map((recipe) => {
+                  const item = getCatalogItemById(recipe.resultEquipmentId);
+                  return (
+                    <option key={recipe.id} value={recipe.id}>
+                      [T{recipe.tier} · {BUILDING_CATEGORY_LABELS[recipe.buildingCategory]}]{" "}
+                      {item?.name ?? recipe.resultEquipmentId}
+                    </option>
+                  );
+                })}
+              </select>
+              {pinnedRecipeId && (
+                <span className={styles.recipeNeedText}>
+                  {missingPinnedMaterials.length > 0
+                    ? `부족 재료: ${missingPinnedMaterials.map((m) => m.name).join(", ")}`
+                    : "필요 재료 보유 완료"}
+                </span>
+              )}
+            </div>
             <div className={styles.recommendList}>
               {recommendedDestinations.length === 0 ? (
                 <p className={styles.recommendEmpty}>
@@ -327,9 +512,11 @@ const FieldNavTargetSection = () => {
                       ? "임무"
                       : dest.category === "EXTRACTION"
                         ? "탈출"
-                        : dest.buildingCategory
-                          ? BUILDING_CATEGORY_LABELS[dest.buildingCategory]
-                          : "거점";
+                        : dest.category === "DISTRICT"
+                          ? "재료구역"
+                          : dest.buildingCategory
+                            ? BUILDING_CATEGORY_LABELS[dest.buildingCategory]
+                            : "거점";
                   const backdropImage = dest.buildingCategory
                     ? BUILDING_CATEGORY_IMAGES[dest.buildingCategory]
                     : undefined;
@@ -386,6 +573,132 @@ const FieldNavTargetSection = () => {
           inert={isRecommendOpen}
         >
           <div className={styles.bodyContent}>
+            {activeBuilding && activeDistrict && !isMoving && character?.isRaiding && (
+              <div className={styles.buildingEventCard}>
+                <div className={styles.buildingEventHeader}>
+                  <span className={styles.buildingEventTitle}>
+                    {activeBuilding.name ?? `건물 #${activeBuilding.id}`}
+                    {activeBuilding.category
+                      ? ` · ${BUILDING_CATEGORY_LABELS[activeBuilding.category]}`
+                      : ""}
+                  </span>
+                  <span className={styles.districtBadge}>
+                    {activeDistrict.name} ({activeDistrictLoot}/{activeDistrict.maxLoot})
+                  </span>
+                </div>
+
+                <p className={styles.buildingEventText}>
+                  {lastBuildingMsg?.buildingId === activeBuilding.id
+                    ? lastBuildingMsg.text
+                    : (activeEventState?.text ??
+                        "방금 전까지 사람이 있었던 흔적이 보입니다. 아직 내부에 가치 있는 것들이 남아 있을지도 모릅니다.")}
+                </p>
+
+                {buildingAction.error && (
+                  <p className={styles.buildingErrorText}>
+                    {buildingAction.error.message}
+                  </p>
+                )}
+
+                {(!activeEventState || activeEventState.stage === "INTRO") ? (
+                  <button
+                    type="button"
+                    className={styles.buildingActionBtn}
+                    disabled={!canAct}
+                    onClick={() => handleBuildingAction("INVESTIGATE")}
+                  >
+                    <span>
+                      {buildingAction.isPending ? "확인 중…" : "다음 · 내부 확인"}
+                    </span>
+                    <span className={styles.actionCode}>+00:10</span>
+                  </button>
+                ) : isDistrictExhausted ? (
+                  <p className={styles.buildingExhaustedText}>
+                    이 지역에서 얻을 건 다 얻은 것 같다
+                  </p>
+                ) : !isActiveBuildingLooted ? (
+                  <button
+                    type="button"
+                    className={styles.buildingActionBtn}
+                    disabled={!canAct}
+                    onClick={() => handleBuildingAction("SEARCH")}
+                  >
+                    <span>
+                      {buildingAction.isPending ? "수색 중…" : "수색하기"}
+                    </span>
+                    <span className={styles.actionCode}>+00:10</span>
+                  </button>
+                ) : (
+                  <p className={styles.buildingExhaustedText}>
+                    이 건물은 이미 수색했습니다.
+                  </p>
+                )}
+
+                {activeBuilding.category && (
+                  <div className={styles.craftList}>
+                    {isActiveCraftUsed ? (
+                      <p className={styles.buildingExhaustedText}>
+                        이미 조합 설비를 사용한 건물입니다.
+                      </p>
+                    ) : (
+                      activeCategoryRecipes.map((recipe) => {
+                        const resultItem = getCatalogItemById(
+                          recipe.resultEquipmentId,
+                        );
+                        const hasBase =
+                          character.equipment.some((s) =>
+                            matchesRecipeBase(recipe, s.weaponMaster),
+                          ) ||
+                          character.inventory.some((s) =>
+                            matchesRecipeBase(recipe, s.weaponMaster),
+                          );
+                        const matCountsNeeded = new Map<string, number>();
+                        for (const mId of recipe.materialIds) {
+                          matCountsNeeded.set(
+                            mId,
+                            (matCountsNeeded.get(mId) ?? 0) + 1,
+                          );
+                        }
+                        const hasAllMats = [...matCountsNeeded.entries()].every(
+                          ([mId, qty]) =>
+                            (ownedItemCounts.get(mId) ?? 0) >= qty,
+                        );
+                        const baseName =
+                          getCatalogItemById(recipe.baseEquipmentId)?.name ??
+                          recipe.compatibleBaseNames[0] ??
+                          recipe.baseEquipmentId;
+                        const matNames = recipe.materialIds
+                          .map((id) => getCatalogItemById(id)?.name ?? id)
+                          .join(" + ");
+                        return (
+                          <div key={recipe.id} className={styles.craftRow}>
+                            <div className={styles.craftInfo}>
+                              <span className={styles.craftName}>
+                                {resultItem?.name ?? recipe.resultEquipmentId}
+                              </span>
+                              <span className={styles.craftReqs}>
+                                {baseName} + {matNames}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              className={styles.craftActionBtn}
+                              disabled={!canAct || !hasBase || !hasAllMats}
+                              onClick={() =>
+                                handleBuildingAction("CRAFT", recipe.id)
+                              }
+                            >
+                              조합 +10m
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className={styles.telemetryGrid}>
               <div className={styles.telemetryCell}>
                 <span className={styles.cellLabel}>경과 시간</span>

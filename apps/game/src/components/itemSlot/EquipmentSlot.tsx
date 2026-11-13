@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Item } from "@webgame/types";
+import { formatSynergySummary, type Item } from "@webgame/types";
 import { useAtomValue } from "jotai";
 import { motion } from "motion/react";
 import React from "react";
@@ -163,6 +163,9 @@ const EquipmentSlot = ({
                 <span>DMG {weapon.damage}</span>
                 <span>CD {weapon.cooldownTicks}s</span>
                 {weapon.castTicks > 0 && <span>CAST {weapon.castTicks}s</span>}
+                {formatSynergySummary(weapon.effect) && (
+                  <span>{formatSynergySummary(weapon.effect)}</span>
+                )}
               </div>
             )}
           </div>

@@ -10,7 +10,11 @@ import publicImg from "@/assets/buildings/public.jpg";
 import mapData from "../../../../packages/types/src/assets/map_graph.json";
 import { getBuildingCenter } from "./getBuildingCenter";
 
-export type RecommendedDestinationCategory = "MISSION" | "EXTRACTION" | "LANDMARK";
+export type RecommendedDestinationCategory =
+  | "MISSION"
+  | "EXTRACTION"
+  | "LANDMARK"
+  | "DISTRICT";
 
 export interface RecommendedDestination {
   id: string;
@@ -19,6 +23,7 @@ export interface RecommendedDestination {
   name: string;
   category: RecommendedDestinationCategory;
   buildingCategory?: BuildingCategory;
+  subtitle?: string;
 }
 
 export const BUILDING_CATEGORY_LABELS: Record<BuildingCategory, string> = {

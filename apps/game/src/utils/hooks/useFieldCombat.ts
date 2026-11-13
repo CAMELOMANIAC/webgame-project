@@ -21,6 +21,7 @@ import {
   enemyNoiseSignalsAtom,
   isCombatAtom,
   isNavigatingAtom,
+  pendingBuildingCombatAtom,
   playerCoordsAtom,
   shortestPathAtom,
   targetNodeIdAtom,
@@ -373,6 +374,21 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     }
   }, [characterData?.raw.isRaiding, characterId, isCombat, isMoving, pendingBattle.data, pendingBattle.isError, pendingBattle.isFetching,
     pendingNavigation, queryClient, triggerCombat, userId]);
+
+  const [pendingBuildingCombat, setPendingBuildingCombat] = useAtom(
+    pendingBuildingCombatAtom,
+  );
+
+  useEffect(() => {
+    if (!pendingBuildingCombat || isCombat) return;
+    setPendingBuildingCombat(null);
+    triggerCombat(pendingBuildingCombat);
+  }, [
+    pendingBuildingCombat,
+    setPendingBuildingCombat,
+    isCombat,
+    triggerCombat,
+  ]);
 
   const navigateRaid = useNavigateRaid();
 

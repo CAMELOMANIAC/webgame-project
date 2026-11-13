@@ -413,3 +413,170 @@ export const recommendEmpty = style({
   fontSize: "12px",
   textAlign: "center",
 });
+
+export const recipePinRow = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "6px",
+  padding: "8px 10px",
+  marginBottom: "8px",
+  borderRadius: vars.radius.control,
+  border: `1px solid ${vars.border.subtle}`,
+  backgroundColor: vars.surface.low,
+});
+
+export const recipeSelect = style({
+  width: "100%",
+  padding: "6px 8px",
+  borderRadius: vars.radius.control,
+  border: `1px solid ${vars.border.subtle}`,
+  backgroundColor: vars.surface.base,
+  color: vars.text.primary,
+  fontSize: "12px",
+  fontFamily: vars.font.mono,
+});
+
+export const recipeNeedText = style({
+  fontSize: "11px",
+  color: vars.color.positive,
+  fontFamily: vars.font.mono,
+  lineHeight: 1.35,
+});
+
+export const buildingEventCard = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "8px",
+  padding: "10px",
+  borderRadius: vars.radius.control,
+  border: `1px solid ${vars.border.subtle}`,
+  backgroundColor: vars.surface.low,
+});
+
+export const buildingEventHeader = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "8px",
+});
+
+export const buildingEventTitle = style({
+  fontSize: "12px",
+  fontWeight: 600,
+  color: vars.text.primary,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+});
+
+export const districtBadge = style({
+  flexShrink: 0,
+  fontFamily: vars.font.mono,
+  fontSize: "10px",
+  fontWeight: 600,
+  color: vars.text.secondary,
+  fontVariantNumeric: "tabular-nums",
+});
+
+export const buildingEventText = style({
+  margin: 0,
+  fontSize: "12px",
+  lineHeight: 1.45,
+  color: vars.text.secondary,
+});
+
+export const buildingExhaustedText = style({
+  margin: 0,
+  fontSize: "11px",
+  color: vars.text.muted,
+});
+
+export const buildingErrorText = style({
+  margin: 0,
+  fontSize: "11px",
+  color: vars.color.negative,
+});
+
+export const buildingActionBtn = style({
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "8px 10px",
+  borderRadius: vars.radius.control,
+  border: `1px solid ${vars.border.subtle}`,
+  backgroundColor: vars.surface.high,
+  color: vars.text.primary,
+  fontSize: "12px",
+  fontWeight: 600,
+  cursor: "pointer",
+  selectors: {
+    "&:hover:not(:disabled)": {
+      borderColor: vars.color.positive,
+    },
+    "&:disabled": {
+      opacity: 0.45,
+      cursor: "not-allowed",
+    },
+  },
+});
+
+export const craftList = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "6px",
+  paddingTop: "6px",
+  borderTop: `1px solid ${vars.border.subtle}`,
+});
+
+export const craftRow = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "8px",
+  padding: "6px 8px",
+  borderRadius: vars.radius.control,
+  border: `1px solid ${vars.border.subtle}`,
+  backgroundColor: vars.surface.base,
+});
+
+export const craftInfo = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "2px",
+  minWidth: 0,
+});
+
+export const craftName = style({
+  fontSize: "12px",
+  fontWeight: 600,
+  color: vars.text.primary,
+});
+
+export const craftReqs = style({
+  fontSize: "10px",
+  fontFamily: vars.font.mono,
+  color: vars.text.muted,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+});
+
+export const craftActionBtn = style({
+  flexShrink: 0,
+  padding: "5px 8px",
+  borderRadius: vars.radius.control,
+  border: `1px solid ${vars.border.subtle}`,
+  backgroundColor: vars.color.positiveBg,
+  color: vars.color.positive,
+  fontFamily: vars.font.mono,
+  fontSize: "11px",
+  fontWeight: 600,
+  cursor: "pointer",
+  selectors: {
+    "&:disabled": {
+      opacity: 0.4,
+      cursor: "not-allowed",
+    },
+  },
+});
