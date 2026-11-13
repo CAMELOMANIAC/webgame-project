@@ -1,3 +1,6 @@
+import { getItemKind } from "./crafting";
+import type { WeaponEffect } from "./index";
+
 interface EquipmentEntry<T> {
   id: string;
   slotIndex: number;
@@ -20,6 +23,7 @@ interface InventoryWeapon {
   cooldownTicks: number;
   castTicks: number;
   description: string | null;
+  effect?: WeaponEffect | null;
 }
 
 export interface StashItemData {
@@ -62,7 +66,9 @@ export interface UnequipOthersResponse {
 }
 
 // 화면의 슬롯 교환에서도 여러 개짜리 묶음을 장착하며 수량이 사라지지 않게 한다.
-export function swapEquipmentBackpack<T extends { id: string }>(
+export function swapEquipmentBackpack<
+  T extends { id: string; effect?: unknown },
+>(
   equipment: EquipmentEntry<T>[],
   inventory: BackpackEntry<T>[],
   equipmentIndex: number,
@@ -77,6 +83,12 @@ export function swapEquipmentBackpack<T extends { id: string }>(
     (!equipped.weaponMaster && !carried.weaponMaster)
   )
     return false;
+  if (
+    carried.weaponMaster &&
+    getItemKind(carried.weaponMaster) === "MATERIAL"
+  ) {
+    return false;
+  }
   if (carried.weaponMaster && carried.quantity > 1) {
     if (equipped.weaponMaster?.id === carried.weaponMaster.id) return false;
     const emptyIndex = equipped.weaponMaster

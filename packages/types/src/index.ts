@@ -1,7 +1,18 @@
 export * from "./weapon";
 export * from "./inventory";
 export * from "./world";
+export * from "./districts";
+export * from "./crafting";
 export type TargetingStrategy = "WEAKEST" | "STRONGEST" | "RANDOM";
+export type ItemKind = "EQUIPMENT" | "MATERIAL";
+export type SynergyTargetRule =
+  | "NEXT"
+  | "PREV"
+  | "ADJACENT"
+  | "EDGES"
+  | "ALL_MELEE"
+  | "ALL_RANGED"
+  | "ALL_OTHER";
 
 export interface Item {
   id: string;
@@ -12,12 +23,21 @@ export interface Item {
   iconKey?: string;
 }
 
-export interface HealingEffect {
-  type: "HEAL";
-  amount: number;
-  hpThreshold: number;
-  oncePerBattle: boolean;
+export interface WeaponEffect {
+  type?: "HEAL" | "SYNERGY" | "MATERIAL";
+  itemKind?: ItemKind;
+  amount?: number;
+  hpThreshold?: number;
+  oncePerBattle?: boolean;
+  target?: SynergyTargetRule;
+  hasteTicks?: number;
+  damageBonus?: number;
+  critChanceBonus?: number;
+  staminaRestore?: number;
+  triggerEveryNHits?: number;
 }
+
+export type HealingEffect = WeaponEffect;
 
 // JSON으로 전달하는 무기 설정. 실행 함수와 전투 중 상태를 포함하지 않는다.
 export interface WeaponData extends Item {
@@ -26,7 +46,7 @@ export interface WeaponData extends Item {
   cooldownTicks: number; // 틱 단위 쿨다운
   castTicks: number; // 공격 전 선딜레이 틱
   strategy?: TargetingStrategy;
-  effect?: HealingEffect;
+  effect?: WeaponEffect;
   attackType?: "MELEE" | "RANGED";
 }
 
@@ -157,6 +177,16 @@ export type BattleEvent = { id: string; timestamp: number } & (
       weaponIndex: number;
       reason: string;
     }
+  | {
+      type: "SYNERGY";
+      actorId: string;
+      sourceSlotIndex: number;
+      targetSlotIndices: number[];
+      hasteTicks?: number;
+      damageBonus?: number;
+      critChanceBonus?: number;
+      staminaRestore?: number;
+    }
   | { type: "DEATH"; playerId: string }
   | { type: "BATTLE_END"; winnerTeamId: string | null; reason: BattleEndReason }
 );
@@ -209,6 +239,20 @@ export type RetreatDecisionResult =
   | { remainingMs: number; windowMs: number; resolution?: never }
   | { resolution: RetreatResolution; remainingMs?: never; windowMs?: never };
 
+export type BuildingEventStage = "INTRO" | "READY" | "CLEARED";
+
+export interface BuildingEventState {
+  stage: BuildingEventStage;
+  text: string;
+}
+
+export interface RaidExplorationState {
+  lootedBuildingIds: number[];
+  districtLootCounts: Record<string, number>;
+  usedCraftBuildingIds: number[];
+  buildingEvents: Record<string, BuildingEventState>;
+}
+
 export interface RaidView {
   id: string;
   status: "ACTIVE" | "EXTRACTED" | "DEAD";
@@ -216,6 +260,22 @@ export interface RaidView {
   currentNodeId: number;
   currentBuildingId?: number | null;
   time: number;
+  exploration?: RaidExplorationState;
+}
+
+export interface BuildingActionInput extends RaidActionInput {
+  action: "INVESTIGATE" | "SEARCH" | "CRAFT";
+  recipeId?: string;
+}
+
+export interface BuildingActionResult {
+  raid: RaidView;
+  action: "INVESTIGATE" | "SEARCH" | "CRAFT";
+  encounterTriggered: boolean;
+  battleLog?: RaidBattleResult;
+  message: string;
+  obtainedItems?: { weaponMasterId: string; name: string; quantity: number }[];
+  craftedItem?: { weaponMasterId: string; name: string; equippedSlotIndex?: number };
 }
 
 export interface RaidActionInput {

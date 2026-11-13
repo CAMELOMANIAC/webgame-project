@@ -9,6 +9,32 @@ export type BuildingCategory =
   | "INFRA"
   | "CULTURAL";
 
+export type DistrictKind =
+  | "RESIDENTIAL"
+  | "COMMERCIAL"
+  | "INDUSTRIAL"
+  | "MEDICAL"
+  | "INFRA";
+
+export interface MapPoint {
+  x: number;
+  y: number;
+}
+
+export interface MapDistrict {
+  id: string;
+  name: string;
+  kind: DistrictKind;
+  seedX: number;
+  seedY: number;
+  labelX: number;
+  labelY: number;
+  centerNodeId: number;
+  maxLoot: number;
+  materialIds: string[];
+  hull: MapPoint[];
+}
+
 export interface MapBuilding {
   id: number;
   height: number;
