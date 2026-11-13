@@ -108,7 +108,6 @@ test("건물 이벤트 API는 잘못된 액션을 거부하고 exploration 추�
     }),
     {
       lootedBuildingIds: [42],
-      districtLootCounts: { "west-res-1": 1 },
       usedCraftBuildingIds: [],
       buildingEvents: {},
     },

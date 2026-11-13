@@ -114,20 +114,17 @@ export function extractRaidExploration(
 ): RaidExplorationState | undefined {
   if (!encounterTravel) return undefined;
   const lootedBuildingIds = encounterTravel.lootedBuildingIds ?? [];
-  const districtLootCounts = encounterTravel.districtLootCounts ?? {};
   const usedCraftBuildingIds = encounterTravel.usedCraftBuildingIds ?? [];
   const buildingEvents = encounterTravel.buildingEvents ?? {};
   if (
     lootedBuildingIds.length === 0 &&
     usedCraftBuildingIds.length === 0 &&
-    Object.keys(districtLootCounts).length === 0 &&
     Object.keys(buildingEvents).length === 0
   ) {
     return undefined;
   }
   return {
     lootedBuildingIds,
-    districtLootCounts,
     usedCraftBuildingIds,
     buildingEvents,
   };
@@ -865,7 +862,11 @@ export async function expireRaidBattles(database: Database) {
   }
 }
 
-function readExplorationState(raid: RaidSession): RaidExplorationState {
+interface InternalExplorationState extends RaidExplorationState {
+  districtLootCounts: Record<string, number>;
+}
+
+function readExplorationState(raid: RaidSession): InternalExplorationState {
   const raw = raid.encounterTravel;
   return {
     lootedBuildingIds: [...(raw?.lootedBuildingIds ?? [])],
@@ -877,7 +878,7 @@ function readExplorationState(raid: RaidSession): RaidExplorationState {
 
 function writeExplorationState(
   raid: RaidSession,
-  next: RaidExplorationState,
+  next: InternalExplorationState,
 ): NonNullable<RaidSession["encounterTravel"]> {
   return {
     visitedEdges: raid.encounterTravel?.visitedEdges ?? [],
@@ -1095,16 +1096,36 @@ export async function executeRaidBuildingAction(
         if (exp.lootedBuildingIds.includes(building.id)) {
           throw new InventoryError("이미 수색을 완료한 건물입니다.", 409);
         }
-        const currentDistrictCount = exp.districtLootCounts[district.id] ?? 0;
-        if (currentDistrictCount >= district.maxLoot) {
-          throw new InventoryError("이 지역에서 얻을 건 다 얻은 것 같다", 409);
+        const currentDistrictItems = exp.districtLootCounts[district.id] ?? 0;
+        const remainingAllowance = district.maxLoot - currentDistrictItems;
+        if (remainingAllowance <= 0) {
+          exp.lootedBuildingIds.push(building.id);
+          exp.buildingEvents[buildingKey] = {
+            stage: "CLEARED",
+            text: "이 지역에서 얻을 건 다 얻은 것 같다.",
+          };
+          const payload: Omit<BuildingActionResult, "raid"> = {
+            action: "SEARCH",
+            encounterTriggered: false,
+            obtainedItems: [],
+            message: "이 지역에서 얻을 건 다 얻은 것 같다.",
+          };
+          return {
+            payload,
+            time: nextTime,
+            encounterTravel: writeExplorationState(raid, exp),
+          };
         }
+
         const pool = district.materialIds;
         if (pool.length === 0) {
           throw new InventoryError("수색할 수 있는 자재가 없는 구역입니다.", 409);
         }
 
-        const pickCount = random() < 0.45 ? 2 : 1;
+        const pickCount = Math.min(
+          random() < 0.45 ? 2 : 1,
+          remainingAllowance,
+        );
         const pickedIds: string[] = [];
         for (let i = 0; i < pickCount; i++) {
           const picked = pool[Math.floor(random() * pool.length) % pool.length];
@@ -1117,6 +1138,7 @@ export async function executeRaidBuildingAction(
           string,
           { weaponMasterId: string; name: string; quantity: number }
         >();
+        let totalObtainedQty = 0;
         for (const itemId of pickedIds) {
           const catalogItem = getCatalogItemById(itemId);
           if (!catalogItem) continue;
@@ -1131,6 +1153,7 @@ export async function executeRaidBuildingAction(
           }
           await putInBackpack(tx, characterId, itemId, 1);
           runningWeight += catalogItem.weight;
+          totalObtainedQty += 1;
           const prev = obtainedMap.get(itemId);
           if (prev) prev.quantity += 1;
           else
@@ -1148,7 +1171,8 @@ export async function executeRaidBuildingAction(
           .where(eq(characters.id, characterId));
 
         exp.lootedBuildingIds.push(building.id);
-        exp.districtLootCounts[district.id] = currentDistrictCount + 1;
+        exp.districtLootCounts[district.id] =
+          currentDistrictItems + totalObtainedQty;
         exp.buildingEvents[buildingKey] = {
           stage: "CLEARED",
           text: `${obtainedItems.map((i) => `${i.name} x${i.quantity}`).join(", ")} 확보`,
