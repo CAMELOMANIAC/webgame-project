@@ -2,7 +2,6 @@ import type { UseMutationResult } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   type BattleLog,
-  type DistrictKind,
   getBuildingDistrict,
   MAP_DISTRICTS,
   type MapBuilding,
@@ -72,14 +71,6 @@ interface WaterPoint {
   x: number;
   y: number;
 }
-
-const DISTRICT_COLORS: Record<DistrictKind, number> = {
-  RESIDENTIAL: 0x5c80b8,
-  COMMERCIAL: 0x85adff,
-  INDUSTRIAL: 0xd98e5f,
-  MEDICAL: 0xff7162,
-  INFRA: 0x7c9eb2,
-};
 
 const BUILDING_CATEGORY_KO: Record<string, string> = {
   COMMERCIAL: "상업",
@@ -653,11 +644,9 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         for (const district of MAP_DISTRICTS) {
           if (district.hull.length < 3) continue;
           const flatHull = district.hull.flatMap((pt) => [pt.x, pt.y]);
-          const tint = DISTRICT_COLORS[district.kind];
           districtGraphics
             .poly(flatHull, true)
-            .fill({ color: tint, alpha: 0.045 })
-            .stroke({ width: 1.2, color: tint, alpha: 0.28, join: "round" });
+            .stroke({ width: 1, color: 0xffffff, alpha: 0.18, join: "round" });
         }
         districtsContainer.addChild(districtGraphics);
 
@@ -1106,7 +1095,6 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
             const categoryKo = b.category
               ? (BUILDING_CATEGORY_KO[b.category] ?? b.category)
               : null;
-            const districtLoot = exp?.districtLootCounts[district.id] ?? 0;
             const title = b.name
               ? `${b.name}${categoryKo ? ` · ${categoryKo}` : ""}`
               : `BUILDING #${b.id}`;
@@ -1122,7 +1110,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
                 ${title}
               </div>
               <div style="font-size: 10px; color: #b0b3be; font-family: monospace; line-height: 1.4;">
-                ${district.name} (${districtLoot}/${district.maxLoot})<br />
+                ${district.name}<br />
                 Height: ${b.height.toFixed(1)}m · Road #${b.roadNodeId}${statusFlags ? `<br /><span style="color: #e2e4ea;">${statusFlags}</span>` : ""}
               </div>
             `;

@@ -11,8 +11,14 @@ import {
   matchesRecipeBase,
 } from "@webgame/types";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useId, useMemo, useRef, useState } from "react";
-import { RiCloseLine, RiCompass3Line } from "react-icons/ri";
+import {
+  RiBuilding2Line,
+  RiCloseLine,
+  RiCompass3Line,
+  RiRouteLine,
+} from "react-icons/ri";
 
 import {
   pendingNavigationAtom,
@@ -153,6 +159,8 @@ const FieldNavTargetSection = () => {
     buildingId: number;
     text: string;
   } | null>(null);
+  const [activeCard, setActiveCard] = useState<"nav" | "building">("nav");
+  const reduceMotion = useReducedMotion();
   const character = data?.raw;
   const locationName =
     nodeId === (rules?.startNodeId ?? 0)
@@ -229,12 +237,6 @@ const FieldNavTargetSection = () => {
     activeBuilding && exploration
       ? exploration.buildingEvents[String(activeBuilding.id)]
       : undefined;
-  const activeDistrictLoot = activeDistrict
-    ? (exploration?.districtLootCounts[activeDistrict.id] ?? 0)
-    : 0;
-  const isDistrictExhausted = activeDistrict
-    ? activeDistrictLoot >= activeDistrict.maxLoot
-    : false;
   const isActiveBuildingLooted = activeBuilding
     ? (exploration?.lootedBuildingIds.includes(activeBuilding.id) ?? false)
     : false;
@@ -294,15 +296,12 @@ const FieldNavTargetSection = () => {
       pinnedChain.map((recipe) => recipe.buildingCategory),
     );
     const usedCraftSet = new Set(exploration?.usedCraftBuildingIds ?? []);
-    const districtLootMap = exploration?.districtLootCounts ?? {};
 
     if (missingPinnedMaterials.length > 0) {
       const seenDistrictIds = new Set<string>();
       for (const mat of missingPinnedMaterials) {
         for (const district of findMaterialDistricts(mat.id)) {
           if (seenDistrictIds.has(district.id)) continue;
-          const looted = districtLootMap[district.id] ?? 0;
-          if (looted >= district.maxLoot) continue;
           seenDistrictIds.add(district.id);
           candidates.push({
             id: `district-${district.id}`,
@@ -422,43 +421,75 @@ const FieldNavTargetSection = () => {
     });
   };
 
+  const hasBuildingEvent = Boolean(
+    activeBuilding && activeDistrict && !isMoving && character?.isRaiding,
+  );
+  const currentCard = hasBuildingEvent ? activeCard : "nav";
+  const cardTransition = {
+    type: "spring" as const,
+    duration: reduceMotion ? 0 : 0.35,
+    bounce: 0,
+  };
+
   return (
-    <div className={styles.container}>
-      <div className={styles.destinationHeader}>
-        <div className={styles.destinationRow}>
-          <strong className={styles.destinationText}>
-            {targetBuilding !== undefined
-              ? (targetBuilding.name ?? `건물 #${targetBuilding.id}`)
-              : targetNodeId !== null
-                ? (targetLandmark?.name ?? `목적지 #${targetNodeId}`)
-                : (currentLandmark?.name ?? `${locationName} #${nodeId}`)}
-          </strong>
-          <p
-            className={styles.statusHint({
-              positive: atExtraction && !canMove,
-            })}
+    <div className={styles.cardDeck}>
+      <AnimatePresence initial={false} mode="popLayout">
+        {currentCard === "nav" ? (
+          <motion.div
+            key="nav"
+            className={styles.container}
+            initial={{ x: reduceMotion ? 0 : "-100%", opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: reduceMotion ? 0 : "-100%", opacity: 0 }}
+            transition={cardTransition}
           >
-            {isMoving
-              ? "목적지로 이동 중입니다"
-              : canMove
-                ? "이동 버튼을 눌러 목적지로 출발하세요"
-                : atExtraction
-                  ? "탈출 가능한 구역입니다"
-                  : "지도에서 다음 목적지를 선택하세요"}
-          </p>
-        </div>
-        <button
-          ref={recommendToggleRef}
-          type="button"
-          className={styles.recommendToggle({ open: isRecommendOpen })}
-          aria-expanded={isRecommendOpen}
-          aria-controls={recommendListId}
-          aria-label="추천 목적지"
-          onClick={() => setIsRecommendOpen((open) => !open)}
-        >
-          {isRecommendOpen ? <RiCloseLine /> : <RiCompass3Line />}
-        </button>
-      </div>
+            <div className={styles.destinationHeader}>
+              <div className={styles.destinationRow}>
+                <div className={styles.titleRow}>
+                  {hasBuildingEvent && (
+                    <button
+                      type="button"
+                      className={styles.viewSwitchButton}
+                      aria-label="건물 탐색 보기"
+                      onClick={() => setActiveCard("building")}
+                    >
+                      <RiBuilding2Line />
+                    </button>
+                  )}
+                  <strong className={styles.destinationText}>
+                    {targetBuilding !== undefined
+                      ? (targetBuilding.name ?? `건물 #${targetBuilding.id}`)
+                      : targetNodeId !== null
+                        ? (targetLandmark?.name ?? `목적지 #${targetNodeId}`)
+                        : (currentLandmark?.name ?? `${locationName} #${nodeId}`)}
+                  </strong>
+                </div>
+                <p
+                  className={styles.statusHint({
+                    positive: atExtraction && !canMove,
+                  })}
+                >
+                  {isMoving
+                    ? "목적지로 이동 중입니다"
+                    : canMove
+                      ? "이동 버튼을 눌러 목적지로 출발하세요"
+                      : atExtraction
+                        ? "탈출 가능한 구역입니다"
+                        : "지도에서 다음 목적지를 선택하세요"}
+                </p>
+              </div>
+              <button
+                ref={recommendToggleRef}
+                type="button"
+                className={styles.recommendToggle({ open: isRecommendOpen })}
+                aria-expanded={isRecommendOpen}
+                aria-controls={recommendListId}
+                aria-label="추천 목적지"
+                onClick={() => setIsRecommendOpen((open) => !open)}
+              >
+                {isRecommendOpen ? <RiCloseLine /> : <RiCompass3Line />}
+              </button>
+            </div>
 
       <div>
         <div
@@ -573,132 +604,6 @@ const FieldNavTargetSection = () => {
           inert={isRecommendOpen}
         >
           <div className={styles.bodyContent}>
-            {activeBuilding && activeDistrict && !isMoving && character?.isRaiding && (
-              <div className={styles.buildingEventCard}>
-                <div className={styles.buildingEventHeader}>
-                  <span className={styles.buildingEventTitle}>
-                    {activeBuilding.name ?? `건물 #${activeBuilding.id}`}
-                    {activeBuilding.category
-                      ? ` · ${BUILDING_CATEGORY_LABELS[activeBuilding.category]}`
-                      : ""}
-                  </span>
-                  <span className={styles.districtBadge}>
-                    {activeDistrict.name} ({activeDistrictLoot}/{activeDistrict.maxLoot})
-                  </span>
-                </div>
-
-                <p className={styles.buildingEventText}>
-                  {lastBuildingMsg?.buildingId === activeBuilding.id
-                    ? lastBuildingMsg.text
-                    : (activeEventState?.text ??
-                        "방금 전까지 사람이 있었던 흔적이 보입니다. 아직 내부에 가치 있는 것들이 남아 있을지도 모릅니다.")}
-                </p>
-
-                {buildingAction.error && (
-                  <p className={styles.buildingErrorText}>
-                    {buildingAction.error.message}
-                  </p>
-                )}
-
-                {(!activeEventState || activeEventState.stage === "INTRO") ? (
-                  <button
-                    type="button"
-                    className={styles.buildingActionBtn}
-                    disabled={!canAct}
-                    onClick={() => handleBuildingAction("INVESTIGATE")}
-                  >
-                    <span>
-                      {buildingAction.isPending ? "확인 중…" : "다음 · 내부 확인"}
-                    </span>
-                    <span className={styles.actionCode}>+00:10</span>
-                  </button>
-                ) : isDistrictExhausted ? (
-                  <p className={styles.buildingExhaustedText}>
-                    이 지역에서 얻을 건 다 얻은 것 같다
-                  </p>
-                ) : !isActiveBuildingLooted ? (
-                  <button
-                    type="button"
-                    className={styles.buildingActionBtn}
-                    disabled={!canAct}
-                    onClick={() => handleBuildingAction("SEARCH")}
-                  >
-                    <span>
-                      {buildingAction.isPending ? "수색 중…" : "수색하기"}
-                    </span>
-                    <span className={styles.actionCode}>+00:10</span>
-                  </button>
-                ) : (
-                  <p className={styles.buildingExhaustedText}>
-                    이 건물은 이미 수색했습니다.
-                  </p>
-                )}
-
-                {activeBuilding.category && (
-                  <div className={styles.craftList}>
-                    {isActiveCraftUsed ? (
-                      <p className={styles.buildingExhaustedText}>
-                        이미 조합 설비를 사용한 건물입니다.
-                      </p>
-                    ) : (
-                      activeCategoryRecipes.map((recipe) => {
-                        const resultItem = getCatalogItemById(
-                          recipe.resultEquipmentId,
-                        );
-                        const hasBase =
-                          character.equipment.some((s) =>
-                            matchesRecipeBase(recipe, s.weaponMaster),
-                          ) ||
-                          character.inventory.some((s) =>
-                            matchesRecipeBase(recipe, s.weaponMaster),
-                          );
-                        const matCountsNeeded = new Map<string, number>();
-                        for (const mId of recipe.materialIds) {
-                          matCountsNeeded.set(
-                            mId,
-                            (matCountsNeeded.get(mId) ?? 0) + 1,
-                          );
-                        }
-                        const hasAllMats = [...matCountsNeeded.entries()].every(
-                          ([mId, qty]) =>
-                            (ownedItemCounts.get(mId) ?? 0) >= qty,
-                        );
-                        const baseName =
-                          getCatalogItemById(recipe.baseEquipmentId)?.name ??
-                          recipe.compatibleBaseNames[0] ??
-                          recipe.baseEquipmentId;
-                        const matNames = recipe.materialIds
-                          .map((id) => getCatalogItemById(id)?.name ?? id)
-                          .join(" + ");
-                        return (
-                          <div key={recipe.id} className={styles.craftRow}>
-                            <div className={styles.craftInfo}>
-                              <span className={styles.craftName}>
-                                {resultItem?.name ?? recipe.resultEquipmentId}
-                              </span>
-                              <span className={styles.craftReqs}>
-                                {baseName} + {matNames}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              className={styles.craftActionBtn}
-                              disabled={!canAct || !hasBase || !hasAllMats}
-                              onClick={() =>
-                                handleBuildingAction("CRAFT", recipe.id)
-                              }
-                            >
-                              조합 +10m
-                            </button>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
             <div className={styles.telemetryGrid}>
               <div className={styles.telemetryCell}>
                 <span className={styles.cellLabel}>경과 시간</span>
@@ -773,6 +678,150 @@ const FieldNavTargetSection = () => {
           </div>
         </div>
       </div>
+          </motion.div>
+        ) : (
+          activeBuilding &&
+          activeDistrict &&
+          character && (
+            <motion.div
+              key="building"
+              className={styles.buildingEventCard}
+              initial={{ x: reduceMotion ? 0 : "100%", opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: reduceMotion ? 0 : "100%", opacity: 0 }}
+              transition={cardTransition}
+            >
+              <div className={styles.buildingEventHeader}>
+                <div className={styles.titleRow}>
+                  <button
+                    type="button"
+                    className={styles.viewSwitchButton}
+                    aria-label="이동 정보 보기"
+                    onClick={() => setActiveCard("nav")}
+                  >
+                    <RiRouteLine />
+                  </button>
+                  <span className={styles.buildingEventTitle}>
+                    {activeBuilding.name ?? `건물 #${activeBuilding.id}`}
+                    {activeBuilding.category
+                      ? ` · ${BUILDING_CATEGORY_LABELS[activeBuilding.category]}`
+                      : ""}
+                  </span>
+                </div>
+                <span className={styles.districtBadge}>
+                  {activeDistrict.name}
+                </span>
+              </div>
+
+              <p className={styles.buildingEventText}>
+                {lastBuildingMsg?.buildingId === activeBuilding.id
+                  ? lastBuildingMsg.text
+                  : (activeEventState?.text ??
+                      "방금 전까지 사람이 있었던 흔적이 보입니다. 아직 내부에 가치 있는 것들이 남아 있을지도 모릅니다.")}
+              </p>
+
+              {buildingAction.error && (
+                <p className={styles.buildingErrorText}>
+                  {buildingAction.error.message}
+                </p>
+              )}
+
+              {!activeEventState || activeEventState.stage === "INTRO" ? (
+                <button
+                  type="button"
+                  className={styles.buildingActionBtn}
+                  disabled={!canAct}
+                  onClick={() => handleBuildingAction("INVESTIGATE")}
+                >
+                  <span>
+                    {buildingAction.isPending ? "확인 중…" : "다음 · 내부 확인"}
+                  </span>
+                  <span className={styles.actionCode}>+00:10</span>
+                </button>
+              ) : !isActiveBuildingLooted ? (
+                <button
+                  type="button"
+                  className={styles.buildingActionBtn}
+                  disabled={!canAct}
+                  onClick={() => handleBuildingAction("SEARCH")}
+                >
+                  <span>
+                    {buildingAction.isPending ? "수색 중…" : "수색하기"}
+                  </span>
+                  <span className={styles.actionCode}>+00:10</span>
+                </button>
+              ) : (
+                <p className={styles.buildingExhaustedText}>
+                  이 건물은 이미 수색했습니다.
+                </p>
+              )}
+
+              {activeBuilding.category && (
+                <div className={styles.craftList}>
+                  {isActiveCraftUsed ? (
+                    <p className={styles.buildingExhaustedText}>
+                      이미 조합 설비를 사용한 건물입니다.
+                    </p>
+                  ) : (
+                    activeCategoryRecipes.map((recipe) => {
+                      const resultItem = getCatalogItemById(
+                        recipe.resultEquipmentId,
+                      );
+                      const hasBase =
+                        character.equipment.some((s) =>
+                          matchesRecipeBase(recipe, s.weaponMaster),
+                        ) ||
+                        character.inventory.some((s) =>
+                          matchesRecipeBase(recipe, s.weaponMaster),
+                        );
+                      const matCountsNeeded = new Map<string, number>();
+                      for (const mId of recipe.materialIds) {
+                        matCountsNeeded.set(
+                          mId,
+                          (matCountsNeeded.get(mId) ?? 0) + 1,
+                        );
+                      }
+                      const hasAllMats = [...matCountsNeeded.entries()].every(
+                        ([mId, qty]) =>
+                          (ownedItemCounts.get(mId) ?? 0) >= qty,
+                      );
+                      const baseName =
+                        getCatalogItemById(recipe.baseEquipmentId)?.name ??
+                        recipe.compatibleBaseNames[0] ??
+                        recipe.baseEquipmentId;
+                      const matNames = recipe.materialIds
+                        .map((id) => getCatalogItemById(id)?.name ?? id)
+                        .join(" + ");
+                      return (
+                        <div key={recipe.id} className={styles.craftRow}>
+                          <div className={styles.craftInfo}>
+                            <span className={styles.craftName}>
+                              {resultItem?.name ?? recipe.resultEquipmentId}
+                            </span>
+                            <span className={styles.craftReqs}>
+                              {baseName} + {matNames}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className={styles.craftActionBtn}
+                            disabled={!canAct || !hasBase || !hasAllMats}
+                            onClick={() =>
+                              handleBuildingAction("CRAFT", recipe.id)
+                            }
+                          >
+                            조합 +10m
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </motion.div>
+          )
+        )}
+      </AnimatePresence>
     </div>
   );
 };
