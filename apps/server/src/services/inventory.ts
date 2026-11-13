@@ -1,9 +1,10 @@
-import type {
-  InventoryUpdateResponse,
-  RecoveredStashDelta,
-  StashMoveResponse,
-  UnequippedCharacterSummary,
-  UnequipOthersResponse,
+import {
+  getItemKind,
+  type InventoryUpdateResponse,
+  type RecoveredStashDelta,
+  type StashMoveResponse,
+  type UnequippedCharacterSummary,
+  type UnequipOthersResponse,
 } from "@webgame/types";
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -16,6 +17,7 @@ import {
   type StashItem,
   stashItems,
   type TransactionClient,
+  weaponMasters,
 } from "../db";
 
 const equipmentEntry = z.object({
@@ -210,6 +212,10 @@ export async function syncSlotsInTransaction(
   ) {
     throw new InventoryError("Item quantities must be preserved");
   }
+  await assertEquippableWeapons(
+    tx,
+    data.equipment.map((item) => item.weaponMasterId),
+  );
   await tx
     .delete(characterWeapons)
     .where(eq(characterWeapons.characterId, characterId));
@@ -299,6 +305,10 @@ export async function syncLoadoutWithStashInTransaction(
   for (const [id, qty] of charCounts) pool.set(id, (pool.get(id) ?? 0) + qty);
 
   const requestedCounts = countItems(data.equipment, data.inventory);
+  await assertEquippableWeapons(
+    tx,
+    data.equipment.map((item) => item.weaponMasterId),
+  );
   const changedStashQuantities = reconcileLoadoutWithStash(
     pool,
     stashCounts,
@@ -610,11 +620,33 @@ export async function unequipOtherCharactersEquipment(
   });
 }
 
-async function putInBackpack(
+async function assertEquippableWeapons(tx: Tx, weaponMasterIds: string[]) {
+  const uniqueIds = [...new Set(weaponMasterIds)];
+  if (uniqueIds.length === 0) return;
+  for (const id of uniqueIds) {
+    if (getItemKind({ id }) === "MATERIAL") {
+      throw new InventoryError("Materials cannot be equipped");
+    }
+  }
+  const masters = await tx.query.weaponMasters.findMany({
+    where: inArray(weaponMasters.id, uniqueIds),
+  });
+  for (const master of masters) {
+    if (getItemKind(master) === "MATERIAL") {
+      throw new InventoryError("Materials cannot be equipped");
+    }
+  }
+}
+
+export async function putInBackpack(
   tx: Tx,
   characterId: string,
   weaponMasterId: string,
+  quantity = 1,
 ) {
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    throw new InventoryError("Invalid item quantity");
+  }
   const items = await tx.query.raidInventoryItems.findMany({
     where: eq(raidInventoryItems.characterId, characterId),
     orderBy: [asc(raidInventoryItems.slotIndex)],
@@ -623,7 +655,7 @@ async function putInBackpack(
   if (stack) {
     await tx
       .update(raidInventoryItems)
-      .set({ quantity: sql`${raidInventoryItems.quantity} + 1` })
+      .set({ quantity: sql`${raidInventoryItems.quantity} + ${quantity}` })
       .where(eq(raidInventoryItems.id, stack.id));
     return;
   }
@@ -636,7 +668,7 @@ async function putInBackpack(
     characterId,
     weaponMasterId,
     slotIndex,
-    quantity: 1,
+    quantity,
   });
 }
 
@@ -656,6 +688,7 @@ export async function equipItem(
     });
     if (equipped?.weaponMasterId !== weaponMasterId) {
       if (weaponMasterId !== null) {
+        await assertEquippableWeapons(tx, [weaponMasterId]);
         const source = await tx.query.raidInventoryItems.findFirst({
           where: and(
             eq(raidInventoryItems.characterId, characterId),

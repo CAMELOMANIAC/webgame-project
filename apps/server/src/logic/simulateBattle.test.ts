@@ -249,5 +249,141 @@ test("퇴각 게이지는 실제 피해로 차며 생존한 첫 충족 시점만
       onReady: () => assert.fail("A dead player cannot retreat"),
     },
   });
-  assert.equal(lethal.finalState.players[0]?.hp, 0);
+    assert.equal(lethal.finalState.players[0]?.hp, 0);
+});
+
+test("슬롯 시너지는 NEXT/EDGES/ALL_MELEE 가속·강화·스태미나 회복과 N회 주기 발동을 적용한다", () => {
+  const hasteLog = simulateBattle(
+    [
+      player("p", "A", {
+        weapons: [
+          weapon({
+            id: "synergy-next",
+            damage: 5,
+            cooldownTicks: 3,
+            effect: {
+              type: "SYNERGY",
+              target: "NEXT",
+              hasteTicks: 2,
+              damageBonus: 7,
+              staminaRestore: 4,
+            },
+          }),
+          weapon({
+            id: "target-next",
+            damage: 10,
+            cooldownTicks: 5,
+          }),
+          null,
+          null,
+          null,
+          weapon({
+            id: "edge-weapon",
+            damage: 8,
+            cooldownTicks: 4,
+            attackType: "MELEE",
+            effect: {
+              type: "SYNERGY",
+              target: "EDGES",
+              damageBonus: 4,
+              triggerEveryNHits: 2,
+            },
+          }),
+        ],
+      }),
+      player("e", "B", { hp: 200, maxHp: 200 }),
+    ],
+    { random: () => 0.9, maxTicks: 15 },
+  );
+
+  const synergyEvents = hasteLog.timeline
+    .flatMap((entry) => entry.events)
+    .filter((event) => event.type === "SYNERGY");
+  assert.ok(synergyEvents.length >= 1);
+  const firstSynergy = synergyEvents[0]!;
+  assert.equal(firstSynergy.sourceSlotIndex, 0);
+  assert.deepEqual(firstSynergy.targetSlotIndices, [1]);
+  assert.equal(firstSynergy.staminaRestore, 4);
+
+  const damageEvents = hasteLog.timeline
+    .flatMap((entry) => entry.events)
+    .filter((event) => event.type === "DAMAGE");
+  // 슬롯 1 기본 공격력 10 + damageBonus 7 = 17
+  assert.ok(damageEvents.some((event) => event.amount === 17));
+
+  const meleeLog = simulateBattle(
+    [
+      player("p", "A", {
+        weapons: [
+          weapon({
+            id: "melee-1",
+            damage: 6,
+            attackType: "MELEE",
+            cooldownTicks: 1,
+          }),
+          weapon({
+            id: "buffer",
+            damage: 0,
+            attackType: "RANGED",
+            cooldownTicks: 1,
+            effect: {
+              type: "SYNERGY",
+              target: "ALL_MELEE",
+              damageBonus: 5,
+              triggerEveryNHits: 2,
+            },
+          }),
+          weapon({
+            id: "ranged-2",
+            damage: 6,
+            attackType: "RANGED",
+            cooldownTicks: 1,
+          }),
+          null,
+          null,
+          null,
+        ],
+      }),
+      player("e", "B", { hp: 200, maxHp: 200 }),
+    ],
+    { random: () => 0.9, maxTicks: 10 },
+  );
+
+  const meleeSynergies = meleeLog.timeline
+    .flatMap((entry) => entry.events)
+    .filter(
+      (
+        event,
+      ): event is Extract<
+        import("@webgame/types").BattleEvent,
+        { type: "SYNERGY" }
+      > => event.type === "SYNERGY" && event.sourceSlotIndex === 1,
+    );
+  // 2회 발동마다 1번만 발동 (10틱 내 buffer가 2번 이상 발동해야 함)
+  assert.equal(meleeSynergies.length, 1);
+  assert.deepEqual(meleeSynergies[0]?.targetSlotIndices, [0]);
+});
+
+test("MATERIAL 아이템은 장착 슬롯에 있어도 전투에서 발동하지 않는다", () => {
+  const log = simulateBattle(
+    [
+      player("p", "A", {
+        weapons: [
+          weapon({
+            id: "mat-cable",
+            damage: 100,
+            effect: { type: "MATERIAL", itemKind: "MATERIAL" },
+          }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+      player("e", "B"),
+    ],
+    { random: () => 0.5, maxTicks: 5 },
+  );
+  assert.equal(log.finalState.players[1]?.hp, 100);
 });

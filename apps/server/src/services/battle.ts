@@ -35,15 +35,34 @@ export type DeferBattle = (
   checkpoint: { eventId: string; players: PlayerState[] },
 ) => RaidBattleResult;
 
+const WeaponEffectSchema = z
+  .object({
+    type: z.enum(["HEAL", "SYNERGY", "MATERIAL"]).optional(),
+    itemKind: z.enum(["EQUIPMENT", "MATERIAL"]).optional(),
+    amount: z.number().int().positive().optional(),
+    hpThreshold: z.number().positive().max(1).optional(),
+    oncePerBattle: z.boolean().optional(),
+    target: z
+      .enum([
+        "NEXT",
+        "PREV",
+        "ADJACENT",
+        "EDGES",
+        "ALL_MELEE",
+        "ALL_RANGED",
+        "ALL_OTHER",
+      ])
+      .optional(),
+    hasteTicks: z.number().int().positive().optional(),
+    damageBonus: z.number().int().positive().optional(),
+    critChanceBonus: z.number().positive().max(1).optional(),
+    staminaRestore: z.number().int().positive().optional(),
+    triggerEveryNHits: z.number().int().positive().optional(),
+  })
+  .refine((val) => val.type !== undefined || val.itemKind !== undefined);
+
 export function toBattleWeapon(weapon: WeaponMaster): WeaponData {
-  const effect = z
-    .object({
-      type: z.literal("HEAL"),
-      amount: z.number().int().positive(),
-      hpThreshold: z.number().positive().max(1),
-      oncePerBattle: z.boolean(),
-    })
-    .safeParse(weapon.effect);
+  const effect = WeaponEffectSchema.safeParse(weapon.effect);
   return {
     ...weapon,
     effect: effect.success ? effect.data : undefined,

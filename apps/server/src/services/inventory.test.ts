@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
+import {
+  CRAFTING_MATERIALS,
+  swapEquipmentBackpack,
+} from "@webgame/types";
 import { buildApp } from "../app";
 import { createDatabase } from "../db";
 import {
   countItems,
+  equipItem,
   EquipItemSchema,
   InventoryError,
   MoveItemSchema,
@@ -268,4 +273,53 @@ test("일괄 장비 해제 API는 소유권을 검증하고 탐사 중 409 오�
     });
     assert.equal(conflict.statusCode, 409);
   }
+});
+
+test("MATERIAL 아이템은 장착 슬롯 스왑과 서버 장착 API에서 모두 거부된다", async () => {
+  const mat = CRAFTING_MATERIALS[0]!;
+  const swapResult = swapEquipmentBackpack(
+    [
+      { id: "empty-wpn-0", slotIndex: 0, weaponMaster: null },
+    ],
+    [
+      {
+        id: "inv-mat-1",
+        slotIndex: 0,
+        quantity: 1,
+        weaponMaster: {
+          id: mat.id,
+          name: mat.name,
+          damage: mat.damage,
+          staminaCost: mat.staminaCost,
+          cooldownTicks: mat.cooldownTicks,
+          castTicks: mat.castTicks,
+          weight: mat.weight,
+          value: mat.value,
+          attackType: mat.attackType,
+          iconKey: mat.iconKey,
+          effect: mat.effect,
+        },
+      },
+    ],
+    0,
+    0,
+  );
+  assert.equal(swapResult, false);
+
+  const database = createTestDb();
+  Reflect.set(database, "transaction", async (cb: (tx: unknown) => Promise<unknown>) =>
+    cb({
+      query: {
+        characters: { findFirst: async () => ({ id: "c1", maxWeight: 50 }) },
+        characterWeapons: { findFirst: async () => undefined },
+        weaponMasters: { findMany: async () => [] },
+      },
+    }),
+  );
+
+  await assert.rejects(
+    equipItem(database, "c1", { slotIndex: 0, weaponMasterId: mat.id }),
+    (err: unknown) =>
+      err instanceof InventoryError && err.message === "Materials cannot be equipped",
+  );
 });
