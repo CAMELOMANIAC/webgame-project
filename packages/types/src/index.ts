@@ -248,7 +248,6 @@ export interface BuildingEventState {
 
 export interface RaidExplorationState {
   lootedBuildingIds: number[];
-  districtLootCounts: Record<string, number>;
   usedCraftBuildingIds: number[];
   buildingEvents: Record<string, BuildingEventState>;
 }
