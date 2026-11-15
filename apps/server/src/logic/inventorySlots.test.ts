@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  calculateBackpackSlotCount,
   calculateEntryDelayMinutes,
   calculateLoadoutTotalValue,
+  findNextAvailableBackpackSlotIndex,
   formatRaidTime,
   swapEquipmentBackpack,
 } from "@webgame/types";
@@ -102,4 +104,21 @@ test("소지품 가치 및 진입 지연 시간을 계산하고 포맷한다", (
   assert.equal(calculateEntryDelayMinutes(99), 0);
   assert.equal(calculateEntryDelayMinutes(0), 0);
   assert.equal(calculateEntryDelayMinutes(-10), 0);
+});
+
+test("가방 슬롯은 최소 18칸을 유지하고 가득 차면 1줄(6칸)씩 확장한다", () => {
+  assert.equal(calculateBackpackSlotCount([]), 18);
+  assert.equal(calculateBackpackSlotCount([0]), 18);
+  assert.equal(calculateBackpackSlotCount([16]), 18);
+  assert.equal(calculateBackpackSlotCount([17]), 24);
+  assert.equal(calculateBackpackSlotCount([22]), 24);
+  assert.equal(calculateBackpackSlotCount([23]), 30);
+  assert.equal(calculateBackpackSlotCount([35]), 42);
+
+  assert.equal(findNextAvailableBackpackSlotIndex([]), 0);
+  assert.equal(findNextAvailableBackpackSlotIndex([0, 1, 3]), 2);
+  assert.equal(
+    findNextAvailableBackpackSlotIndex(Array.from({ length: 40 }, (_, i) => i)),
+    40,
+  );
 });

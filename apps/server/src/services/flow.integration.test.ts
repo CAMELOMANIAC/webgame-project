@@ -119,10 +119,10 @@ test("실제 DB: 탈출 정산 후 다시 조회해도 창고 수량과 상태�
   );
 });
 
-test("실제 DB: 가방이 가득 차면 승리 보상을 추가하지 않는다", async (t) => {
+test("실제 DB: 슬롯 개수 제한 없이 무게 한도까지 보상을 획득하고 한도 초과 시 추가하지 않는다", async (t) => {
   const { db, user, character, weapon, monsterIds } = await integrationFixture(
     t,
-    500,
+    33,
   );
   await db
     .update(weaponMasters)

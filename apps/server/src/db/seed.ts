@@ -18,98 +18,8 @@ import {
 const db = createDatabase();
 
 async function main() {
-  const weapons: (typeof weaponMasters.$inferInsert)[] = [
-    {
-      name: "Primary Sword",
-      attackType: "MELEE",
-      iconKey: "SWORD",
-      damage: 10,
-      cooldownTicks: 10,
-      staminaCost: 10,
-      castTicks: 0,
-      weight: 5,
-      value: 100,
-      description: "A standard sword.",
-    },
-    {
-      name: "Secondary Dagger",
-      attackType: "MELEE",
-      iconKey: "DAGGER",
-      damage: 5,
-      cooldownTicks: 8,
-      staminaCost: 5,
-      castTicks: 0,
-      weight: 3,
-      value: 50,
-      description: "Quick but weak.",
-    },
-    {
-      name: "Life-saver",
-      attackType: "MELEE",
-      iconKey: "HEAL",
-      effect: {
-        type: "HEAL",
-        amount: 50,
-        hpThreshold: 0.5,
-        oncePerBattle: true,
-      },
-      damage: 0,
-      cooldownTicks: 0,
-      staminaCost: 20,
-      castTicks: 0,
-      weight: 2,
-      value: 150,
-      description: "Heals you when health is low.",
-    },
-    {
-      name: "Sniper Rifle",
-      attackType: "RANGED",
-      iconKey: "RIFLE",
-      damage: 25,
-      cooldownTicks: 20,
-      staminaCost: 30,
-      castTicks: 15,
-      weight: 15,
-      value: 300,
-      description: "Heavy damage from distance.",
-    },
-    {
-      name: "Giant Slayer",
-      attackType: "MELEE",
-      iconKey: "AXE",
-      damage: 15,
-      cooldownTicks: 12,
-      staminaCost: 15,
-      castTicks: 5,
-      weight: 10,
-      value: 200,
-      description: "Strong against tanky enemies.",
-    },
-    {
-      id: "hanlim-relief-carbine",
-      name: "기업 구호용 카빈",
-      damage: 16,
-      staminaCost: 4,
-      cooldownTicks: 2,
-      castTicks: 0,
-      weight: 3,
-      value: 40,
-      attackType: "RANGED",
-      iconKey: "RIFLE",
-    },
-    {
-      id: "hanlim-control-baton",
-      name: "기업 제식 충격봉",
-      damage: 6,
-      staminaCost: 3,
-      cooldownTicks: 3,
-      castTicks: 0,
-      weight: 2,
-      value: 30,
-      attackType: "MELEE",
-      iconKey: "STAFF",
-    },
-    ...ALL_CATALOG_ITEMS.map((item) => ({
+  const weapons: (typeof weaponMasters.$inferInsert)[] = ALL_CATALOG_ITEMS.map(
+    (item) => ({
       id: item.id,
       name: item.name,
       damage: item.damage,
@@ -122,8 +32,8 @@ async function main() {
       attackType: item.attackType,
       iconKey: item.iconKey,
       effect: item.effect,
-    })),
-  ];
+    }),
+  );
 
   console.log("Clearing existing data...");
   await db.delete(raidInventoryItems);

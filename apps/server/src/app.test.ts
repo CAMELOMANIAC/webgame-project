@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
+import {
+  STORY_BUILDING_EVENTS,
+  hasBuildingChoiceCondition,
+  resolveBuildingIntroEvent,
+} from "@webgame/types";
 import { buildApp } from "./app";
 import { createDatabase } from "./db";
 import { findEnemyNoiseSignals } from "./logic/ghostNoise";
@@ -135,4 +140,85 @@ test("건물 이벤트 API는 잘못된 액션을 거부하고 exploration 추�
     },
   });
   assert.equal(invalid.statusCode, 400);
+
+  const invalidLoot = await app.inject({
+    method: "POST",
+    url: "/character/char-1/raid/loot/action",
+    headers: { "x-dev-user-id": "test-user" },
+    payload: {
+      raidId: "00000000-0000-0000-0000-000000000001",
+      expectedVersion: 0,
+      requestId: "00000000-0000-0000-0000-000000000003",
+      action: "INVALID",
+    },
+  });
+  assert.equal(invalidLoot.statusCode, 400);
+});
+
+test("extractRaidExploration은 pendingLoot 유무에 따라 조건부로 전리품 목록을 포함한다", () => {
+  assert.equal(
+    extractRaidExploration({
+      visitedEdges: [],
+      remainingDistance: 0,
+      pendingLoot: [],
+    }),
+    undefined,
+  );
+  const sampleLoot = [
+    {
+      id: "loot-1",
+      weaponMasterId: "mat-scrap",
+      name: "고철 파편",
+      quantity: 1,
+      weight: 1,
+      value: 20,
+      iconKey: "AXE",
+      source: "SEARCH" as const,
+    },
+  ];
+  assert.deepEqual(
+    extractRaidExploration({
+      visitedEdges: [],
+      remainingDistance: 0,
+      pendingLoot: sampleLoot,
+    }),
+    {
+      lootedBuildingIds: [],
+      usedCraftBuildingIds: [],
+      buildingEvents: {},
+      pendingLoot: sampleLoot,
+    },
+  );
+});
+
+test("건물 이벤트 선택지 조건 판정과 레이드당 1회 제한이 정확히 동작한다", () => {
+  const storyEvent = STORY_BUILDING_EVENTS.find(
+    (e) => e.id === "story-evacuation-echo",
+  );
+  assert.ok(storyEvent);
+  const medicalChoice = storyEvent.choices?.find((c) => c.id === "medical-port");
+  assert.ok(medicalChoice);
+
+  assert.equal(hasBuildingChoiceCondition(medicalChoice, ["mat-tape"]), false);
+  assert.equal(hasBuildingChoiceCondition(medicalChoice, ["mat-electrolyte"]), true);
+
+  const villa = { id: 999, height: 28 };
+  const district = { kind: "RESIDENTIAL" as const };
+  assert.equal(
+    resolveBuildingIntroEvent(villa, district, []).id,
+    "story-evacuation-echo",
+  );
+  assert.equal(
+    resolveBuildingIntroEvent(villa, district, ["story-evacuation-echo"]).id,
+    "district-residential-villa",
+  );
+
+  const broadcast = STORY_BUILDING_EVENTS.find(
+    (e) => e.id === "story-anomalous-broadcast",
+  );
+  const shuntChoice = broadcast?.choices?.find((c) => c.id === "shunt-relay");
+  assert.ok(shuntChoice);
+  assert.equal(hasBuildingChoiceCondition(shuntChoice, ["mat-tape"]), false);
+  assert.equal(hasBuildingChoiceCondition(shuntChoice, ["mat-battery"]), true);
+  assert.equal(hasBuildingChoiceCondition(shuntChoice, ["mat-relay"]), true);
 });

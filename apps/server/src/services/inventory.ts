@@ -1,5 +1,5 @@
 import {
-  getItemKind,
+  findNextAvailableBackpackSlotIndex,
   type InventoryUpdateResponse,
   type RecoveredStashDelta,
   type StashMoveResponse,
@@ -17,7 +17,6 @@ import {
   type StashItem,
   stashItems,
   type TransactionClient,
-  weaponMasters,
 } from "../db";
 
 const equipmentEntry = z.object({
@@ -26,7 +25,7 @@ const equipmentEntry = z.object({
 });
 const inventoryEntry = z.object({
   weaponMasterId: z.string().min(1),
-  slotIndex: z.number().int().min(0).max(31),
+  slotIndex: z.number().int().min(0),
   quantity: z.number().int().positive().max(2147483647).default(1),
 });
 const uniqueSlots = (items: { slotIndex: number }[]) =>
@@ -38,13 +37,12 @@ export const SlotsSchema = z.object({
     .refine(uniqueSlots, "Duplicate equipment slot"),
   inventory: z
     .array(inventoryEntry)
-    .max(32)
     .refine(uniqueSlots, "Duplicate backpack slot"),
 });
 export const MoveItemSchema = z.object({
   direction: z.enum(["to_backpack", "to_stash"]),
   weaponMasterId: z.string().min(1),
-  slotIndex: z.number().int().min(0).max(31),
+  slotIndex: z.number().int().min(0),
 });
 export const EquipItemSchema = z.object({
   slotIndex: z.number().int().min(0).max(5),
@@ -212,10 +210,6 @@ export async function syncSlotsInTransaction(
   ) {
     throw new InventoryError("Item quantities must be preserved");
   }
-  await assertEquippableWeapons(
-    tx,
-    data.equipment.map((item) => item.weaponMasterId),
-  );
   await tx
     .delete(characterWeapons)
     .where(eq(characterWeapons.characterId, characterId));
@@ -305,10 +299,6 @@ export async function syncLoadoutWithStashInTransaction(
   for (const [id, qty] of charCounts) pool.set(id, (pool.get(id) ?? 0) + qty);
 
   const requestedCounts = countItems(data.equipment, data.inventory);
-  await assertEquippableWeapons(
-    tx,
-    data.equipment.map((item) => item.weaponMasterId),
-  );
   const changedStashQuantities = reconcileLoadoutWithStash(
     pool,
     stashCounts,
@@ -620,24 +610,6 @@ export async function unequipOtherCharactersEquipment(
   });
 }
 
-async function assertEquippableWeapons(tx: Tx, weaponMasterIds: string[]) {
-  const uniqueIds = [...new Set(weaponMasterIds)];
-  if (uniqueIds.length === 0) return;
-  for (const id of uniqueIds) {
-    if (getItemKind({ id }) === "MATERIAL") {
-      throw new InventoryError("Materials cannot be equipped");
-    }
-  }
-  const masters = await tx.query.weaponMasters.findMany({
-    where: inArray(weaponMasters.id, uniqueIds),
-  });
-  for (const master of masters) {
-    if (getItemKind(master) === "MATERIAL") {
-      throw new InventoryError("Materials cannot be equipped");
-    }
-  }
-}
-
 export async function putInBackpack(
   tx: Tx,
   characterId: string,
@@ -659,11 +631,9 @@ export async function putInBackpack(
       .where(eq(raidInventoryItems.id, stack.id));
     return;
   }
-  const occupied = new Set(items.map((item) => item.slotIndex));
-  const slotIndex = Array.from({ length: 32 }, (_, index) => index).find(
-    (index) => !occupied.has(index),
+  const slotIndex = findNextAvailableBackpackSlotIndex(
+    items.map((item) => item.slotIndex),
   );
-  if (slotIndex === undefined) throw new InventoryError("Backpack is full");
   await tx.insert(raidInventoryItems).values({
     characterId,
     weaponMasterId,
@@ -688,7 +658,6 @@ export async function equipItem(
     });
     if (equipped?.weaponMasterId !== weaponMasterId) {
       if (weaponMasterId !== null) {
-        await assertEquippableWeapons(tx, [weaponMasterId]);
         const source = await tx.query.raidInventoryItems.findFirst({
           where: and(
             eq(raidInventoryItems.characterId, characterId),

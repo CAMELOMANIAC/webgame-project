@@ -24,7 +24,7 @@ export interface PendingRetreat {
 export function retreatDamageMultiplier(player: BattleCombatant, enemies: BattleCombatant[]) {
   const power = (unit: BattleCombatant) =>
     unit.maxHp + 10 * unit.weapons.reduce((damage, weapon) =>
-      damage + (weapon && !weapon.effect
+      damage + (weapon && weapon.damage > 0
         ? weapon.damage / Math.max(1, weapon.cooldownTicks, weapon.castTicks)
         : 0), 0);
   return Math.min(2, Math.max(1, enemies.reduce((sum, enemy) => sum + power(enemy), 0) / Math.max(1, power(player))));

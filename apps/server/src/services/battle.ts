@@ -1,10 +1,13 @@
-import type {
-  BattleCombatant,
-  BattleLog,
-  PlayerState,
-  GhostMatch,
-  RaidBattleResult,
-  WeaponData,
+import {
+  type BattleCombatant,
+  type BattleLog,
+  findNextAvailableBackpackSlotIndex,
+  getCatalogItemById,
+  type GhostMatch,
+  type PlayerState,
+  type RaidBattleResult,
+  resolveCatalogWeaponData,
+  type WeaponData,
 } from "@webgame/types";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -21,8 +24,8 @@ import {
 } from "../db";
 import { patrolCombat } from "../logic/ghostPatrols";
 import { hanlimNpcs } from "../logic/npcs";
-import { recoveryVitals } from "../logic/rules";
 import { retreatDamageMultiplier } from "../logic/retreat";
+import { recoveryVitals } from "../logic/rules";
 import { simulateBattle } from "../logic/simulateBattle";
 import {
   calculateInventoryWeight,
@@ -35,13 +38,29 @@ export type DeferBattle = (
   checkpoint: { eventId: string; players: PlayerState[] },
 ) => RaidBattleResult;
 
+export interface BattleSettlementOptions {
+  deferLootToPending?: boolean;
+}
+
+const WeaponTagSchema = z.enum([
+  "BLADE",
+  "FIREARM",
+  "BLUNT",
+  "TECH",
+  "BIO",
+  "CHEM",
+  "ARMOR",
+]);
+
 const WeaponEffectSchema = z
   .object({
-    type: z.enum(["HEAL", "SYNERGY", "MATERIAL"]).optional(),
+    type: z.enum(["HEAL", "SYNERGY", "MATERIAL", "SHIELD"]).optional(),
     itemKind: z.enum(["EQUIPMENT", "MATERIAL"]).optional(),
+    tags: z.array(WeaponTagSchema).optional(),
     amount: z.number().int().positive().optional(),
     hpThreshold: z.number().positive().max(1).optional(),
     oncePerBattle: z.boolean().optional(),
+    shieldGain: z.number().int().positive().optional(),
     target: z
       .enum([
         "NEXT",
@@ -51,22 +70,41 @@ const WeaponEffectSchema = z
         "ALL_MELEE",
         "ALL_RANGED",
         "ALL_OTHER",
+        "TAG",
       ])
       .optional(),
+    targetTag: WeaponTagSchema.optional(),
     hasteTicks: z.number().int().positive().optional(),
     damageBonus: z.number().int().positive().optional(),
     critChanceBonus: z.number().positive().max(1).optional(),
+    shieldBonus: z.number().int().positive().optional(),
     staminaRestore: z.number().int().positive().optional(),
     triggerEveryNHits: z.number().int().positive().optional(),
+    perTag: z
+      .object({
+        tag: WeaponTagSchema,
+        damageBonus: z.number().int().positive().optional(),
+        shieldGain: z.number().int().positive().optional(),
+        healAmount: z.number().int().positive().optional(),
+        staminaRestore: z.number().int().positive().optional(),
+      })
+      .optional(),
   })
-  .refine((val) => val.type !== undefined || val.itemKind !== undefined);
+  .refine(
+    (val) =>
+      val.type !== undefined ||
+      val.itemKind !== undefined ||
+      val.tags !== undefined ||
+      val.shieldGain !== undefined ||
+      val.perTag !== undefined,
+  );
 
 export function toBattleWeapon(weapon: WeaponMaster): WeaponData {
   const effect = WeaponEffectSchema.safeParse(weapon.effect);
-  return {
+  return resolveCatalogWeaponData({
     ...weapon,
     effect: effect.success ? effect.data : undefined,
-  };
+  });
 }
 
 export async function executeMonsterBattle(
@@ -84,6 +122,7 @@ export async function executeMonsterBattleInTransaction(
   characterId: string,
   level = 1,
   defer?: DeferBattle,
+  options?: BattleSettlementOptions,
 ): Promise<RaidBattleResult> {
   const { character, player } = await loadBattlePlayer(tx, characterId);
   const monsters = await tx.query.monsterMasters.findMany({
@@ -129,6 +168,7 @@ export async function executeMonsterBattleInTransaction(
     enemies,
     match.weapons.map((weapon) => weapon.weaponMasterId),
     defer,
+    options,
   );
   return { ...result, encounter: { kind: "NPC", name: match.name } };
 }
@@ -137,19 +177,29 @@ export async function executeHanlimBattleInTransaction(
   tx: TransactionClient,
   characterId: string,
   defer?: DeferBattle,
+  options?: BattleSettlementOptions,
 ): Promise<RaidBattleResult> {
   const npc = hanlimNpcs.control;
   const weapon = await tx.query.weaponMasters.findFirst({
     where: eq(weaponMasters.id, npc.weaponId),
   });
   if (!weapon) throw new Error(`Weapon ${npc.weaponId} not found`);
-  return executeNpcCombat(tx, characterId, npc.id, npc, toBattleWeapon(weapon), {
-    kind: "NPC",
-    name: npc.name,
-    faction: npc.faction,
-    role: npc.role,
-    reason: npc.reason,
-  }, defer);
+  return executeNpcCombat(
+    tx,
+    characterId,
+    npc.id,
+    npc,
+    toBattleWeapon(weapon),
+    {
+      kind: "NPC",
+      name: npc.name,
+      faction: npc.faction,
+      role: npc.role,
+      reason: npc.reason,
+    },
+    defer,
+    options,
+  );
 }
 
 export async function executePatrolGhostBattleInTransaction(
@@ -158,15 +208,17 @@ export async function executePatrolGhostBattleInTransaction(
   patrolId: string,
   recordedTime: number,
   defer?: DeferBattle,
+  options?: BattleSettlementOptions,
 ): Promise<RaidBattleResult> {
   return executeNpcCombat(
     tx,
     characterId,
     patrolId,
     patrolCombat,
-    patrolCombat.weapon,
+    resolveCatalogWeaponData(patrolCombat.weapon),
     { kind: "NPC_GHOST", name: patrolCombat.name, patrolId, recordedTime },
     defer,
+    options,
   );
 }
 
@@ -178,6 +230,7 @@ async function executeNpcCombat(
   weapon: WeaponData,
   encounter: NonNullable<RaidBattleResult["encounter"]>,
   defer?: DeferBattle,
+  options?: BattleSettlementOptions,
 ): Promise<RaidBattleResult> {
   const { character, player } = await loadBattlePlayer(tx, characterId);
   const enemy: BattleCombatant = {
@@ -195,7 +248,15 @@ async function executeNpcCombat(
     currentWeaponIndex: 0,
     weapons: [weapon, null, null, null, null, null],
   };
-  const result = await settleBattle(tx, character, player, [enemy], [weapon.id], defer);
+  const result = await settleBattle(
+    tx,
+    character,
+    player,
+    [enemy],
+    [weapon.id],
+    defer,
+    options,
+  );
   return { ...result, encounter };
 }
 
@@ -247,17 +308,28 @@ export async function executeGhostBattleInTransaction(
   raidId: string,
   ghost: GhostMatch,
   defer?: DeferBattle,
+  options?: BattleSettlementOptions,
 ): Promise<RaidBattleResult> {
   const { character, player } = await loadBattlePlayer(tx, characterId);
   await tx.insert(raidGhostEncounters).values({
     raidId,
     snapshotId: ghost.id,
   }).onConflictDoNothing();
-  const opponent = {
+  const resolveSlot = (weapon: WeaponData | null) =>
+    weapon ? resolveCatalogWeaponData(weapon) : null;
+  const opponent: BattleCombatant = {
     ...ghost.combatant,
     id: `ghost:${ghost.id}`,
     teamId: "TeamB",
     currentWeaponIndex: 0,
+    weapons: [
+      resolveSlot(ghost.combatant.weapons[0]),
+      resolveSlot(ghost.combatant.weapons[1]),
+      resolveSlot(ghost.combatant.weapons[2]),
+      resolveSlot(ghost.combatant.weapons[3]),
+      resolveSlot(ghost.combatant.weapons[4]),
+      resolveSlot(ghost.combatant.weapons[5]),
+    ],
   };
   const result = await settleBattle(
     tx,
@@ -266,6 +338,7 @@ export async function executeGhostBattleInTransaction(
     [opponent],
     opponent.weapons.flatMap((weapon) => (weapon ? [weapon.id] : [])),
     defer,
+    options,
   );
   return {
     ...result,
@@ -287,6 +360,7 @@ async function settleBattle(
   enemies: BattleCombatant[],
   rewardIds: string[],
   defer?: DeferBattle,
+  options?: BattleSettlementOptions,
 ): Promise<RaidBattleResult> {
   const checkpoints: { eventId: string; players: PlayerState[] }[] = [];
   const log = simulateBattle([player, ...enemies], defer ? {
@@ -305,7 +379,7 @@ async function settleBattle(
       rewardItemName: null,
     }, rewardId ? [rewardId] : [], checkpoint);
   }
-  return applyBattleSettlement(tx, character, log, rewardIds);
+  return applyBattleSettlement(tx, character, log, rewardIds, options);
 }
 
 export async function applyBattleSettlement(
@@ -313,6 +387,7 @@ export async function applyBattleSettlement(
   character: Character,
   log: BattleLog,
   rewardIds: string[],
+  options?: BattleSettlementOptions,
 ): Promise<RaidBattleResult> {
   const characterId = character.id;
   const player = log.initialState.players.find((unit) => unit.id === characterId);
@@ -324,7 +399,10 @@ export async function applyBattleSettlement(
   const playerDied = finalPlayer.hp <= 0;
   const playerWon = log.result.winnerTeamId === player.teamId;
 
-  const rewardItemName = await (async () => {
+  const rewardResolution: {
+    rewardItemName: string | null;
+    rewardItem: RaidBattleResult["rewardItem"];
+  } = await (async () => {
     if (playerDied) {
       await tx
         .delete(raidInventoryItems)
@@ -342,7 +420,7 @@ export async function applyBattleSettlement(
           weight: 0,
         })
         .where(eq(characters.id, characterId));
-      return null;
+      return { rewardItemName: null, rewardItem: null };
     }
 
     const weight = await calculateInventoryWeight(tx, characterId);
@@ -350,23 +428,63 @@ export async function applyBattleSettlement(
       .update(characters)
       .set({ hp: finalPlayer.hp, stamina: finalPlayer.stamina, weight })
       .where(eq(characters.id, characterId));
-    if (!playerWon) return null;
+    if (!playerWon) return { rewardItemName: null, rewardItem: null };
     const rewardId =
       rewardIds[Math.floor(Math.random() * rewardIds.length)] ??
       (await tx.query.weaponMasters.findFirst())?.id;
-    if (!rewardId) return null;
+    if (!rewardId) return { rewardItemName: null, rewardItem: null };
+
+    if (options?.deferLootToPending) {
+      const dbReward = await tx.query.weaponMasters.findFirst({
+        where: eq(weaponMasters.id, rewardId),
+      });
+      const catalogReward = dbReward ? null : getCatalogItemById(rewardId);
+      if (!dbReward && catalogReward) {
+        await tx
+          .insert(weaponMasters)
+          .values({
+            id: catalogReward.id,
+            name: catalogReward.name,
+            damage: catalogReward.damage,
+            staminaCost: catalogReward.staminaCost,
+            cooldownTicks: catalogReward.cooldownTicks,
+            castTicks: catalogReward.castTicks,
+            weight: catalogReward.weight,
+            value: catalogReward.value,
+            description: catalogReward.description,
+            attackType: catalogReward.attackType,
+            iconKey: catalogReward.iconKey,
+            effect: catalogReward.effect,
+          })
+          .onConflictDoNothing();
+      }
+      const resolved = dbReward ?? catalogReward;
+      if (!resolved) return { rewardItemName: null, rewardItem: null };
+      return {
+        rewardItemName: resolved.name,
+        rewardItem: {
+          weaponMasterId: resolved.id,
+          name: resolved.name,
+          weight: resolved.weight,
+          value: resolved.value,
+          iconKey: resolved.iconKey,
+          quantity: 1,
+        },
+      };
+    }
+
     const inventory = await tx.query.raidInventoryItems.findMany({
       where: eq(raidInventoryItems.characterId, characterId),
     });
-    const occupied = new Set(inventory.map((item) => item.slotIndex));
-    const slotIndex = Array.from({ length: 32 }, (_, index) => index).find(
-      (index) => !occupied.has(index),
-    );
-    if (slotIndex === undefined) return null;
     const reward = await tx.query.weaponMasters.findFirst({
       where: eq(weaponMasters.id, rewardId),
     });
-    if (!reward || weight + reward.weight > character.maxWeight) return null;
+    if (!reward || weight + reward.weight > character.maxWeight) {
+      return { rewardItemName: null, rewardItem: null };
+    }
+    const slotIndex = findNextAvailableBackpackSlotIndex(
+      inventory.map((item) => item.slotIndex),
+    );
     await tx.insert(raidInventoryItems).values({
       characterId,
       weaponMasterId: rewardId,
@@ -377,8 +495,15 @@ export async function applyBattleSettlement(
       .update(characters)
       .set({ weight: weight + reward.weight })
       .where(eq(characters.id, characterId));
-    return reward.name;
+    return { rewardItemName: reward.name, rewardItem: null };
   })();
 
-  return { ...log, playerDied, rewardItemName };
+  return {
+    ...log,
+    playerDied,
+    rewardItemName: rewardResolution.rewardItemName,
+    ...(rewardResolution.rewardItem
+      ? { rewardItem: rewardResolution.rewardItem }
+      : {}),
+  };
 }

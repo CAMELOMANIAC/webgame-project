@@ -8,7 +8,7 @@ import {
   raidInventoryItems,
   type TransactionClient,
 } from "../db";
-import { executeMonsterBattle, toBattleWeapon } from "./battle";
+import { applyBattleSettlement, executeMonsterBattle, toBattleWeapon } from "./battle";
 
 function fixture({ armed = true, enemyArmed = false, hp = 35 } = {}) {
   const database = createDatabase(
@@ -203,4 +203,65 @@ test("SF 명칭으로 바꿔도 공격 방식·아이콘·회복 효과는 명�
   assert.equal(weapon.attackType, "RANGED");
   assert.equal(weapon.iconKey, "HEAL");
   assert.equal(weapon.effect?.amount, 50);
+});
+
+test("deferLootToPending 옵션 시 전투 승리 보상을 가방에 바로 넣지 않고 rewardItem으로 반환한다", async (t) => {
+  const { database, createItem } = fixture();
+  t.after(() => database.$disconnect());
+
+  // 가방 32칸이 모두 찼고 캐릭터 maxWeight를 낮게 설정해도 rewardItem은 정상 반환되어야 한다.
+  Reflect.set(
+    database.query.raidInventoryItems,
+    "findMany",
+    async () =>
+      Array.from({ length: 32 }, (_, slotIndex) => ({
+        slotIndex,
+        quantity: 1,
+        weaponMaster: { weight: 1 },
+      })),
+  );
+
+  const immediateLog = await executeMonsterBattle(database, "character");
+  createItem.mock.resetCalls();
+
+  const character = {
+    id: "character",
+    userId: "user",
+    variantId: "legacy-origin",
+    displayName: null,
+    createdAt: new Date(),
+    activeRaidId: null,
+    hp: 35,
+    maxHp: 150,
+    stamina: 120,
+    maxStamina: 120,
+    staminaRegen: 0,
+    weight: 33,
+    maxWeight: 1,
+    time: 0,
+    currentNodeId: 0,
+    isRaiding: true,
+    variantLevel: 1,
+    variantExp: 0,
+  };
+
+  const deferredResult = await applyBattleSettlement(
+    database as unknown as TransactionClient,
+    character,
+    immediateLog,
+    ["attack"],
+    { deferLootToPending: true },
+  );
+
+  assert.equal(deferredResult.playerDied, false);
+  assert.equal(createItem.mock.callCount(), 0);
+  assert.equal(deferredResult.rewardItemName, "Test Rifle");
+  assert.deepEqual(deferredResult.rewardItem, {
+    weaponMasterId: "attack",
+    name: "Test Rifle",
+    weight: 1,
+    value: 1,
+    iconKey: "RIFLE",
+    quantity: 1,
+  });
 });

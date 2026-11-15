@@ -1,11 +1,13 @@
-import type {
-  BattleCombatant,
-  BattleEvent,
-  BattleLog,
-  BattleLogEntry,
-  PlayerState,
-  SynergyTargetRule,
-  WeaponData,
+import {
+  type BattleCombatant,
+  type BattleEvent,
+  type BattleLog,
+  type BattleLogEntry,
+  getWeaponTags,
+  type PlayerState,
+  type SynergyTargetRule,
+  type WeaponData,
+  type WeaponTag,
 } from "@webgame/types";
 
 interface SimulationOptions {
@@ -25,9 +27,11 @@ interface SimWeapon extends WeaponData {
   activationCount: number;
   pendingDamageBonus: number;
   pendingCritBonus: number;
+  pendingShieldBonus: number;
 }
 
 interface SimCombatant extends Omit<BattleCombatant, "weapons"> {
+  shield: number;
   weapons: Array<SimWeapon | null>;
   castingWeaponIndex: number | null;
   castingTicksRemaining: number;
@@ -40,6 +44,7 @@ function capturePlayers(players: SimCombatant[]): PlayerState[] {
     name: player.displayName ?? player.id,
     hp: player.hp,
     maxHp: player.maxHp,
+    shield: player.shield,
     stamina: player.stamina,
     maxStamina: player.maxStamina,
     weight: player.weight,
@@ -56,6 +61,7 @@ function capturePlayers(players: SimCombatant[]): PlayerState[] {
             castTicks: weapon.castTicks,
             weight: weapon.weight,
             attackType: weapon.attackType,
+            tags: getWeaponTags(weapon),
           }
         : null,
     ),
@@ -70,19 +76,25 @@ function aliveTeams(players: SimCombatant[]) {
 
 function canUseEffect(actor: SimCombatant, weapon: SimWeapon) {
   const effect = weapon.effect;
-  if (!effect) return true;
-  if (effect.type === "MATERIAL" || effect.itemKind === "MATERIAL") {
-    return false;
-  }
-  if (effect.type === "HEAL") {
+  const hasAction =
+    weapon.damage > 0 ||
+    Boolean(effect?.amount) ||
+    Boolean(effect?.shieldGain) ||
+    Boolean(effect?.target) ||
+    Boolean(effect?.staminaRestore) ||
+    Boolean(effect?.perTag);
+  if (!hasAction) return false;
+  if (effect?.oncePerBattle && weapon.isTriggered) return false;
+  const isPureHeal =
+    effect?.type === "HEAL" &&
+    weapon.damage <= 0 &&
+    !effect.shieldGain &&
+    !effect.target &&
+    !effect.staminaRestore &&
+    !effect.perTag;
+  if (isPureHeal) {
     const threshold = effect.hpThreshold ?? 1;
-    return (
-      actor.hp < actor.maxHp * threshold &&
-      (!effect.oncePerBattle || !weapon.isTriggered)
-    );
-  }
-  if (effect.type === "SYNERGY") {
-    return !effect.oncePerBattle || !weapon.isTriggered;
+    return actor.hp < actor.maxHp * threshold;
   }
   return true;
 }
@@ -91,19 +103,13 @@ function resolveSynergyTargets(
   weapons: Array<SimWeapon | null>,
   sourceSlotIndex: number,
   rule: SynergyTargetRule,
+  targetTag?: WeaponTag,
 ): number[] {
   const len = weapons.length;
   if (len === 0) return [];
 
-  const isTargetable = (idx: number) => {
-    const w = weapons[idx];
-    return (
-      idx !== sourceSlotIndex &&
-      Boolean(w) &&
-      w?.effect?.type !== "MATERIAL" &&
-      w?.effect?.itemKind !== "MATERIAL"
-    );
-  };
+  const isTargetable = (idx: number) =>
+    idx !== sourceSlotIndex && Boolean(weapons[idx]);
 
   let candidates: number[];
   switch (rule) {
@@ -134,6 +140,15 @@ function resolveSynergyTargets(
       break;
     case "ALL_OTHER":
       candidates = weapons.map((_, idx) => idx);
+      break;
+    case "TAG":
+      candidates = targetTag
+        ? weapons
+            .map((w, idx) =>
+              w && getWeaponTags(w).includes(targetTag) ? idx : -1,
+            )
+            .filter((idx) => idx >= 0)
+        : [];
       break;
   }
 
@@ -178,16 +193,19 @@ export function simulateBattle(
 
   const simPlayers: SimCombatant[] = players.map((player) => ({
     ...player,
+    shield: 0,
     weapons: player.weapons.map((weapon) =>
       weapon
         ? {
             ...weapon,
+            tags: getWeaponTags(weapon),
             effect: weapon.effect ? { ...weapon.effect } : undefined,
             currentCooldown: 0,
             isTriggered: false,
             activationCount: 0,
             pendingDamageBonus: 0,
             pendingCritBonus: 0,
+            pendingShieldBonus: 0,
           }
         : null,
     ),
@@ -230,9 +248,50 @@ export function simulateBattle(
         weapon.isTriggered = true;
       }
 
-      if (eff?.type === "HEAL" && eff.amount && eff.amount > 0) {
+      const triggerEvery = eff?.triggerEveryNHits ?? 1;
+      const effectTriggered = weapon.activationCount % triggerEvery === 0;
+      const perTagRule = eff?.perTag;
+      const perTagCount = perTagRule
+        ? actor.weapons.reduce(
+            (count, w) =>
+              w && getWeaponTags(w).includes(perTagRule.tag)
+                ? count + 1
+                : count,
+            0,
+          )
+        : 0;
+      const perTagDamage = (perTagRule?.damageBonus ?? 0) * perTagCount;
+      const perTagShield = (perTagRule?.shieldGain ?? 0) * perTagCount;
+      const perTagHeal = (perTagRule?.healAmount ?? 0) * perTagCount;
+      const perTagStamina = (perTagRule?.staminaRestore ?? 0) * perTagCount;
+
+      const selfShieldGain = effectTriggered
+        ? (eff?.shieldGain ?? 0) + perTagShield
+        : 0;
+      const totalShieldGain = selfShieldGain + weapon.pendingShieldBonus;
+      weapon.pendingShieldBonus = 0;
+      if (totalShieldGain > 0) {
+        actor.shield += totalShieldGain;
+        emit({
+          id: generateId(),
+          type: "SHIELD",
+          targetId: actor.id,
+          amount: totalShieldGain,
+          currentShield: actor.shield,
+          weaponIndex,
+          timestamp: currentTick,
+        });
+      }
+
+      const canHeal =
+        eff?.type === "HEAL" &&
+        eff.amount !== undefined &&
+        eff.amount > 0 &&
+        actor.hp < actor.maxHp * (eff.hpThreshold ?? 1);
+      const healPower = (canHeal ? (eff.amount ?? 0) : 0) + perTagHeal;
+      if (healPower > 0 && actor.hp < actor.maxHp) {
         const beforeHp = actor.hp;
-        actor.hp = Math.min(actor.maxHp, actor.hp + eff.amount);
+        actor.hp = Math.min(actor.maxHp, actor.hp + healPower);
         emit({
           id: generateId(),
           type: "HEAL",
@@ -243,10 +302,11 @@ export function simulateBattle(
         });
       }
 
-      if (weapon.damage > 0) {
+      const baseDamage = weapon.damage + perTagDamage;
+      if (baseDamage > 0) {
         const target = findTarget(actor, weapon, simPlayers, random);
         if (target) {
-          const totalDamage = weapon.damage + weapon.pendingDamageBonus;
+          const totalDamage = baseDamage + weapon.pendingDamageBonus;
           const critChance = Math.min(1, 0.1 + weapon.pendingCritBonus);
           weapon.pendingDamageBonus = 0;
           weapon.pendingCritBonus = 0;
@@ -255,8 +315,11 @@ export function simulateBattle(
           const amount = isCritical
             ? Math.floor(totalDamage * 1.5)
             : totalDamage;
+          const absorbedShield = Math.min(target.shield, amount);
+          target.shield -= absorbedShield;
+          const hpDamage = amount - absorbedShield;
           const previousHp = target.hp;
-          target.hp = Math.max(0, target.hp - amount);
+          target.hp = Math.max(0, target.hp - hpDamage);
           const tracksRetreat = retreat?.playerId === target.id;
           const wasReady = retreatGauge >= 100;
           if (tracksRetreat) {
@@ -282,6 +345,10 @@ export function simulateBattle(
             amount,
             remainingHp: target.hp,
             isCritical,
+            ...(absorbedShield > 0 ? { absorbedShield } : {}),
+            ...(target.shield > 0 || absorbedShield > 0
+              ? { remainingShield: target.shield }
+              : {}),
             ...(tracksRetreat && { retreatGauge }),
             timestamp: currentTick,
           });
@@ -316,62 +383,68 @@ export function simulateBattle(
         }
       }
 
-      if (eff && eff.type !== "MATERIAL") {
-        const triggerEvery = eff.triggerEveryNHits ?? 1;
-        if (weapon.activationCount % triggerEvery === 0) {
-          const staminaRestore = eff.staminaRestore ?? 0;
-          if (staminaRestore > 0) {
-            changeStamina(
-              actor,
-              Math.min(actor.maxStamina, actor.stamina + staminaRestore),
-            );
-          }
-          const targetSlotIndices = eff.target
-            ? resolveSynergyTargets(actor.weapons, weaponIndex, eff.target)
-            : [];
-          if (targetSlotIndices.length > 0) {
-            for (const targetIdx of targetSlotIndices) {
-              const targetWeapon = actor.weapons[targetIdx];
-              if (!targetWeapon) continue;
-              if (eff.hasteTicks && eff.hasteTicks > 0) {
-                targetWeapon.currentCooldown = Math.max(
-                  0,
-                  targetWeapon.currentCooldown - eff.hasteTicks,
+      if (eff && effectTriggered) {
+        const staminaRestore = (eff.staminaRestore ?? 0) + perTagStamina;
+        if (staminaRestore > 0) {
+          changeStamina(
+            actor,
+            Math.min(actor.maxStamina, actor.stamina + staminaRestore),
+          );
+        }
+        const targetSlotIndices = eff.target
+          ? resolveSynergyTargets(
+              actor.weapons,
+              weaponIndex,
+              eff.target,
+              eff.targetTag,
+            )
+          : [];
+        if (targetSlotIndices.length > 0) {
+          for (const targetIdx of targetSlotIndices) {
+            const targetWeapon = actor.weapons[targetIdx];
+            if (!targetWeapon) continue;
+            if (eff.hasteTicks && eff.hasteTicks > 0) {
+              targetWeapon.currentCooldown = Math.max(
+                0,
+                targetWeapon.currentCooldown - eff.hasteTicks,
+              );
+              if (
+                actor.castingWeaponIndex === targetIdx &&
+                actor.castingTicksRemaining > 0
+              ) {
+                actor.castingTicksRemaining = Math.max(
+                  1,
+                  actor.castingTicksRemaining - eff.hasteTicks,
                 );
-                if (
-                  actor.castingWeaponIndex === targetIdx &&
-                  actor.castingTicksRemaining > 0
-                ) {
-                  actor.castingTicksRemaining = Math.max(
-                    1,
-                    actor.castingTicksRemaining - eff.hasteTicks,
-                  );
-                }
-              }
-              if (eff.damageBonus && eff.damageBonus > 0) {
-                targetWeapon.pendingDamageBonus += eff.damageBonus;
-              }
-              if (eff.critChanceBonus && eff.critChanceBonus > 0) {
-                targetWeapon.pendingCritBonus += eff.critChanceBonus;
               }
             }
+            if (eff.damageBonus && eff.damageBonus > 0) {
+              targetWeapon.pendingDamageBonus += eff.damageBonus;
+            }
+            if (eff.critChanceBonus && eff.critChanceBonus > 0) {
+              targetWeapon.pendingCritBonus += eff.critChanceBonus;
+            }
+            if (eff.shieldBonus && eff.shieldBonus > 0) {
+              targetWeapon.pendingShieldBonus += eff.shieldBonus;
+            }
           }
-          if (staminaRestore > 0 || targetSlotIndices.length > 0) {
-            emit({
-              id: generateId(),
-              type: "SYNERGY",
-              actorId: actor.id,
-              sourceSlotIndex: weaponIndex,
-              targetSlotIndices,
-              ...(eff.hasteTicks ? { hasteTicks: eff.hasteTicks } : {}),
-              ...(eff.damageBonus ? { damageBonus: eff.damageBonus } : {}),
-              ...(eff.critChanceBonus
-                ? { critChanceBonus: eff.critChanceBonus }
-                : {}),
-              ...(staminaRestore > 0 ? { staminaRestore } : {}),
-              timestamp: currentTick,
-            });
-          }
+        }
+        if (staminaRestore > 0 || targetSlotIndices.length > 0) {
+          emit({
+            id: generateId(),
+            type: "SYNERGY",
+            actorId: actor.id,
+            sourceSlotIndex: weaponIndex,
+            targetSlotIndices,
+            ...(eff.hasteTicks ? { hasteTicks: eff.hasteTicks } : {}),
+            ...(eff.damageBonus ? { damageBonus: eff.damageBonus } : {}),
+            ...(eff.critChanceBonus
+              ? { critChanceBonus: eff.critChanceBonus }
+              : {}),
+            ...(eff.shieldBonus ? { shieldBonus: eff.shieldBonus } : {}),
+            ...(staminaRestore > 0 ? { staminaRestore } : {}),
+            timestamp: currentTick,
+          });
         }
       }
 

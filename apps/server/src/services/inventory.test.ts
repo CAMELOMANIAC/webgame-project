@@ -43,7 +43,7 @@ test("아이템 수량은 장착 개수와 가방 묶음 수량을 합산한다"
 
 test("슬롯 범위·정수·중복과 잘못된 수량을 거부한다", () => {
   const entry = { weaponMasterId: "a", slotIndex: 0, quantity: 1 };
-  for (const slotIndex of [-1, 32, 0.5]) {
+  for (const slotIndex of [-1, 0.5]) {
     assert.equal(
       SlotsSchema.safeParse({
         equipment: [],
@@ -52,6 +52,13 @@ test("슬롯 범위·정수·중복과 잘못된 수량을 거부한다", () => 
       false,
     );
   }
+  assert.equal(
+    SlotsSchema.safeParse({
+      equipment: [],
+      inventory: [{ ...entry, slotIndex: 32 }],
+    }).success,
+    true,
+  );
   for (const quantity of [0, -1, 0.5]) {
     assert.equal(
       SlotsSchema.safeParse({
@@ -275,51 +282,77 @@ test("일괄 장비 해제 API는 소유권을 검증하고 탐사 중 409 오�
   }
 });
 
-test("MATERIAL 아이템은 장착 슬롯 스왑과 서버 장착 API에서 모두 거부된다", async () => {
+test("MATERIAL 아이템도 장착 슬롯 스왑과 서버 장착 API에서 정상 장착된다", async (t) => {
   const mat = CRAFTING_MATERIALS[0]!;
-  const swapResult = swapEquipmentBackpack(
-    [
-      { id: "empty-wpn-0", slotIndex: 0, weaponMaster: null },
-    ],
-    [
-      {
-        id: "inv-mat-1",
-        slotIndex: 0,
-        quantity: 1,
-        weaponMaster: {
-          id: mat.id,
-          name: mat.name,
-          damage: mat.damage,
-          staminaCost: mat.staminaCost,
-          cooldownTicks: mat.cooldownTicks,
-          castTicks: mat.castTicks,
-          weight: mat.weight,
-          value: mat.value,
-          attackType: mat.attackType,
-          iconKey: mat.iconKey,
-          effect: mat.effect,
-        },
-      },
-    ],
-    0,
-    0,
-  );
-  assert.equal(swapResult, false);
+  const equipmentSlots: {
+    id: string;
+    slotIndex: number;
+    weaponMaster: typeof mat | null;
+  }[] = [{ id: "empty-wpn-0", slotIndex: 0, weaponMaster: null }];
+  const backpackSlots: {
+    id: string;
+    slotIndex: number;
+    quantity: number;
+    weaponMaster: typeof mat | null;
+  }[] = [{ id: "inv-mat-1", slotIndex: 0, quantity: 1, weaponMaster: mat }];
+  const swapResult = swapEquipmentBackpack(equipmentSlots, backpackSlots, 0, 0);
+  assert.equal(swapResult, true);
+  assert.equal(equipmentSlots[0]?.weaponMaster?.id, mat.id);
+  assert.equal(backpackSlots[0]?.weaponMaster, null);
 
   const database = createTestDb();
-  Reflect.set(database, "transaction", async (cb: (tx: unknown) => Promise<unknown>) =>
-    cb({
-      query: {
-        characters: { findFirst: async () => ({ id: "c1", maxWeight: 50 }) },
-        characterWeapons: { findFirst: async () => undefined },
-        weaponMasters: { findMany: async () => [] },
-      },
-    }),
+  t.after(() => database.$disconnect());
+  let equipped = false;
+  Reflect.set(
+    database,
+    "transaction",
+    async (cb: (tx: unknown) => Promise<unknown>) =>
+      cb({
+        query: {
+          characters: {
+            findFirst: async () => ({
+              id: "c1",
+              maxWeight: 50,
+              activeRaid: null,
+            }),
+          },
+          characterWeapons: {
+            findFirst: async () => undefined,
+            findMany: async () =>
+              equipped
+                ? [{ id: "cw-1", slotIndex: 0, weaponMasterId: mat.id, weaponMaster: mat }]
+                : [],
+          },
+          raidInventoryItems: {
+            findFirst: async () => ({
+              id: "inv-mat-1",
+              slotIndex: 0,
+              quantity: 1,
+              weaponMasterId: mat.id,
+            }),
+            findMany: async () => [],
+          },
+        },
+        delete: () => ({
+          where: async () => undefined,
+        }),
+        insert: () => ({
+          values: async () => {
+            equipped = true;
+            return undefined;
+          },
+        }),
+        update: () => ({
+          set: () => ({
+            where: async () => undefined,
+          }),
+        }),
+      }),
   );
 
-  await assert.rejects(
-    equipItem(database, "c1", { slotIndex: 0, weaponMasterId: mat.id }),
-    (err: unknown) =>
-      err instanceof InventoryError && err.message === "Materials cannot be equipped",
-  );
+  const result = await equipItem(database, "c1", {
+    slotIndex: 0,
+    weaponMasterId: mat.id,
+  });
+  assert.deepEqual(result, { status: "success", weight: mat.weight });
 });

@@ -14,7 +14,11 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-import type { BuildingEventState, WeaponEffect } from "@webgame/types";
+import type {
+  BuildingEventState,
+  PendingLootItem,
+  WeaponEffect,
+} from "@webgame/types";
 import type { PendingRetreat } from "../logic/retreat";
 
 export const attackTypeEnum = pgEnum("AttackType", ["MELEE", "RANGED"]);
@@ -276,6 +280,8 @@ export const raidSessions = pgTable(
       districtLootCounts?: Record<string, number>;
       usedCraftBuildingIds?: number[];
       buildingEvents?: Record<string, BuildingEventState>;
+      completedEventIds?: string[];
+      pendingLoot?: PendingLootItem[];
     }>(),
     ghostRoster: jsonb("ghostRoster").$type<{
       tracks: {

@@ -364,15 +364,78 @@ test("슬롯 시너지는 NEXT/EDGES/ALL_MELEE 가속·강화·스태미나 회�
   assert.deepEqual(meleeSynergies[0]?.targetSlotIndices, [0]);
 });
 
-test("MATERIAL 아이템은 장착 슬롯에 있어도 전투에서 발동하지 않는다", () => {
+test("장착한 MATERIAL 아이템도 전투 중 소모되지 않고 쿨다운마다 발동한다", () => {
   const log = simulateBattle(
     [
       player("p", "A", {
         weapons: [
           weapon({
-            id: "mat-cable",
-            damage: 100,
-            effect: { type: "MATERIAL", itemKind: "MATERIAL" },
+            id: "mat-tape",
+            damage: 0,
+            staminaCost: 2,
+            cooldownTicks: 3,
+            tags: ["ARMOR"],
+            effect: {
+              type: "SHIELD",
+              itemKind: "MATERIAL",
+              tags: ["ARMOR"],
+              shieldGain: 8,
+            },
+          }),
+          weapon({
+            id: "mat-lighter",
+            damage: 5,
+            staminaCost: 2,
+            cooldownTicks: 3,
+            tags: ["CHEM"],
+            effect: {
+              type: "SYNERGY",
+              itemKind: "MATERIAL",
+              tags: ["CHEM"],
+              target: "NEXT",
+              damageBonus: 3,
+            },
+          }),
+          weapon({
+            id: "wpn_primary",
+            damage: 10,
+            staminaCost: 5,
+            cooldownTicks: 3,
+            tags: ["BLADE"],
+          }),
+          null,
+          null,
+          null,
+        ],
+      }),
+      player("e", "B", { hp: 200, maxHp: 200 }),
+    ],
+    { random: () => 0.9, maxTicks: 10 },
+  );
+
+  const events = log.timeline.flatMap((entry) => entry.events);
+  const shieldEvents = events.filter((event) => event.type === "SHIELD");
+  const damageEvents = events.filter((event) => event.type === "DAMAGE");
+  assert.ok(shieldEvents.length >= 2);
+  assert.ok(shieldEvents.some((event) => event.amount === 8));
+  assert.ok(damageEvents.some((event) => event.amount === 5));
+  assert.ok(damageEvents.some((event) => event.amount === 13));
+  assert.equal(log.finalState.players[0]?.shield, shieldEvents.length * 8);
+});
+
+test("보호막은 HP보다 먼저 피해를 흡수하고 흡수된 피해는 후퇴 게이지를 채우지 않는다", () => {
+  let retreatTriggered = false;
+  const log = simulateBattle(
+    [
+      player("p", "A", {
+        weapons: [
+          weapon({
+            id: "mat-shield",
+            damage: 0,
+            staminaCost: 0,
+            cooldownTicks: 10,
+            tags: ["ARMOR"],
+            effect: { type: "SHIELD", tags: ["ARMOR"], shieldGain: 20 },
           }),
           null,
           null,
@@ -381,9 +444,118 @@ test("MATERIAL 아이템은 장착 슬롯에 있어도 전투에서 발동하지
           null,
         ],
       }),
-      player("e", "B"),
+      player("e", "B", {
+        weapons: [
+          weapon({ damage: 50, staminaCost: 0, cooldownTicks: 10 }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
     ],
-    { random: () => 0.5, maxTicks: 5 },
+    {
+      random: () => 0.9,
+      maxTicks: 3,
+      retreat: {
+        playerId: "p",
+        multiplier: 1,
+        onReady: () => {
+          retreatTriggered = true;
+        },
+      },
+    },
   );
-  assert.equal(log.finalState.players[1]?.hp, 100);
+
+  const damageToPlayer = log.timeline
+    .flatMap((entry) => entry.events)
+    .find(
+      (
+        event,
+      ): event is Extract<
+        import("@webgame/types").BattleEvent,
+        { type: "DAMAGE" }
+      > => event.type === "DAMAGE" && event.targetId === "p",
+    );
+  assert.ok(damageToPlayer);
+  assert.equal(damageToPlayer.amount, 50);
+  assert.equal(damageToPlayer.absorbedShield, 20);
+  assert.equal(damageToPlayer.remainingShield, 0);
+  assert.equal(damageToPlayer.remainingHp, 70);
+  assert.equal(damageToPlayer.retreatGauge, 75);
+  assert.equal(retreatTriggered, false);
+});
+
+test("TAG 시너지는 같은 태그의 모든 슬롯을 강화하고 perTag는 장착 태그 수만큼 증폭한다", () => {
+  const log = simulateBattle(
+    [
+      player("p", "A", {
+        weapons: [
+          weapon({
+            id: "eq-log-t2b",
+            damage: 15,
+            staminaCost: 2,
+            cooldownTicks: 1,
+            tags: ["BLADE"],
+            effect: {
+              type: "SYNERGY",
+              tags: ["BLADE"],
+              target: "TAG",
+              targetTag: "BLADE",
+              damageBonus: 6,
+              perTag: { tag: "BLADE", damageBonus: 2 },
+            },
+          }),
+          weapon({
+            id: "mat-nanosuture",
+            damage: 4,
+            staminaCost: 2,
+            cooldownTicks: 1,
+            tags: ["BIO", "ARMOR", "BLADE"],
+            effect: {
+              type: "HEAL",
+              itemKind: "MATERIAL",
+              tags: ["BIO", "ARMOR", "BLADE"],
+              amount: 6,
+              hpThreshold: 0.95,
+              oncePerBattle: false,
+            },
+          }),
+          weapon({
+            id: "wpn_sniper",
+            damage: 10,
+            staminaCost: 2,
+            cooldownTicks: 1,
+            tags: ["FIREARM"],
+            effect: { tags: ["FIREARM"] },
+          }),
+          null,
+          null,
+          null,
+        ],
+      }),
+      player("e", "B", { hp: 200, maxHp: 200 }),
+    ],
+    { random: () => 0.9, maxTicks: 4 },
+  );
+
+  const events = log.timeline.flatMap((entry) => entry.events);
+  const tagSynergy = events.find(
+    (
+      event,
+    ): event is Extract<
+      import("@webgame/types").BattleEvent,
+      { type: "SYNERGY" }
+    > => event.type === "SYNERGY" && event.sourceSlotIndex === 0,
+  );
+  assert.ok(tagSynergy);
+  assert.deepEqual(tagSynergy.targetSlotIndices, [1]);
+
+  const damages = events
+    .filter((event) => event.type === "DAMAGE")
+    .map((event) => event.amount);
+  // 슬롯 0: 기본 15 + perTag(BLADE 2개 * 2) = 19, 슬롯 1: 기본 4 + 6 = 10
+  assert.equal(damages[0], 19);
+  assert.equal(damages[1], 10);
 });

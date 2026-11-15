@@ -8,14 +8,20 @@ import {
   getBuildingDistrict,
   getCatalogItemById,
   getRecipeById,
+  hasBuildingChoiceCondition,
+  type LootSourceKind,
   type MapBuilding,
   matchesRecipeBase,
+  type PendingLootItem,
   type RaidActionInput,
   type RaidExplorationState,
+  type RaidLootActionInput,
+  type RaidLootActionResult,
   type RaidNavigationInput,
   type RaidNavigationResult,
   type RaidNoiseResult,
   type RaidView,
+  resolveBuildingIntroEvent,
   type RetreatDecisionResult,
   type RetreatResolution,
   seopoMapVersion,
@@ -103,9 +109,28 @@ export const NavigateSchema = RaidActionSchema.extend({
 );
 
 export const BuildingActionSchema = RaidActionSchema.extend({
-  action: z.enum(["INVESTIGATE", "SEARCH", "CRAFT"]),
+  action: z.enum(["INVESTIGATE", "SEARCH", "CRAFT", "EVENT_CHOICE"]),
   recipeId: z.string().min(1).optional(),
+  choiceId: z.string().min(1).optional(),
 });
+
+export const RaidLootActionSchema = RaidActionSchema.extend({
+  action: z.enum([
+    "CLAIM_ITEM",
+    "CLAIM_ALL",
+    "DISCARD_BACKPACK",
+    "DISCARD_EQUIPMENT",
+    "ABANDON_ALL",
+  ]),
+  lootId: z.string().trim().min(1).optional(),
+  backpackSlotIndex: z.number().int().min(0).optional(),
+  equipmentSlotIndex: z.number().int().min(0).max(15).optional(),
+  equipment: SlotsSchema.shape.equipment.optional(),
+  inventory: SlotsSchema.shape.inventory.optional(),
+}).refine(
+  (data) => (data.equipment === undefined) === (data.inventory === undefined),
+  { message: "Equipment and inventory must be sent together" },
+);
 
 export const extractionNodeIds = gameRules.extractionNodeIds;
 
@@ -116,10 +141,14 @@ export function extractRaidExploration(
   const lootedBuildingIds = encounterTravel.lootedBuildingIds ?? [];
   const usedCraftBuildingIds = encounterTravel.usedCraftBuildingIds ?? [];
   const buildingEvents = encounterTravel.buildingEvents ?? {};
+  const completedEventIds = encounterTravel.completedEventIds ?? [];
+  const pendingLoot = encounterTravel.pendingLoot ?? [];
   if (
     lootedBuildingIds.length === 0 &&
     usedCraftBuildingIds.length === 0 &&
-    Object.keys(buildingEvents).length === 0
+    Object.keys(buildingEvents).length === 0 &&
+    completedEventIds.length === 0 &&
+    pendingLoot.length === 0
   ) {
     return undefined;
   }
@@ -127,6 +156,8 @@ export function extractRaidExploration(
     lootedBuildingIds,
     usedCraftBuildingIds,
     buildingEvents,
+    ...(completedEventIds.length > 0 ? { completedEventIds } : {}),
+    ...(pendingLoot.length > 0 ? { pendingLoot } : {}),
   };
 }
 
@@ -497,6 +528,34 @@ export async function navigateRaid(
     async (tx, raid) => {
       if (raid.mapVersion !== seopoMapVersion)
         throw new InventoryError("Raid map version is not supported", 409);
+      if (
+        raid.currentBuildingId !== null &&
+        raid.currentBuildingId !== undefined &&
+        parsed.destinationBuildingId !== raid.currentBuildingId
+      ) {
+        const currentBuilding = (
+          mapData.buildings as unknown as MapBuilding[]
+        ).find((b) => b.id === raid.currentBuildingId);
+        if (currentBuilding && !currentBuilding.category) {
+          const exp = readExplorationState(raid);
+          const isResolved =
+            exp.lootedBuildingIds.includes(currentBuilding.id) ||
+            exp.buildingEvents[String(currentBuilding.id)]?.stage === "CLEARED";
+          if (!isResolved) {
+            const introEvent = resolveBuildingIntroEvent(
+              currentBuilding,
+              getBuildingDistrict(currentBuilding),
+              exp.completedEventIds,
+            );
+            if (introEvent.choices && introEvent.choices.length > 0) {
+              throw new InventoryError(
+                "진행 중인 건물 이벤트를 먼저 완료해야 이동할 수 있습니다.",
+                409,
+              );
+            }
+          }
+        }
+      }
       if (parsed.path[0] !== raid.currentNodeId)
         throw new InventoryError("Path must start at the current node");
       const isBuildingMove = parsed.path.length === 1;
@@ -521,6 +580,10 @@ export async function navigateRaid(
           equipment: parsed.equipment,
           inventory: parsed.inventory,
         });
+      // 다른 위치로 이동하면 이전 위치의 미회수 전리품은 자동 폐기된다.
+      const moveExp = readExplorationState(raid);
+      const hadPendingLoot = moveExp.pendingLoot.length > 0;
+      moveExp.pendingLoot = [];
       // A building move records one step at the same road node.
       const path = isBuildingMove
         ? [raid.currentNodeId, raid.currentNodeId]
@@ -579,6 +642,7 @@ export async function navigateRaid(
                   raid.id,
                   encounter.ghost,
                   retreat.defer,
+                  { deferLootToPending: true },
                 )
               : encounter?.kind === "NPC_GHOST"
                 ? await executePatrolGhostBattleInTransaction(
@@ -587,8 +651,14 @@ export async function navigateRaid(
                     encounter.patrolId,
                     encounter.time,
                     retreat.defer,
+                    { deferLootToPending: true },
                   )
-                : await executeHanlimBattleInTransaction(tx, characterId, retreat.defer);
+                : await executeHanlimBattleInTransaction(
+                    tx,
+                    characterId,
+                    retreat.defer,
+                    { deferLootToPending: true },
+                  );
           const pendingRetreat = retreat.finish(battleLog);
           if (
             battleLog.result.winnerTeamId === "TeamA" &&
@@ -601,6 +671,17 @@ export async function navigateRaid(
             if (isMissionEncounter)
               await recoverMissionRecord(tx, userId, raid.id);
           }
+          if (!pendingRetreat && !battleLog.playerDied && battleLog.rewardItem) {
+            moveExp.pendingLoot.push({
+              id: randomUUID(),
+              ...battleLog.rewardItem,
+              source: "COMBAT",
+            });
+          }
+          const encounterTravel =
+            hadPendingLoot || moveExp.pendingLoot.length > 0
+              ? writeExplorationState(raid, moveExp)
+              : undefined;
           return {
             payload: { encounterTriggered: true, stopNodeId, battleLog },
             currentNodeId: stopNodeId,
@@ -608,6 +689,7 @@ export async function navigateRaid(
             pendingRetreat,
             time: stopTime,
             ghostRoster,
+            ...(encounterTravel !== undefined ? { encounterTravel } : {}),
             status: battleLog.playerDied ? "DEAD" : "ACTIVE",
           };
         }
@@ -621,6 +703,9 @@ export async function navigateRaid(
         currentBuildingId: parsed.destinationBuildingId ?? null,
         time: lastTravelTime,
         ghostRoster,
+        ...(hadPendingLoot
+          ? { encounterTravel: writeExplorationState(raid, moveExp) }
+          : {}),
       };
     },
   );
@@ -660,7 +745,16 @@ export async function extractRaid(
         .update(characters)
         .set({ weight: await calculateInventoryWeight(tx, characterId) })
         .where(eq(characters.id, characterId));
-      return { payload: { status: "success" }, status: "EXTRACTED" };
+      const exp = readExplorationState(raid);
+      const hadPendingLoot = exp.pendingLoot.length > 0;
+      exp.pendingLoot = [];
+      return {
+        payload: { status: "success" },
+        status: "EXTRACTED",
+        ...(hadPendingLoot
+          ? { encounterTravel: writeExplorationState(raid, exp) }
+          : {}),
+      };
     },
   );
 }
@@ -810,7 +904,13 @@ export async function decideRaidBattle(
         hp: pending.hp, stamina: pending.stamina, currentNodeId,
       }).where(eq(characters.id, characterId));
     } else {
-      settled = await applyBattleSettlement(tx, character, pending.fullLog, pending.rewardIds);
+      settled = await applyBattleSettlement(
+        tx,
+        character,
+        pending.fullLog,
+        pending.rewardIds,
+        { deferLootToPending: true },
+      );
       if (settled.playerDied) {
         status = "DEAD";
         currentBuildingId = null;
@@ -826,8 +926,23 @@ export async function decideRaidBattle(
         if (pending.missionEncounter) await recoverMissionRecord(tx, userId, raid.id);
       }
     }
+    let encounterTravel = raid.encounterTravel;
+    if (settled && !settled.playerDied && settled.rewardItem) {
+      const exp = readExplorationState(raid);
+      exp.pendingLoot.push({
+        id: randomUUID(),
+        ...settled.rewardItem,
+        source: "COMBAT",
+      });
+      encounterTravel = writeExplorationState(raid, exp);
+    }
     const nextRaid = {
-      ...raid, currentNodeId, currentBuildingId, status, version: raid.version + 1,
+      ...raid,
+      currentNodeId,
+      currentBuildingId,
+      status,
+      encounterTravel,
+      version: raid.version + 1,
     };
     const resolution: RetreatResolution = settled
       ? {
@@ -837,6 +952,7 @@ export async function decideRaidBattle(
       : { decision: "RETREAT", raid: view(nextRaid), hp: pending.hp, stamina: pending.stamina };
     await tx.update(raidSessions).set({
       currentNodeId, currentBuildingId, status, version: nextRaid.version, ghostRoster,
+      ...(encounterTravel !== undefined ? { encounterTravel } : {}),
       pendingRetreat: { ...pending, resolution },
       ...(status === "DEAD" && { endedAt: new Date(now) }),
     }).where(eq(raidSessions.id, raid.id));
@@ -864,6 +980,8 @@ export async function expireRaidBattles(database: Database) {
 
 interface InternalExplorationState extends RaidExplorationState {
   districtLootCounts: Record<string, number>;
+  completedEventIds: string[];
+  pendingLoot: PendingLootItem[];
 }
 
 function readExplorationState(raid: RaidSession): InternalExplorationState {
@@ -873,6 +991,8 @@ function readExplorationState(raid: RaidSession): InternalExplorationState {
     districtLootCounts: { ...(raw?.districtLootCounts ?? {}) },
     usedCraftBuildingIds: [...(raw?.usedCraftBuildingIds ?? [])],
     buildingEvents: { ...(raw?.buildingEvents ?? {}) },
+    completedEventIds: [...(raw?.completedEventIds ?? [])],
+    pendingLoot: [...(raw?.pendingLoot ?? [])],
   };
 }
 
@@ -887,6 +1007,8 @@ function writeExplorationState(
     districtLootCounts: next.districtLootCounts,
     usedCraftBuildingIds: next.usedCraftBuildingIds,
     buildingEvents: next.buildingEvents,
+    completedEventIds: next.completedEventIds,
+    pendingLoot: next.pendingLoot,
   };
 }
 
@@ -913,7 +1035,25 @@ async function ensureCatalogItemsInTransaction(
       effect: item.effect,
     }));
   if (rows.length > 0) {
-    await tx.insert(weaponMasters).values(rows).onConflictDoNothing();
+    await tx
+      .insert(weaponMasters)
+      .values(rows)
+      .onConflictDoUpdate({
+        target: weaponMasters.id,
+        set: {
+          name: sql`excluded."name"`,
+          damage: sql`excluded."damage"`,
+          staminaCost: sql`excluded."staminaCost"`,
+          cooldownTicks: sql`excluded."cooldownTicks"`,
+          castTicks: sql`excluded."castTicks"`,
+          weight: sql`excluded."weight"`,
+          value: sql`excluded."value"`,
+          description: sql`excluded."description"`,
+          attackType: sql`excluded."attackType"`,
+          iconKey: sql`excluded."iconKey"`,
+          effect: sql`excluded."effect"`,
+        },
+      });
   }
 }
 
@@ -921,17 +1061,33 @@ async function consumeBackpackItemsInTransaction(
   tx: TransactionClient,
   characterId: string,
   requirements: { itemId: string; quantity: number }[],
+  excludeEquippedId?: string,
 ) {
-  const rows = await tx.query.raidInventoryItems.findMany({
-    where: eq(raidInventoryItems.characterId, characterId),
-    orderBy: [asc(raidInventoryItems.slotIndex)],
-  });
+  const [rows, equippedRows] = await Promise.all([
+    tx.query.raidInventoryItems.findMany({
+      where: eq(raidInventoryItems.characterId, characterId),
+      orderBy: [asc(raidInventoryItems.slotIndex)],
+    }),
+    tx.query.characterWeapons.findMany({
+      where: eq(characterWeapons.characterId, characterId),
+      orderBy: [asc(characterWeapons.slotIndex)],
+    }),
+  ]);
+  const usableEquippedRows = excludeEquippedId
+    ? equippedRows.filter((row) => row.id !== excludeEquippedId)
+    : equippedRows;
 
   const remainingById = new Map<string, number>();
   for (const row of rows) {
     remainingById.set(
       row.weaponMasterId,
       (remainingById.get(row.weaponMasterId) ?? 0) + row.quantity,
+    );
+  }
+  for (const row of usableEquippedRows) {
+    remainingById.set(
+      row.weaponMasterId,
+      (remainingById.get(row.weaponMasterId) ?? 0) + 1,
     );
   }
   for (const req of requirements) {
@@ -941,6 +1097,7 @@ async function consumeBackpackItemsInTransaction(
     remainingById.set(req.itemId, remainingById.get(req.itemId)! - req.quantity);
   }
 
+  const consumedEquippedIds = new Set<string>();
   for (const req of requirements) {
     let needed = req.quantity;
     for (const row of rows) {
@@ -960,7 +1117,70 @@ async function consumeBackpackItemsInTransaction(
         needed = 0;
       }
     }
+    for (const row of usableEquippedRows) {
+      if (
+        needed <= 0 ||
+        consumedEquippedIds.has(row.id) ||
+        row.weaponMasterId !== req.itemId
+      ) {
+        continue;
+      }
+      await tx.delete(characterWeapons).where(eq(characterWeapons.id, row.id));
+      consumedEquippedIds.add(row.id);
+      needed -= 1;
+    }
   }
+}
+
+async function stageCatalogItemsAsPendingLoot(
+  tx: TransactionClient,
+  exp: InternalExplorationState,
+  itemIds: readonly string[],
+  source: LootSourceKind,
+) {
+  if (itemIds.length === 0) {
+    return {
+      obtainedItems: [] as { weaponMasterId: string; name: string; quantity: number }[],
+      totalObtainedQty: 0,
+    };
+  }
+  await ensureCatalogItemsInTransaction(tx, [...itemIds]);
+
+  const obtainedMap = new Map<
+    string,
+    { weaponMasterId: string; name: string; quantity: number }
+  >();
+  let totalObtainedQty = 0;
+
+  for (const itemId of itemIds) {
+    const catalogItem = getCatalogItemById(itemId);
+    if (!catalogItem) continue;
+    exp.pendingLoot.push({
+      id: randomUUID(),
+      weaponMasterId: catalogItem.id,
+      name: catalogItem.name,
+      quantity: 1,
+      weight: catalogItem.weight,
+      value: catalogItem.value,
+      iconKey: catalogItem.iconKey,
+      source,
+    });
+    totalObtainedQty += 1;
+    const prev = obtainedMap.get(itemId);
+    if (prev) prev.quantity += 1;
+    else {
+      obtainedMap.set(itemId, {
+        weaponMasterId: itemId,
+        name: catalogItem.name,
+        quantity: 1,
+      });
+    }
+  }
+
+  return {
+    obtainedItems: [...obtainedMap.values()],
+    totalObtainedQty,
+  };
 }
 
 export async function executeRaidBuildingAction(
@@ -979,7 +1199,11 @@ export async function executeRaidBuildingAction(
     characterId,
     parsed,
     "BUILDING_ACTION",
-    { action: parsed.action, recipeId: parsed.recipeId ?? null },
+    {
+      action: parsed.action,
+      recipeId: parsed.recipeId ?? null,
+      choiceId: parsed.choiceId ?? null,
+    },
     async (tx, raid, character) => {
       if (raid.currentBuildingId === null || raid.currentBuildingId === undefined) {
         throw new InventoryError("현재 건물 내부에 있지 않습니다.", 409);
@@ -993,11 +1217,17 @@ export async function executeRaidBuildingAction(
 
       const district = getBuildingDistrict(building);
       const exp = readExplorationState(raid);
+      const introEvent = resolveBuildingIntroEvent(
+        building,
+        district,
+        exp.completedEventIds,
+      );
+      const encounterRate = introEvent.encounterRate ?? 0.3;
       const nextTime = raid.time + 10;
       const buildingKey = String(building.id);
       const prevEvent: BuildingEventState = exp.buildingEvents[buildingKey] ?? {
         stage: "INTRO",
-        text: "방금 전까지 사람이 있었던 흔적이 보입니다. 아직 내부에 가치 있는 것들이 남아 있을지도 모릅니다.",
+        text: introEvent.introText,
       };
 
       const runBuildingEncounter = async () => {
@@ -1026,6 +1256,7 @@ export async function executeRaidBuildingAction(
                 tx,
                 characterId,
                 retreat.defer,
+                { deferLootToPending: true },
               )
             : hasMonster
               ? await executeMonsterBattleInTransaction(
@@ -1033,12 +1264,14 @@ export async function executeRaidBuildingAction(
                   characterId,
                   enemyLevel,
                   retreat.defer,
+                  { deferLootToPending: true },
                 )
               : hasHanlimWeapon
                 ? await executeHanlimBattleInTransaction(
                     tx,
                     characterId,
                     retreat.defer,
+                    { deferLootToPending: true },
                   )
                 : await executePatrolGhostBattleInTransaction(
                     tx,
@@ -1046,8 +1279,16 @@ export async function executeRaidBuildingAction(
                     `npc-building-${building.id}`,
                     nextTime,
                     retreat.defer,
+                    { deferLootToPending: true },
                   );
 
+        if (!battleLog.playerDied && battleLog.rewardItem) {
+          exp.pendingLoot.push({
+            id: randomUUID(),
+            ...battleLog.rewardItem,
+            source: "COMBAT",
+          });
+        }
         exp.buildingEvents[buildingKey] = {
           stage: "READY",
           text: "건물 내부 수색 중 적대 개체와 교전했습니다.",
@@ -1059,7 +1300,7 @@ export async function executeRaidBuildingAction(
         if (prevEvent.stage !== "INTRO") {
           throw new InventoryError("이미 건물 내부 상황을 확인했습니다.", 409);
         }
-        const combatTriggered = random() < 0.3;
+        const combatTriggered = random() < encounterRate;
         if (combatTriggered) {
           const { retreat, battleLog } = await runBuildingEncounter();
           const payload: Omit<BuildingActionResult, "raid"> = {
@@ -1095,10 +1336,16 @@ export async function executeRaidBuildingAction(
       }
 
       if (parsed.action === "SEARCH") {
+        if (building.category) {
+          throw new InventoryError(
+            "무기 업그레이드 설비 건물에서는 탐색을 진행할 수 없습니다.",
+            409,
+          );
+        }
         if (exp.lootedBuildingIds.includes(building.id)) {
           throw new InventoryError("이미 수색을 완료한 건물입니다.", 409);
         }
-        if (prevEvent.stage === "INTRO" && random() < 0.3) {
+        if (prevEvent.stage === "INTRO" && random() < encounterRate) {
           const { retreat, battleLog } = await runBuildingEncounter();
           const payload: Omit<BuildingActionResult, "raid"> = {
             action: "SEARCH",
@@ -1149,62 +1396,136 @@ export async function executeRaidBuildingAction(
           const picked = pool[Math.floor(random() * pool.length) % pool.length];
           if (picked) pickedIds.push(picked);
         }
-        await ensureCatalogItemsInTransaction(tx, pickedIds);
-
-        let runningWeight = await calculateInventoryWeight(tx, characterId);
-        const obtainedMap = new Map<
-          string,
-          { weaponMasterId: string; name: string; quantity: number }
-        >();
-        let totalObtainedQty = 0;
-        for (const itemId of pickedIds) {
-          const catalogItem = getCatalogItemById(itemId);
-          if (!catalogItem) continue;
-          if (runningWeight + catalogItem.weight > character.maxWeight) {
-            if (obtainedMap.size === 0) {
-              throw new InventoryError(
-                "소지 중량이 한계를 초과해 아이템을 회수할 수 없습니다.",
-                409,
-              );
-            }
-            break;
-          }
-          await putInBackpack(tx, characterId, itemId, 1);
-          runningWeight += catalogItem.weight;
-          totalObtainedQty += 1;
-          const prev = obtainedMap.get(itemId);
-          if (prev) prev.quantity += 1;
-          else
-            obtainedMap.set(itemId, {
-              weaponMasterId: itemId,
-              name: catalogItem.name,
-              quantity: 1,
-            });
-        }
-
-        const obtainedItems = [...obtainedMap.values()];
-        await tx
-          .update(characters)
-          .set({ weight: await calculateInventoryWeight(tx, characterId) })
-          .where(eq(characters.id, characterId));
+        const { obtainedItems, totalObtainedQty } =
+          await stageCatalogItemsAsPendingLoot(tx, exp, pickedIds, "SEARCH");
 
         exp.lootedBuildingIds.push(building.id);
         exp.districtLootCounts[district.id] =
           currentDistrictItems + totalObtainedQty;
         exp.buildingEvents[buildingKey] = {
           stage: "CLEARED",
-          text: `${obtainedItems.map((i) => `${i.name} x${i.quantity}`).join(", ")} 확보`,
+          text: `${obtainedItems.map((i) => `${i.name} x${i.quantity}`).join(", ")} 발견`,
         };
 
         const payload: Omit<BuildingActionResult, "raid"> = {
           action: "SEARCH",
           encounterTriggered: false,
           obtainedItems,
-          message: `건물을 수색해 ${obtainedItems.map((i) => `${i.name} x${i.quantity}`).join(", ")}을(를) 확보했습니다.`,
+          message: `전리품 발견: ${obtainedItems.map((i) => `${i.name} x${i.quantity}`).join(", ")} (획득창에서 회수하세요)`,
         };
         return {
           payload,
           time: nextTime,
+          encounterTravel: writeExplorationState(raid, exp),
+        };
+      }
+
+      if (parsed.action === "EVENT_CHOICE") {
+        if (!parsed.choiceId) {
+          throw new InventoryError("선택지 ID가 필요합니다.", 400);
+        }
+        if (
+          exp.lootedBuildingIds.includes(building.id) ||
+          prevEvent.stage === "CLEARED"
+        ) {
+          throw new InventoryError("이미 이벤트를 완료한 건물입니다.", 409);
+        }
+        const choice = introEvent.choices?.find((c) => c.id === parsed.choiceId);
+        if (!choice || choice.action !== "EVENT_CHOICE" || !choice.outcomes?.length) {
+          throw new InventoryError("유효하지 않은 건물 이벤트 선택지입니다.", 400);
+        }
+
+        const [equippedRows, backpackRows] = await Promise.all([
+          tx.query.characterWeapons.findMany({
+            where: eq(characterWeapons.characterId, characterId),
+            columns: { weaponMasterId: true },
+          }),
+          tx.query.raidInventoryItems.findMany({
+            where: eq(raidInventoryItems.characterId, characterId),
+            columns: { weaponMasterId: true },
+          }),
+        ]);
+        const ownedItemIds = [
+          ...equippedRows.map((r) => r.weaponMasterId),
+          ...backpackRows.map((r) => r.weaponMasterId),
+        ];
+
+        if (!hasBuildingChoiceCondition(choice, ownedItemIds)) {
+          throw new InventoryError("선택지 실행 조건을 충족하지 못했습니다.", 409);
+        }
+
+        if (choice.condition?.consumeItemId) {
+          await consumeBackpackItemsInTransaction(tx, characterId, [
+            { itemId: choice.condition.consumeItemId, quantity: 1 },
+          ]);
+        }
+
+        const roll = random();
+        let outcome = choice.outcomes[choice.outcomes.length - 1]!;
+        let cumulative = 0;
+        for (const candidate of choice.outcomes) {
+          if (candidate.chance === undefined) {
+            outcome = candidate;
+            break;
+          }
+          cumulative += candidate.chance;
+          if (roll < cumulative) {
+            outcome = candidate;
+            break;
+          }
+        }
+
+        const { obtainedItems } = await stageCatalogItemsAsPendingLoot(
+          tx,
+          exp,
+          outcome.rewardItemIds ?? [],
+          "EVENT",
+        );
+
+        const hpDelta = outcome.hpDelta ?? 0;
+        const staminaDelta = outcome.staminaDelta ?? 0;
+        // 비전투 함정 피해로 즉사하지 않도록 최소 체력 1을 보장합니다.
+        const nextHp =
+          hpDelta < 0
+            ? Math.max(1, character.hp + hpDelta)
+            : Math.min(character.maxHp, character.hp + hpDelta);
+        const nextStamina = Math.max(
+          0,
+          Math.min(character.maxStamina, character.stamina + staminaDelta),
+        );
+        if (nextHp !== character.hp || nextStamina !== character.stamina) {
+          await tx
+            .update(characters)
+            .set({ hp: nextHp, stamina: nextStamina })
+            .where(eq(characters.id, characterId));
+        }
+
+        const timeCost = outcome.timeCostMinutes ?? choice.timeCostMinutes ?? 10;
+        exp.lootedBuildingIds.push(building.id);
+        if (
+          introEvent.oncePerRaid &&
+          !exp.completedEventIds.includes(introEvent.id)
+        ) {
+          exp.completedEventIds.push(introEvent.id);
+        }
+        exp.buildingEvents[buildingKey] = {
+          stage: "CLEARED",
+          text: outcome.text,
+        };
+
+        const payload: Omit<BuildingActionResult, "raid"> = {
+          action: "EVENT_CHOICE",
+          encounterTriggered: false,
+          ...(obtainedItems.length > 0 ? { obtainedItems } : {}),
+          ...(hpDelta !== 0 ? { hpDelta: nextHp - character.hp } : {}),
+          ...(staminaDelta !== 0
+            ? { staminaDelta: nextStamina - character.stamina }
+            : {}),
+          message: outcome.text,
+        };
+        return {
+          payload,
+          time: raid.time + timeCost,
           encounterTravel: writeExplorationState(raid, exp),
         };
       }
@@ -1261,7 +1582,12 @@ export async function executeRaidBuildingAction(
       if (baseBackpack) {
         materialReqs.push({ itemId: baseBackpack.weaponMasterId, quantity: 1 });
       }
-      await consumeBackpackItemsInTransaction(tx, characterId, materialReqs);
+      await consumeBackpackItemsInTransaction(
+        tx,
+        characterId,
+        materialReqs,
+        baseEquipped?.id,
+      );
 
       let equippedSlotIndex: number | undefined;
       await ensureCatalogItemsInTransaction(tx, [recipe.resultEquipmentId]);
@@ -1314,6 +1640,259 @@ export async function executeRaidBuildingAction(
         time: nextTime,
         encounterTravel: writeExplorationState(raid, exp),
       };
+    },
+  );
+}
+
+export async function executeRaidLootAction(
+  database: Database,
+  userId: string,
+  characterId: string,
+  input: RaidLootActionInput,
+): Promise<RaidLootActionResult> {
+  const parsed = RaidLootActionSchema.parse(input);
+
+  return performRaidAction(
+    database,
+    userId,
+    characterId,
+    parsed,
+    "LOOT_ACTION",
+    {
+      action: parsed.action,
+      lootId: parsed.lootId ?? null,
+      backpackSlotIndex: parsed.backpackSlotIndex ?? null,
+      equipmentSlotIndex: parsed.equipmentSlotIndex ?? null,
+      equipment: parsed.equipment ?? null,
+      inventory: parsed.inventory ?? null,
+    },
+    async (tx, raid, character) => {
+      if (parsed.equipment && parsed.inventory) {
+        await syncSlotsInTransaction(tx, characterId, {
+          equipment: parsed.equipment,
+          inventory: parsed.inventory,
+        });
+      }
+
+      const exp = readExplorationState(raid);
+      const backpackItems = await tx.query.raidInventoryItems.findMany({
+        where: eq(raidInventoryItems.characterId, characterId),
+        with: { weaponMaster: true },
+        orderBy: [asc(raidInventoryItems.slotIndex)],
+      });
+      let currentWeight = await calculateInventoryWeight(tx, characterId);
+
+      if (parsed.action === "CLAIM_ITEM") {
+        if (!parsed.lootId) {
+          throw new InventoryError("회수할 전리품 ID가 필요합니다.", 400);
+        }
+        const targetIndex = exp.pendingLoot.findIndex(
+          (item) => item.id === parsed.lootId,
+        );
+        if (targetIndex === -1) {
+          throw new InventoryError("회수할 전리품을 찾을 수 없습니다.", 404);
+        }
+        const target = exp.pendingLoot[targetIndex]!;
+        const addWeight = target.weight * target.quantity;
+        if (currentWeight + addWeight > character.maxWeight) {
+          throw new InventoryError(
+            "중량 한도를 초과하여 회수할 수 없습니다.",
+            409,
+          );
+        }
+
+        await ensureCatalogItemsInTransaction(tx, [target.weaponMasterId]);
+        await putInBackpack(tx, characterId, target.weaponMasterId, target.quantity);
+        const finalWeight = await calculateInventoryWeight(tx, characterId);
+        await tx
+          .update(characters)
+          .set({ weight: finalWeight })
+          .where(eq(characters.id, characterId));
+
+        exp.pendingLoot.splice(targetIndex, 1);
+        const payload: Omit<RaidLootActionResult, "raid"> = {
+          action: "CLAIM_ITEM",
+          claimedItems: [
+            {
+              weaponMasterId: target.weaponMasterId,
+              name: target.name,
+              quantity: target.quantity,
+            },
+          ],
+          weight: finalWeight,
+          message: `${target.name} x${target.quantity}을(를) 배낭에 넣었습니다.`,
+        };
+        return {
+          payload,
+          encounterTravel: writeExplorationState(raid, exp),
+        };
+      }
+
+      if (parsed.action === "CLAIM_ALL") {
+        if (exp.pendingLoot.length === 0) {
+          throw new InventoryError("회수할 전리품이 없습니다.", 404);
+        }
+
+        const toClaim: PendingLootItem[] = [];
+        const remainingLoot: PendingLootItem[] = [];
+
+        for (const item of exp.pendingLoot) {
+          const addWeight = item.weight * item.quantity;
+          const fitsWeight = currentWeight + addWeight <= character.maxWeight;
+
+          if (fitsWeight) {
+            currentWeight += addWeight;
+            toClaim.push(item);
+          } else {
+            remainingLoot.push(item);
+          }
+        }
+
+        if (toClaim.length === 0) {
+          throw new InventoryError(
+            "중량이 부족하여 회수할 수 있는 전리품이 없습니다.",
+            409,
+          );
+        }
+
+        await ensureCatalogItemsInTransaction(
+          tx,
+          toClaim.map((item) => item.weaponMasterId),
+        );
+        const claimedMap = new Map<
+          string,
+          { weaponMasterId: string; name: string; quantity: number }
+        >();
+        for (const item of toClaim) {
+          await putInBackpack(tx, characterId, item.weaponMasterId, item.quantity);
+          const prev = claimedMap.get(item.weaponMasterId);
+          if (prev) prev.quantity += item.quantity;
+          else {
+            claimedMap.set(item.weaponMasterId, {
+              weaponMasterId: item.weaponMasterId,
+              name: item.name,
+              quantity: item.quantity,
+            });
+          }
+        }
+
+        const finalWeight = await calculateInventoryWeight(tx, characterId);
+        await tx
+          .update(characters)
+          .set({ weight: finalWeight })
+          .where(eq(characters.id, characterId));
+
+        exp.pendingLoot = remainingLoot;
+        const claimedItems = [...claimedMap.values()];
+        const payload: Omit<RaidLootActionResult, "raid"> = {
+          action: "CLAIM_ALL",
+          claimedItems,
+          weight: finalWeight,
+          message:
+            remainingLoot.length > 0
+              ? `${claimedItems.map((i) => `${i.name} x${i.quantity}`).join(", ")} 회수 완료 (${remainingLoot.length}개 미회수)`
+              : `${claimedItems.map((i) => `${i.name} x${i.quantity}`).join(", ")} 모두 회수 완료`,
+        };
+        return {
+          payload,
+          encounterTravel: writeExplorationState(raid, exp),
+        };
+      }
+
+      if (parsed.action === "ABANDON_ALL") {
+        const count = exp.pendingLoot.length;
+        exp.pendingLoot = [];
+        const payload: Omit<RaidLootActionResult, "raid"> = {
+          action: "ABANDON_ALL",
+          weight: currentWeight,
+          message:
+            count > 0
+              ? `남은 전리품 ${count}건을 두고 이동합니다.`
+              : "정리할 전리품이 없습니다.",
+        };
+        return {
+          payload,
+          encounterTravel: writeExplorationState(raid, exp),
+        };
+      }
+
+      if (parsed.action === "DISCARD_EQUIPMENT") {
+        if (parsed.equipmentSlotIndex === undefined) {
+          throw new InventoryError("버릴 장비 슬롯 번호가 필요합니다.", 400);
+        }
+        const equipItems = await tx.query.characterWeapons.findMany({
+          where: eq(characterWeapons.characterId, characterId),
+          with: { weaponMaster: true },
+          orderBy: [asc(characterWeapons.slotIndex)],
+        });
+        const equipItem = equipItems.find(
+          (item) => item.slotIndex === parsed.equipmentSlotIndex,
+        );
+        if (!equipItem) {
+          throw new InventoryError("비울 장비 슬롯에 아이템이 없습니다.", 404);
+        }
+
+        await tx
+          .delete(characterWeapons)
+          .where(eq(characterWeapons.id, equipItem.id));
+
+        const finalWeight = await calculateInventoryWeight(tx, characterId);
+        await tx
+          .update(characters)
+          .set({ weight: finalWeight })
+          .where(eq(characters.id, characterId));
+
+        const payload: Omit<RaidLootActionResult, "raid"> = {
+          action: "DISCARD_EQUIPMENT",
+          discardedItem: {
+            weaponMasterId: equipItem.weaponMasterId,
+            name: equipItem.weaponMaster.name,
+            slotIndex: equipItem.slotIndex,
+          },
+          weight: finalWeight,
+          message: `${equipItem.weaponMaster.name}을(를) 버렸습니다.`,
+        };
+        return { payload };
+      }
+
+      if (parsed.backpackSlotIndex === undefined) {
+        throw new InventoryError("버릴 배낭 슬롯 번호가 필요합니다.", 400);
+      }
+      const slotItem = backpackItems.find(
+        (item) => item.slotIndex === parsed.backpackSlotIndex,
+      );
+      if (!slotItem) {
+        throw new InventoryError("비울 배낭 슬롯에 아이템이 없습니다.", 404);
+      }
+
+      if (slotItem.quantity > 1) {
+        await tx
+          .update(raidInventoryItems)
+          .set({ quantity: slotItem.quantity - 1 })
+          .where(eq(raidInventoryItems.id, slotItem.id));
+      } else {
+        await tx
+          .delete(raidInventoryItems)
+          .where(eq(raidInventoryItems.id, slotItem.id));
+      }
+
+      const finalWeight = await calculateInventoryWeight(tx, characterId);
+      await tx
+        .update(characters)
+        .set({ weight: finalWeight })
+        .where(eq(characters.id, characterId));
+
+      const payload: Omit<RaidLootActionResult, "raid"> = {
+        action: "DISCARD_BACKPACK",
+        discardedItem: {
+          weaponMasterId: slotItem.weaponMasterId,
+          name: slotItem.weaponMaster.name,
+          slotIndex: slotItem.slotIndex,
+        },
+        weight: finalWeight,
+        message: `${slotItem.weaponMaster.name} 1개를 버렸습니다.`,
+      };
+      return { payload };
     },
   );
 }

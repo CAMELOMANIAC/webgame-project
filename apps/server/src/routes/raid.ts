@@ -8,6 +8,7 @@ import {
   BuildingActionSchema,
   decideRaidBattle,
   executeRaidBuildingAction,
+  executeRaidLootAction,
   getPendingRaidBattle,
   extractionNodeIds,
   extractRaid,
@@ -17,6 +18,7 @@ import {
   NavigateSchema,
   navigateRaid,
   RaidActionSchema,
+  RaidLootActionSchema,
   resetRaidWithoutSession,
   startRaid,
 } from "../services/raid";
@@ -159,6 +161,23 @@ export function registerRaidRoutes(
           actor(request),
           characterId,
           BuildingActionSchema.parse(request.body),
+        );
+      } catch (error) {
+        fastify.log.error(error);
+        return sendInventoryError(reply, error);
+      }
+    },
+  );
+  fastify.post(
+    "/character/:characterId/raid/loot/action",
+    async (request, reply) => {
+      try {
+        const { characterId } = request.params as { characterId: string };
+        return await executeRaidLootAction(
+          database,
+          actor(request),
+          characterId,
+          RaidLootActionSchema.parse(request.body),
         );
       } catch (error) {
         fastify.log.error(error);

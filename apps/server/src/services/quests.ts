@@ -1,4 +1,4 @@
-import type { JournalView } from "@webgame/types";
+import { HANLIM_EQUIPMENTS, type JournalView } from "@webgame/types";
 import { and, eq } from "drizzle-orm";
 import {
   type Database,
@@ -49,32 +49,22 @@ export async function journalView(
 export async function ensureMissionWeapons(tx: TransactionClient) {
   await tx
     .insert(weaponMasters)
-    .values([
-      {
-        id: "hanlim-relief-carbine",
-        name: "기업 구호용 카빈",
-        damage: 16,
-        staminaCost: 4,
-        cooldownTicks: 2,
-        castTicks: 0,
-        weight: 3,
-        value: 40,
-        attackType: "RANGED",
-        iconKey: "RIFLE",
-      },
-      {
-        id: "hanlim-control-baton",
-        name: "기업 제식 충격봉",
-        damage: 6,
-        staminaCost: 3,
-        cooldownTicks: 3,
-        castTicks: 0,
-        weight: 2,
-        value: 30,
-        attackType: "MELEE",
-        iconKey: "STAFF",
-      },
-    ])
+    .values(
+      HANLIM_EQUIPMENTS.map((item) => ({
+        id: item.id,
+        name: item.name,
+        damage: item.damage,
+        staminaCost: item.staminaCost,
+        cooldownTicks: item.cooldownTicks,
+        castTicks: item.castTicks,
+        weight: item.weight,
+        value: item.value,
+        description: item.description,
+        attackType: item.attackType,
+        iconKey: item.iconKey,
+        effect: item.effect,
+      })),
+    )
     .onConflictDoNothing();
 }
 
