@@ -5,6 +5,7 @@ import {
   getBuildingDistrict,
   MAP_DISTRICTS,
   type MapBuilding,
+  type MapPoint,
 } from "@webgame/types";
 import { getDefaultStore, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Application, Container, Graphics, Sprite, Text, TextStyle } from "pixi.js";
@@ -33,6 +34,7 @@ import {
   targetBuildingIdAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
+import { vars } from "@/styles/theme.css";
 import { getBuildingCenter } from "@/utils/getBuildingCenter";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import type { NavigateRaidParams, NavigateRaidResponse } from "@/utils/hooks/useNavigateRaid";
@@ -92,6 +94,32 @@ const NOISE_PULSE_SECONDS = 1.35;
 const NOISE_ECHO_DELAY_SECONDS = 0.3;
 const NOISE_ECHO_STRENGTH = 0.55;
 const NOISE_PULSE_INTERVAL_MS = 3000;
+const DISTRICT_DASH_PX = 4;
+const DISTRICT_DASH_GAP_PX = 7;
+const DISTRICT_DASH_PERIOD_PX = DISTRICT_DASH_PX + DISTRICT_DASH_GAP_PX;
+
+function drawDistrictDashes(
+  graphics: Graphics,
+  edges: { start: MapPoint; end: MapPoint; offset: number }[],
+  scale: number,
+  color: string,
+) {
+  graphics.clear();
+  for (const { start, end, offset } of edges) {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const length = Math.hypot(dx, dy) * scale;
+    const phase = (offset * scale) % DISTRICT_DASH_PERIOD_PX;
+    for (let dash = -phase; dash < length; dash += DISTRICT_DASH_PERIOD_PX) {
+      const from = Math.max(0, dash);
+      const to = Math.min(length, dash + DISTRICT_DASH_PX);
+      if (to <= from) continue;
+      graphics.moveTo(start.x + dx * from / length, start.y + dy * from / length);
+      graphics.lineTo(start.x + dx * to / length, start.y + dy * to / length);
+    }
+  }
+  graphics.stroke({ width: 1 / scale, color, alpha: 0.3 });
+}
 
 function syncFogVisibility(
   sightMaskSprite: Sprite | null,
@@ -613,7 +641,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         initialized = true;
 
         if (disposed) {
-          app.destroy(true, { children: true, texture: false });
+          app.destroy({ removeView: true }, { children: true, texture: false });
           return;
         }
 
@@ -640,15 +668,31 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
         // --- 1.15 Districts (14개 지적도 권역 폴리곤 및 지명 라벨) ---
         const districtsContainer = new Container();
-        const districtGraphics = new Graphics();
+        const dashedDistrictGraphics = new Graphics();
+        const dashedEdges: Parameters<typeof drawDistrictDashes>[1] = [];
+        const drawnDistrictEdges = new Set<string>();
+        const palette = getComputedStyle(host);
+        const districtDashColor = palette.getPropertyValue(vars.text.secondary.slice(4, -1)).trim();
         for (const district of MAP_DISTRICTS) {
-          if (district.hull.length < 3) continue;
-          const flatHull = district.hull.flatMap((pt) => [pt.x, pt.y]);
-          districtGraphics
-            .poly(flatHull, true)
-            .stroke({ width: 1, color: 0xffffff, alpha: 0.18, join: "round" });
+          const [first, ...rest] = district.hull;
+          if (!first || rest.length < 2) continue;
+
+          let offset = 0;
+          let start = first;
+          for (const end of [...rest, first]) {
+            const startKey = `${start.x},${start.y}`;
+            const endKey = `${end.x},${end.y}`;
+            const edgeKey =
+              startKey < endKey ? `${startKey}:${endKey}` : `${endKey}:${startKey}`;
+
+            if (!drawnDistrictEdges.has(edgeKey)) {
+              dashedEdges.push({ start, end, offset });
+              drawnDistrictEdges.add(edgeKey);
+            }
+            offset += Math.hypot(end.x - start.x, end.y - start.y);
+            start = end;
+          }
         }
-        districtsContainer.addChild(districtGraphics);
 
         const districtLabelStyle = new TextStyle({
           fontFamily: "monospace",
@@ -729,6 +773,18 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         }
         mapLayer.addChild(buildingsContainer);
         buildingsContainerRef.current = buildingsContainer;
+
+        // Draw district boundaries over the road layer.
+        mapLayer.addChild(dashedDistrictGraphics);
+        let lastDashScale = 0;
+        const updateDistrictDashes = () => {
+          const scale = worldContainer.scale.x;
+          if (scale === lastDashScale) return;
+          lastDashScale = scale;
+          drawDistrictDashes(dashedDistrictGraphics, dashedEdges, scale, districtDashColor);
+        };
+        updateDistrictDashes();
+        app.ticker.add(updateDistrictDashes);
 
         // --- 1.4 Nodes (1,131개 교차점 일괄 드로잉) ---
         const nodesGraphics = new Graphics();
@@ -822,7 +878,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       noiseRippleRef.current?.destroy();
       noiseRippleRef.current = null;
       if (initialized) {
-        app.destroy(true, { children: true, texture: false });
+        // The field and battle canvases share Pixi's global resource pools.
+        app.destroy({ removeView: true }, { children: true, texture: false });
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1550,20 +1607,10 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     g.visible = !isCombat;
 
     const lootedSet = new Set(exploration?.lootedBuildingIds ?? []);
-    const usedCraftSet = new Set(exploration?.usedCraftBuildingIds ?? []);
 
     for (const b of buildings) {
       if (b.flatPoints.length < 6) continue;
-      if (b.category) {
-        const isUsed = usedCraftSet.has(b.id);
-        g.poly(b.flatPoints, true)
-          .fill({ color: isUsed ? 0x45454d : 0x85adff, alpha: isUsed ? 0.16 : 0.24 })
-          .stroke({
-            width: 1.4,
-            color: isUsed ? 0x60606b : 0x85adff,
-            alpha: isUsed ? 0.45 : 0.85,
-          });
-      } else if (lootedSet.has(b.id)) {
+      if (lootedSet.has(b.id)) {
         g.poly(b.flatPoints, true).fill({ color: 0x0a0a0c, alpha: 0.48 });
       }
     }
