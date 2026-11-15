@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { formatSynergySummary, type Item } from "@webgame/types";
+import { type Item, resolveCatalogWeaponData } from "@webgame/types";
 import { useAtomValue } from "jotai";
 import { motion } from "motion/react";
 import React from "react";
@@ -12,6 +12,7 @@ import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 import * as styles from "./EquipmentSlot.css";
 import * as slotStyles from "./ItemSlot.css";
 import ItemSlotContent from "./ItemSlotContent";
+import { useSlotInteraction } from "./SlotInteractionContext";
 
 interface EquipmentSlotProps {
   item: Item;
@@ -27,10 +28,18 @@ const EquipmentSlot = ({
   const isCombat = useAtomValue(isCombatAtom);
   const currentTime = useAtomValue(currentTimeAtom);
   const processedEvents = useAtomValue(processedEventsAtom);
+  const { onInspectSlot, isClickSuppressed } = useSlotInteraction();
 
   const isEmpty = item.id.toString().includes("empty");
   const rawEquipmentItem = characterData?.raw.equipment[index];
   const weapon = rawEquipmentItem?.weaponMaster;
+  const resolvedWeapon = weapon
+    ? resolveCatalogWeaponData({
+        ...weapon,
+        description: weapon.description ?? undefined,
+        effect: weapon.effect ?? undefined,
+      })
+    : undefined;
 
   const {
     attributes,
@@ -66,7 +75,7 @@ const EquipmentSlot = ({
   let remainingCooldown = 0;
   let isAttacking = false;
 
-  if (isCombat && weapon && characterData?.raw.id) {
+  if (isCombat && resolvedWeapon && characterData?.raw.id) {
     const actorId = characterData.raw.id;
 
     const lastCastStart = [...processedEvents]
@@ -108,7 +117,7 @@ const EquipmentSlot = ({
 
     if (lastAttack) {
       const elapsed = currentTime - lastAttack.timestamp;
-      const cooldownDuration = weapon.cooldownTicks;
+      const cooldownDuration = resolvedWeapon.cooldownTicks;
       if (elapsed < cooldownDuration) {
         isOnCooldown = true;
         remainingCooldown = cooldownDuration - elapsed;
@@ -149,26 +158,21 @@ const EquipmentSlot = ({
           : {}
       }
       transition={{ duration: 0.25, ease: "easeOut" }}
+      onClick={() => {
+        if (isEmpty || isClickSuppressed?.()) return;
+        onInspectSlot?.({ source: "equipment", item, index });
+      }}
       {...attributes}
       {...listeners}
     >
       <span className={slotStyles.slotIndex}>0{index + 1}</span>
       {!isEmpty && (
         <>
-          <ItemSlotContent name={item.name} iconKey={weapon?.iconKey} />
-          <div className={styles.tooltipLabel}>
-            <strong>{item.name}</strong>
-            {weapon && (
-              <div className={styles.tooltipStats}>
-                <span>DMG {weapon.damage}</span>
-                <span>CD {weapon.cooldownTicks}s</span>
-                {weapon.castTicks > 0 && <span>CAST {weapon.castTicks}s</span>}
-                {formatSynergySummary(weapon.effect) && (
-                  <span>{formatSynergySummary(weapon.effect)}</span>
-                )}
-              </div>
-            )}
-          </div>
+          <ItemSlotContent
+            name={item.name}
+            itemId={resolvedWeapon?.id ?? item.masterId}
+            iconKey={resolvedWeapon?.iconKey}
+          />
 
           {isOnCooldown && (
             <motion.div

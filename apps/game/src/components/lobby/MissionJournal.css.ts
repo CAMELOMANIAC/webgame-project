@@ -188,7 +188,7 @@ export const actionButton = style({
   fontWeight: 600,
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between",
+  justifyContent: "center",
   cursor: "pointer",
   transition: "background-color 0.15s ease",
   selectors: {
@@ -200,11 +200,6 @@ export const actionButton = style({
     opacity: 0.4,
     cursor: "default",
   },
-});
-
-export const buttonCode = style({
-  fontFamily: vars.font.mono,
-  fontSize: "11px",
 });
 
 export const navLinks = style({

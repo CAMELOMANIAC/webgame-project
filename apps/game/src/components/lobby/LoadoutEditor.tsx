@@ -33,9 +33,18 @@ import {
 import { ErrorToast } from "@/components/common/ErrorToast";
 import BackpackSlot from "@/components/itemSlot/BackpackSlot";
 import Equipment from "@/components/itemSlot/Equipment";
+import ItemDetailModal, {
+  type InspectedItem,
+  type ItemDetailAction,
+} from "@/components/itemSlot/ItemDetailModal";
 import * as slotStyles from "@/components/itemSlot/ItemSlot.css";
 import ItemSlotContent from "@/components/itemSlot/ItemSlotContent";
 import SlotManager from "@/components/itemSlot/SlotManager";
+import {
+  resolveInspectedSlotDetails,
+  type SlotInspectTarget,
+  SlotInteractionProvider,
+} from "@/components/itemSlot/SlotInteractionContext";
 import * as baseStyles from "@/components/lobby/BaseScreen.css";
 import { useCharacterRoster } from "@/utils/hooks/useCharacterCollection";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
@@ -102,11 +111,11 @@ interface LoadoutEditorProps {
 function StashItemCard({
   item,
   disabled,
-  onMoveToBackpack,
+  onInspect,
 }: {
   item: StashItemResponse;
   disabled: boolean;
-  onMoveToBackpack: (weaponMasterId: string) => void;
+  onInspect: (item: StashItemResponse) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `stash:${item.weaponMasterId}`,
@@ -117,15 +126,14 @@ function StashItemCard({
     <motion.button
       ref={setNodeRef}
       type="button"
-      disabled={disabled}
       className={`${slotStyles.slot({ state: "occupied" })} ${slotStyles.button} ${isDragging ? slotStyles.dragging : ""}`}
-      title={`${item.weaponMaster.name} · ×${item.quantity} · DMG ${item.weaponMaster.damage} · ${item.weaponMaster.weight}kg`}
-      onClick={() => onMoveToBackpack(item.weaponMasterId)}
+      onClick={() => onInspect(item)}
       {...attributes}
       {...listeners}
     >
       <ItemSlotContent
         name={item.weaponMaster.name}
+        itemId={item.weaponMasterId}
         iconKey={item.weaponMaster.iconKey}
         quantity={item.quantity}
       />
@@ -147,6 +155,9 @@ export function LoadoutEditor({
 }: LoadoutEditorProps) {
   const [localError, setLocalError] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  const [inspectedTarget, setInspectedTarget] = useState<
+    SlotInspectTarget | { source: "stash"; weaponMasterId: string } | null
+  >(null);
   const suppressClickRef = useRef(false);
 
   const activeId = useAtomValue(activeDragIdAtom);
@@ -205,6 +216,7 @@ export function LoadoutEditor({
   const {
     handleDragStart: handleInventoryDragStart,
     handleDragEnd: handleInventoryDragEnd,
+    moveSlots,
   } = useInventoryDrag(characterData, {
     deferCacheWrite: true,
     ignoreCombatLock: true,
@@ -260,23 +272,18 @@ export function LoadoutEditor({
       return;
     }
 
-    const targetSlot =
+    const targetSlotIndex =
       preferredSlotIndex !== undefined &&
       !backpack[preferredSlotIndex]?.weaponMaster
-        ? backpack[preferredSlotIndex]
-        : firstEmptySlot;
+        ? preferredSlotIndex
+        : (firstEmptySlot?.slotIndex ?? backpack.length);
 
-    if (!targetSlot) {
-      clearErrors();
-      setLocalError("가방 슬롯이 가득 찼습니다.");
-      return;
-    }
     clearErrors();
     moveItemMutation.mutate({
       characterId: character.id,
       direction: "to_backpack",
       weaponMasterId,
-      slotIndex: targetSlot.slotIndex,
+      slotIndex: targetSlotIndex,
     });
   };
 
@@ -504,7 +511,94 @@ export function LoadoutEditor({
         null)
       : null);
 
+  const inspectedItem: InspectedItem | null = (() => {
+    if (!inspectedTarget) return null;
+
+    if (inspectedTarget.source === "stash") {
+      const stashItem = stash.find(
+        (entry) => entry.weaponMasterId === inspectedTarget.weaponMasterId,
+      );
+      if (!stashItem) return null;
+      return {
+        id: stashItem.id,
+        masterId: stashItem.weaponMasterId,
+        name: stashItem.weaponMaster.name,
+        iconKey: stashItem.weaponMaster.iconKey,
+        quantity: stashItem.quantity,
+        weight: stashItem.weaponMaster.weight,
+        value: stashItem.weaponMaster.value,
+        weaponData: stashItem.weaponMaster,
+        slotLabel: "거점 창고",
+        actions: [
+          {
+            label: "가방에 넣기",
+            tone: "primary",
+            disabled: isBusy,
+            onClick: () => {
+              handleMoveToBackpack(stashItem.weaponMasterId);
+              setInspectedTarget(null);
+            },
+          },
+        ],
+      };
+    }
+
+    const { baseItem, rawSlotIndex, firstEmptyEquipId, firstEmptyBackpackId } =
+      resolveInspectedSlotDetails(inspectedTarget, characterData);
+    const actions: ItemDetailAction[] = [];
+
+    if (!isBusy && characterData) {
+      if (inspectedTarget.source === "equipment") {
+        actions.push({
+          label: "가방으로 해제",
+          disabled: !firstEmptyBackpackId,
+          onClick: () => {
+            if (firstEmptyBackpackId) {
+              moveSlots(inspectedTarget.item.id, firstEmptyBackpackId);
+            }
+            setInspectedTarget(null);
+          },
+        });
+        if (commitMode === "deferred") {
+          actions.push({
+            label: "창고로 보관",
+            onClick: () => {
+              handleMoveToStash(inspectedTarget.item.id);
+              setInspectedTarget(null);
+            },
+          });
+        }
+      } else {
+        actions.push({
+          label: "장착",
+          tone: "primary",
+          disabled: !firstEmptyEquipId,
+          onClick: () => {
+            if (firstEmptyEquipId) {
+              moveSlots(inspectedTarget.item.id, firstEmptyEquipId);
+            }
+            setInspectedTarget(null);
+          },
+        });
+        actions.push({
+          label: "창고로 보관",
+          onClick: () => {
+            handleMoveToStash(
+              inspectedTarget.item.id,
+              baseItem.masterId,
+              rawSlotIndex,
+            );
+            setInspectedTarget(null);
+          },
+        });
+      }
+    }
+
+    return { ...baseItem, actions };
+  })();
+
   return (
+    <>
     <DndContext
       sensors={sensors}
       collisionDetection={collisionDetection}
@@ -513,6 +607,10 @@ export function LoadoutEditor({
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
+      <SlotInteractionProvider
+        onInspectSlot={(target) => setInspectedTarget(target)}
+        isClickSuppressed={() => suppressClickRef.current}
+      >
       <LayoutGroup id="base-inventory-group">
         <ErrorToast message={errorMessage} onDismiss={clearErrors} />
 
@@ -566,7 +664,7 @@ export function LoadoutEditor({
             <h2 className={baseStyles.sectionHeader}>
               <span>배치 가방</span>
               <span className={baseStyles.sectionCode}>
-                PACK // {filledInventoryItems.length} / 32
+                PACK // {filledInventoryItems.length} ITEMS
               </span>
             </h2>
             {filledInventoryItems.length === 0 ? (
@@ -613,9 +711,12 @@ export function LoadoutEditor({
                     key={item.id}
                     item={item}
                     disabled={isBusy}
-                    onMoveToBackpack={(weaponMasterId) => {
+                    onInspect={(targetItem) => {
                       if (suppressClickRef.current) return;
-                      handleMoveToBackpack(weaponMasterId);
+                      setInspectedTarget({
+                        source: "stash",
+                        weaponMasterId: targetItem.weaponMasterId,
+                      });
                     }}
                   />
                 ))}
@@ -630,6 +731,12 @@ export function LoadoutEditor({
           )}
         </DragOverlay>
       </LayoutGroup>
+      </SlotInteractionProvider>
     </DndContext>
+    <ItemDetailModal
+      item={inspectedItem}
+      onClose={() => setInspectedTarget(null)}
+    />
+    </>
   );
 }

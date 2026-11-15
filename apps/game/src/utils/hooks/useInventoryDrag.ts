@@ -5,7 +5,10 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import { useQueryClient } from "@tanstack/react-query";
-import { swapEquipmentBackpack } from "@webgame/types";
+import {
+  calculateBackpackSlotCount,
+  swapEquipmentBackpack,
+} from "@webgame/types";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useRef } from "react";
 
@@ -39,6 +42,24 @@ export function buildCharacterDataFromRaw(
     }
   });
 
+  const targetSlotCount = calculateBackpackSlotCount(
+    rawInventory
+      .filter((i) => Boolean(i.weaponMaster) && i.quantity > 0)
+      .map((i) => i.slotIndex),
+  );
+  while (rawInventory.length < targetSlotCount) {
+    const nextIdx = rawInventory.length;
+    rawInventory.push({
+      id: `empty-inv-${nextIdx}`,
+      slotIndex: nextIdx,
+      weaponMaster: null,
+      quantity: 0,
+    });
+  }
+  if (rawInventory.length > targetSlotCount) {
+    rawInventory.length = targetSlotCount;
+  }
+
   newRaw.weight =
     rawEquipment.reduce((sum, w) => sum + (w.weaponMaster?.weight ?? 0), 0) +
     rawInventory.reduce(
@@ -49,6 +70,7 @@ export function buildCharacterDataFromRaw(
 
   const equipment = rawEquipment.map((w) => ({
     id: w.id,
+    masterId: w.weaponMaster?.id,
     name: w.weaponMaster?.name || "",
     iconKey: w.weaponMaster?.iconKey,
     weight: w.weaponMaster?.weight || 0,
@@ -57,6 +79,7 @@ export function buildCharacterDataFromRaw(
 
   const inventory = rawInventory.map((i) => ({
     id: i.id,
+    masterId: i.weaponMaster?.id,
     name: i.weaponMaster?.name || "",
     iconKey: i.weaponMaster?.iconKey,
     weight: i.weaponMaster?.weight || 0,
@@ -165,18 +188,8 @@ export function useInventoryDrag(
     activeIdRef.current = event.active.id;
   };
 
-  const handleDragEnd = (event: DragEndEvent): boolean => {
-    if (isLocked) return false;
-    const { active, over } = event;
-    setActiveDragId(null);
-    activeIdRef.current = null;
-
-    if (!over || !characterData) return false;
-
-    const activeIdStr = active.id.toString();
-    const overIdStr = over.id.toString();
-
-    if (activeIdStr === overIdStr) return false;
+  const moveSlots = (activeIdStr: string, overIdStr: string): boolean => {
+    if (isLocked || !characterData || activeIdStr === overIdStr) return false;
 
     let updatedData: CharacterData | undefined;
 
@@ -221,5 +234,16 @@ export function useInventoryDrag(
     return false;
   };
 
-  return { handleDragStart, handleDragEnd };
+  const handleDragEnd = (event: DragEndEvent): boolean => {
+    if (isLocked) return false;
+    const { active, over } = event;
+    setActiveDragId(null);
+    activeIdRef.current = null;
+
+    if (!over || !characterData) return false;
+
+    return moveSlots(active.id.toString(), over.id.toString());
+  };
+
+  return { handleDragStart, handleDragEnd, moveSlots };
 }

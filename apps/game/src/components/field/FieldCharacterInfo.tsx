@@ -20,13 +20,18 @@ const FieldCharacterInfo = () => {
     if (battleLog) {
       const player = battleLog.initialState.players[0];
       let hp = player.hp;
+      let shield = player.shield ?? 0;
       let stamina = player.stamina;
 
       for (const event of processedEvents) {
-        if (
-          (event.type === "DAMAGE" || event.type === "HEAL") &&
-          event.targetId === player.id
-        ) {
+        if (event.type === "SHIELD" && event.targetId === player.id) {
+          shield = event.currentShield;
+        }
+        if (event.type === "DAMAGE" && event.targetId === player.id) {
+          hp = event.remainingHp;
+          shield = event.remainingShield ?? 0;
+        }
+        if (event.type === "HEAL" && event.targetId === player.id) {
           hp = event.remainingHp;
         }
         if (event.type === "STAMINA_CHANGE" && event.playerId === player.id) {
@@ -35,6 +40,7 @@ const FieldCharacterInfo = () => {
       }
       return {
         hp,
+        shield,
         stamina,
         maxHp: player.maxHp,
         maxStamina: player.maxStamina,
@@ -45,6 +51,7 @@ const FieldCharacterInfo = () => {
     if (characterData) {
       return {
         hp: characterData.raw.hp,
+        shield: 0,
         stamina: characterData.raw.stamina,
         maxHp: characterData.raw.maxHp,
         maxStamina: characterData.raw.maxStamina,
@@ -84,9 +91,14 @@ const FieldCharacterInfo = () => {
       <div className={styles.gaugeSection}>
         <div className={styles.labelRow}>
           <p className={styles.metricLabel}>HP</p>
-          <p className={styles.metricValue({ critical: hpRatio <= 0.3 })}>
-            {stats.hp}/{stats.maxHp}
-          </p>
+          <div className={styles.metricValueGroup}>
+            {stats.shield > 0 && (
+              <p className={styles.shieldValue}>SHD +{stats.shield}</p>
+            )}
+            <p className={styles.metricValue({ critical: hpRatio <= 0.3 })}>
+              {stats.hp}/{stats.maxHp}
+            </p>
+          </div>
         </div>
         <div className={styles.segmentTrack}>
           {Array.from({ length: SEGMENT_COUNT }).map((_, idx) => (

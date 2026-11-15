@@ -1,5 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import {
+  type BuildingActionInput,
   CRAFTING_RECIPES,
   findMaterialDistricts,
   firstMissionNodeId,
@@ -8,16 +9,14 @@ import {
   getCatalogItemById,
   getCraftingRecipesForCategory,
   getRecipeChainForTarget,
+  hasBuildingChoiceCondition,
   matchesRecipeBase,
+  resolveBuildingIntroEvent,
 } from "@webgame/types";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import {
-  RiArrowLeftRightLine,
-  RiCloseLine,
-  RiCompass3Line,
-} from "react-icons/ri";
+import { RiCloseLine, RiCompass3Line } from "react-icons/ri";
 
 import {
   pendingNavigationAtom,
@@ -41,9 +40,11 @@ import {
   targetBuildingIdAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
+import ItemSlotContent from "@/components/itemSlot/ItemSlotContent";
 import { useBuildingAction } from "@/utils/hooks/useBuildingAction";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useJournal } from "@/utils/hooks/useJournal";
+import { useLootAction } from "@/utils/hooks/useLootAction";
 import { useRaidRules } from "@/utils/hooks/useRaidRules";
 import { useRaidSession } from "@/utils/hooks/useRaidSession";
 import {
@@ -57,6 +58,7 @@ import {
   LANDMARK_BUILDING_BY_ID,
   LANDMARK_BUILDING_BY_ROAD_NODE,
   type RecommendedDestination,
+  resolveBuildingImage,
   STATIC_RECOMMENDED_DESTINATIONS,
 } from "@/utils/recommendedDestinations";
 
@@ -124,6 +126,8 @@ function TelemetryValue({
   );
 }
 
+type ActiveFieldCard = "nav" | "building" | "loot";
+
 const FieldNavTargetSection = () => {
   const navigate = useNavigate();
   const recommendListId = useId();
@@ -154,11 +158,12 @@ const FieldNavTargetSection = () => {
   const [pinnedRecipeId, setPinnedRecipeId] = useAtom(pinnedRecipeIdAtom);
   const setPendingBuildingCombat = useSetAtom(pendingBuildingCombatAtom);
   const buildingAction = useBuildingAction();
+  const lootAction = useLootAction();
   const [lastBuildingMsg, setLastBuildingMsg] = useState<{
     buildingId: number;
     text: string;
   } | null>(null);
-  const [activeCard, setActiveCard] = useState<"nav" | "building">("nav");
+  const [isBuildingDismissed, setIsBuildingDismissed] = useState(false);
   const reduceMotion = useReducedMotion();
   const character = data?.raw;
   const locationName =
@@ -176,7 +181,8 @@ const FieldNavTargetSection = () => {
     !isCombat &&
     !hasPending &&
     !extractRaid.isPending &&
-    !buildingAction.isPending;
+    !buildingAction.isPending &&
+    !lootAction.isPending;
 
   const ownedItemCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -245,6 +251,14 @@ const FieldNavTargetSection = () => {
   const activeCategoryRecipes = activeBuilding?.category
     ? getCraftingRecipesForCategory(activeBuilding.category)
     : [];
+  const completedEventIds =
+    character?.activeRaid?.exploration?.completedEventIds ?? [];
+  const activeIntroEvent = activeBuilding
+    ? resolveBuildingIntroEvent(activeBuilding, activeDistrict, completedEventIds)
+    : undefined;
+  const activeBuildingImage = activeBuilding
+    ? resolveBuildingImage(activeBuilding, activeIntroEvent)
+    : undefined;
   const canMove =
     targetNodeId !== null &&
     (shortestPath.length > 1 ||
@@ -382,12 +396,13 @@ const FieldNavTargetSection = () => {
   ]);
 
   const handleBuildingAction = (
-    action: "INVESTIGATE" | "SEARCH" | "CRAFT",
+    action: BuildingActionInput["action"],
     recipeId?: string,
+    choiceId?: string,
   ) => {
     if (!character || !activeBuilding || !canAct) return;
     buildingAction.mutate(
-      { characterId: character.id, action, recipeId },
+      { characterId: character.id, action, recipeId, choiceId },
       {
         onSuccess: (res) => {
           setLastBuildingMsg({ buildingId: activeBuilding.id, text: res.message });
@@ -420,21 +435,72 @@ const FieldNavTargetSection = () => {
     });
   };
 
-  const hasBuildingEvent = Boolean(
-    activeBuilding && activeDistrict && !isMoving && character?.isRaiding,
+  const pendingLoot = useMemo(
+    () => exploration?.pendingLoot ?? [],
+    [exploration?.pendingLoot],
   );
-  const prevHasBuildingRef = useRef(hasBuildingEvent);
-  useEffect(() => {
-    if (hasBuildingEvent && !prevHasBuildingRef.current) {
-      setActiveCard("building");
+  const currentWeight = character?.weight ?? 0;
+  const maxWeight = character?.maxWeight ?? 0;
+
+  const claimableCount = useMemo(() => {
+    let simulatedWeight = currentWeight;
+    let claimable = 0;
+    for (const item of pendingLoot) {
+      const addWeight = item.weight * item.quantity;
+      const fitsWeight = simulatedWeight + addWeight <= maxWeight;
+      if (fitsWeight) {
+        claimable += 1;
+        simulatedWeight += addWeight;
+      }
     }
-    prevHasBuildingRef.current = hasBuildingEvent;
-  }, [hasBuildingEvent]);
-  const currentCard = hasBuildingEvent ? activeCard : "nav";
+    return claimable;
+  }, [pendingLoot, currentWeight, maxWeight]);
+
+  const hasBuildingEvent = Boolean(
+    activeBuilding && activeDistrict && !isMoving && !isCombat && character?.isRaiding,
+  );
+  const hasPendingLoot = Boolean(
+    pendingLoot.length > 0 && !isMoving && !isCombat && character?.isRaiding,
+  );
+
+  useEffect(() => {
+    if (isMoving || activeBuildingId === null) {
+      setIsBuildingDismissed(false);
+    }
+  }, [isMoving, activeBuildingId]);
+
+  const prevBuildingIdRef = useRef<number | null>(activeBuildingId);
+  useEffect(() => {
+    if (activeBuildingId !== prevBuildingIdRef.current) {
+      setIsBuildingDismissed(false);
+      prevBuildingIdRef.current = activeBuildingId;
+    }
+  }, [activeBuildingId]);
+
+  const currentCard: ActiveFieldCard = hasPendingLoot
+    ? "loot"
+    : hasBuildingEvent && !isBuildingDismissed
+      ? "building"
+      : "nav";
   const cardTransition = {
     type: "spring" as const,
     duration: reduceMotion ? 0 : 0.35,
     bounce: 0,
+  };
+
+  const handleClaimItem = (lootId: string) => {
+    if (!character || !canAct) return;
+    lootAction.mutate({ characterId: character.id, action: "CLAIM_ITEM", lootId });
+  };
+
+  const handleClaimAll = () => {
+    if (!character || !canAct || claimableCount === 0) return;
+    lootAction.mutate({ characterId: character.id, action: "CLAIM_ALL" });
+  };
+
+  const handleAbandonAll = () => {
+    if (!character || !canAct) return;
+    lootAction.mutate({ characterId: character.id, action: "ABANDON_ALL" });
   };
 
   return (
@@ -473,16 +539,6 @@ const FieldNavTargetSection = () => {
                 </p>
               </div>
               <div className={styles.headerActions}>
-                {hasBuildingEvent && (
-                  <button
-                    type="button"
-                    className={styles.viewSwitchButton}
-                    aria-label="건물 탐색 보기"
-                    onClick={() => setActiveCard("building")}
-                  >
-                    <RiArrowLeftRightLine />
-                  </button>
-                )}
                 <button
                   ref={recommendToggleRef}
                   type="button"
@@ -645,10 +701,7 @@ const FieldNavTargetSection = () => {
                   disabled={!canAct}
                   onClick={leave}
                 >
-                  <span>
-                    {extractRaid.isPending ? "탈출 처리 중…" : "탈출하기"}
-                  </span>
-                  <span className={styles.actionCode}>EXTRACT →</span>
+                  {extractRaid.isPending ? "탈출 처리 중…" : "탈출하기"}
                 </button>
               ) : (
                 <button
@@ -657,16 +710,7 @@ const FieldNavTargetSection = () => {
                   disabled={!canAct || !canMove}
                   onClick={() => triggerStartNavigation((prev) => prev + 1)}
                 >
-                  <span>{isMoving ? "이동 중…" : "이동"}</span>
-                  <span className={styles.actionCode}>
-                    {targetBuilding !== undefined
-                      ? (targetBuilding.name !== undefined
-                          ? `${targetBuilding.name} →`
-                          : `BLDG #${targetBuilding.id} →`)
-                      : targetNodeId !== null
-                        ? `NODE #${targetNodeId} →`
-                        : "MOVE →"}
-                  </span>
+                  {isMoving ? "이동 중…" : "이동"}
                 </button>
               )
             ) : (
@@ -676,14 +720,80 @@ const FieldNavTargetSection = () => {
                   className={styles.primaryAction}
                   onClick={() => void navigate({ to: "/base" })}
                 >
-                  <span>거점으로 돌아가기</span>
-                  <span className={styles.actionCode}>BASE →</span>
+                  거점으로 돌아가기
                 </button>
               )
             )}
           </div>
         </div>
       </div>
+          </motion.div>
+        ) : currentCard === "loot" && character ? (
+          <motion.div
+            key="loot"
+            className={styles.lootCard}
+            initial={{ x: reduceMotion ? 0 : "100%", opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: reduceMotion ? 0 : "100%", opacity: 0 }}
+            transition={cardTransition}
+          >
+            <div className={styles.lootHeader}>
+              <span className={styles.lootTitle}>전리품 회수</span>
+            </div>
+
+            {lootAction.error && (
+              <p className={styles.buildingErrorText}>
+                {lootAction.error.message}
+              </p>
+            )}
+
+            <div className={styles.lootList}>
+              {pendingLoot.map((item) => {
+                const itemWeight = item.weight * item.quantity;
+                const canFitWeight = currentWeight + itemWeight <= maxWeight;
+                const isBlocked = !canFitWeight;
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={styles.lootRow({ blocked: isBlocked })}
+                    disabled={!canAct || isBlocked}
+                    aria-label={item.name}
+                    onClick={() => handleClaimItem(item.id)}
+                  >
+                    <span className={styles.lootSlotWeight}>
+                      {itemWeight}kg
+                    </span>
+                    <ItemSlotContent
+                      name={item.name}
+                      itemId={item.weaponMasterId}
+                      iconKey={item.iconKey}
+                      quantity={item.quantity}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className={styles.lootBulkRow}>
+              <button
+                type="button"
+                className={styles.primaryAction}
+                disabled={!canAct || claimableCount === 0}
+                onClick={handleClaimAll}
+              >
+                모두 회수 ({claimableCount})
+              </button>
+              <button
+                type="button"
+                className={styles.lootAbandonBtn}
+                disabled={!canAct}
+                onClick={handleAbandonAll}
+              >
+                전리품 포기
+              </button>
+            </div>
           </motion.div>
         ) : (
           activeBuilding &&
@@ -697,34 +807,43 @@ const FieldNavTargetSection = () => {
               exit={{ x: reduceMotion ? 0 : "100%", opacity: 0 }}
               transition={cardTransition}
             >
-              <div className={styles.buildingEventHeader}>
-                <span className={styles.buildingEventTitle}>
-                  {activeBuilding.name ?? `건물 #${activeBuilding.id}`}
-                  {activeBuilding.category
-                    ? ` · ${BUILDING_CATEGORY_LABELS[activeBuilding.category]}`
-                    : ""}
-                </span>
-                <div className={styles.headerActions}>
-                  <span className={styles.districtBadge}>
-                    {activeDistrict.name}
-                  </span>
-                  <button
-                    type="button"
-                    className={styles.viewSwitchButton}
-                    aria-label="이동 정보 보기"
-                    onClick={() => setActiveCard("nav")}
-                  >
-                    <RiArrowLeftRightLine />
-                  </button>
-                </div>
-              </div>
+              <div className={styles.buildingEventContent}>
+                <div className={styles.buildingEventHero}>
+                  {activeBuildingImage && (
+                    <div
+                      className={styles.buildingEventImageWrap}
+                      aria-hidden="true"
+                    >
+                      <img
+                        src={activeBuildingImage}
+                        alt=""
+                        className={styles.buildingEventImage}
+                      />
+                    </div>
+                  )}
 
-              <p className={styles.buildingEventText}>
-                {lastBuildingMsg?.buildingId === activeBuilding.id
-                  ? lastBuildingMsg.text
-                  : (activeEventState?.text ??
-                      "방금 전까지 사람이 있었던 흔적이 보입니다. 아직 내부에 가치 있는 것들이 남아 있을지도 모릅니다.")}
-              </p>
+                  <div className={styles.buildingEventHeader}>
+                    <span className={styles.buildingEventTitle}>
+                      {activeBuilding.name ?? `건물 #${activeBuilding.id}`}
+                      {activeBuilding.category
+                        ? ` · ${BUILDING_CATEGORY_LABELS[activeBuilding.category]}`
+                        : ""}
+                    </span>
+                    <div className={styles.headerActions}>
+                      <span className={styles.districtBadge}>
+                        {activeDistrict.name}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className={styles.buildingEventText}>
+                    {lastBuildingMsg?.buildingId === activeBuilding.id
+                      ? lastBuildingMsg.text
+                      : (activeEventState?.text ??
+                          activeIntroEvent?.introText ??
+                          "")}
+                  </p>
+                </div>
 
               {buildingAction.error && (
                 <p className={styles.buildingErrorText}>
@@ -732,29 +851,74 @@ const FieldNavTargetSection = () => {
                 </p>
               )}
 
-              {!isActiveBuildingLooted ? (
-                <button
-                  type="button"
-                  className={styles.buildingActionBtn}
-                  disabled={!canAct}
-                  onClick={() => handleBuildingAction("SEARCH")}
-                >
-                  <span>
-                    {buildingAction.isPending ? "탐색 중…" : "탐색하기"}
-                  </span>
-                  <span className={styles.actionCode}>+00:10</span>
-                </button>
-              ) : (
-                <p className={styles.buildingExhaustedText}>
-                  이 건물은 이미 탐색했습니다.
-                </p>
-              )}
+              {!activeBuilding.category &&
+                (!isActiveBuildingLooted ? (
+                  activeIntroEvent?.choices &&
+                  activeIntroEvent.choices.length > 0 ? (
+                    <div className={styles.buildingChoiceList}>
+                      {activeIntroEvent.choices.map((choice) => {
+                        const ownedItemIds = [...ownedItemCounts.keys()];
+                        const conditionMet = hasBuildingChoiceCondition(
+                          choice,
+                          ownedItemIds,
+                        );
+                        const mins = choice.timeCostMinutes ?? 10;
+                        const timeLabel = `+${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+                        return (
+                          <button
+                            key={choice.id}
+                            type="button"
+                            className={styles.buildingActionBtn}
+                            disabled={!canAct || !conditionMet}
+                            onClick={() =>
+                              handleBuildingAction(
+                                "EVENT_CHOICE",
+                                undefined,
+                                choice.id,
+                              )
+                            }
+                          >
+                            <span className={styles.buildingChoiceTextGroup}>
+                              <span>{choice.label}</span>
+                              {choice.condition && (
+                                <span className={styles.buildingChoiceCondition}>
+                                  조건: {choice.condition.label}
+                                </span>
+                              )}
+                            </span>
+                            <span className={styles.actionCode}>
+                              {timeLabel}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.buildingActionBtn}
+                      disabled={!canAct}
+                      onClick={() => handleBuildingAction("SEARCH")}
+                    >
+                      <span>
+                        {buildingAction.isPending
+                          ? "탐색 중…"
+                          : (activeIntroEvent?.searchLabel ?? "탐색하기")}
+                      </span>
+                      <span className={styles.actionCode}>+00:10</span>
+                    </button>
+                  )
+                ) : (
+                  <p className={styles.buildingExhaustedText}>
+                    이 건물은 이미 탐색했습니다.
+                  </p>
+                ))}
 
               {activeBuilding.category && (
                 <div className={styles.craftList}>
                   {isActiveCraftUsed ? (
                     <p className={styles.buildingExhaustedText}>
-                      이미 조합 설비를 사용한 건물입니다.
+                      이미 업그레이드 설비를 사용한 건물입니다.
                     </p>
                   ) : (
                     activeCategoryRecipes.map((recipe) => {
@@ -804,7 +968,7 @@ const FieldNavTargetSection = () => {
                               handleBuildingAction("CRAFT", recipe.id)
                             }
                           >
-                            조합 +10m
+                            업그레이드 +10m
                           </button>
                         </div>
                       );
@@ -813,16 +977,17 @@ const FieldNavTargetSection = () => {
                 </div>
               )}
 
-              {isActiveBuildingLooted && (
-                <button
-                  type="button"
-                  className={styles.buildingActionBtn}
-                  onClick={() => setActiveCard("nav")}
-                >
-                  <span>빠져나간다</span>
-                  <span className={styles.actionCode}>NAV →</span>
-                </button>
-              )}
+              <button
+                type="button"
+                className={styles.buildingDismissBtn}
+                onClick={() => setIsBuildingDismissed(true)}
+              >
+                {(!activeBuilding.category && isActiveBuildingLooted) ||
+                (Boolean(activeBuilding.category) && isActiveCraftUsed)
+                  ? "빠져나간다"
+                  : "그냥 넘어간다"}
+              </button>
+              </div>
             </motion.div>
           )
         )}

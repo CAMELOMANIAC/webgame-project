@@ -2,6 +2,7 @@ import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import { vanillaExtractPlugin } from "@vanilla-extract/vite-plugin";
 import react from "@vitejs/plugin-react-swc";
 import { defineConfig } from "vite";
+import { ViteImageOptimizer } from "vite-plugin-image-optimizer";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 // https://vite.dev/config/
@@ -21,5 +22,12 @@ export default defineConfig({
     vanillaExtractPlugin(),
     react(),
     tsconfigPaths(),
+    ViteImageOptimizer({
+      test: /\.(jpe?g|png|gif|tiff|webp|avif)$/i,
+      jpg: { quality: 80, progressive: true },
+      jpeg: { quality: 80, progressive: true },
+      png: { quality: 80 },
+      webp: { quality: 80 },
+    }),
   ],
 });

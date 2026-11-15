@@ -11,18 +11,7 @@ export const container = style({
   flex: 1,
   flexDirection: "column",
   position: "relative",
-  selectors: {
-    "&::before": {
-      content: '""',
-      position: "absolute",
-      inset: 0,
-      backgroundColor: "rgba(12, 12, 15, 0.92)",
-      borderTop: "1px solid rgba(255, 255, 255, 0.08)",
-      backdropFilter: "blur(12px)",
-      pointerEvents: "none",
-      zIndex: 0,
-    },
-  },
+  borderTop: "1px solid rgba(255, 255, 255, 0.08)",
 });
 
 export const header = style({
@@ -32,7 +21,6 @@ export const header = style({
   alignItems: "center",
   justifyContent: "space-between",
   padding: "12px 16px 10px",
-  backgroundColor: "rgba(12, 12, 15, 0.96)",
   borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
 });
 
@@ -70,9 +58,10 @@ export const gridContainer = style({
   width: "100%",
   height: "100%",
   display: "grid",
-  gridTemplateColumns: `repeat(auto-fill, ${itemSlotSize})`,
+  gridTemplateColumns: `repeat(6, ${itemSlotSize})`,
+  justifyContent: "space-between",
   alignContent: "start",
-  gap: "8px",
+  gap: "6px",
   padding: "12px 16px 94px",
   overflowY: "auto",
 });

@@ -120,8 +120,7 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
                 disabled={locked}
                 onClick={() => accept.mutate()}
               >
-                <span>구호 물자 받고 임무 수락</span>
-                <span className={styles.buttonCode}>ACCEPT →</span>
+                구호 물자 받고 임무 수락
               </button>
             )}
             {mission.status === "ACTIVE" && (
@@ -143,8 +142,7 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
                 disabled={locked}
                 onClick={() => report.mutate()}
               >
-                <span>회수 기록 보고 · 보상 받기</span>
-                <span className={styles.buttonCode}>REPORT →</span>
+                회수 기록 보고 · 보상 받기
               </button>
             )}
             {mission.status === "COMPLETE" && (

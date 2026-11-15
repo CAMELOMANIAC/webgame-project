@@ -1,11 +1,25 @@
-import type { BuildingCategory, MapBuilding } from "@webgame/types";
+import type {
+  BuildingCategory,
+  BuildingEventDefinition,
+  MapBuilding,
+  NormalBuildingImageKey,
+} from "@webgame/types";
 
+import apartmentImg from "@/assets/buildings/apartment.jpg";
 import commercialImg from "@/assets/buildings/commercial.jpg";
+import commercialStreetImg from "@/assets/buildings/commercial_street.jpg";
 import culturalImg from "@/assets/buildings/cultural.jpg";
+import factoryImg from "@/assets/buildings/factory.jpg";
 import infraImg from "@/assets/buildings/infra.jpg";
+import labBuildingImg from "@/assets/buildings/lab_building.jpg";
 import logisticsImg from "@/assets/buildings/logistics.jpg";
+import luxuryHouseImg from "@/assets/buildings/luxury_house.jpg";
 import medicalImg from "@/assets/buildings/medical.jpg";
+import officeBuildingImg from "@/assets/buildings/office_building.jpg";
 import publicImg from "@/assets/buildings/public.jpg";
+import utilityFacilityImg from "@/assets/buildings/utility_facility.jpg";
+import villaImg from "@/assets/buildings/villa.jpg";
+import warehouseImg from "@/assets/buildings/warehouse.jpg";
 
 import mapData from "../../../../packages/types/src/assets/map_graph.json";
 import { getBuildingCenter } from "./getBuildingCenter";
@@ -43,6 +57,31 @@ export const BUILDING_CATEGORY_IMAGES: Record<BuildingCategory, string> = {
   INFRA: infraImg,
   CULTURAL: culturalImg,
 };
+
+export const NORMAL_BUILDING_IMAGES: Record<NormalBuildingImageKey, string> = {
+  apartment: apartmentImg,
+  villa: villaImg,
+  luxury_house: luxuryHouseImg,
+  commercial_street: commercialStreetImg,
+  office_building: officeBuildingImg,
+  factory: factoryImg,
+  warehouse: warehouseImg,
+  lab_building: labBuildingImg,
+  utility_facility: utilityFacilityImg,
+};
+
+export function resolveBuildingImage(
+  building: Pick<MapBuilding, "category">,
+  introEvent?: Pick<BuildingEventDefinition, "imageKey">,
+): string | undefined {
+  if (building.category) {
+    return BUILDING_CATEGORY_IMAGES[building.category];
+  }
+  if (introEvent?.imageKey) {
+    return NORMAL_BUILDING_IMAGES[introEvent.imageKey];
+  }
+  return undefined;
+}
 
 const landmarkBuildings = ((mapData.buildings ?? []) as MapBuilding[]).filter(
   (building): building is MapBuilding & { name: string; category: BuildingCategory } =>

@@ -1,3 +1,4 @@
+import { MIN_BACKPACK_SLOTS } from "@webgame/types";
 import { useAtomValue } from "jotai";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { memo } from "react";
@@ -34,7 +35,8 @@ const Backpack = memo(
         <div className={styles.header}>
           <h3 className={styles.title}>배치 가방</h3>
           <span className={styles.subCode}>
-            PACK // {occupiedCount} / {characterData?.inventory.length ?? 32}
+            PACK // {occupiedCount} /{" "}
+            {characterData?.inventory.length ?? MIN_BACKPACK_SLOTS}
           </span>
         </div>
         <AnimatePresence>

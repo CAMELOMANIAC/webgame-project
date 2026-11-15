@@ -10,6 +10,8 @@ export const pageTransition = style({
 });
 
 export const fieldPanels = style({
+  position: "relative",
+  zIndex: 1,
   display: "grid",
   gridTemplateRows: "minmax(0, 1fr) auto minmax(0, 0fr)",
   flex: 1,
@@ -25,6 +27,14 @@ export const fieldPanels = style({
   "@media": {
     "(prefers-reduced-motion: reduce)": { transition: "none" },
   },
+});
+
+export const backpackBackdrop = style({
+  position: "absolute",
+  inset: 0,
+  zIndex: 0,
+  backgroundColor: "rgba(12, 12, 15, 0.92)",
+  backdropFilter: "blur(12px)",
 });
 
 export const fieldHeader = style({

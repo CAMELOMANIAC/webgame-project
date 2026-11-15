@@ -10,6 +10,7 @@ import { isCombatAtom, pinnedRecipeIdAtom } from "@/atoms/raidAtom";
 
 import * as styles from "./ItemSlot.css";
 import ItemSlotContent from "./ItemSlotContent";
+import { useSlotInteraction } from "./SlotInteractionContext";
 
 interface BackpackProps {
   item: Item;
@@ -19,6 +20,7 @@ interface BackpackProps {
 const BackpackSlot = ({ item, index }: BackpackProps) => {
   const isCombat = useAtomValue(isCombatAtom);
   const pinnedRecipeId = useAtomValue(pinnedRecipeIdAtom);
+  const { onInspectSlot, isClickSuppressed } = useSlotInteraction();
   const isEmpty = item?.id.toString().includes("empty");
 
   const isPinnedIngredient = (() => {
@@ -69,13 +71,10 @@ const BackpackSlot = ({ item, index }: BackpackProps) => {
     <div
       ref={combinedRef}
       className={`${styles.slot({ state: slotState })} ${isDragging ? styles.dragging : ""} ${isCombat || isEmpty ? styles.staticSlot : ""}`}
-      title={
-        isEmpty
-          ? "빈 가방 슬롯"
-          : isPinnedIngredient
-            ? `${item.name} (목표 조합 필요)`
-            : item.name
-      }
+      onClick={() => {
+        if (isEmpty || isClickSuppressed?.()) return;
+        onInspectSlot?.({ source: "backpack", item, index });
+      }}
       {...attributes}
       {...listeners}
     >
@@ -87,6 +86,7 @@ const BackpackSlot = ({ item, index }: BackpackProps) => {
       {!isEmpty && (
         <ItemSlotContent
           name={item.name}
+          itemId={item.masterId}
           iconKey={item.iconKey}
           quantity={item.quantity}
         />

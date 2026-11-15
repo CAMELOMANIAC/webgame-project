@@ -129,3 +129,12 @@ export const button = style({
     "&:disabled": { opacity: 0.4, cursor: "default" },
   },
 });
+
+export const itemImage = style({
+  display: "block",
+  objectFit: "contain",
+  marginBottom: "8px",
+  pointerEvents: "none",
+  userSelect: "none",
+  filter: "drop-shadow(0 1px 3px rgba(0, 0, 0, 0.75)) brightness(1.08)",
+});

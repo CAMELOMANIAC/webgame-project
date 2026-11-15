@@ -72,7 +72,7 @@ export function CharacterCard({
         <h3 className={styles.footerTitle}>
           {pendingResult ? "탐사 결과 확인" : isRaiding ? "진행 중인 탐사로 복귀" : "탐사 준비"}
         </h3>
-        <span className={styles.footerCode}>{pendingResult ? "SYNC →" : isRaiding ? "ACTIVE →" : "PREPARE → #00"}</span>
+        <span className={styles.footerCode} aria-hidden="true">→</span>
       </div>
     </motion.button>
   );

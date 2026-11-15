@@ -46,7 +46,7 @@ function BaseHome() {
           </p>
           <Link to="/base/quest" className={styles.missionLink}>
             <span>기업 임무 통신 확인</span>
-            <span className={styles.linkCode}>COMM →</span>
+            <span className={styles.linkCode} aria-hidden="true">→</span>
           </Link>
         </section>
       </div>

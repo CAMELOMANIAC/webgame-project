@@ -39,38 +39,3 @@ export const castProgress = style({
   height: "100%",
   backgroundColor: vars.color.positive,
 });
-
-export const tooltipLabel = style({
-  display: "none",
-  position: "absolute",
-  bottom: "108%",
-  left: "50%",
-  transform: "translateX(-50%)",
-  backgroundColor: vars.surface.mid,
-  border: `1px solid ${vars.border.strong}`,
-  borderRadius: vars.radius.control,
-  padding: "6px 10px",
-  fontSize: "11px",
-  whiteSpace: "nowrap",
-  pointerEvents: "none",
-  zIndex: 100,
-  color: vars.text.primary,
-  boxShadow: "0 8px 16px rgba(0, 0, 0, 0.45)",
-  selectors: {
-    "*:hover > &": {
-      display: "flex",
-      flexDirection: "column",
-      gap: "2px",
-    },
-  },
-});
-
-export const tooltipStats = style({
-  display: "flex",
-  gap: "8px",
-  fontFamily: vars.font.mono,
-  color: vars.text.secondary,
-  fontSize: "11px",
-  fontVariantNumeric: "tabular-nums",
-  marginTop: "2px",
-});

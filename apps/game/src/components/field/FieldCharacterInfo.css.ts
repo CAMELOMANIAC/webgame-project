@@ -95,6 +95,21 @@ export const metricLabel = style({
   color: vars.text.muted,
 });
 
+export const metricValueGroup = style({
+  display: "flex",
+  flexDirection: "row",
+  alignItems: "center",
+  gap: "6px",
+});
+
+export const shieldValue = style({
+  fontFamily: vars.font.mono,
+  fontSize: "11px",
+  fontWeight: 600,
+  color: vars.color.positive,
+  fontVariantNumeric: "tabular-nums",
+});
+
 export const metricValue = recipe({
   base: {
     fontFamily: vars.font.mono,

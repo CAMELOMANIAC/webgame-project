@@ -1,5 +1,10 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { InventorySnapshot, Item, RaidView } from "@webgame/types";
+import {
+  calculateBackpackSlotCount,
+  type InventorySnapshot,
+  type Item,
+  type RaidView,
+} from "@webgame/types";
 
 import { API_BASE_URL, apiFetch } from "./api";
 import type { CharacterVariant } from "./hooks/useCharacterCollection";
@@ -99,12 +104,21 @@ export function normalizeCharacterData(data: CharacterResponse): CharacterData {
     if (w.slotIndex < 6) normalizedEquipment[w.slotIndex] = w;
   });
 
-  // 2. 백팩 정규화 (32슬롯 고정)
-  const normalizedInventory: CharacterResponse["inventory"] = Array(32)
+  // 2. 백팩 정규화 (최소 18슬롯, 1줄 6칸 단위로 동적 확장)
+  const backpackSlotCount = calculateBackpackSlotCount(
+    data.inventory
+      .filter((i) => i.weaponMaster !== null && i.quantity > 0)
+      .map((i) => i.slotIndex),
+  );
+  const normalizedInventory: CharacterResponse["inventory"] = Array(
+    backpackSlotCount,
+  )
     .fill(null)
     .map((_, i) => createEmptyInventory(i));
   data.inventory.forEach((i) => {
-    if (i.slotIndex < 32) normalizedInventory[i.slotIndex] = i;
+    if (i.slotIndex >= 0 && i.slotIndex < backpackSlotCount) {
+      normalizedInventory[i.slotIndex] = i;
+    }
   });
 
   const rawNormalized: CharacterResponse = {
@@ -116,6 +130,7 @@ export function normalizeCharacterData(data: CharacterResponse): CharacterData {
   // 컴포넌트 편의를 위한 단순 Item 배열 추출
   const equipment = normalizedEquipment.map((w) => ({
     id: w.id,
+    masterId: w.weaponMaster?.id,
     name: w.weaponMaster?.name || "",
     iconKey: w.weaponMaster?.iconKey,
     weight: w.weaponMaster?.weight || 0,
@@ -124,6 +139,7 @@ export function normalizeCharacterData(data: CharacterResponse): CharacterData {
 
   const inventory = normalizedInventory.map((i) => ({
     id: i.id,
+    masterId: i.weaponMaster?.id,
     name: i.weaponMaster?.name || "",
     iconKey: i.weaponMaster?.iconKey,
     weight: i.weaponMaster?.weight || 0,

@@ -1,4 +1,6 @@
+import { useDroppable } from "@dnd-kit/core";
 import { useAtomValue } from "jotai";
+import { RiDeleteBinLine } from "react-icons/ri";
 
 import { battleLogAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import FieldCharacterInfo from "@/components/field/FieldCharacterInfo";
@@ -6,10 +8,20 @@ import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 
 import * as styles from "./FieldStatusSection.css";
 
-const FieldStatusSection = () => {
+export const FIELD_DISCARD_DROP_ID = "field-discard-drop";
+
+interface FieldStatusSectionProps {
+  discardMode?: boolean;
+}
+
+const FieldStatusSection = ({ discardMode = false }: FieldStatusSectionProps) => {
   const { data } = useGetCharacter();
   const log = useAtomValue(battleLogAtom);
   const events = useAtomValue(processedEventsAtom);
+  const { setNodeRef: setDiscardRef, isOver: isDiscardOver } = useDroppable({
+    id: FIELD_DISCARD_DROP_ID,
+    disabled: !discardMode,
+  });
   const player = log?.initialState.players[0];
   let stamina = player?.stamina ?? data?.raw.stamina;
   for (const event of events)
@@ -31,7 +43,10 @@ const FieldStatusSection = () => {
         <FieldCharacterInfo />
       </div>
       <div className={styles.sideCol}>
-        <div className={styles.compactWidget}>
+        <div
+          className={styles.compactWidget({ hidden: discardMode })}
+          aria-hidden={discardMode}
+        >
           <div className={styles.cellHeader}>
             <p className={styles.widgetLabel}>ENG</p>
             <span className={styles.metricDot({ tone: "positive" })} />
@@ -41,7 +56,10 @@ const FieldStatusSection = () => {
             {player?.maxStamina ?? data?.raw.maxStamina ?? "—"}
           </p>
         </div>
-        <div className={styles.compactWidget}>
+        <div
+          className={styles.compactWidget({ hidden: discardMode })}
+          aria-hidden={discardMode}
+        >
           <div className={styles.cellHeader}>
             <p className={styles.widgetLabel}>WGT</p>
             <span className={styles.metricDot({ tone: "neutral" })} />
@@ -51,6 +69,15 @@ const FieldStatusSection = () => {
             {player?.maxWeight ?? data?.raw.maxWeight ?? "—"} kg
           </p>
         </div>
+        {discardMode && (
+          <div
+            ref={setDiscardRef}
+            className={styles.discardWidget({ active: isDiscardOver })}
+          >
+            <RiDeleteBinLine size={20} aria-hidden="true" />
+            <span className={styles.discardLabel}>아이템 버리기</span>
+          </div>
+        )}
       </div>
     </section>
   );

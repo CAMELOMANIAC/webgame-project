@@ -48,31 +48,6 @@ export const headerActions = style({
   flexShrink: 0,
 });
 
-export const viewSwitchButton = style({
-  flexShrink: 0,
-  width: "30px",
-  height: "30px",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  borderRadius: vars.radius.control,
-  border: `1px solid ${vars.border.strong}`,
-  backgroundColor: vars.surface.low,
-  color: vars.text.primary,
-  cursor: "pointer",
-  fontSize: "15px",
-  transition: "background-color 0.15s ease",
-  selectors: {
-    "&:hover:not(:disabled)": {
-      backgroundColor: vars.surface.high,
-    },
-    "&:disabled": {
-      opacity: 0.4,
-      cursor: "default",
-    },
-  },
-});
-
 export const destinationText = style({
   color: vars.text.primary,
   fontWeight: 700,
@@ -191,7 +166,7 @@ export const primaryAction = style({
   fontWeight: 600,
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between",
+  justifyContent: "center",
   cursor: "pointer",
   transition: "background-color 0.15s ease",
   selectors: {
@@ -490,6 +465,7 @@ export const recipeNeedText = style({
 export const buildingEventCard = style([
   fieldWidget({ tone: "default" }),
   {
+    position: "relative",
     height: "auto",
     maxHeight: "100%",
     minHeight: 0,
@@ -497,14 +473,37 @@ export const buildingEventCard = style([
     flexDirection: "column",
     justifyContent: "flex-start",
     alignItems: "stretch",
-    padding: "14px",
+    padding: 0,
     flex: 0,
-    gap: "10px",
-    overflowY: "auto",
+    overflow: "hidden",
   },
 ]);
 
+export const buildingEventContent = style({
+  position: "relative",
+  zIndex: 1,
+  display: "flex",
+  flexDirection: "column",
+  gap: "10px",
+  padding: "14px",
+  minHeight: 0,
+  overflowY: "auto",
+});
+
+export const buildingEventHero = style({
+  position: "relative",
+  margin: "-14px -14px 0",
+  padding: "14px 14px 12px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "10px",
+  overflow: "hidden",
+  flexShrink: 0,
+});
+
 export const buildingEventHeader = style({
+  position: "relative",
+  zIndex: 1,
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
@@ -529,11 +528,47 @@ export const districtBadge = style({
   fontVariantNumeric: "tabular-nums",
 });
 
+export const buildingEventImageWrap = style({
+  position: "absolute",
+  inset: 0,
+  zIndex: 0,
+  pointerEvents: "none",
+  overflow: "hidden",
+  WebkitMaskImage:
+    "linear-gradient(180deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.75) 55%, rgba(0, 0, 0, 0) 100%)",
+  maskImage:
+    "linear-gradient(180deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.75) 55%, rgba(0, 0, 0, 0) 100%)",
+  selectors: {
+    "&::after": {
+      content: '""',
+      position: "absolute",
+      inset: 0,
+      background:
+        "linear-gradient(180deg, rgba(14, 15, 18, 0.3) 0%, rgba(14, 15, 18, 0) 100%)",
+    },
+  },
+});
+
+export const buildingEventImage = style({
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  display: "block",
+  opacity: 0.28,
+});
+
 export const buildingEventText = style({
+  position: "relative",
+  zIndex: 1,
   margin: 0,
+  padding: "10px 12px",
+  borderRadius: vars.radius.control,
+  backgroundColor: "rgba(9, 9, 11, 0.45)",
+  backdropFilter: "blur(4px)",
+  WebkitBackdropFilter: "blur(4px)",
   fontSize: "12px",
-  lineHeight: 1.45,
-  color: vars.text.secondary,
+  lineHeight: 1.6,
+  color: vars.text.primary,
 });
 
 export const buildingExhaustedText = style({
@@ -553,6 +588,8 @@ export const buildingActionBtn = style({
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
+  gap: "8px",
+  textAlign: "left",
   padding: "8px 10px",
   borderRadius: vars.radius.control,
   border: `1px solid ${vars.border.subtle}`,
@@ -570,6 +607,33 @@ export const buildingActionBtn = style({
       cursor: "not-allowed",
     },
   },
+});
+
+export const buildingDismissBtn = style([
+  buildingActionBtn,
+  {
+    justifyContent: "center",
+    textAlign: "center",
+  },
+]);
+
+export const buildingChoiceList = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "6px",
+});
+
+export const buildingChoiceTextGroup = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "2px",
+  minWidth: 0,
+});
+
+export const buildingChoiceCondition = style({
+  fontSize: "11px",
+  fontWeight: 500,
+  color: vars.text.muted,
 });
 
 export const craftList = style({
@@ -618,9 +682,10 @@ export const craftActionBtn = style({
   padding: "5px 8px",
   borderRadius: vars.radius.control,
   border: `1px solid ${vars.border.subtle}`,
-  backgroundColor: vars.color.positiveBg,
-  color: vars.color.positive,
+  backgroundColor: vars.surface.high,
+  color: vars.text.primary,
   fontFamily: vars.font.mono,
+  fontVariantNumeric: "tabular-nums",
   fontSize: "11px",
   fontWeight: 600,
   cursor: "pointer",
@@ -628,6 +693,136 @@ export const craftActionBtn = style({
     "&:disabled": {
       opacity: 0.4,
       cursor: "not-allowed",
+    },
+  },
+});
+
+export const lootCard = style([
+  fieldWidget({ tone: "default" }),
+  {
+    height: "auto",
+    maxHeight: "100%",
+    minHeight: 0,
+    width: "100%",
+    flexDirection: "column",
+    justifyContent: "flex-start",
+    alignItems: "stretch",
+    padding: "14px",
+    flex: 0,
+    gap: "10px",
+    overflowY: "auto",
+  },
+]);
+
+export const lootHeader = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "8px",
+});
+
+export const lootTitle = style({
+  fontSize: "14px",
+  fontWeight: 700,
+  color: vars.text.primary,
+  letterSpacing: "-0.02em",
+});
+
+export const lootList = style({
+  display: "flex",
+  flexWrap: "wrap",
+  justifyContent: "center",
+  gap: "8px",
+  maxHeight: "34dvh",
+  overflowY: "auto",
+  padding: "2px",
+});
+
+export const lootRow = recipe({
+  base: {
+    position: "relative",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "58px",
+    flexShrink: 0,
+    aspectRatio: "1 / 1",
+    padding: "4px",
+    borderRadius: vars.radius.control,
+    backdropFilter: "blur(8px)",
+    color: vars.text.primary,
+    userSelect: "none",
+    transition: "border-color 0.15s ease, background-color 0.15s ease",
+  },
+  variants: {
+    blocked: {
+      false: {
+        border: `1px solid ${vars.border.strong}`,
+        backgroundColor: "rgba(20, 20, 24, 0.92)",
+        cursor: "pointer",
+        selectors: {
+          "&:hover:not(:disabled)": {
+            borderColor: vars.text.primary,
+          },
+          "&:disabled": {
+            opacity: 0.45,
+            cursor: "default",
+          },
+        },
+      },
+      true: {
+        border: `1px solid ${vars.border.negative}`,
+        backgroundColor: vars.color.negativeBg,
+        opacity: 0.65,
+        cursor: "not-allowed",
+      },
+    },
+  },
+  defaultVariants: {
+    blocked: false,
+  },
+});
+
+export const lootSlotWeight = style({
+  position: "absolute",
+  top: "3px",
+  left: "4px",
+  fontFamily: vars.font.mono,
+  fontSize: "9px",
+  color: vars.text.disabled,
+  fontVariantNumeric: "tabular-nums",
+  pointerEvents: "none",
+});
+
+export const lootBulkRow = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "6px",
+});
+
+export const lootAbandonBtn = style({
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "9px 12px",
+  borderRadius: vars.radius.control,
+  border: `1px solid ${vars.border.strong}`,
+  backgroundColor: vars.surface.low,
+  color: vars.text.primary,
+  fontSize: "12px",
+  fontWeight: 600,
+  whiteSpace: "nowrap",
+  cursor: "pointer",
+  transition: "background-color 0.15s ease",
+  selectors: {
+    "&:hover:not(:disabled)": {
+      backgroundColor: vars.surface.high,
+    },
+    "&:disabled": {
+      opacity: 0.4,
+      cursor: "default",
     },
   },
 });

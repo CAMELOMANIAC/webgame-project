@@ -90,18 +90,26 @@ export function moveStashToBackpackDraft(
     return { ok: false, error: "창고에 해당 물품이 없습니다." };
   }
 
-  const targetSlot =
+  let targetSlot =
     preferredSlotIndex === undefined
       ? newRaw.inventory.find((slot) => !slot.weaponMaster)
       : newRaw.inventory[preferredSlotIndex];
 
+  if (!targetSlot && preferredSlotIndex === undefined) {
+    const nextSlotIndex = newRaw.inventory.length;
+    targetSlot = {
+      id: `empty-inv-${nextSlotIndex}`,
+      slotIndex: nextSlotIndex,
+      weaponMaster: null,
+      quantity: 0,
+    };
+    newRaw.inventory.push(targetSlot);
+  }
+
   if (!targetSlot) {
     return {
       ok: false,
-      error:
-        preferredSlotIndex === undefined
-          ? "가방 슬롯이 가득 찼습니다."
-          : "유효하지 않은 가방 슬롯입니다.",
+      error: "유효하지 않은 가방 슬롯입니다.",
     };
   }
 
@@ -269,6 +277,15 @@ export function applyImmediateStashMove(
       return { ok: false, error: "창고에 해당 물품이 없습니다." };
     }
 
+    while (newRaw.inventory.length <= slotIndex) {
+      const idx = newRaw.inventory.length;
+      newRaw.inventory.push({
+        id: `empty-inv-${idx}`,
+        slotIndex: idx,
+        weaponMaster: null,
+        quantity: 0,
+      });
+    }
     const targetSlot = newRaw.inventory[slotIndex];
     if (!targetSlot || targetSlot.weaponMaster) {
       return { ok: false, error: "비어 있는 가방 슬롯이 필요합니다." };
