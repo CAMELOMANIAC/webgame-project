@@ -105,7 +105,7 @@ export function BattleCanvas({
         initialized = true;
 
         if (disposed) {
-          app.destroy(true, { children: true, texture: false });
+          app.destroy({ removeView: true }, { children: true, texture: false });
           return;
         }
 
@@ -154,7 +154,8 @@ export function BattleCanvas({
       playerDashGroupRef.current = null;
       playerCompassSpriteRef.current = null;
       if (initialized) {
-        app.destroy(true, { children: true, texture: false });
+        // The field and battle canvases share Pixi's global resource pools.
+        app.destroy({ removeView: true }, { children: true, texture: false });
       }
     };
   }, []);
