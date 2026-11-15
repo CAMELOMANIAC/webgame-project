@@ -16,7 +16,7 @@ import { ItemSlotIcon } from "./ItemSlotContent";
 
 export interface ItemDetailAction {
   label: string;
-  tone?: "primary" | "default" | "danger";
+  tone?: "primary" | "default";
   disabled?: boolean;
   onClick: () => void;
 }

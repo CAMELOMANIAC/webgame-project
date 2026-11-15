@@ -39,11 +39,7 @@ import ItemDetailModal, {
   type InspectedItem,
   type ItemDetailAction,
 } from "@/components/itemSlot/ItemDetailModal";
-import {
-  resolveInspectedSlotDetails,
-  type SlotInspectTarget,
-  SlotInteractionProvider,
-} from "@/components/itemSlot/SlotInteractionContext";
+import { SlotInteractionProvider } from "@/components/itemSlot/SlotInteractionContext";
 import { inheritMotionDiv, page } from "@/styles/theme.css";
 import { useEnemyPositions } from "@/utils/hooks/useEnemyPositions";
 import { useFieldCombat } from "@/utils/hooks/useFieldCombat";
@@ -51,6 +47,10 @@ import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useInventoryDrag } from "@/utils/hooks/useInventoryDrag";
 import { useLootAction } from "@/utils/hooks/useLootAction";
 import { useRaidNoise } from "@/utils/hooks/useRaidNoise";
+import {
+  resolveInspectedSlotDetails,
+  type SlotInspectTarget,
+} from "@/utils/hooks/useSlotInteraction";
 
 import * as styles from "./index.css";
 
@@ -204,7 +204,6 @@ function RouteComponent() {
         if (characterData.raw.isRaiding && rawSlotIndex !== undefined) {
           actions.push({
             label: "버리기",
-            tone: "danger",
             disabled: lootAction.isPending,
             onClick: () => {
               lootAction.mutate({
@@ -231,7 +230,6 @@ function RouteComponent() {
         if (characterData.raw.isRaiding && rawSlotIndex !== undefined) {
           actions.push({
             label: "버리기",
-            tone: "danger",
             disabled: lootAction.isPending,
             onClick: () => {
               lootAction.mutate({

@@ -186,14 +186,14 @@ export const synergyBox = style({
   gap: "3px",
   padding: "8px 10px",
   borderRadius: vars.radius.control,
-  border: `1px solid ${vars.border.positive}`,
-  backgroundColor: vars.color.positiveBg,
+  border: `1px solid ${vars.border.subtle}`,
+  backgroundColor: vars.surface.low,
 });
 
 export const synergyLabel = style({
   fontFamily: vars.font.mono,
   fontSize: "11px",
-  color: vars.color.positive,
+  color: vars.text.muted,
 });
 
 export const synergyText = style({
@@ -252,16 +252,6 @@ export const actionButton = recipe({
         selectors: {
           "&:hover:not(:disabled)": {
             borderColor: vars.text.primary,
-          },
-        },
-      },
-      danger: {
-        border: `1px solid ${vars.border.negative}`,
-        backgroundColor: vars.color.negativeBg,
-        color: vars.color.negative,
-        selectors: {
-          "&:hover:not(:disabled)": {
-            borderColor: vars.color.negative,
           },
         },
       },
