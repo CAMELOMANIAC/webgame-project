@@ -7,10 +7,10 @@ import {
 import { useAtomValue } from "jotai";
 
 import { isCombatAtom, pinnedRecipeIdAtom } from "@/atoms/raidAtom";
+import { useSlotInteraction } from "@/utils/hooks/useSlotInteraction";
 
 import * as styles from "./ItemSlot.css";
 import ItemSlotContent from "./ItemSlotContent";
-import { useSlotInteraction } from "./SlotInteractionContext";
 
 interface BackpackProps {
   item: Item;

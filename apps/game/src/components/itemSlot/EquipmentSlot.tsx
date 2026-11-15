@@ -8,11 +8,11 @@ import React from "react";
 import { currentTimeAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { isCombatAtom } from "@/atoms/raidAtom";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
+import { useSlotInteraction } from "@/utils/hooks/useSlotInteraction";
 
 import * as styles from "./EquipmentSlot.css";
 import * as slotStyles from "./ItemSlot.css";
 import ItemSlotContent from "./ItemSlotContent";
-import { useSlotInteraction } from "./SlotInteractionContext";
 
 interface EquipmentSlotProps {
   item: Item;

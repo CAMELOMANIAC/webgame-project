@@ -39,18 +39,18 @@ import ItemDetailModal, {
 } from "@/components/itemSlot/ItemDetailModal";
 import * as slotStyles from "@/components/itemSlot/ItemSlot.css";
 import ItemSlotContent from "@/components/itemSlot/ItemSlotContent";
+import { SlotInteractionProvider } from "@/components/itemSlot/SlotInteractionContext";
 import SlotManager from "@/components/itemSlot/SlotManager";
-import {
-  resolveInspectedSlotDetails,
-  type SlotInspectTarget,
-  SlotInteractionProvider,
-} from "@/components/itemSlot/SlotInteractionContext";
 import * as baseStyles from "@/components/lobby/BaseScreen.css";
 import { useCharacterRoster } from "@/utils/hooks/useCharacterCollection";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 import type { StashItemResponse } from "@/utils/hooks/useGetStash";
 import { useInventoryDrag } from "@/utils/hooks/useInventoryDrag";
 import { useMoveStashItem } from "@/utils/hooks/useMoveStashItem";
+import {
+  resolveInspectedSlotDetails,
+  type SlotInspectTarget,
+} from "@/utils/hooks/useSlotInteraction";
 import { useSyncItemsMutation } from "@/utils/hooks/useSyncItemsMutation";
 import {
   useUnequipAllEquipment,
