@@ -3,6 +3,14 @@ import { recipe } from "@vanilla-extract/recipes";
 
 import { cornerBrackets, fieldWidget, vars } from "@/styles/theme.css";
 
+export const cardDeck = style({
+  position: "relative",
+  width: "100%",
+  maxHeight: "100%",
+  minHeight: 0,
+  overflow: "hidden",
+});
+
 export const container = style([
   fieldWidget({ tone: "default" }),
   {
@@ -30,6 +38,39 @@ export const destinationRow = style({
   display: "flex",
   flexDirection: "column",
   gap: "3px",
+  minWidth: 0,
+});
+
+export const headerActions = style({
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  flexShrink: 0,
+});
+
+export const viewSwitchButton = style({
+  flexShrink: 0,
+  width: "30px",
+  height: "30px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: vars.radius.control,
+  border: `1px solid ${vars.border.strong}`,
+  backgroundColor: vars.surface.low,
+  color: vars.text.primary,
+  cursor: "pointer",
+  fontSize: "15px",
+  transition: "background-color 0.15s ease",
+  selectors: {
+    "&:hover:not(:disabled)": {
+      backgroundColor: vars.surface.high,
+    },
+    "&:disabled": {
+      opacity: 0.4,
+      cursor: "default",
+    },
+  },
 });
 
 export const destinationText = style({
@@ -38,6 +79,9 @@ export const destinationText = style({
   fontSize: "17px",
   letterSpacing: "-0.02em",
   fontVariantNumeric: "tabular-nums",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
 });
 
 export const statusHint = recipe({
@@ -443,15 +487,22 @@ export const recipeNeedText = style({
   lineHeight: 1.35,
 });
 
-export const buildingEventCard = style({
-  display: "flex",
-  flexDirection: "column",
-  gap: "8px",
-  padding: "10px",
-  borderRadius: vars.radius.control,
-  border: `1px solid ${vars.border.subtle}`,
-  backgroundColor: vars.surface.low,
-});
+export const buildingEventCard = style([
+  fieldWidget({ tone: "default" }),
+  {
+    height: "auto",
+    maxHeight: "100%",
+    minHeight: 0,
+    width: "100%",
+    flexDirection: "column",
+    justifyContent: "flex-start",
+    alignItems: "stretch",
+    padding: "14px",
+    flex: 0,
+    gap: "10px",
+    overflowY: "auto",
+  },
+]);
 
 export const buildingEventHeader = style({
   display: "flex",

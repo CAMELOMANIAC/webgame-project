@@ -12,12 +12,11 @@ import {
 } from "@webgame/types";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
-  RiBuilding2Line,
+  RiArrowLeftRightLine,
   RiCloseLine,
   RiCompass3Line,
-  RiRouteLine,
 } from "react-icons/ri";
 
 import {
@@ -424,6 +423,13 @@ const FieldNavTargetSection = () => {
   const hasBuildingEvent = Boolean(
     activeBuilding && activeDistrict && !isMoving && character?.isRaiding,
   );
+  const prevHasBuildingRef = useRef(hasBuildingEvent);
+  useEffect(() => {
+    if (hasBuildingEvent && !prevHasBuildingRef.current) {
+      setActiveCard("building");
+    }
+    prevHasBuildingRef.current = hasBuildingEvent;
+  }, [hasBuildingEvent]);
   const currentCard = hasBuildingEvent ? activeCard : "nav";
   const cardTransition = {
     type: "spring" as const,
@@ -445,25 +451,13 @@ const FieldNavTargetSection = () => {
           >
             <div className={styles.destinationHeader}>
               <div className={styles.destinationRow}>
-                <div className={styles.titleRow}>
-                  {hasBuildingEvent && (
-                    <button
-                      type="button"
-                      className={styles.viewSwitchButton}
-                      aria-label="건물 탐색 보기"
-                      onClick={() => setActiveCard("building")}
-                    >
-                      <RiBuilding2Line />
-                    </button>
-                  )}
-                  <strong className={styles.destinationText}>
-                    {targetBuilding !== undefined
-                      ? (targetBuilding.name ?? `건물 #${targetBuilding.id}`)
-                      : targetNodeId !== null
-                        ? (targetLandmark?.name ?? `목적지 #${targetNodeId}`)
-                        : (currentLandmark?.name ?? `${locationName} #${nodeId}`)}
-                  </strong>
-                </div>
+                <strong className={styles.destinationText}>
+                  {targetBuilding !== undefined
+                    ? (targetBuilding.name ?? `건물 #${targetBuilding.id}`)
+                    : targetNodeId !== null
+                      ? (targetLandmark?.name ?? `목적지 #${targetNodeId}`)
+                      : (currentLandmark?.name ?? `${locationName} #${nodeId}`)}
+                </strong>
                 <p
                   className={styles.statusHint({
                     positive: atExtraction && !canMove,
@@ -478,17 +472,29 @@ const FieldNavTargetSection = () => {
                         : "지도에서 다음 목적지를 선택하세요"}
                 </p>
               </div>
-              <button
-                ref={recommendToggleRef}
-                type="button"
-                className={styles.recommendToggle({ open: isRecommendOpen })}
-                aria-expanded={isRecommendOpen}
-                aria-controls={recommendListId}
-                aria-label="추천 목적지"
-                onClick={() => setIsRecommendOpen((open) => !open)}
-              >
-                {isRecommendOpen ? <RiCloseLine /> : <RiCompass3Line />}
-              </button>
+              <div className={styles.headerActions}>
+                {hasBuildingEvent && (
+                  <button
+                    type="button"
+                    className={styles.viewSwitchButton}
+                    aria-label="건물 탐색 보기"
+                    onClick={() => setActiveCard("building")}
+                  >
+                    <RiArrowLeftRightLine />
+                  </button>
+                )}
+                <button
+                  ref={recommendToggleRef}
+                  type="button"
+                  className={styles.recommendToggle({ open: isRecommendOpen })}
+                  aria-expanded={isRecommendOpen}
+                  aria-controls={recommendListId}
+                  aria-label="추천 목적지"
+                  onClick={() => setIsRecommendOpen((open) => !open)}
+                >
+                  {isRecommendOpen ? <RiCloseLine /> : <RiCompass3Line />}
+                </button>
+              </div>
             </div>
 
       <div>
@@ -692,25 +698,25 @@ const FieldNavTargetSection = () => {
               transition={cardTransition}
             >
               <div className={styles.buildingEventHeader}>
-                <div className={styles.titleRow}>
+                <span className={styles.buildingEventTitle}>
+                  {activeBuilding.name ?? `건물 #${activeBuilding.id}`}
+                  {activeBuilding.category
+                    ? ` · ${BUILDING_CATEGORY_LABELS[activeBuilding.category]}`
+                    : ""}
+                </span>
+                <div className={styles.headerActions}>
+                  <span className={styles.districtBadge}>
+                    {activeDistrict.name}
+                  </span>
                   <button
                     type="button"
                     className={styles.viewSwitchButton}
                     aria-label="이동 정보 보기"
                     onClick={() => setActiveCard("nav")}
                   >
-                    <RiRouteLine />
+                    <RiArrowLeftRightLine />
                   </button>
-                  <span className={styles.buildingEventTitle}>
-                    {activeBuilding.name ?? `건물 #${activeBuilding.id}`}
-                    {activeBuilding.category
-                      ? ` · ${BUILDING_CATEGORY_LABELS[activeBuilding.category]}`
-                      : ""}
-                  </span>
                 </div>
-                <span className={styles.districtBadge}>
-                  {activeDistrict.name}
-                </span>
               </div>
 
               <p className={styles.buildingEventText}>
@@ -726,19 +732,7 @@ const FieldNavTargetSection = () => {
                 </p>
               )}
 
-              {!activeEventState || activeEventState.stage === "INTRO" ? (
-                <button
-                  type="button"
-                  className={styles.buildingActionBtn}
-                  disabled={!canAct}
-                  onClick={() => handleBuildingAction("INVESTIGATE")}
-                >
-                  <span>
-                    {buildingAction.isPending ? "확인 중…" : "다음 · 내부 확인"}
-                  </span>
-                  <span className={styles.actionCode}>+00:10</span>
-                </button>
-              ) : !isActiveBuildingLooted ? (
+              {!isActiveBuildingLooted ? (
                 <button
                   type="button"
                   className={styles.buildingActionBtn}
@@ -746,13 +740,13 @@ const FieldNavTargetSection = () => {
                   onClick={() => handleBuildingAction("SEARCH")}
                 >
                   <span>
-                    {buildingAction.isPending ? "수색 중…" : "수색하기"}
+                    {buildingAction.isPending ? "탐색 중…" : "탐색하기"}
                   </span>
                   <span className={styles.actionCode}>+00:10</span>
                 </button>
               ) : (
                 <p className={styles.buildingExhaustedText}>
-                  이 건물은 이미 수색했습니다.
+                  이 건물은 이미 탐색했습니다.
                 </p>
               )}
 
@@ -817,6 +811,17 @@ const FieldNavTargetSection = () => {
                     })
                   )}
                 </div>
+              )}
+
+              {isActiveBuildingLooted && (
+                <button
+                  type="button"
+                  className={styles.buildingActionBtn}
+                  onClick={() => setActiveCard("nav")}
+                >
+                  <span>빠져나간다</span>
+                  <span className={styles.actionCode}>NAV →</span>
+                </button>
               )}
             </motion.div>
           )

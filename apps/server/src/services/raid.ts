@@ -1000,66 +1000,68 @@ export async function executeRaidBuildingAction(
         text: "방금 전까지 사람이 있었던 흔적이 보입니다. 아직 내부에 가치 있는 것들이 남아 있을지도 모릅니다.",
       };
 
+      const runBuildingEncounter = async () => {
+        const retreat = prepareRetreat(
+          raid,
+          raid.currentNodeId,
+          raid.currentBuildingId,
+          false,
+        );
+        const prefersHanlim =
+          building.category === "PUBLIC" ||
+          building.category === "INFRA" ||
+          building.category === "MEDICAL";
+        const [hasHanlimWeapon, hasMonster] = await Promise.all([
+          tx.query.weaponMasters.findFirst({
+            where: eq(weaponMasters.id, hanlimNpcs.control.weaponId),
+          }),
+          tx.query.monsterMasters.findFirst(),
+        ]);
+
+        const enemyLevel =
+          district.kind === "INDUSTRIAL" || district.kind === "MEDICAL" ? 3 : 1;
+        const battleLog =
+          prefersHanlim && hasHanlimWeapon
+            ? await executeHanlimBattleInTransaction(
+                tx,
+                characterId,
+                retreat.defer,
+              )
+            : hasMonster
+              ? await executeMonsterBattleInTransaction(
+                  tx,
+                  characterId,
+                  enemyLevel,
+                  retreat.defer,
+                )
+              : hasHanlimWeapon
+                ? await executeHanlimBattleInTransaction(
+                    tx,
+                    characterId,
+                    retreat.defer,
+                  )
+                : await executePatrolGhostBattleInTransaction(
+                    tx,
+                    characterId,
+                    `npc-building-${building.id}`,
+                    nextTime,
+                    retreat.defer,
+                  );
+
+        exp.buildingEvents[buildingKey] = {
+          stage: "READY",
+          text: "건물 내부 수색 중 적대 개체와 교전했습니다.",
+        };
+        return { retreat, battleLog };
+      };
+
       if (parsed.action === "INVESTIGATE") {
         if (prevEvent.stage !== "INTRO") {
           throw new InventoryError("이미 건물 내부 상황을 확인했습니다.", 409);
         }
         const combatTriggered = random() < 0.3;
         if (combatTriggered) {
-          const retreat = prepareRetreat(
-            raid,
-            raid.currentNodeId,
-            raid.currentBuildingId,
-            false,
-          );
-          const prefersHanlim =
-            building.category === "PUBLIC" ||
-            building.category === "INFRA" ||
-            building.category === "MEDICAL";
-          const [hasHanlimWeapon, hasMonster] = await Promise.all([
-            tx.query.weaponMasters.findFirst({
-              where: eq(weaponMasters.id, hanlimNpcs.control.weaponId),
-            }),
-            tx.query.monsterMasters.findFirst(),
-          ]);
-
-          const enemyLevel =
-            district.kind === "INDUSTRIAL" || district.kind === "MEDICAL"
-              ? 3
-              : 1;
-          const battleLog =
-            prefersHanlim && hasHanlimWeapon
-              ? await executeHanlimBattleInTransaction(
-                  tx,
-                  characterId,
-                  retreat.defer,
-                )
-              : hasMonster
-                ? await executeMonsterBattleInTransaction(
-                    tx,
-                    characterId,
-                    enemyLevel,
-                    retreat.defer,
-                  )
-                : hasHanlimWeapon
-                  ? await executeHanlimBattleInTransaction(
-                      tx,
-                      characterId,
-                      retreat.defer,
-                    )
-                  : await executePatrolGhostBattleInTransaction(
-                      tx,
-                      characterId,
-                      `npc-building-${building.id}`,
-                      nextTime,
-                      retreat.defer,
-                    );
-
-          exp.buildingEvents[buildingKey] = {
-            stage: "READY",
-            text: "건물 내부 수색 중 적대 개체와 교전했습니다.",
-          };
-
+          const { retreat, battleLog } = await runBuildingEncounter();
           const payload: Omit<BuildingActionResult, "raid"> = {
             action: "INVESTIGATE",
             encounterTriggered: true,
@@ -1095,6 +1097,22 @@ export async function executeRaidBuildingAction(
       if (parsed.action === "SEARCH") {
         if (exp.lootedBuildingIds.includes(building.id)) {
           throw new InventoryError("이미 수색을 완료한 건물입니다.", 409);
+        }
+        if (prevEvent.stage === "INTRO" && random() < 0.3) {
+          const { retreat, battleLog } = await runBuildingEncounter();
+          const payload: Omit<BuildingActionResult, "raid"> = {
+            action: "SEARCH",
+            encounterTriggered: true,
+            battleLog,
+            message: "건물 내부에서 적대 NPC/변이 개체와 조우했습니다!",
+          };
+          return {
+            payload,
+            pendingRetreat: retreat.finish(battleLog),
+            time: nextTime,
+            encounterTravel: writeExplorationState(raid, exp),
+            status: battleLog.playerDied ? "DEAD" : "ACTIVE",
+          };
         }
         const currentDistrictItems = exp.districtLootCounts[district.id] ?? 0;
         const remainingAllowance = district.maxLoot - currentDistrictItems;
