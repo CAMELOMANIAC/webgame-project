@@ -563,7 +563,7 @@ export const buildingActionBtn = style({
   cursor: "pointer",
   selectors: {
     "&:hover:not(:disabled)": {
-      borderColor: vars.color.positive,
+      borderColor: vars.border.strong,
     },
     "&:disabled": {
       opacity: 0.45,
