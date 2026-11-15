@@ -1,5 +1,4 @@
-import { getItemKind } from "./crafting";
-import type { WeaponEffect } from "./index";
+import type { WeaponEffect, WeaponTag } from "./index";
 
 interface EquipmentEntry<T> {
   id: string;
@@ -23,6 +22,7 @@ interface InventoryWeapon {
   cooldownTicks: number;
   castTicks: number;
   description: string | null;
+  tags?: WeaponTag[];
   effect?: WeaponEffect | null;
 }
 
@@ -65,6 +65,45 @@ export interface UnequipOthersResponse {
   recoveredItems: RecoveredStashDelta[];
 }
 
+export const MIN_BACKPACK_SLOTS = 18;
+export const BACKPACK_ROW_SIZE = 6;
+
+/**
+ * 가방에 들어있는 아이템의 슬롯 인덱스를 기준으로 표시할 전체 가방 슬롯 수를 계산합니다.
+ * 최소 18칸(6칸 × 3줄)을 유지하며, 빈 슬롯이 남도록 1줄(6칸) 단위로 자동 확장됩니다.
+ */
+export function calculateBackpackSlotCount(
+  occupiedSlotIndices: Iterable<number>,
+): number {
+  let maxOccupiedIndex = -1;
+  for (const index of occupiedSlotIndices) {
+    if (index > maxOccupiedIndex) {
+      maxOccupiedIndex = index;
+    }
+  }
+  const minRequiredWithEmpty = maxOccupiedIndex + 2;
+  if (minRequiredWithEmpty <= MIN_BACKPACK_SLOTS) {
+    return MIN_BACKPACK_SLOTS;
+  }
+  return (
+    Math.ceil(minRequiredWithEmpty / BACKPACK_ROW_SIZE) * BACKPACK_ROW_SIZE
+  );
+}
+
+/**
+ * 점유된 슬롯 인덱스를 제외한 가장 작은 비음수 빈 슬롯 인덱스를 반환합니다.
+ */
+export function findNextAvailableBackpackSlotIndex(
+  occupiedSlotIndices: Iterable<number>,
+): number {
+  const occupied = new Set(occupiedSlotIndices);
+  let slotIndex = 0;
+  while (occupied.has(slotIndex)) {
+    slotIndex += 1;
+  }
+  return slotIndex;
+}
+
 // 화면의 슬롯 교환에서도 여러 개짜리 묶음을 장착하며 수량이 사라지지 않게 한다.
 export function swapEquipmentBackpack<
   T extends { id: string; effect?: unknown },
@@ -83,12 +122,6 @@ export function swapEquipmentBackpack<
     (!equipped.weaponMaster && !carried.weaponMaster)
   )
     return false;
-  if (
-    carried.weaponMaster &&
-    getItemKind(carried.weaponMaster) === "MATERIAL"
-  ) {
-    return false;
-  }
   if (carried.weaponMaster && carried.quantity > 1) {
     if (equipped.weaponMaster?.id === carried.weaponMaster.id) return false;
     const emptyIndex = equipped.weaponMaster

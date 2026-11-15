@@ -3,8 +3,18 @@ export * from "./inventory";
 export * from "./world";
 export * from "./districts";
 export * from "./crafting";
+export * from "./buildingEvents";
 export type TargetingStrategy = "WEAKEST" | "STRONGEST" | "RANDOM";
 export type ItemKind = "EQUIPMENT" | "MATERIAL";
+export type WeaponTag =
+  | "BLADE"
+  | "FIREARM"
+  | "BLUNT"
+  | "TECH"
+  | "BIO"
+  | "CHEM"
+  | "ARMOR";
+
 export type SynergyTargetRule =
   | "NEXT"
   | "PREV"
@@ -12,10 +22,12 @@ export type SynergyTargetRule =
   | "EDGES"
   | "ALL_MELEE"
   | "ALL_RANGED"
-  | "ALL_OTHER";
+  | "ALL_OTHER"
+  | "TAG";
 
 export interface Item {
   id: string;
+  masterId?: string;
   name: string;
   weight: number;
   value: number;
@@ -24,17 +36,28 @@ export interface Item {
 }
 
 export interface WeaponEffect {
-  type?: "HEAL" | "SYNERGY" | "MATERIAL";
+  type?: "HEAL" | "SYNERGY" | "MATERIAL" | "SHIELD";
   itemKind?: ItemKind;
+  tags?: WeaponTag[];
   amount?: number;
   hpThreshold?: number;
   oncePerBattle?: boolean;
+  shieldGain?: number;
   target?: SynergyTargetRule;
+  targetTag?: WeaponTag;
   hasteTicks?: number;
   damageBonus?: number;
   critChanceBonus?: number;
+  shieldBonus?: number;
   staminaRestore?: number;
   triggerEveryNHits?: number;
+  perTag?: {
+    tag: WeaponTag;
+    damageBonus?: number;
+    shieldGain?: number;
+    healAmount?: number;
+    staminaRestore?: number;
+  };
 }
 
 export type HealingEffect = WeaponEffect;
@@ -46,6 +69,7 @@ export interface WeaponData extends Item {
   cooldownTicks: number; // 틱 단위 쿨다운
   castTicks: number; // 공격 전 선딜레이 틱
   strategy?: TargetingStrategy;
+  tags?: WeaponTag[];
   effect?: WeaponEffect;
   attackType?: "MELEE" | "RANGED";
 }
@@ -89,6 +113,7 @@ export interface PlayerState {
   name: string;
   maxHp: number;
   hp: number;
+  shield?: number;
   maxStamina: number;
   stamina: number;
   weight: number;
@@ -103,6 +128,7 @@ export interface PlayerState {
     castTicks: number;
     weight: number;
     attackType?: "MELEE" | "RANGED";
+    tags?: WeaponTag[];
   } | null>;
 }
 
@@ -159,9 +185,18 @@ export type BattleEvent = { id: string; timestamp: number } & (
       amount: number;
       remainingHp: number;
       isCritical: boolean;
+      absorbedShield?: number;
+      remainingShield?: number;
       retreatGauge?: number;
     }
   | { type: "HEAL"; targetId: string; amount: number; remainingHp: number }
+  | {
+      type: "SHIELD";
+      targetId: string;
+      amount: number;
+      currentShield: number;
+      weaponIndex: number;
+    }
   | { type: "STAMINA_CHANGE"; playerId: string; currentStamina: number }
   | { type: "COOLDOWN"; actorId: string; weaponIndex: number; duration: number }
   | {
@@ -185,6 +220,7 @@ export type BattleEvent = { id: string; timestamp: number } & (
       hasteTicks?: number;
       damageBonus?: number;
       critChanceBonus?: number;
+      shieldBonus?: number;
       staminaRestore?: number;
     }
   | { type: "DEATH"; playerId: string }
@@ -224,6 +260,14 @@ export interface BattleLog {
 export interface RaidBattleResult extends BattleLog {
   playerDied: boolean;
   rewardItemName: string | null;
+  rewardItem?: {
+    weaponMasterId: string;
+    name: string;
+    weight: number;
+    value: number;
+    iconKey: string;
+    quantity: number;
+  } | null;
 }
 
 export type RetreatResolution =
@@ -246,10 +290,53 @@ export interface BuildingEventState {
   text: string;
 }
 
+export type LootSourceKind = "SEARCH" | "EVENT" | "COMBAT";
+
+export interface PendingLootItem {
+  id: string;
+  weaponMasterId: string;
+  name: string;
+  quantity: number;
+  weight: number;
+  value: number;
+  iconKey: string;
+  source: LootSourceKind;
+}
+
 export interface RaidExplorationState {
   lootedBuildingIds: number[];
   usedCraftBuildingIds: number[];
   buildingEvents: Record<string, BuildingEventState>;
+  completedEventIds?: string[];
+  pendingLoot?: PendingLootItem[];
+}
+
+export interface RaidLootActionInput extends RaidActionInput {
+  action:
+    | "CLAIM_ITEM"
+    | "CLAIM_ALL"
+    | "DISCARD_BACKPACK"
+    | "DISCARD_EQUIPMENT"
+    | "ABANDON_ALL";
+  lootId?: string;
+  backpackSlotIndex?: number;
+  equipmentSlotIndex?: number;
+  equipment?: { weaponMasterId: string; slotIndex: number }[];
+  inventory?: { weaponMasterId: string; slotIndex: number; quantity: number }[];
+}
+
+export interface RaidLootActionResult {
+  raid: RaidView;
+  action:
+    | "CLAIM_ITEM"
+    | "CLAIM_ALL"
+    | "DISCARD_BACKPACK"
+    | "DISCARD_EQUIPMENT"
+    | "ABANDON_ALL";
+  claimedItems?: { weaponMasterId: string; name: string; quantity: number }[];
+  discardedItem?: { weaponMasterId: string; name: string; slotIndex: number };
+  weight: number;
+  message: string;
 }
 
 export interface RaidView {
@@ -263,18 +350,21 @@ export interface RaidView {
 }
 
 export interface BuildingActionInput extends RaidActionInput {
-  action: "INVESTIGATE" | "SEARCH" | "CRAFT";
+  action: "INVESTIGATE" | "SEARCH" | "CRAFT" | "EVENT_CHOICE";
   recipeId?: string;
+  choiceId?: string;
 }
 
 export interface BuildingActionResult {
   raid: RaidView;
-  action: "INVESTIGATE" | "SEARCH" | "CRAFT";
+  action: "INVESTIGATE" | "SEARCH" | "CRAFT" | "EVENT_CHOICE";
   encounterTriggered: boolean;
   battleLog?: RaidBattleResult;
   message: string;
   obtainedItems?: { weaponMasterId: string; name: string; quantity: number }[];
   craftedItem?: { weaponMasterId: string; name: string; equippedSlotIndex?: number };
+  hpDelta?: number;
+  staminaDelta?: number;
 }
 
 export interface RaidActionInput {
