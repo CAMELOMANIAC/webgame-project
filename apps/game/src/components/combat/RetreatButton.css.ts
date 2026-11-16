@@ -1,70 +1,160 @@
 import { style } from "@vanilla-extract/css";
 import { recipe } from "@vanilla-extract/recipes";
 
+import { vars } from "@/styles/theme.css";
+
 export const container = style({
   position: "relative",
   display: "flex",
   width: "100%",
-  height: "auto",
   justifyContent: "center",
 });
 
-export const buttonModal = recipe({
+export const button = recipe({
   base: {
     position: "relative",
-    display: "flex",
-    width: "auto",
-    height: "auto",
-    borderRadius: "9999px",
-    padding: "6px 16px",
-    fontWeight: 800,
-    letterSpacing: "1px",
-    fontSize: "12px",
-    overflow: "hidden",
-    backdropFilter: "blur(6px)",
+    minWidth: "168px",
+    display: "inline-flex",
+    flexDirection: "column",
+    gap: "5px",
+    padding: "7px 14px 6px",
+    borderRadius: vars.radius.control,
     borderWidth: "1px",
     borderStyle: "solid",
+    overflow: "hidden",
     boxSizing: "border-box",
+    fontFamily: vars.font.sans,
+    transition: "background-color 220ms ease, border-color 220ms ease",
   },
   variants: {
-    theme: {
+    status: {
+      DETECTED: {
+        backgroundColor: vars.surface.mid,
+        borderColor: vars.border.negative,
+        color: vars.color.negative,
+        cursor: "default",
+      },
+      PREPARING: {
+        backgroundColor: vars.surface.mid,
+        borderColor: vars.border.strong,
+        color: vars.text.primary,
+        cursor: "default",
+      },
       READY: {
-        backgroundColor: "rgba(133, 173, 255, 0.2)",
-        borderColor: "rgba(133, 173, 255, 0.5)",
-        color: "rgb(133, 173, 255)",
+        backgroundColor: vars.color.ctaBg,
+        borderColor: vars.color.ctaBg,
+        color: vars.color.ctaFg,
         cursor: "pointer",
+        selectors: {
+          "&:hover": {
+            backgroundColor: vars.color.ctaHover,
+            borderColor: vars.color.ctaHover,
+          },
+        },
       },
-      DANGER: {
-        backgroundColor: "rgba(255, 113, 108, 0.2)",
-        borderColor: "rgba(255, 113, 108, 0.5)",
-        color: "rgb(255, 113, 108)",
-        cursor: "default",
-      },
-      PENDING: {
-        backgroundColor: "rgba(150, 150, 150, 0.2)",
-        borderColor: "rgba(150, 150, 150, 0.5)",
-        color: "rgb(200, 200, 200)",
-        cursor: "default",
+      EXPIRED: {
+        backgroundColor: vars.surface.low,
+        borderColor: vars.border.negative,
+        color: vars.text.muted,
+        cursor: "not-allowed",
       },
     },
   },
   defaultVariants: {
-    theme: "DANGER",
+    status: "DETECTED",
   },
 });
 
-export const gaugeBar = style({
-  position: "absolute",
-  top: 0,
-  left: 0,
-  height: "100%",
-  backgroundColor: "rgba(255, 255, 255, 0.15)",
-  zIndex: 0,
+export const contentHost = style({
+  position: "relative",
+  width: "100%",
+  height: "20px",
+  overflow: "hidden",
 });
 
-export const content = style({
+export const contentRow = style({
+  position: "absolute",
+  inset: 0,
   display: "flex",
   alignItems: "center",
-  gap: "8px",
-  zIndex: 1,
+  justifyContent: "center",
+  gap: "7px",
+  fontSize: "12px",
+  fontWeight: 600,
+  letterSpacing: "-0.01em",
+  whiteSpace: "nowrap",
+});
+
+export const statusDot = recipe({
+  base: {
+    width: "5px",
+    height: "5px",
+    borderRadius: "1px",
+    flexShrink: 0,
+  },
+  variants: {
+    status: {
+      DETECTED: { backgroundColor: vars.color.negative },
+      PREPARING: { backgroundColor: vars.color.positive },
+      READY: { backgroundColor: vars.color.ctaFg },
+      EXPIRED: { backgroundColor: vars.text.disabled },
+    },
+  },
+  defaultVariants: {
+    status: "DETECTED",
+  },
+});
+
+export const track = recipe({
+  base: {
+    position: "relative",
+    width: "100%",
+    height: "3px",
+    borderRadius: "1px",
+    overflow: "hidden",
+  },
+  variants: {
+    ready: {
+      true: { backgroundColor: "rgba(9, 9, 11, 0.18)" },
+      false: { backgroundColor: vars.border.grid },
+    },
+  },
+  defaultVariants: {
+    ready: false,
+  },
+});
+
+export const gaugeBar = recipe({
+  base: {
+    height: "100%",
+  },
+  variants: {
+    status: {
+      DETECTED: { backgroundColor: vars.color.negative },
+      PREPARING: { backgroundColor: vars.color.positive },
+      READY: { backgroundColor: vars.color.ctaFg },
+      EXPIRED: { backgroundColor: vars.border.grid },
+    },
+  },
+  defaultVariants: {
+    status: "DETECTED",
+  },
+});
+
+export const segmentMask = recipe({
+  base: {
+    position: "absolute",
+    inset: 0,
+    pointerEvents: "none",
+    backgroundImage: `repeating-linear-gradient(to right, transparent, transparent 8px, ${vars.surface.base} 8px, ${vars.surface.base} 10px)`,
+  },
+  variants: {
+    ready: {
+      true: { opacity: 0.2 },
+      false: { opacity: 0.85 },
+    },
+  },
+  defaultVariants: {
+    ready: false,
+  },
 });
