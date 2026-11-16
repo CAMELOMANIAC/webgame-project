@@ -155,28 +155,6 @@ globalStyle(`${metaCell} strong`, {
   fontVariantNumeric: "tabular-nums",
 });
 
-export const noticeText = recipe({
-  base: {
-    padding: "10px 12px",
-    borderRadius: "6px",
-    fontSize: "12px !important",
-  },
-  variants: {
-    tone: {
-      positive: {
-        color: `${vars.color.positive} !important`,
-        background: "rgba(133, 173, 255, 0.1)",
-        border: "1px solid rgba(255, 255, 255, 0.12)",
-      },
-      negative: {
-        color: `${vars.color.negative} !important`,
-        background: "rgba(255, 113, 98, 0.12)",
-        border: "1px solid rgba(255, 255, 255, 0.12)",
-      },
-    },
-  },
-});
-
 export const actionButton = style({
   width: "100%",
   padding: "12px 14px",

@@ -123,18 +123,6 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
                 구호 물자 받고 임무 수락
               </button>
             )}
-            {mission.status === "ACTIVE" && (
-              <p className={styles.noticeText({ tone: "positive" })}>
-                {mode === "base"
-                  ? "지원 장비를 창고에서 꺼내 장착하세요. 배치 후 지도에서 임무 목표로 이동할 수 있습니다."
-                  : "전술지도에서 임무 목표로 이동해 기록을 확보하세요."}
-              </p>
-            )}
-            {mission.status === "RECOVERED" && !resultPending && (
-              <p className={styles.noticeText({ tone: "negative" })}>
-                기록을 확보했습니다. 탐사 중 쓰러지면 다시 회수해야 합니다.
-              </p>
-            )}
             {mode === "base" && mission.status === "READY" && (
               <button
                 type="button"
@@ -144,15 +132,6 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
               >
                 회수 기록 보고 · 보상 받기
               </button>
-            )}
-            {mission.status === "COMPLETE" && (
-              <p
-                className={styles.noticeText({ tone: "positive" })}
-                role="status"
-              >
-                보고와 보상 지급이 완료됐습니다. 복귀 관측 기록을 열람할 수
-                있습니다.
-              </p>
             )}
 
             <nav className={styles.navLinks}>
