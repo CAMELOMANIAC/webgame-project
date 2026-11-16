@@ -140,6 +140,7 @@ type ActiveFieldCard = "nav" | "building" | "loot";
 const FieldNavTargetSection = () => {
   const navigate = useNavigate();
   const recommendListId = useId();
+  const modeSwitchLayoutId = useId();
   const recommendToggleRef = useRef<HTMLButtonElement>(null);
   const { data } = useGetCharacter();
   const { data: rules } = useRaidRules();
@@ -426,6 +427,35 @@ const FieldNavTargetSection = () => {
     }
   };
 
+  const routeToCraftingCategory = (
+    buildingCategory: CraftingRecipe["buildingCategory"],
+  ) => {
+    setHighlightedDistrictIds([]);
+    if (!canAct) return;
+    const usedCraftSet = new Set(exploration?.usedCraftBuildingIds ?? []);
+    const matchingLandmarks = STATIC_RECOMMENDED_DESTINATIONS.filter(
+      (dest) =>
+        dest.buildingCategory === buildingCategory &&
+        (dest.buildingId === undefined || !usedCraftSet.has(dest.buildingId)),
+    );
+    if (matchingLandmarks.length === 0) return;
+
+    let nearest = matchingLandmarks[0];
+    let minMinutes = Infinity;
+    for (const dest of matchingLandmarks) {
+      const path =
+        dest.nodeId === nodeId ? [nodeId] : findShortestPath(nodeId, dest.nodeId);
+      const minutes = estimatePathTravelMinutes(path, dest.buildingId !== undefined);
+      if (minutes < minMinutes) {
+        minMinutes = minutes;
+        nearest = dest;
+      }
+    }
+    if (nearest) {
+      handleSelectRecommendation(nearest);
+    }
+  };
+
   const handleSelectRecipeCard = (recipe: CraftingRecipe) => {
     setPinnedRecipeId(recipe.id);
     setSelectedMaterialId(null);
@@ -447,30 +477,35 @@ const FieldNavTargetSection = () => {
       return;
     }
 
-    setHighlightedDistrictIds([]);
-    if (!canAct) return;
-    const usedCraftSet = new Set(exploration?.usedCraftBuildingIds ?? []);
-    const matchingLandmarks = STATIC_RECOMMENDED_DESTINATIONS.filter(
-      (dest) =>
-        dest.buildingCategory === recipe.buildingCategory &&
-        (dest.buildingId === undefined || !usedCraftSet.has(dest.buildingId)),
-    );
-    if (matchingLandmarks.length === 0) return;
+    routeToCraftingCategory(recipe.buildingCategory);
+  };
 
-    let nearest = matchingLandmarks[0];
-    let minMinutes = Infinity;
-    for (const dest of matchingLandmarks) {
-      const path =
-        dest.nodeId === nodeId ? [nodeId] : findShortestPath(nodeId, dest.nodeId);
-      const minutes = estimatePathTravelMinutes(path, dest.buildingId !== undefined);
-      if (minutes < minMinutes) {
-        minMinutes = minutes;
-        nearest = dest;
-      }
+  const handleSelectBaseEquipment = (
+    e: React.MouseEvent,
+    recipe: CraftingRecipe,
+  ) => {
+    e.stopPropagation();
+    const districts = findMaterialDistricts(recipe.baseEquipmentId);
+    if (districts.length > 0) {
+      setPinnedRecipeId(recipe.id);
+      setSelectedMaterialId(recipe.baseEquipmentId);
+      selectNearestDestinationForDistricts(districts);
+      return;
     }
-    if (nearest) {
-      handleSelectRecommendation(nearest);
+
+    const baseRecipe = CRAFTING_RECIPES.find(
+      (r) => r.resultEquipmentId === recipe.baseEquipmentId,
+    );
+    if (baseRecipe) {
+      setPinnedRecipeId(baseRecipe.id);
+      setSelectedMaterialId(null);
+      routeToCraftingCategory(baseRecipe.buildingCategory);
+      return;
     }
+
+    setPinnedRecipeId(recipe.id);
+    setSelectedMaterialId(recipe.baseEquipmentId);
+    setHighlightedDistrictIds([]);
   };
 
   const handleSelectIngredient = (
@@ -519,6 +554,7 @@ const FieldNavTargetSection = () => {
   const hasBuildingEvent = Boolean(
     activeBuilding && activeDistrict && !isMoving && !isCombat && character?.isRaiding,
   );
+  const canReenterBuilding = Boolean(hasBuildingEvent && isBuildingDismissed);
   const hasPendingLoot = Boolean(
     pendingLoot.length > 0 && !isMoving && !isCombat && character?.isRaiding,
   );
@@ -630,8 +666,22 @@ const FieldNavTargetSection = () => {
                 })}
                 onClick={() => setNavListMode("BUILDING")}
               >
-                <RiBuilding2Line aria-hidden="true" />
-                <span>건물</span>
+                {navListMode === "BUILDING" && (
+                  <motion.span
+                    layoutId={modeSwitchLayoutId}
+                    className={styles.modeSwitchIndicator}
+                    transition={
+                      reduceMotion
+                        ? { duration: 0 }
+                        : { type: "spring", stiffness: 460, damping: 34 }
+                    }
+                    aria-hidden="true"
+                  />
+                )}
+                <span className={styles.modeSwitchBtnInner}>
+                  <RiBuilding2Line aria-hidden="true" />
+                  <span>건물</span>
+                </span>
               </button>
               <button
                 type="button"
@@ -642,12 +692,47 @@ const FieldNavTargetSection = () => {
                 })}
                 onClick={() => setNavListMode("ITEM")}
               >
-                <RiHammerLine aria-hidden="true" />
-                <span>아이템</span>
+                {navListMode === "ITEM" && (
+                  <motion.span
+                    layoutId={modeSwitchLayoutId}
+                    className={styles.modeSwitchIndicator}
+                    transition={
+                      reduceMotion
+                        ? { duration: 0 }
+                        : { type: "spring", stiffness: 460, damping: 34 }
+                    }
+                    aria-hidden="true"
+                  />
+                )}
+                <span className={styles.modeSwitchBtnInner}>
+                  <RiHammerLine aria-hidden="true" />
+                  <span>아이템</span>
+                </span>
               </button>
             </div>
             <div className={styles.recommendList}>
-              {navListMode === "BUILDING" ? (
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={navListMode}
+                  className={styles.recommendTabPanel}
+                  initial={
+                    reduceMotion
+                      ? false
+                      : { opacity: 0, x: navListMode === "ITEM" ? 16 : -16 }
+                  }
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={
+                    reduceMotion
+                      ? { opacity: 0 }
+                      : { opacity: 0, x: navListMode === "ITEM" ? -16 : 16 }
+                  }
+                  transition={
+                    reduceMotion
+                      ? { duration: 0 }
+                      : { duration: 0.16, ease: "easeOut" }
+                  }
+                >
+                  {navListMode === "BUILDING" ? (
                 recommendedDestinations.length === 0 ? (
                   <p className={styles.recommendEmpty}>
                     표시할 추천 목적지가 없습니다.
@@ -690,14 +775,7 @@ const FieldNavTargetSection = () => {
                         )}
                         <div className={styles.recommendInfo}>
                           <div className={styles.recommendMeta}>
-                            <span
-                              className={styles.recommendTag({
-                                tone:
-                                  dest.category === "LANDMARK"
-                                    ? "neutral"
-                                    : "positive",
-                              })}
-                            >
+                            <span className={styles.recommendTag}>
                               {categoryLabel}
                             </span>
                             <span className={styles.recommendCode}>
@@ -734,11 +812,6 @@ const FieldNavTargetSection = () => {
                   const hasBase = ownedWeapons.some((w) =>
                     matchesRecipeBase(recipe, w),
                   );
-                  const ownedMatsCount = recipe.materialIds.filter(
-                    (matId) => (ownedItemCounts.get(matId) ?? 0) >= 1,
-                  ).length;
-                  const allMatsOwned =
-                    ownedMatsCount === recipe.materialIds.length;
                   const isCardSelected = pinnedRecipeId === recipe.id;
 
                   return (
@@ -758,18 +831,18 @@ const FieldNavTargetSection = () => {
                       {itemBackdrop && (
                         <span
                           aria-hidden="true"
-                          className={styles.recipeBackdrop}
-                          style={{ backgroundImage: `url(${itemBackdrop})` }}
-                        />
+                          className={styles.recipeBackdropWrap}
+                        >
+                          <span
+                            className={styles.recipeBackdrop}
+                            style={{ backgroundImage: `url(${itemBackdrop})` }}
+                          />
+                        </span>
                       )}
                       <div className={styles.recipeCardContent}>
                         <div className={styles.recipeHeader}>
                           <div className={styles.recipeTitleGroup}>
-                            <span
-                              className={styles.recommendTag({
-                                tone: allMatsOwned ? "positive" : "neutral",
-                              })}
-                            >
+                            <span className={styles.recommendTag}>
                               T{recipe.tier} ·{" "}
                               {BUILDING_CATEGORY_LABELS[recipe.buildingCategory]}
                             </span>
@@ -777,22 +850,20 @@ const FieldNavTargetSection = () => {
                               {resultName}
                             </span>
                           </div>
-                          <span
-                            className={styles.recipeStatusText({
-                              ready: hasBase && allMatsOwned,
-                            })}
-                          >
-                            {hasBase && allMatsOwned
-                              ? "조합 가능"
-                              : `${ownedMatsCount}/${recipe.materialIds.length}`}
-                          </span>
                         </div>
                         <div className={styles.recipeIngredientsRow}>
-                          <span
-                            className={styles.recipeBaseBadge({ owned: hasBase })}
+                          <button
+                            type="button"
+                            className={styles.recipeBaseBadge({
+                              owned: hasBase,
+                              selected:
+                                isCardSelected &&
+                                selectedMaterialId === recipe.baseEquipmentId,
+                            })}
+                            onClick={(e) => handleSelectBaseEquipment(e, recipe)}
                           >
                             {baseName}
-                          </span>
+                          </button>
                           {recipe.materialIds.map((matId) => {
                             const matName =
                               getCatalogItemById(matId)?.name ?? matId;
@@ -822,6 +893,8 @@ const FieldNavTargetSection = () => {
                   );
                 })
               )}
+                </motion.div>
+              </AnimatePresence>
             </div>
           </div>
         </div>
@@ -858,7 +931,7 @@ const FieldNavTargetSection = () => {
             </div>
 
             {character?.isRaiding || isMoving || hasPending ? (
-              atExtraction && !canMove && !isMoving ? (
+              atExtraction && !canMove && !isMoving && !canReenterBuilding ? (
                 <button
                   type="button"
                   className={styles.primaryAction}
@@ -871,8 +944,19 @@ const FieldNavTargetSection = () => {
                 <button
                   type="button"
                   className={styles.primaryAction}
-                  disabled={!canAct || !canMove}
-                  onClick={() => triggerStartNavigation((prev) => prev + 1)}
+                  disabled={!canAct || (!canMove && !canReenterBuilding)}
+                  onClick={() => {
+                    if (
+                      canReenterBuilding &&
+                      (!canMove ||
+                        (shortestPath.length === 1 &&
+                          targetBuildingId === activeBuildingId))
+                    ) {
+                      setIsBuildingDismissed(false);
+                      return;
+                    }
+                    triggerStartNavigation((prev) => prev + 1);
+                  }}
                 >
                   {isMoving ? "이동 중…" : "이동"}
                 </button>
@@ -1001,11 +1085,13 @@ const FieldNavTargetSection = () => {
                   </div>
 
                   <p className={styles.buildingEventText}>
-                    {lastBuildingMsg?.buildingId === activeBuilding.id
-                      ? lastBuildingMsg.text
-                      : (activeEventState?.text ??
-                          activeIntroEvent?.introText ??
-                          "")}
+                    {activeBuilding.category && isActiveCraftUsed
+                      ? "이미 업그레이드 설비를 사용한 건물입니다."
+                      : lastBuildingMsg?.buildingId === activeBuilding.id
+                        ? lastBuildingMsg.text
+                        : (activeEventState?.text ??
+                            activeIntroEvent?.introText ??
+                            "")}
                   </p>
                 </div>
 
@@ -1073,14 +1159,9 @@ const FieldNavTargetSection = () => {
                   </button>
                 ))}
 
-              {activeBuilding.category && (
+              {activeBuilding.category && !isActiveCraftUsed && (
                 <div className={styles.craftList}>
-                  {isActiveCraftUsed ? (
-                    <p className={styles.buildingExhaustedText}>
-                      이미 업그레이드 설비를 사용한 건물입니다.
-                    </p>
-                  ) : (
-                    activeCategoryRecipes.map((recipe) => {
+                  {activeCategoryRecipes.map((recipe) => {
                       const resultItem = getCatalogItemById(
                         recipe.resultEquipmentId,
                       );
@@ -1131,8 +1212,7 @@ const FieldNavTargetSection = () => {
                           </button>
                         </div>
                       );
-                    })
-                  )}
+                    })}
                 </div>
               )}
 

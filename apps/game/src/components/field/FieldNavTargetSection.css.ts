@@ -259,11 +259,18 @@ export const recommendList = style({
   display: "flex",
   flexDirection: "column",
   gap: "6px",
+  overflowX: "hidden",
   overflowY: "auto",
   maxHeight: "48dvh",
   minHeight: 0,
   flex: "1 1 auto",
   paddingRight: "2px",
+});
+
+export const recommendTabPanel = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "6px",
 });
 
 export const bodySection = recipe({
@@ -371,29 +378,14 @@ export const recommendMeta = style({
   gap: "6px",
 });
 
-export const recommendTag = recipe({
-  base: {
-    fontFamily: vars.font.mono,
-    fontSize: "10px",
-    fontWeight: 600,
-    padding: "1px 5px",
-    borderRadius: "2px",
-  },
-  variants: {
-    tone: {
-      positive: {
-        color: vars.color.positive,
-        backgroundColor: vars.color.positiveBg,
-      },
-      neutral: {
-        color: vars.text.secondary,
-        backgroundColor: vars.surface.high,
-      },
-    },
-  },
-  defaultVariants: {
-    tone: "neutral",
-  },
+export const recommendTag = style({
+  fontFamily: vars.font.mono,
+  fontSize: "10px",
+  fontWeight: 600,
+  color: vars.text.secondary,
+  padding: "1px 5px",
+  borderRadius: "2px",
+  border: `1px solid ${vars.border.subtle}`,
 });
 
 export const recommendCode = style({
@@ -434,6 +426,7 @@ export const recommendEmpty = style({
 });
 
 export const modeSwitch = style({
+  position: "relative",
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
   padding: "3px",
@@ -446,26 +439,25 @@ export const modeSwitch = style({
 
 export const modeSwitchBtn = recipe({
   base: {
+    position: "relative",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: "6px",
     height: "28px",
     borderRadius: "999px",
     border: 0,
+    backgroundColor: "transparent",
     fontSize: "12px",
     fontWeight: 600,
     cursor: "pointer",
-    transition: "background-color 0.15s ease, color 0.15s ease",
+    transition: "color 0.15s ease",
   },
   variants: {
     active: {
       true: {
-        backgroundColor: vars.color.ctaBg,
         color: vars.color.ctaFg,
       },
       false: {
-        backgroundColor: "transparent",
         color: vars.text.muted,
         selectors: {
           "&:hover": {
@@ -478,6 +470,23 @@ export const modeSwitchBtn = recipe({
   defaultVariants: {
     active: false,
   },
+});
+
+export const modeSwitchIndicator = style({
+  position: "absolute",
+  inset: 0,
+  borderRadius: "999px",
+  backgroundColor: vars.color.ctaBg,
+  zIndex: 0,
+  pointerEvents: "none",
+});
+
+export const modeSwitchBtnInner = style({
+  position: "relative",
+  zIndex: 1,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
 });
 
 export const recipeCard = recipe({
@@ -495,7 +504,7 @@ export const recipeCard = recipe({
     flexShrink: 0,
     textAlign: "left",
     cursor: "pointer",
-    overflow: "hidden",
+    overflow: "visible",
     transition: "background-color 0.15s ease, border-color 0.15s ease",
     selectors: {
       "&:hover": {
@@ -509,7 +518,7 @@ export const recipeCard = recipe({
       true: [
         cornerBrackets({ tone: "default" }),
         {
-          borderColor: vars.color.positive,
+          borderColor: vars.text.primary,
           backgroundColor: vars.surface.high,
         },
       ],
@@ -521,22 +530,31 @@ export const recipeCard = recipe({
   },
 });
 
+export const recipeBackdropWrap = style({
+  position: "absolute",
+  inset: 0,
+  overflow: "hidden",
+  borderRadius: vars.radius.control,
+  pointerEvents: "none",
+  zIndex: 0,
+});
+
 export const recipeBackdrop = style({
   position: "absolute",
-  top: "4px",
-  right: "8px",
-  bottom: "4px",
-  width: "76px",
+  top: "-18px",
+  right: "-18px",
+  bottom: "-18px",
+  width: "136px",
   backgroundSize: "contain",
-  backgroundPosition: "right center",
+  backgroundPosition: "center",
   backgroundRepeat: "no-repeat",
-  opacity: 0.28,
+  opacity: 0.45,
   pointerEvents: "none",
   zIndex: 0,
   maskImage:
-    "linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.5) 45%, black 100%)",
+    "linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.55) 40%, black 100%)",
   WebkitMaskImage:
-    "linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.5) 45%, black 100%)",
+    "linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.55) 40%, black 100%)",
 });
 
 export const recipeCardContent = style({
@@ -570,25 +588,6 @@ export const recipeName = style({
   whiteSpace: "nowrap",
 });
 
-export const recipeStatusText = recipe({
-  base: {
-    flexShrink: 0,
-    fontFamily: vars.font.mono,
-    fontSize: "11px",
-    fontWeight: 600,
-    fontVariantNumeric: "tabular-nums",
-  },
-  variants: {
-    ready: {
-      true: { color: vars.color.positive },
-      false: { color: vars.color.negative },
-    },
-  },
-  defaultVariants: {
-    ready: false,
-  },
-});
-
 export const recipeIngredientsRow = style({
   display: "flex",
   flexWrap: "wrap",
@@ -605,22 +604,43 @@ export const recipeBaseBadge = recipe({
     borderRadius: vars.radius.badge,
     border: `1px solid ${vars.border.subtle}`,
     backgroundColor: vars.surface.high,
+    cursor: "pointer",
+    transition: "border-color 0.15s ease, opacity 0.15s ease",
   },
   variants: {
     owned: {
       true: {
         color: vars.text.secondary,
+        selectors: {
+          "&:hover": {
+            borderColor: vars.text.primary,
+          },
+        },
       },
       false: {
         color: vars.color.negative,
         borderColor: vars.color.negative,
         backgroundColor: vars.color.negativeBg,
         opacity: 0.8,
+        selectors: {
+          "&:hover": {
+            opacity: 1,
+          },
+        },
       },
+    },
+    selected: {
+      true: {
+        boxShadow: `0 0 0 1px ${vars.text.primary}`,
+        borderColor: vars.text.primary,
+        opacity: 1,
+      },
+      false: {},
     },
   },
   defaultVariants: {
     owned: false,
+    selected: false,
   },
 });
 
@@ -642,7 +662,7 @@ export const ingredientChip = recipe({
         color: vars.text.primary,
         selectors: {
           "&:hover": {
-            borderColor: vars.color.positive,
+            borderColor: vars.text.primary,
           },
         },
       },
@@ -660,8 +680,8 @@ export const ingredientChip = recipe({
     },
     selected: {
       true: {
-        boxShadow: `0 0 0 1px ${vars.color.positive}`,
-        borderColor: vars.color.positive,
+        boxShadow: `0 0 0 1px ${vars.text.primary}`,
+        borderColor: vars.text.primary,
         opacity: 1,
       },
       false: {},
@@ -780,12 +800,6 @@ export const buildingEventText = style({
   fontSize: "12px",
   lineHeight: 1.6,
   color: vars.text.primary,
-});
-
-export const buildingExhaustedText = style({
-  margin: 0,
-  fontSize: "11px",
-  color: vars.text.muted,
 });
 
 export const buildingErrorText = style({
@@ -959,7 +973,7 @@ export const lootRow = recipe({
     width: "58px",
     flexShrink: 0,
     aspectRatio: "1 / 1",
-    padding: "4px",
+    padding: 0,
     borderRadius: vars.radius.control,
     backdropFilter: "blur(8px)",
     color: vars.text.primary,
@@ -971,6 +985,9 @@ export const lootRow = recipe({
       false: {
         border: `1px solid ${vars.border.strong}`,
         backgroundColor: "rgba(20, 20, 24, 0.92)",
+        backgroundImage:
+          "radial-gradient(circle at 50% 45%, rgba(44, 47, 56, 0.42) 0%, rgba(12, 12, 15, 0.68) 100%)",
+        boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.04)",
         cursor: "pointer",
         selectors: {
           "&:hover:not(:disabled)": {
@@ -999,10 +1016,12 @@ export const lootSlotWeight = style({
   position: "absolute",
   top: "3px",
   left: "4px",
+  zIndex: 1,
   fontFamily: vars.font.mono,
   fontSize: "9px",
   color: vars.text.disabled,
   fontVariantNumeric: "tabular-nums",
+  textShadow: "0 1px 2px rgba(0, 0, 0, 0.9)",
   pointerEvents: "none",
 });
 

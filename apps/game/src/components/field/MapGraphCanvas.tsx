@@ -1657,8 +1657,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         g.lineTo(point.x, point.y);
       }
       g.closePath()
-        .fill({ color: highlightColor, alpha: 0.14 })
-        .stroke({ width: 2, color: highlightColor, alpha: 0.85 });
+        .fill({ color: highlightColor, alpha: 0.06 })
+        .stroke({ width: 1.5, color: highlightColor, alpha: 0.45 });
     }
   }, [isPixiReady, isCombat, highlightedDistrictIds]);
 
