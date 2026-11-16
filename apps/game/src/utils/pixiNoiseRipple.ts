@@ -1,9 +1,12 @@
 import type { EnemyNoiseSignal } from "@webgame/types";
-import { type Container, DisplacementFilter, Sprite, Texture } from "pixi.js";
+import { type Container, DisplacementFilter, Graphics, Sprite, Texture } from "pixi.js";
 
 const textureSize = 128;
 const crestRadius = 0.72;
 const displayRadiusScale = 0.77;
+const ringColor = 0xe4e4e7;
+const primaryRingAlpha = 0.2;
+const echoRingAlpha = 0.13;
 
 let rippleTexture: Texture | undefined;
 
@@ -50,7 +53,7 @@ export function createNoiseRipple(world: Container, mapLayer: Container) {
   const texture = getRippleTexture();
   if (!texture) return null;
 
-  const createWave = (area: EnemyNoiseSignal) => {
+  const createWave = (area: EnemyNoiseSignal, isEcho: boolean) => {
     const sprite = new Sprite(texture);
     sprite.anchor.set(0.5);
     sprite.position.set(area.x, area.y);
@@ -58,7 +61,21 @@ export function createNoiseRipple(world: Container, mapLayer: Container) {
     // Pixi는 렌더링 시점의 월드 경계를 화면 크기로 제한한다.
     const filter = new DisplacementFilter({ sprite, clipToViewport: true });
     const displayRadius = area.radius * displayRadiusScale;
-    return { sprite, filter, diameter: (displayRadius * 2) / crestRadius };
+
+    const ring = new Graphics();
+    ring.position.set(area.x, area.y);
+    ring.visible = false;
+    world.addChild(ring);
+
+    return {
+      sprite,
+      filter,
+      ring,
+      displayRadius,
+      diameter: (displayRadius * 2) / crestRadius,
+      maxRingAlpha: isEcho ? echoRingAlpha : primaryRingAlpha,
+      ringWidth: isEcho ? 1.25 : 1.75,
+    };
   };
 
   type Wave = ReturnType<typeof createWave>;
@@ -67,13 +84,34 @@ export function createNoiseRipple(world: Container, mapLayer: Container) {
 
   const hide = () => {
     if (!mapLayer.destroyed) mapLayer.filters = null;
+    for (const { primary, echo } of pairs) {
+      if (!primary.ring.destroyed) primary.ring.visible = false;
+      if (!echo.ring.destroyed) echo.ring.visible = false;
+    }
   };
 
-  const updateWave = ({ sprite, filter, diameter }: Wave, wave?: RippleWave) => {
-    filter.enabled = !!wave && wave.strength > 0;
-    if (wave && filter.enabled) {
+  const updateWave = (
+    { sprite, filter, ring, displayRadius, diameter, maxRingAlpha, ringWidth }: Wave,
+    wave?: RippleWave,
+  ) => {
+    const active = !!wave && wave.strength > 0;
+    filter.enabled = active;
+    if (wave && active) {
       sprite.setSize(diameter * wave.radiusScale);
       filter.scale.set(wave.strength * 18);
+      if (!ring.destroyed) {
+        ring.visible = true;
+        ring
+          .clear()
+          .circle(0, 0, displayRadius * wave.radiusScale)
+          .stroke({
+            width: ringWidth,
+            color: ringColor,
+            alpha: maxRingAlpha * wave.strength,
+          });
+      }
+    } else if (!ring.destroyed) {
+      ring.visible = false;
     }
   };
 
@@ -82,10 +120,15 @@ export function createNoiseRipple(world: Container, mapLayer: Container) {
     for (const { primary, echo } of pairs) {
       primary.filter.destroy();
       primary.sprite.destroy();
+      primary.ring.destroy();
       echo.filter.destroy();
       echo.sprite.destroy();
+      echo.ring.destroy();
     }
-    pairs = areas.map((area) => ({ primary: createWave(area), echo: createWave(area) }));
+    pairs = areas.map((area) => ({
+      primary: createWave(area, false),
+      echo: createWave(area, true),
+    }));
     filters = pairs.flatMap(({ primary, echo }) => [primary.filter, echo.filter]);
   };
 
