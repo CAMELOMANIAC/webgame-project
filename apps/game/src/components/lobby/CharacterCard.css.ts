@@ -27,7 +27,7 @@ export const cardButton = style({
     backgroundColor: vars.color.ctaHover,
   },
   ":focus-visible": {
-    outline: `2px solid ${vars.color.positive}`,
+    outline: `2px solid ${vars.text.primary}`,
     outlineOffset: "2px",
   },
   selectors: {

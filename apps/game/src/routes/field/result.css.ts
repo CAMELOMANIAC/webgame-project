@@ -99,7 +99,7 @@ export const returnButton = style({
   selectors: {
     "&:hover": { background: vars.color.ctaHover },
     "&:focus-visible": {
-      outline: `2px solid ${vars.color.positive}`,
+      outline: `2px solid ${vars.text.primary}`,
       outlineOffset: "3px",
     },
   },

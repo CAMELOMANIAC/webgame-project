@@ -91,7 +91,7 @@ export const userList = style({
 });
 
 export const userButton = style([
-  cornerBrackets({ tone: "positive" }),
+  cornerBrackets({ tone: "default" }),
   {
     display: "flex",
     alignItems: "center",
@@ -109,7 +109,7 @@ export const userButton = style([
     selectors: {
       "&:hover": {
         backgroundColor: vars.surface.high,
-        borderColor: vars.border.positive,
+        borderColor: vars.text.primary,
       },
     },
   },

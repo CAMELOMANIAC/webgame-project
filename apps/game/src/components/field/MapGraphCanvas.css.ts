@@ -123,11 +123,11 @@ export const toggleButton = recipe({
   variants: {
     active: {
       true: {
-        background: "rgba(133, 173, 255, 0.14)",
-        border: `1px solid ${vars.border.positive}`,
-        color: vars.color.positive,
+        background: "rgba(255, 255, 255, 0.14)",
+        border: `1px solid ${vars.text.primary}`,
+        color: vars.text.primary,
         ":hover": {
-          background: "rgba(133, 173, 255, 0.2)",
+          background: "rgba(255, 255, 255, 0.2)",
         },
       },
       false: {
