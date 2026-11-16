@@ -189,12 +189,17 @@ export async function syncSlots(
   );
 }
 
+type ParsedSlots = {
+  equipment: { weaponMasterId: string; slotIndex: number }[];
+  inventory: { weaponMasterId: string; slotIndex: number; quantity: number }[];
+};
+
 export async function syncSlotsInTransaction(
   tx: Tx,
   characterId: string,
   input: SlotsInput,
 ): Promise<InventoryUpdateResponse> {
-  const data = SlotsSchema.parse(input);
+  const data = SlotsSchema.parse(input) as ParsedSlots;
   const character = await getCharacter(tx, characterId);
   const equipment = await tx.query.characterWeapons.findMany({
     where: eq(characterWeapons.characterId, characterId),
@@ -266,7 +271,7 @@ export async function syncLoadoutWithStashInTransaction(
   characterId: string,
   input: SlotsInput,
 ) {
-  const data = SlotsSchema.parse(input);
+  const data = SlotsSchema.parse(input) as ParsedSlots;
   const character = await getCharacter(tx, characterId);
   if (character.userId !== userId) {
     throw new InventoryError("User does not own this character", 403);

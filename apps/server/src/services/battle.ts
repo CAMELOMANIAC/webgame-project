@@ -8,6 +8,7 @@ import {
   type RaidBattleResult,
   resolveCatalogWeaponData,
   type WeaponData,
+  type WeaponEffect,
 } from "@webgame/types";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -103,7 +104,7 @@ export function toBattleWeapon(weapon: WeaponMaster): WeaponData {
   const effect = WeaponEffectSchema.safeParse(weapon.effect);
   return resolveCatalogWeaponData({
     ...weapon,
-    effect: effect.success ? effect.data : undefined,
+    effect: effect.success ? (effect.data as WeaponEffect) : undefined,
   });
 }
 
@@ -429,9 +430,12 @@ export async function applyBattleSettlement(
       .set({ hp: finalPlayer.hp, stamina: finalPlayer.stamina, weight })
       .where(eq(characters.id, characterId));
     if (!playerWon) return { rewardItemName: null, rewardItem: null };
-    const rewardId =
+    const fallbackWeapon = (await tx.query.weaponMasters.findFirst()) as unknown as
+      | WeaponMaster
+      | undefined;
+    const rewardId: string | undefined =
       rewardIds[Math.floor(Math.random() * rewardIds.length)] ??
-      (await tx.query.weaponMasters.findFirst())?.id;
+      fallbackWeapon?.id;
     if (!rewardId) return { rewardItemName: null, rewardItem: null };
 
     if (options?.deferLootToPending) {

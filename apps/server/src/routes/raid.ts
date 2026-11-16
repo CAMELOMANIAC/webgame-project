@@ -1,4 +1,10 @@
-import { seopoMapVersion } from "@webgame/types";
+import {
+  type BuildingActionInput,
+  type RaidActionInput,
+  type RaidLootActionInput,
+  type RaidNavigationInput,
+  seopoMapVersion,
+} from "@webgame/types";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Database } from "../db";
@@ -120,7 +126,7 @@ export function registerRaidRoutes(
       try {
         const input = RaidActionSchema.extend({
           expectedVersion: z.coerce.number().int().nonnegative(),
-        }).parse(request.query);
+        }).parse(request.query) as RaidActionInput;
         reply.header("Cache-Control", "no-store");
         const result = await getRaidNavigationResult(
           database,
@@ -143,7 +149,7 @@ export function registerRaidRoutes(
           database,
           actor(request),
           characterId,
-          NavigateSchema.parse(request.body),
+          NavigateSchema.parse(request.body) as RaidNavigationInput,
         );
       } catch (error) {
         fastify.log.error(error);
@@ -160,7 +166,7 @@ export function registerRaidRoutes(
           database,
           actor(request),
           characterId,
-          BuildingActionSchema.parse(request.body),
+          BuildingActionSchema.parse(request.body) as BuildingActionInput,
         );
       } catch (error) {
         fastify.log.error(error);
@@ -177,7 +183,7 @@ export function registerRaidRoutes(
           database,
           actor(request),
           characterId,
-          RaidLootActionSchema.parse(request.body),
+          RaidLootActionSchema.parse(request.body) as RaidLootActionInput,
         );
       } catch (error) {
         fastify.log.error(error);
@@ -194,7 +200,7 @@ export function registerRaidRoutes(
           database,
           actor(request),
           characterId,
-          RaidActionSchema.parse(request.body),
+          RaidActionSchema.parse(request.body) as RaidActionInput,
         );
       } catch (error) {
         fastify.log.error(error);
@@ -207,7 +213,10 @@ export function registerRaidRoutes(
       const input = RaidActionSchema.extend({
         characterId: z.string(),
         level: z.number().int().positive().optional(),
-      }).parse(request.body);
+      }).parse(request.body) as RaidActionInput & {
+        characterId: string;
+        level?: number;
+      };
       return await fightRaidMonster(
         database,
         actor(request),

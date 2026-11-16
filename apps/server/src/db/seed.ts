@@ -217,7 +217,9 @@ async function main() {
   }
 
   console.log("Adding weapons to user stash (warehouse)...");
-  const allWeapons = await db.query.weaponMasters.findMany();
+  const allWeapons = (await db.query.weaponMasters.findMany()) as unknown as {
+    id: string;
+  }[];
   for (const wm of allWeapons) {
     await db.insert(stashItems).values({
       userId: user.id,

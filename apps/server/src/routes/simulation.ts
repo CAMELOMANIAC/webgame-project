@@ -1,3 +1,4 @@
+import type { BattleCombatant } from "@webgame/types";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { simulateBattle } from "../logic/simulateBattle";
@@ -70,7 +71,7 @@ export function registerSimulationRoutes(fastify: FastifyInstance) {
   fastify.post("/battle/simulate", async (request, reply) => {
     try {
       const body = SimulateSchema.parse(request.body);
-      const result = simulateBattle(body.players);
+      const result = simulateBattle(body.players as BattleCombatant[]);
       return result;
     } catch (error) {
       fastify.log.error(error);

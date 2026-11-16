@@ -511,7 +511,7 @@ export async function navigateRaid(
   characterId: string,
   input: RaidNavigationInput,
 ): Promise<RaidNavigationResult> {
-  const parsed = NavigateSchema.parse(input);
+  const parsed = NavigateSchema.parse(input) as RaidNavigationInput;
   const payload = {
     path: parsed.path,
     destinationBuildingId: parsed.destinationBuildingId,
@@ -721,7 +721,7 @@ export async function extractRaid(
     database,
     userId,
     characterId,
-    RaidActionSchema.parse(input),
+    RaidActionSchema.parse(input) as RaidActionInput,
     "EXTRACT",
     {},
     async (tx, raid) => {
@@ -770,7 +770,7 @@ export async function fightRaidMonster(
     database,
     userId,
     characterId,
-    RaidActionSchema.parse(input),
+    RaidActionSchema.parse(input) as RaidActionInput,
     "BATTLE",
     { level },
     async (tx, raid) => {
@@ -872,7 +872,7 @@ export async function decideRaidBattle(
   battleId: string,
   action: "OPEN" | "RETREAT" | "CONTINUE" | "EXPIRE",
 ): Promise<RetreatDecisionResult> {
-  return withInventoryTransaction(database, async (tx) => {
+  return withInventoryTransaction(database, async (tx): Promise<RetreatDecisionResult> => {
     const character = await ownedCharacter(tx, userId, characterId);
     const raid = await tx.query.raidSessions.findFirst({
       where: and(eq(raidSessions.id, raidId), eq(raidSessions.characterId, characterId)),
@@ -1190,7 +1190,7 @@ export async function executeRaidBuildingAction(
   input: BuildingActionInput,
   options: { random?: () => number } = {},
 ): Promise<BuildingActionResult> {
-  const parsed = BuildingActionSchema.parse(input);
+  const parsed = BuildingActionSchema.parse(input) as BuildingActionInput;
   const random = options.random ?? Math.random;
 
   return performRaidAction(
@@ -1650,7 +1650,7 @@ export async function executeRaidLootAction(
   characterId: string,
   input: RaidLootActionInput,
 ): Promise<RaidLootActionResult> {
-  const parsed = RaidLootActionSchema.parse(input);
+  const parsed = RaidLootActionSchema.parse(input) as RaidLootActionInput;
 
   return performRaidAction(
     database,
