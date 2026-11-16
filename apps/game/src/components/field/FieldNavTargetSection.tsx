@@ -1016,66 +1016,61 @@ const FieldNavTargetSection = () => {
               )}
 
               {!activeBuilding.category &&
-                (!isActiveBuildingLooted ? (
-                  activeIntroEvent?.choices &&
-                  activeIntroEvent.choices.length > 0 ? (
-                    <div className={styles.buildingChoiceList}>
-                      {activeIntroEvent.choices.map((choice) => {
-                        const ownedItemIds = [...ownedItemCounts.keys()];
-                        const conditionMet = hasBuildingChoiceCondition(
-                          choice,
-                          ownedItemIds,
-                        );
-                        const mins = choice.timeCostMinutes ?? 10;
-                        const timeLabel = `+${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
-                        return (
-                          <button
-                            key={choice.id}
-                            type="button"
-                            className={styles.buildingActionBtn}
-                            disabled={!canAct || !conditionMet}
-                            onClick={() =>
-                              handleBuildingAction(
-                                "EVENT_CHOICE",
-                                undefined,
-                                choice.id,
-                              )
-                            }
-                          >
-                            <span className={styles.buildingChoiceTextGroup}>
-                              <span>{choice.label}</span>
-                              {choice.condition && (
-                                <span className={styles.buildingChoiceCondition}>
-                                  조건: {choice.condition.label}
-                                </span>
-                              )}
-                            </span>
-                            <span className={styles.actionCode}>
-                              {timeLabel}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className={styles.buildingActionBtn}
-                      disabled={!canAct}
-                      onClick={() => handleBuildingAction("SEARCH")}
-                    >
-                      <span>
-                        {buildingAction.isPending
-                          ? "탐색 중…"
-                          : (activeIntroEvent?.searchLabel ?? "탐색하기")}
-                      </span>
-                      <span className={styles.actionCode}>+00:10</span>
-                    </button>
-                  )
+                !isActiveBuildingLooted &&
+                (activeIntroEvent?.choices &&
+                activeIntroEvent.choices.length > 0 ? (
+                  <div className={styles.buildingChoiceList}>
+                    {activeIntroEvent.choices.map((choice) => {
+                      const ownedItemIds = [...ownedItemCounts.keys()];
+                      const conditionMet = hasBuildingChoiceCondition(
+                        choice,
+                        ownedItemIds,
+                      );
+                      const mins = choice.timeCostMinutes ?? 10;
+                      const timeLabel = `+${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+                      return (
+                        <button
+                          key={choice.id}
+                          type="button"
+                          className={styles.buildingActionBtn}
+                          disabled={!canAct || !conditionMet}
+                          onClick={() =>
+                            handleBuildingAction(
+                              "EVENT_CHOICE",
+                              undefined,
+                              choice.id,
+                            )
+                          }
+                        >
+                          <span className={styles.buildingChoiceTextGroup}>
+                            <span>{choice.label}</span>
+                            {choice.condition && (
+                              <span className={styles.buildingChoiceCondition}>
+                                조건: {choice.condition.label}
+                              </span>
+                            )}
+                          </span>
+                          <span className={styles.actionCode}>
+                            {timeLabel}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <p className={styles.buildingExhaustedText}>
-                    이 건물은 이미 탐색했습니다.
-                  </p>
+                  <button
+                    type="button"
+                    className={styles.buildingActionBtn}
+                    disabled={!canAct}
+                    onClick={() => handleBuildingAction("SEARCH")}
+                  >
+                    <span>
+                      {buildingAction.isPending
+                        ? "탐색 중…"
+                        : (activeIntroEvent?.searchLabel ?? "탐색하기")}
+                    </span>
+                    <span className={styles.actionCode}>+00:10</span>
+                  </button>
                 ))}
 
               {activeBuilding.category && (
