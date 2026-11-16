@@ -34,7 +34,7 @@ export function ItemSlotIcon({
   itemId,
   name,
   iconKey,
-  size = 32,
+  size = 38,
 }: ItemSlotIconProps) {
   const imageSrc = resolveItemImageSrc(itemId, name);
   if (imageSrc) {
@@ -45,7 +45,6 @@ export function ItemSlotIcon({
         aria-hidden="true"
         draggable={false}
         className={styles.itemImage}
-        style={{ width: size, height: size }}
       />
     );
   }
@@ -68,7 +67,7 @@ export default function ItemSlotContent({
 }: ItemSlotContentProps) {
   return (
     <>
-      <ItemSlotIcon itemId={itemId} name={name} iconKey={iconKey} size={32} />
+      <ItemSlotIcon itemId={itemId} name={name} iconKey={iconKey} size={38} />
       <span className={styles.itemNameLabel}>{name}</span>
       {quantity > 1 && (
         <span className={styles.quantityBadge}>×{quantity}</span>

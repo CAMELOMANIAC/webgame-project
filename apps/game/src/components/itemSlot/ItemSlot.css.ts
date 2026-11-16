@@ -5,6 +5,13 @@ import { cornerBrackets, vars } from "@/styles/theme.css";
 
 export const itemSlotSize = "52px";
 
+const occupiedSlotSurface = {
+  backgroundColor: "rgba(20, 20, 24, 0.92)",
+  backgroundImage:
+    "radial-gradient(circle at 50% 45%, rgba(44, 47, 56, 0.42) 0%, rgba(12, 12, 15, 0.68) 100%)",
+  boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.04)",
+} as const;
+
 export const slot = recipe({
   base: {
     display: "flex",
@@ -46,10 +53,10 @@ export const slot = recipe({
         cornerBrackets({ tone: "positive" }),
         {
           border: "1px solid rgba(133, 173, 255, 0.55)",
-          backgroundColor: "rgba(20, 20, 24, 0.92)",
+          ...occupiedSlotSurface,
           selectors: {
             "&:hover": {
-              borderColor: "rgba(133, 173, 255, 0.65)",
+              borderColor: vars.text.primary,
             },
           },
         },
@@ -58,17 +65,17 @@ export const slot = recipe({
         cornerBrackets({ tone: "default" }),
         {
           border: "1px solid #fafafa",
-          backgroundColor: "rgba(20, 20, 24, 0.92)",
+          ...occupiedSlotSurface,
         },
       ],
       occupied: [
         cornerBrackets({ tone: "default" }),
         {
           border: `1px solid ${vars.border.strong}`,
-          backgroundColor: "rgba(20, 20, 24, 0.92)",
+          ...occupiedSlotSurface,
           selectors: {
             "&:hover": {
-              borderColor: "rgba(133, 173, 255, 0.45)",
+              borderColor: vars.text.primary,
             },
           },
         },
@@ -84,16 +91,19 @@ export const slotIndex = style({
   position: "absolute",
   top: "3px",
   left: "4px",
+  zIndex: 1,
   fontFamily: vars.font.mono,
   fontSize: "9px",
   color: vars.text.disabled,
   fontVariantNumeric: "tabular-nums",
+  textShadow: "0 1px 2px rgba(0, 0, 0, 0.9)",
   pointerEvents: "none",
 });
 
 export const itemNameLabel = style({
   position: "absolute",
-  bottom: "3px",
+  bottom: "2px",
+  zIndex: 1,
   fontSize: "10px",
   fontWeight: 500,
   color: vars.text.secondary,
@@ -101,6 +111,7 @@ export const itemNameLabel = style({
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+  textShadow: "0 1px 2px rgba(0, 0, 0, 0.95), 0 0 4px rgba(0, 0, 0, 0.95)",
   pointerEvents: "none",
 });
 
@@ -108,10 +119,12 @@ export const quantityBadge = style({
   position: "absolute",
   top: "3px",
   right: "4px",
+  zIndex: 1,
   fontFamily: vars.font.mono,
   fontSize: "9px",
   color: vars.color.positive,
   fontVariantNumeric: "tabular-nums",
+  textShadow: "0 1px 2px rgba(0, 0, 0, 0.9)",
   pointerEvents: "none",
 });
 
@@ -132,9 +145,12 @@ export const button = style({
 
 export const itemImage = style({
   display: "block",
+  width: "100%",
+  height: "100%",
+  padding: "2px",
+  boxSizing: "border-box",
   objectFit: "contain",
-  marginBottom: "8px",
   pointerEvents: "none",
   userSelect: "none",
-  filter: "drop-shadow(0 1px 3px rgba(0, 0, 0, 0.75)) brightness(1.08)",
+  filter: "saturate(0.55) contrast(1.04) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.85))",
 });

@@ -38,30 +38,60 @@ export const content = style({
   overflowY: "auto",
 });
 
+export const hero = style({
+  position: "relative",
+  margin: "-14px -14px 0",
+  padding: "14px 14px 12px",
+  minHeight: "112px",
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "space-between",
+  gap: "10px",
+  overflow: "hidden",
+  flexShrink: 0,
+});
+
+export const heroImageWrap = style({
+  position: "absolute",
+  inset: 0,
+  zIndex: 0,
+  pointerEvents: "none",
+  overflow: "hidden",
+  WebkitMaskImage:
+    "linear-gradient(180deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.75) 55%, rgba(0, 0, 0, 0) 100%)",
+  maskImage:
+    "linear-gradient(180deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.75) 55%, rgba(0, 0, 0, 0) 100%)",
+  selectors: {
+    "&::after": {
+      content: '""',
+      position: "absolute",
+      inset: 0,
+      background:
+        "linear-gradient(180deg, rgba(14, 15, 18, 0.3) 0%, rgba(14, 15, 18, 0) 100%)",
+    },
+  },
+});
+
+export const heroImage = style({
+  position: "absolute",
+  top: "50%",
+  right: "8px",
+  display: "block",
+  width: "140px",
+  height: "140px",
+  objectFit: "contain",
+  transform: "translateY(-50%)",
+  opacity: 0.36,
+  filter: "saturate(0.75) contrast(1.06)",
+});
+
 export const header = style({
+  position: "relative",
+  zIndex: 1,
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "space-between",
   gap: "10px",
-});
-
-export const titleGroup = style({
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-  minWidth: 0,
-});
-
-export const iconFrame = style({
-  width: "44px",
-  height: "44px",
-  flexShrink: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  borderRadius: vars.radius.control,
-  border: `1px solid ${vars.border.subtle}`,
-  backgroundColor: vars.surface.low,
 });
 
 export const titleMeta = style({
@@ -69,6 +99,7 @@ export const titleMeta = style({
   flexDirection: "column",
   gap: "3px",
   minWidth: 0,
+  flex: 1,
 });
 
 export const slotMeta = style({
@@ -132,6 +163,8 @@ export const closeBtn = style({
 });
 
 export const tagRow = style({
+  position: "relative",
+  zIndex: 1,
   display: "flex",
   flexWrap: "wrap",
   gap: "4px",

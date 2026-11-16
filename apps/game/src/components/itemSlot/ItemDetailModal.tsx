@@ -11,10 +11,10 @@ import {
 import { useEffect, useId, useRef } from "react";
 import { RiCloseLine } from "react-icons/ri";
 
+import { resolveItemImageSrc } from "@/assets/items";
 import { resolveItemSource } from "@/utils/resolveItemSource";
 
 import * as styles from "./ItemDetailModal.css";
-import { ItemSlotIcon } from "./ItemSlotContent";
 
 export interface ItemDetailAction {
   label: string;
@@ -138,6 +138,9 @@ export default function ItemDetailModal({ item, onClose }: ItemDetailModalProps)
     : null;
   const description = item?.weaponData?.description ?? catalog?.description;
   const itemSource = resolveItemSource(catalog?.id ?? item?.masterId ?? item?.id);
+  const itemImageSrc = item
+    ? resolveItemImageSrc(item.masterId ?? catalog?.id, item.name)
+    : undefined;
   const quantity = item?.quantity ?? 1;
   const showCombatStats =
     itemKind === "EQUIPMENT" ||
@@ -154,16 +157,18 @@ export default function ItemDetailModal({ item, onClose }: ItemDetailModalProps)
     >
       {item && mergedWeapon && (
         <div className={styles.content}>
-          <div className={styles.header}>
-            <div className={styles.titleGroup}>
-              <div className={styles.iconFrame}>
-                <ItemSlotIcon
-                  itemId={item.masterId ?? catalog?.id}
-                  name={item.name}
-                  iconKey={item.iconKey ?? catalog?.iconKey}
-                  size={28}
+          <div className={styles.hero}>
+            {itemImageSrc && (
+              <div className={styles.heroImageWrap} aria-hidden="true">
+                <img
+                  src={itemImageSrc}
+                  alt=""
+                  draggable={false}
+                  className={styles.heroImage}
                 />
               </div>
+            )}
+            <div className={styles.header}>
               <div className={styles.titleMeta}>
                 <span className={styles.slotMeta}>
                   {item.slotLabel
@@ -184,27 +189,27 @@ export default function ItemDetailModal({ item, onClose }: ItemDetailModalProps)
                   )}
                 </div>
               </div>
+              <button
+                type="button"
+                className={styles.closeBtn}
+                aria-label="닫기"
+                autoFocus
+                onClick={() => dialogRef.current?.close()}
+              >
+                <RiCloseLine aria-hidden="true" />
+              </button>
             </div>
-            <button
-              type="button"
-              className={styles.closeBtn}
-              aria-label="닫기"
-              autoFocus
-              onClick={() => dialogRef.current?.close()}
-            >
-              <RiCloseLine aria-hidden="true" />
-            </button>
-          </div>
 
-          {tags.length > 0 && (
-            <div className={styles.tagRow}>
-              {tags.map((tag) => (
-                <span key={tag} className={styles.tagBadge}>
-                  {WEAPON_TAG_LABELS[tag]}
-                </span>
-              ))}
-            </div>
-          )}
+            {tags.length > 0 && (
+              <div className={styles.tagRow}>
+                {tags.map((tag) => (
+                  <span key={tag} className={styles.tagBadge}>
+                    {WEAPON_TAG_LABELS[tag]}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
 
           {showCombatStats ? (
             <div className={styles.statsGrid}>
