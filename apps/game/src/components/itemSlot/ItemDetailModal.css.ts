@@ -211,6 +211,28 @@ export const description = style({
   color: vars.text.secondary,
 });
 
+export const sourceBox = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "3px",
+  padding: "8px 10px",
+  borderRadius: vars.radius.control,
+  border: `1px solid ${vars.border.subtle}`,
+  backgroundColor: vars.surface.low,
+});
+
+export const sourceLabel = style({
+  fontFamily: vars.font.mono,
+  fontSize: "11px",
+  color: vars.text.muted,
+});
+
+export const sourceText = style({
+  fontSize: "12px",
+  lineHeight: 1.45,
+  color: vars.text.primary,
+});
+
 export const actionRow = style({
   display: "flex",
   gap: "8px",

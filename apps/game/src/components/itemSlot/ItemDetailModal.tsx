@@ -11,6 +11,8 @@ import {
 import { useEffect, useId, useRef } from "react";
 import { RiCloseLine } from "react-icons/ri";
 
+import { resolveItemSource } from "@/utils/resolveItemSource";
+
 import * as styles from "./ItemDetailModal.css";
 import { ItemSlotIcon } from "./ItemSlotContent";
 
@@ -135,6 +137,7 @@ export default function ItemDetailModal({ item, onClose }: ItemDetailModalProps)
     ? formatSynergySummary(mergedWeapon.effect)
     : null;
   const description = item?.weaponData?.description ?? catalog?.description;
+  const itemSource = resolveItemSource(catalog?.id ?? item?.masterId ?? item?.id);
   const quantity = item?.quantity ?? 1;
   const showCombatStats =
     itemKind === "EQUIPMENT" ||
@@ -267,6 +270,13 @@ export default function ItemDetailModal({ item, onClose }: ItemDetailModalProps)
           )}
 
           {description && <p className={styles.description}>{description}</p>}
+
+          {itemSource && (
+            <div className={styles.sourceBox}>
+              <span className={styles.sourceLabel}>출처</span>
+              <span className={styles.sourceText}>{itemSource}</span>
+            </div>
+          )}
 
           {item.actions && item.actions.length > 0 && (
             <div className={styles.actionRow}>
