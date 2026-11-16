@@ -20,6 +20,7 @@ import {
   focusPlayerTriggerAtom,
   focusRouteTargetAtom,
   followPlayerAtom,
+  highlightedDistrictIdsAtom,
   isInventoryDirtyAtom,
   isNavigatingAtom,
   navigationProgressAtom,
@@ -296,6 +297,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const nodesGraphicsRef = useRef<Graphics | null>(null);
   const hoverHighlightGraphicsRef = useRef<Graphics | null>(null);
   const explorationGraphicsRef = useRef<Graphics | null>(null);
+  const districtHighlightGraphicsRef = useRef<Graphics | null>(null);
+  const districtLabelsRef = useRef<Map<string, Text>>(new Map());
   const exitContainerRef = useRef<Container | null>(null);
   const pathLineGraphicsRef = useRef<Graphics | null>(null);
   const targetMarkerGroupRef = useRef<Container | null>(null);
@@ -307,6 +310,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const focusTweenRef = useRef<TweenHandle | null>(null);
   const focusPlayerTrigger = useAtomValue(focusPlayerTriggerAtom);
   const focusRouteTarget = useAtomValue(focusRouteTargetAtom);
+  const highlightedDistrictIds = useAtomValue(highlightedDistrictIdsAtom);
   const startNavigationTrigger = useAtomValue(startNavigationTriggerAtom);
 
   const { data: characterData } = useGetCharacter();
@@ -668,6 +672,11 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
         // --- 1.15 Districts (14개 지적도 권역 폴리곤 및 지명 라벨) ---
         const districtsContainer = new Container();
+        const districtHighlightGraphics = new Graphics();
+        districtsContainer.addChild(districtHighlightGraphics);
+        districtHighlightGraphicsRef.current = districtHighlightGraphics;
+        districtLabelsRef.current.clear();
+
         const dashedDistrictGraphics = new Graphics();
         const dashedEdges: Parameters<typeof drawDistrictDashes>[1] = [];
         const drawnDistrictEdges = new Set<string>();
@@ -710,6 +719,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
           label.anchor.set(0.5);
           label.position.set(district.labelX, district.labelY);
           label.alpha = 0.65;
+          districtLabelsRef.current.set(district.id, label);
           districtsContainer.addChild(label);
         }
         mapLayer.addChild(districtsContainer);
@@ -870,6 +880,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       nodesGraphicsRef.current = null;
       hoverHighlightGraphicsRef.current = null;
       explorationGraphicsRef.current = null;
+      districtHighlightGraphicsRef.current = null;
+      districtLabelsRef.current.clear();
       exitContainerRef.current = null;
       pathLineGraphicsRef.current = null;
       targetMarkerGroupRef.current = null;
@@ -1615,6 +1627,40 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       }
     }
   }, [isPixiReady, isCombat, exploration]);
+
+  useEffect(() => {
+    const g = districtHighlightGraphicsRef.current;
+    const host = canvasHostRef.current;
+    if (!isPixiReady || !g || g.destroyed) return;
+    g.clear();
+    g.visible = !isCombat;
+
+    const highlightedSet = new Set(highlightedDistrictIds);
+    const cssHighlightColor = host
+      ? getComputedStyle(host)
+          .getPropertyValue(vars.color.positive.slice(4, -1))
+          .trim()
+      : "";
+    const highlightColor = cssHighlightColor || 0x85adff;
+
+    for (const district of MAP_DISTRICTS) {
+      const isHighlighted = highlightedSet.has(district.id);
+      const label = districtLabelsRef.current.get(district.id);
+      if (label && !label.destroyed) {
+        label.alpha = isHighlighted ? 1 : 0.65;
+      }
+      if (!isHighlighted || district.hull.length < 3) continue;
+      const [first, ...rest] = district.hull;
+      if (!first) continue;
+      g.moveTo(first.x, first.y);
+      for (const point of rest) {
+        g.lineTo(point.x, point.y);
+      }
+      g.closePath()
+        .fill({ color: highlightColor, alpha: 0.14 })
+        .stroke({ width: 2, color: highlightColor, alpha: 0.85 });
+    }
+  }, [isPixiReady, isCombat, highlightedDistrictIds]);
 
   // 5.1. 실시간 최단 경로 연산 (A* 알고리즘 연동)
   useEffect(() => {

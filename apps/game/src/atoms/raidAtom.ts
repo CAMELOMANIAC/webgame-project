@@ -83,6 +83,14 @@ export const activeDragIdAtom = atom<string | number | null>(null);
 // 슬롯 간 이동 애니메이션이 진행 중인 아이템 ID 목록 (z-index 및 overflow 클리핑 해제용)
 export const animatingSlotIdsAtom = atom<string[]>([]);
 
+export type NavListMode = "BUILDING" | "ITEM";
+
+// 필드 네비게이터 추천 목록 모드 (건물 / 아이템 조합)
+export const navListModeAtom = atom<NavListMode>("BUILDING");
+
+// 지도에 강조 표시할 구역 ID 목록
+export const highlightedDistrictIdsAtom = atom<string[]>([]);
+
 // 필드 네비게이터에서 목표 조합으로 고정(Pin)한 레시피 ID
 export const pinnedRecipeIdAtom = atom<string | null>(null);
 

@@ -433,33 +433,244 @@ export const recommendEmpty = style({
   textAlign: "center",
 });
 
-export const recipePinRow = style({
+export const modeSwitch = style({
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  padding: "3px",
+  borderRadius: "999px",
+  border: `1px solid ${vars.border.subtle}`,
+  backgroundColor: vars.surface.low,
+  gap: "2px",
+  flexShrink: 0,
+});
+
+export const modeSwitchBtn = recipe({
+  base: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "6px",
+    height: "28px",
+    borderRadius: "999px",
+    border: 0,
+    fontSize: "12px",
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "background-color 0.15s ease, color 0.15s ease",
+  },
+  variants: {
+    active: {
+      true: {
+        backgroundColor: vars.color.ctaBg,
+        color: vars.color.ctaFg,
+      },
+      false: {
+        backgroundColor: "transparent",
+        color: vars.text.muted,
+        selectors: {
+          "&:hover": {
+            color: vars.text.primary,
+          },
+        },
+      },
+    },
+  },
+  defaultVariants: {
+    active: false,
+  },
+});
+
+export const recipeCard = recipe({
+  base: {
+    position: "relative",
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: vars.radius.control,
+    border: `1px solid ${vars.border.subtle}`,
+    backgroundColor: vars.surface.low,
+    color: vars.text.primary,
+    display: "flex",
+    flexDirection: "column",
+    gap: "7px",
+    flexShrink: 0,
+    textAlign: "left",
+    cursor: "pointer",
+    overflow: "hidden",
+    transition: "background-color 0.15s ease, border-color 0.15s ease",
+    selectors: {
+      "&:hover": {
+        backgroundColor: vars.surface.high,
+        borderColor: vars.border.strong,
+      },
+    },
+  },
+  variants: {
+    active: {
+      true: [
+        cornerBrackets({ tone: "default" }),
+        {
+          borderColor: vars.color.positive,
+          backgroundColor: vars.surface.high,
+        },
+      ],
+      false: [cornerBrackets({ tone: "default" })],
+    },
+  },
+  defaultVariants: {
+    active: false,
+  },
+});
+
+export const recipeBackdrop = style({
+  position: "absolute",
+  top: "4px",
+  right: "8px",
+  bottom: "4px",
+  width: "76px",
+  backgroundSize: "contain",
+  backgroundPosition: "right center",
+  backgroundRepeat: "no-repeat",
+  opacity: 0.28,
+  pointerEvents: "none",
+  zIndex: 0,
+  maskImage:
+    "linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.5) 45%, black 100%)",
+  WebkitMaskImage:
+    "linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.5) 45%, black 100%)",
+});
+
+export const recipeCardContent = style({
+  position: "relative",
+  zIndex: 1,
   display: "flex",
   flexDirection: "column",
   gap: "6px",
-  padding: "8px 10px",
-  marginBottom: "8px",
-  borderRadius: vars.radius.control,
-  border: `1px solid ${vars.border.subtle}`,
-  backgroundColor: vars.surface.low,
 });
 
-export const recipeSelect = style({
-  width: "100%",
-  padding: "6px 8px",
-  borderRadius: vars.radius.control,
-  border: `1px solid ${vars.border.subtle}`,
-  backgroundColor: vars.surface.base,
+export const recipeHeader = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "8px",
+});
+
+export const recipeTitleGroup = style({
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  minWidth: 0,
+});
+
+export const recipeName = style({
+  fontSize: "13px",
+  fontWeight: 600,
   color: vars.text.primary,
-  fontSize: "12px",
-  fontFamily: vars.font.mono,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
 });
 
-export const recipeNeedText = style({
-  fontSize: "11px",
-  color: vars.color.positive,
-  fontFamily: vars.font.mono,
-  lineHeight: 1.35,
+export const recipeStatusText = recipe({
+  base: {
+    flexShrink: 0,
+    fontFamily: vars.font.mono,
+    fontSize: "11px",
+    fontWeight: 600,
+    fontVariantNumeric: "tabular-nums",
+  },
+  variants: {
+    ready: {
+      true: { color: vars.color.positive },
+      false: { color: vars.color.negative },
+    },
+  },
+  defaultVariants: {
+    ready: false,
+  },
+});
+
+export const recipeIngredientsRow = style({
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: "4px",
+});
+
+export const recipeBaseBadge = recipe({
+  base: {
+    fontFamily: vars.font.mono,
+    fontSize: "11px",
+    lineHeight: 1.2,
+    padding: "2px 6px",
+    borderRadius: vars.radius.badge,
+    border: `1px solid ${vars.border.subtle}`,
+    backgroundColor: vars.surface.high,
+  },
+  variants: {
+    owned: {
+      true: {
+        color: vars.text.secondary,
+      },
+      false: {
+        color: vars.color.negative,
+        borderColor: vars.color.negative,
+        backgroundColor: vars.color.negativeBg,
+        opacity: 0.8,
+      },
+    },
+  },
+  defaultVariants: {
+    owned: false,
+  },
+});
+
+export const ingredientChip = recipe({
+  base: {
+    fontSize: "11px",
+    fontWeight: 500,
+    lineHeight: 1.2,
+    padding: "3px 7px",
+    borderRadius: vars.radius.badge,
+    cursor: "pointer",
+    transition: "border-color 0.15s ease, opacity 0.15s ease",
+  },
+  variants: {
+    owned: {
+      true: {
+        border: `1px solid ${vars.border.strong}`,
+        backgroundColor: vars.surface.high,
+        color: vars.text.primary,
+        selectors: {
+          "&:hover": {
+            borderColor: vars.color.positive,
+          },
+        },
+      },
+      false: {
+        border: `1px solid ${vars.color.negative}`,
+        backgroundColor: vars.color.negativeBg,
+        color: vars.color.negative,
+        opacity: 0.78,
+        selectors: {
+          "&:hover": {
+            opacity: 1,
+          },
+        },
+      },
+    },
+    selected: {
+      true: {
+        boxShadow: `0 0 0 1px ${vars.color.positive}`,
+        borderColor: vars.color.positive,
+        opacity: 1,
+      },
+      false: {},
+    },
+  },
+  defaultVariants: {
+    owned: false,
+    selected: false,
+  },
 });
 
 export const buildingEventCard = style([
