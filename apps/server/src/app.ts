@@ -32,11 +32,8 @@ export function buildApp({
     credentials: false,
   });
 
-  registerDevelopmentIdentity(
-    fastify,
-    database,
-    developmentAuth && process.env.NODE_ENV !== "production",
-  );
+  // TODO: 운영 인증 구현 후 NODE_ENV !== "production" 조건을 복원한다.
+  registerDevelopmentIdentity(fastify, database, developmentAuth);
   registerSimulationRoutes(fastify);
   registerGameRoutes(fastify, database);
   registerGhostRoutes(fastify, database);
