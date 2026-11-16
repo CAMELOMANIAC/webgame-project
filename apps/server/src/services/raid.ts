@@ -1387,31 +1387,42 @@ export async function executeRaidBuildingAction(
           throw new InventoryError("수색할 수 있는 자재가 없는 구역입니다.", 409);
         }
 
-        const pickCount = Math.min(
-          random() < 0.45 ? 2 : 1,
-          remainingAllowance,
-        );
+        const searchRoll = random();
+        const rolledCount = searchRoll < 0.25 ? 0 : searchRoll < 0.7 ? 1 : 2;
+        const pickCount = Math.min(rolledCount, remainingAllowance);
         const pickedIds: string[] = [];
         for (let i = 0; i < pickCount; i++) {
           const picked = pool[Math.floor(random() * pool.length) % pool.length];
           if (picked) pickedIds.push(picked);
         }
         const { obtainedItems, totalObtainedQty } =
-          await stageCatalogItemsAsPendingLoot(tx, exp, pickedIds, "SEARCH");
+          pickedIds.length > 0
+            ? await stageCatalogItemsAsPendingLoot(
+                tx,
+                exp,
+                pickedIds,
+                "SEARCH",
+              )
+            : { obtainedItems: [], totalObtainedQty: 0 };
+
+        const resultText =
+          obtainedItems.length > 0
+            ? "건물 내부 탐색을 마쳤습니다."
+            : "건물 내부를 뒤졌지만 쓸 만한 것을 찾지 못했습니다.";
 
         exp.lootedBuildingIds.push(building.id);
         exp.districtLootCounts[district.id] =
           currentDistrictItems + totalObtainedQty;
         exp.buildingEvents[buildingKey] = {
           stage: "CLEARED",
-          text: "건물 내부 탐색을 마쳤습니다.",
+          text: resultText,
         };
 
         const payload: Omit<BuildingActionResult, "raid"> = {
           action: "SEARCH",
           encounterTriggered: false,
           obtainedItems,
-          message: "건물 내부 탐색을 마쳤습니다.",
+          message: resultText,
         };
         return {
           payload,
