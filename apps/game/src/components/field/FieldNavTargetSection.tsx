@@ -1144,6 +1144,7 @@ const FieldNavTargetSection = () => {
               <button
                 type="button"
                 className={styles.buildingDismissBtn}
+                disabled={!canAct}
                 onClick={() => setIsBuildingDismissed(true)}
               >
                 {(!activeBuilding.category && isActiveBuildingLooted) ||
