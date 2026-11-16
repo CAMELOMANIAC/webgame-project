@@ -1,3 +1,4 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
 import cors from "@fastify/cors";
 import Fastify, { type FastifyServerOptions } from "fastify";
 import { type Database, db as defaultDatabase } from "./db";
@@ -62,4 +63,15 @@ export function buildApp({
   });
 
   return fastify;
+}
+
+let cachedApp: ReturnType<typeof buildApp> | undefined;
+
+export default async function handler(
+  req: IncomingMessage,
+  res: ServerResponse,
+) {
+  cachedApp ??= buildApp();
+  await cachedApp.ready();
+  cachedApp.server.emit("request", req, res);
 }
