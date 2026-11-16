@@ -20,7 +20,7 @@
     "@webgame/types": "workspace:*",
     "drizzle-orm": "^0.45.4",
     "fastify": "^5.2.1",
-    "postgres": "^4.0.0",
+    "postgres": "^3.4.9",
     "zod": "^3.24.1"
   },
   "devDependencies": {
