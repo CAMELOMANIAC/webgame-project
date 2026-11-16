@@ -1404,14 +1404,14 @@ export async function executeRaidBuildingAction(
           currentDistrictItems + totalObtainedQty;
         exp.buildingEvents[buildingKey] = {
           stage: "CLEARED",
-          text: `${obtainedItems.map((i) => `${i.name} x${i.quantity}`).join(", ")} 발견`,
+          text: "건물 내부 탐색을 마쳤습니다.",
         };
 
         const payload: Omit<BuildingActionResult, "raid"> = {
           action: "SEARCH",
           encounterTriggered: false,
           obtainedItems,
-          message: `전리품 발견: ${obtainedItems.map((i) => `${i.name} x${i.quantity}`).join(", ")} (획득창에서 회수하세요)`,
+          message: "건물 내부 탐색을 마쳤습니다.",
         };
         return {
           payload,
