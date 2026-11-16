@@ -85,6 +85,7 @@ pnpm lint         # 전체 워크스페이스 ESLint 검사
 - 색상·폰트·보더는 하드코딩하지 않고 `@/styles/theme.css`의 `vars` 토큰을 참조합니다.
 - 수치 데이터(HP, 스태미나, 중량, 쿨타임, 라운드, 좌표)에는 반드시 `fontVariantNumeric: "tabular-nums"`와 모노스페이스 폰트(`vars.font.mono`)를 적용합니다.
 - 유채색은 긍정·안정(`#85adff`)과 부정·위험(`#ff7162`) 2축 시맨틱 용도로만 제한하며, 최상위 실행 CTA 버튼은 솔리드 화이트(`#fafafa`)를 사용합니다.
+- **호버·포커스·선택(`hover`/`focus-visible`/`active`/`selected`) 강조에 파란색(`#85adff`, `vars.color.positive`, `vars.border.positive`)을 절대 사용하지 마세요.** UI 선택·호버 경계선은 반드시 진한 흰색(`#fafafa` / `vars.text.primary`)을 사용합니다.
 
 ---
 
