@@ -5,6 +5,9 @@ import {
   type Item,
   type RaidView,
 } from "@webgame/types";
+import { getDefaultStore } from "jotai";
+
+import { isInventoryDirtyAtom } from "@/atoms/raidAtom";
 
 import { API_BASE_URL, apiFetch } from "./api";
 import type { CharacterVariant } from "./hooks/useCharacterCollection";
@@ -77,10 +80,64 @@ export function createCharacterQueryOptions(
         });
       }
 
-      return normalizeCharacterData(data);
+      const normalized = normalizeCharacterData(data);
+      const store = getDefaultStore();
+      if (store.get(isInventoryDirtyAtom)) {
+        const cached = queryClient.getQueryData<CharacterData>(
+          characterKey(userId, characterId),
+        );
+        if (
+          cached &&
+          data.isRaiding &&
+          hasSameItemPool(cached.raw, normalized.raw)
+        ) {
+          return {
+            ...normalized,
+            equipment: cached.equipment,
+            inventory: cached.inventory,
+            raw: {
+              ...normalized.raw,
+              equipment: cached.raw.equipment,
+              inventory: cached.raw.inventory,
+              weight: cached.raw.weight,
+            },
+          };
+        }
+        store.set(isInventoryDirtyAtom, false);
+      }
+
+      return normalized;
     },
     staleTime: Infinity,
   };
+}
+
+function collectItemCounts(raw: CharacterResponse): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const w of raw.equipment) {
+    if (w.weaponMaster) {
+      counts.set(w.weaponMaster.id, (counts.get(w.weaponMaster.id) ?? 0) + 1);
+    }
+  }
+  for (const i of raw.inventory) {
+    if (i.weaponMaster && i.quantity > 0) {
+      counts.set(
+        i.weaponMaster.id,
+        (counts.get(i.weaponMaster.id) ?? 0) + i.quantity,
+      );
+    }
+  }
+  return counts;
+}
+
+function hasSameItemPool(a: CharacterResponse, b: CharacterResponse): boolean {
+  const countsA = collectItemCounts(a);
+  const countsB = collectItemCounts(b);
+  if (countsA.size !== countsB.size) return false;
+  for (const [id, qty] of countsA) {
+    if (countsB.get(id) !== qty) return false;
+  }
+  return true;
 }
 
 export function normalizeCharacterData(data: CharacterResponse): CharacterData {
