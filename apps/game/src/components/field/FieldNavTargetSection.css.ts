@@ -111,6 +111,20 @@ export const cellValue = style({
   fontVariantNumeric: "tabular-nums",
 });
 
+export const cellValueRow = style({
+  display: "inline-flex",
+  alignItems: "baseline",
+  gap: "4px",
+});
+
+export const exhaustedMultiplier = style({
+  fontFamily: vars.font.mono,
+  fontSize: "10px",
+  fontWeight: 700,
+  color: vars.color.negative,
+  fontVariantNumeric: "tabular-nums",
+});
+
 export const accessibleValue = style({
   position: "absolute",
   width: "1px",
@@ -179,6 +193,13 @@ export const primaryAction = style({
     },
   },
 });
+
+export const primaryActionWithCost = style([
+  primaryAction,
+  {
+    justifyContent: "space-between",
+  },
+]);
 
 export const secondaryAction = style({
   width: "100%",

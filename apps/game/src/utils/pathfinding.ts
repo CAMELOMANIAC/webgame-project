@@ -104,6 +104,21 @@ export function estimateSpentFatigueAtProgress(
   return spent;
 }
 
+export function estimatePathFatigueCost(
+  path: number[],
+  hasTargetBuilding = false,
+): number {
+  if (path.length === 0) return 0;
+  if (path.length === 1) {
+    return hasTargetBuilding ? FATIGUE_RULES.buildingMoveFatigueCost : 0;
+  }
+  let total = 0;
+  for (let index = 1; index < path.length; index++) {
+    total += roadFatigueCost(path[index - 1]!, path[index]!);
+  }
+  return total;
+}
+
 export function estimatePathTravelMinutes(
   path: number[],
   hasTargetBuilding = false,

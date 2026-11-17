@@ -59,6 +59,7 @@ import { useLootAction } from "@/utils/hooks/useLootAction";
 import { useRaidRules } from "@/utils/hooks/useRaidRules";
 import { useRaidSession } from "@/utils/hooks/useRaidSession";
 import {
+  estimatePathFatigueCost,
   estimatePathTravelMinutes,
   findNearestDistrictNode,
   findShortestPath,
@@ -232,12 +233,20 @@ const FieldNavTargetSection = () => {
     isMoving && navigationStartTime !== null
       ? navigationStartTime
       : (character?.activeRaid?.time ?? 0);
+  const isExhausted =
+    character?.fatigue !== undefined && character.fatigue <= 0;
+  const baseTravelMinutes = canMove
+    ? estimatePathTravelMinutes(shortestPath, targetBuildingId !== null)
+    : 0;
   const travelMinutes = canMove
     ? estimatePathTravelMinutes(
         shortestPath,
         targetBuildingId !== null,
         character?.fatigue,
       )
+    : 0;
+  const estimatedFatigueCost = canMove
+    ? estimatePathFatigueCost(shortestPath, targetBuildingId !== null)
     : 0;
   const estimatedTime = currentTime + travelMinutes;
   const elapsedMinutes = isMoving
@@ -317,6 +326,9 @@ const FieldNavTargetSection = () => {
                 dest.buildingId !== undefined,
                 character?.fatigue,
               ),
+          fatigueCost: isCurrent
+            ? 0
+            : estimatePathFatigueCost(path, dest.buildingId !== undefined),
         };
       })
       .sort((a, b) => a.travelMinutes - b.travelMinutes);
@@ -414,6 +426,12 @@ const FieldNavTargetSection = () => {
   };
 
   const handleSelectRecipeCard = (recipe: CraftingRecipe) => {
+    if (pinnedRecipeId === recipe.id) {
+      setPinnedRecipeId(null);
+      setSelectedMaterialId(null);
+      setHighlightedDistrictIds([]);
+      return;
+    }
     setPinnedRecipeId(recipe.id);
     setSelectedMaterialId(null);
 
@@ -748,7 +766,9 @@ const FieldNavTargetSection = () => {
                         <span className={styles.recommendTime}>
                           {isCurrent
                             ? "현재 위치"
-                            : `+${formatRaidTime(dest.travelMinutes)}`}
+                            : dest.fatigueCost > 0
+                              ? `+${formatRaidTime(dest.travelMinutes)} · -${dest.fatigueCost} ENG`
+                              : `+${formatRaidTime(dest.travelMinutes)}`}
                         </span>
                       </button>
                     );
@@ -873,15 +893,24 @@ const FieldNavTargetSection = () => {
               </div>
               <div className={styles.telemetryCell}>
                 <span className={styles.cellLabel}>예상 소모</span>
-                <RollingText
-                  className={styles.cellValue}
-                  value={
-                    travelMinutes > 0
-                      ? `+${formatRaidTime(displayRemainingMinutes)}`
-                      : "—"
-                  }
-                  direction={isMoving && travelMinutes > 0 ? "down" : undefined}
-                />
+                <span className={styles.cellValueRow}>
+                  <RollingText
+                    className={styles.cellValue}
+                    value={
+                      travelMinutes > 0
+                        ? `+${formatRaidTime(
+                            isExhausted && !isMoving
+                              ? baseTravelMinutes
+                              : displayRemainingMinutes,
+                          )}`
+                        : "—"
+                    }
+                    direction={isMoving && travelMinutes > 0 ? "down" : undefined}
+                  />
+                  {isExhausted && !isMoving && travelMinutes > 0 && (
+                    <span className={styles.exhaustedMultiplier}>×2</span>
+                  )}
+                </span>
               </div>
               <div className={styles.telemetryCell}>
                 <span className={styles.cellLabel}>예상 도착</span>
@@ -901,31 +930,48 @@ const FieldNavTargetSection = () => {
                 >
                   {extractRaid.isPending ? "탈출 처리 중…" : "탈출하기"}
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  className={styles.primaryAction}
-                  disabled={!canAct || (!canMove && !canReenterBuilding)}
-                  onClick={() => {
-                    if (
-                      canReenterBuilding &&
-                      (!canMove ||
-                        (shortestPath.length === 1 &&
-                          targetBuildingId === activeBuildingId))
-                    ) {
-                      setIsBuildingDismissed(false);
-                      return;
+              ) : (() => {
+                const isReenter =
+                  isReenteringCurrentBuilding || (canReenterBuilding && !canMove);
+                const showFatigueCost =
+                  !isMoving && !isReenter && estimatedFatigueCost > 0;
+                return (
+                  <button
+                    type="button"
+                    className={
+                      showFatigueCost
+                        ? styles.primaryActionWithCost
+                        : styles.primaryAction
                     }
-                    triggerStartNavigation((prev) => prev + 1);
-                  }}
-                >
-                  {isMoving
-                    ? "이동 중…"
-                    : isReenteringCurrentBuilding || (canReenterBuilding && !canMove)
-                      ? "건물 진입"
-                      : "이동"}
-                </button>
-              )
+                    disabled={!canAct || (!canMove && !canReenterBuilding)}
+                    onClick={() => {
+                      if (
+                        canReenterBuilding &&
+                        (!canMove ||
+                          (shortestPath.length === 1 &&
+                            targetBuildingId === activeBuildingId))
+                      ) {
+                        setIsBuildingDismissed(false);
+                        return;
+                      }
+                      triggerStartNavigation((prev) => prev + 1);
+                    }}
+                  >
+                    <span>
+                      {isMoving
+                        ? "이동 중…"
+                        : isReenter
+                          ? "건물 진입"
+                          : "이동"}
+                    </span>
+                    {showFatigueCost && (
+                      <span className={styles.actionCode}>
+                        -{estimatedFatigueCost} ENG
+                      </span>
+                    )}
+                  </button>
+                );
+              })()
             ) : (
               character && (
                 <button
