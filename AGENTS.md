@@ -53,8 +53,9 @@ pnpm lint         # 전체 워크스페이스 ESLint 검사
    - 어떠한 경우에도 `any` 타입을 명시적으로 사용하지 마세요. 정확한 인터페이스를 정의하거나 컴파일러가 추론할 수 있도록 작성하세요.
    - 클라이언트·서버 간 공유되는 데이터 구조는 `packages/types`에 정의합니다.
 2. **검증 절차 (Definition of Done)**
-   - **작은 UI·스타일 수정(`apps/game` 내부, 로직/API/공유 타입 변경 없음):** Vanilla Extract 빌드 타임 CSS 검증을 포함해 `pnpm --filter game check-types && pnpm --filter game lint && pnpm --filter game build`만 실행합니다(`pnpm test` 생략 가능).
-   - **로직·API·공유 타입(`apps/server`, `packages/types`) 수정 또는 최종 커밋 전:** 사용자에게 별도로 확인을 묻지 말고 다음 전체 검증을 순서대로 모두 통과해야 합니다:
+   - **단순 텍스트 리터럴·CSS 수치 값 수정(속성·임포트·토큰·타입 추가/제거 없이 기존 문자열이나 `1px → 2px` 같은 크기·위치 수치만 변경):** `check-types`, `lint`, `build`, `test`를 모두 생략할 수 있습니다.
+   - **그 외 UI·스타일 수정(`apps/game` 내부, 속성/구조 변경 포함, 로직/API/공유 타입 변경 없음):** Vanilla Extract 빌드 타임 CSS 검증을 포함해 `pnpm --filter game check-types && pnpm --filter game lint && pnpm --filter game build`만 실행합니다(`pnpm test` 생략 가능).
+   - **로직·API·공유 타입(`apps/server`, `packages/types`) 수정 또는 그에 준하는 최종 커밋 전:** 사용자에게 별도로 확인을 묻지 말고 다음 전체 검증을 순서대로 모두 통과해야 합니다:
      1. 타입 검사: `pnpm check-types` (또는 해당 패키지 `tsc --noEmit`)
      2. 테스트 및 빌드: `pnpm test` 및 `pnpm build`
      3. 린트 검사: 모든 작업 완료 후 반드시 `pnpm lint` 실행
