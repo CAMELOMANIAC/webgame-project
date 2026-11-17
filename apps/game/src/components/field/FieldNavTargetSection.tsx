@@ -270,7 +270,8 @@ const FieldNavTargetSection = () => {
     : undefined;
   const isCurrentBuildingCompleted =
     activeBuildingId !== null &&
-    (activeBuilding?.category ? isActiveCraftUsed : isActiveBuildingLooted);
+    (activeEventState?.stage === "CLEARED" ||
+      (activeBuilding?.category ? isActiveCraftUsed : isActiveBuildingLooted));
   const isAtTargetBuilding =
     shortestPath.length === 1 &&
     targetBuildingId !== null &&
@@ -565,7 +566,9 @@ const FieldNavTargetSection = () => {
   const hasBuildingEvent = Boolean(
     activeBuilding && activeDistrict && !isMoving && !isCombat && character?.isRaiding,
   );
-  const canReenterBuilding = Boolean(hasBuildingEvent && isBuildingDismissed);
+  const canReenterBuilding = Boolean(
+    hasBuildingEvent && isBuildingDismissed && !isCurrentBuildingCompleted,
+  );
   const hasPendingLoot = Boolean(
     pendingLoot.length > 0 && !isMoving && !isCombat && character?.isRaiding,
   );
@@ -971,7 +974,7 @@ const FieldNavTargetSection = () => {
                 >
                   {isMoving
                     ? "이동 중…"
-                    : isReenteringCurrentBuilding
+                    : isReenteringCurrentBuilding || (canReenterBuilding && !canMove)
                       ? "건물 진입"
                       : "이동"}
                 </button>
