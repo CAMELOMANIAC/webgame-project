@@ -1,4 +1,8 @@
-import { applyExhaustedTravelMinutes, FATIGUE_RULES } from "@webgame/types";
+import {
+  applyExhaustedTravelMinutes,
+  FATIGUE_RULES,
+  getNodeDistrict,
+} from "@webgame/types";
 
 import mapData from "../../../../packages/types/src/assets/map_graph.json";
 
@@ -228,3 +232,53 @@ export function findShortestPath(startId: number, targetId: number): number[] {
   path.push(startId);
   return path.reverse();
 }
+
+export function findNearestDistrictNode(
+  startId: number,
+  districtIds: Iterable<string>,
+): number | null {
+  if (startId < 0 || startId >= nodes.length) return null;
+  const targetDistricts = new Set(districtIds);
+  if (targetDistricts.size === 0) return null;
+
+  if (targetDistricts.has(getNodeDistrict(startId).id)) {
+    return startId;
+  }
+
+  const dist = new Map<number, number>([[startId, 0]]);
+  const visited = new Set<number>();
+  const openSet = new Set<number>([startId]);
+
+  while (openSet.size > 0) {
+    let currentId = -1;
+    let minDist = Infinity;
+    openSet.forEach((id) => {
+      const d = dist.get(id) ?? Infinity;
+      if (d < minDist) {
+        minDist = d;
+        currentId = id;
+      }
+    });
+
+    if (currentId === -1) break;
+    if (targetDistricts.has(getNodeDistrict(currentId).id)) {
+      return currentId;
+    }
+
+    openSet.delete(currentId);
+    visited.add(currentId);
+
+    const neighbors = adjacencyList.get(currentId) ?? [];
+    for (const neighbor of neighbors) {
+      if (visited.has(neighbor.id)) continue;
+      const nextDist = minDist + neighbor.weight;
+      if (nextDist < (dist.get(neighbor.id) ?? Infinity)) {
+        dist.set(neighbor.id, nextDist);
+        openSet.add(neighbor.id);
+      }
+    }
+  }
+
+  return null;
+}
+

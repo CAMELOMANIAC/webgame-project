@@ -60,6 +60,7 @@ import { useRaidRules } from "@/utils/hooks/useRaidRules";
 import { useRaidSession } from "@/utils/hooks/useRaidSession";
 import {
   estimatePathTravelMinutes,
+  findNearestDistrictNode,
   findShortestPath,
 } from "@/utils/pathfinding";
 import {
@@ -363,27 +364,15 @@ const FieldNavTargetSection = () => {
   const selectNearestDestinationForDistricts = (districts: MapDistrict[]) => {
     setHighlightedDistrictIds(districts.map((d) => d.id));
     if (districts.length === 0 || !canAct) return;
-    let nearestDistrict = districts[0];
-    let minMinutes = Infinity;
-    for (const district of districts) {
-      const path =
-        district.centerNodeId === nodeId
-          ? [nodeId]
-          : findShortestPath(nodeId, district.centerNodeId);
-      const minutes =
-        district.centerNodeId === nodeId
-          ? 0
-          : estimatePathTravelMinutes(path, false, character?.fatigue);
-      if (minutes < minMinutes) {
-        minMinutes = minutes;
-        nearestDistrict = district;
-      }
-    }
-    if (nearestDistrict) {
+    const nearestNodeId = findNearestDistrictNode(
+      nodeId,
+      districts.map((d) => d.id),
+    );
+    if (nearestNodeId !== null) {
       setRequestedBuilding(null);
-      setRequestedNode(nearestDistrict.centerNodeId);
+      setRequestedNode(nearestNodeId);
       setFocusRouteTarget((prev) => ({
-        nodeId: nearestDistrict.centerNodeId,
+        nodeId: nearestNodeId,
         seq: (prev?.seq ?? 0) + 1,
       }));
       recommendToggleRef.current?.focus({ preventScroll: true });
