@@ -1,8 +1,8 @@
 import type { EnemyNoiseSignal } from "@webgame/types";
 import mapData from "../../../../packages/types/src/assets/map_graph.json";
 
-const cellSize = 128;
-const hearingDistance = 135;
+const cellSize = 48;
+const hearingDistance = 140;
 const radius = Math.ceil(Math.hypot(cellSize / 2, cellSize / 2));
 
 export function findEnemyNoiseSignals(
