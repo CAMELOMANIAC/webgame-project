@@ -4,6 +4,7 @@ export * from "./world";
 export * from "./districts";
 export * from "./crafting";
 export * from "./buildingEvents";
+export * from "./fatigue";
 export type TargetingStrategy = "WEAKEST" | "STRONGEST" | "RANDOM";
 export type ItemKind = "EQUIPMENT" | "MATERIAL";
 export type WeaponTag =
@@ -116,6 +117,8 @@ export interface PlayerState {
   shield?: number;
   maxStamina: number;
   stamina: number;
+  fatigue?: number;
+  maxFatigue?: number;
   weight: number;
   maxWeight: number;
   time: number;
@@ -160,6 +163,8 @@ export interface User {
   stamina: number;
   maxStamina: number;
   staminaRegen: number; // 틱당 회복량
+  fatigue?: number;
+  maxFatigue?: number;
   weight: number;
   maxWeight: number;
   time: number;
@@ -364,7 +369,7 @@ export interface BuildingActionResult {
   obtainedItems?: { weaponMasterId: string; name: string; quantity: number }[];
   craftedItem?: { weaponMasterId: string; name: string; equippedSlotIndex?: number };
   hpDelta?: number;
-  staminaDelta?: number;
+  fatigueDelta?: number;
 }
 
 export interface RaidActionInput {

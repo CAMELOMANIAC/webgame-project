@@ -22,7 +22,7 @@ export interface BuildingEventOutcome {
   text: string;
   timeCostMinutes?: number;
   hpDelta?: number;
-  staminaDelta?: number;
+  fatigueDelta?: number;
   rewardItemIds?: readonly string[];
   /** 선택적 성공 확률 (0~1). 미지정 시 확정 또는 이전 분기 실패 fallback */
   chance?: number;
@@ -41,6 +41,7 @@ export interface BuildingEventChoice {
   label: string;
   action: "SEARCH" | "CRAFT" | "LEAVE" | "EVENT_CHOICE";
   timeCostMinutes?: number;
+  fatigueCost?: number;
   condition?: BuildingEventChoiceCondition;
   outcomes?: readonly BuildingEventOutcome[];
 }
@@ -147,6 +148,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         label: "위층 소음을 무시하고 쓰러진 인물의 배낭을 수색한다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 10,
+        fatigueCost: 8,
         outcomes: [
           {
             chance: 0.65,
@@ -166,11 +168,12 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         label: "손대지 않고 계단 반대편 비상구로 조용히 우회한다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 5,
+        fatigueCost: 0,
         outcomes: [
           {
             text: "무전기 경고음을 등진 채 비상구 외벽을 따라 빠르게 빠져나왔습니다. 위층의 끌리는 소리는 곧 멎었고, 안전한 구석에서 잠시 호흡을 가다듬었습니다. 손목 단말기에는 '미확인 개체 접촉 회피' 기록이 남았습니다.",
             timeCostMinutes: 5,
-            staminaDelta: 8,
+            fatigueDelta: 8,
           },
         ],
       },
@@ -179,6 +182,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         label: "방호복 의료 포트를 연결해 생체 서명을 확인한다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 5,
+        fatigueCost: 4,
         condition: {
           requireTag: "BIO",
           label: "생체 계열 장비 / 전해질 팩",
@@ -208,6 +212,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
           "바리케이드 반대편에 소음을 내어 인원을 유인한 뒤 보급 상자를 챙긴다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 10,
+        fatigueCost: 8,
         outcomes: [
           {
             chance: 0.55,
@@ -219,7 +224,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
             text: "철제 상자를 들어 올리는 순간 바닥의 공구함이 넘어지며 쇳소리가 울렸습니다. 돌아선 인원이 경고 없이 쏜 진압탄이 허벅지를 강타했고, 상자를 버린 채 컨테이너 틈으로 굴러 빠져나왔습니다.",
             timeCostMinutes: 15,
             hpDelta: -15,
-            staminaDelta: -10,
+            fatigueDelta: -10,
           },
         ],
       },
@@ -228,11 +233,12 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         label: "불빛에 닿기 전에 몸을 낮춰 외곽 배수로로 조용히 돌아 나간다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 5,
+        fatigueCost: 0,
         outcomes: [
           {
             text: "어두운 배수로를 따라 조용히 기어가 검문선을 벗어났습니다. 무전 소리도 불빛도 더는 따라오지 않아, 잠시 숨을 고른 뒤 다음 경로로 이동했습니다.",
             timeCostMinutes: 5,
-            staminaDelta: 4,
+            fatigueDelta: 4,
           },
         ],
       },
@@ -241,6 +247,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         label: "불빛 앞으로 나가 발급 표식을 제시하고 정식 통과를 요구한다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 0,
+        fatigueCost: 4,
         condition: {
           requireTag: "ARMOR",
           label: "방호 계열 장비 보유",
@@ -270,6 +277,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
           "셔터 틈을 비집고 들어가 단말기 뒤쪽 유지보수 덮개를 강제로 뜯어낸다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 10,
+        fatigueCost: 8,
         outcomes: [
           {
             chance: 0.6,
@@ -289,11 +297,12 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         label: "생체 패드에 손을 대지 않고 상가 앞을 조용히 지나친다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 5,
+        fatigueCost: 0,
         outcomes: [
           {
             text: "냉각팬 소리와 붉은 센서 불빛을 등진 채 셔터 앞을 조용히 지나쳤습니다. 불필요한 경보도 부상도 피한 채 잠시 호흡을 가다듬고 다음 골목으로 이동했습니다.",
             timeCostMinutes: 5,
-            staminaDelta: 6,
+            fatigueDelta: 6,
           },
         ],
       },
@@ -303,6 +312,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
           "단말기 하단 점검 포트를 열어 배선을 우회 연결하고 배급을 실행한다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 5,
+        fatigueCost: 4,
         condition: {
           requireTag: "TECH",
           label: "기술 계열 장비 / 구리 배선 보유",
@@ -331,6 +341,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         label: "단말기의 수동 잠금장치를 강제로 해제해 격리실 문을 연다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 10,
+        fatigueCost: 10,
         outcomes: [
           {
             chance: 0.5,
@@ -350,11 +361,12 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         label: "잠금장치를 건드리지 않고 인터폰 전원을 내린 뒤 복도를 빠져나간다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 5,
+        fatigueCost: 0,
         outcomes: [
           {
             text: "인터폰 스위치를 내리자 유리창을 두드리는 둔탁한 진동만 복도에 남았습니다. 외곽 병동으로 조용히 돌아 나온 뒤 호흡을 가다듬었고, 손목 단말기에는 '격리 구역 이상 없음' 기록이 남았습니다.",
             timeCostMinutes: 5,
-            staminaDelta: 5,
+            fatigueDelta: 5,
           },
         ],
       },
@@ -364,6 +376,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
           "방호 장비로 호흡기를 가린 뒤 방역 경보를 버텨내며 문을 열어 여성을 끌어낸다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 5,
+        fatigueCost: 5,
         condition: {
           requireTag: "ARMOR",
           requireItemId: "mat-ceramic",
@@ -394,6 +407,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
           "스파크가 멎은 틈을 노려 전원이 들어온 통신 랙 내부 부품을 급히 떼어낸다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 10,
+        fatigueCost: 8,
         outcomes: [
           {
             chance: 0.55,
@@ -405,7 +419,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
             text: "릴레이 모듈을 당기는 순간 배전반 상단에서 굵은 아크 방전이 터지며 손끝과 팔을 때렸습니다. 동시에 천장 모서리의 기업 감시 카메라가 경보음을 울리기 시작해 부품을 포기하고 계단 위로 뛰어올랐습니다.",
             timeCostMinutes: 15,
             hpDelta: -15,
-            staminaDelta: -10,
+            fatigueDelta: -10,
           },
         ],
       },
@@ -414,11 +428,12 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         label: "통신 랙에 손을 대지 않고 비상 통로를 따라 단지 밖으로 빠져나간다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 5,
+        fatigueCost: 0,
         outcomes: [
           {
             text: "잡음 섞인 안내 방송을 등진 채 젖은 콘크리트 복도를 따라 밖으로 빠져나왔습니다. 감전 위험과 감시망 추적을 모두 피한 채 잠시 호흡을 고르고 이동했습니다.",
             timeCostMinutes: 5,
-            staminaDelta: 5,
+            fatigueDelta: 5,
           },
         ],
       },
@@ -428,6 +443,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
           "보유한 부품을 임시 우회 단자에 물려 전류를 분산시킨 뒤 과부하 없이 수거한다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 5,
+        fatigueCost: 4,
         condition: {
           requireAnyItemIds: ["mat-battery", "mat-relay"],
           label: "리튬 배터리 또는 고속 릴레이 칩 보유",
