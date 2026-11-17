@@ -1,3 +1,5 @@
+import { applyExhaustedTravelMinutes } from "@webgame/types";
+
 import mapData from "../../../../packages/types/src/assets/map_graph.json";
 
 interface Node {
@@ -32,27 +34,37 @@ const MAX_EDGE_MINUTES = 60;
 const DISTANCE_PER_STEP_UNIT = 20;
 const BUILDING_MOVE_MINUTES = 10;
 
-export function roadTravelMinutes(from: number, to: number): number {
-  if (from === to) return BUILDING_MOVE_MINUTES;
-  const fromNode = nodes[from];
-  const toNode = nodes[to];
-  if (!fromNode || !toNode) return STEP_UNIT_MINUTES;
-  const length = getDistance(fromNode, toNode);
-  const rawMinutes =
-    Math.round(length / DISTANCE_PER_STEP_UNIT) * STEP_UNIT_MINUTES;
-  return Math.min(MAX_EDGE_MINUTES, Math.max(STEP_UNIT_MINUTES, rawMinutes));
+export function roadTravelMinutes(
+  from: number,
+  to: number,
+  fatigue?: number,
+): number {
+  const baseMinutes = (() => {
+    if (from === to) return BUILDING_MOVE_MINUTES;
+    const fromNode = nodes[from];
+    const toNode = nodes[to];
+    if (!fromNode || !toNode) return STEP_UNIT_MINUTES;
+    const length = getDistance(fromNode, toNode);
+    const rawMinutes =
+      Math.round(length / DISTANCE_PER_STEP_UNIT) * STEP_UNIT_MINUTES;
+    return Math.min(MAX_EDGE_MINUTES, Math.max(STEP_UNIT_MINUTES, rawMinutes));
+  })();
+  return applyExhaustedTravelMinutes(baseMinutes, fatigue);
 }
 
 export function estimatePathTravelMinutes(
   path: number[],
   hasTargetBuilding = false,
+  fatigue?: number,
 ): number {
   if (path.length === 1) {
-    return hasTargetBuilding ? BUILDING_MOVE_MINUTES : 0;
+    return hasTargetBuilding
+      ? applyExhaustedTravelMinutes(BUILDING_MOVE_MINUTES, fatigue)
+      : 0;
   }
   let total = 0;
   for (let index = 1; index < path.length; index++) {
-    total += roadTravelMinutes(path[index - 1]!, path[index]!);
+    total += roadTravelMinutes(path[index - 1]!, path[index]!, fatigue);
   }
   return total;
 }

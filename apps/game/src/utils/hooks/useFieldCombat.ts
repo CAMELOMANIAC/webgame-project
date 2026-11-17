@@ -257,6 +257,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
                 activeRaidId: null,
                 hp: old.raw.maxHp,
                 stamina: old.raw.maxStamina,
+                fatigue: old.raw.maxFatigue,
               },
             };
           },

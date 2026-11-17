@@ -25,6 +25,8 @@ export interface CharacterResponse {
   stamina: number;
   maxStamina: number;
   staminaRegen: number;
+  fatigue: number;
+  maxFatigue: number;
   weight: number;
   maxWeight: number;
   time: number;

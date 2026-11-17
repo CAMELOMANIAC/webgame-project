@@ -2,7 +2,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { useAtomValue } from "jotai";
 import { RiDeleteBinLine } from "react-icons/ri";
 
-import { battleLogAtom, processedEventsAtom } from "@/atoms/globalAtom";
+import { battleLogAtom } from "@/atoms/globalAtom";
 import FieldCharacterInfo from "@/components/field/FieldCharacterInfo";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 
@@ -17,16 +17,14 @@ interface FieldStatusSectionProps {
 const FieldStatusSection = ({ discardMode = false }: FieldStatusSectionProps) => {
   const { data } = useGetCharacter();
   const log = useAtomValue(battleLogAtom);
-  const events = useAtomValue(processedEventsAtom);
   const { setNodeRef: setDiscardRef, isOver: isDiscardOver } = useDroppable({
     id: FIELD_DISCARD_DROP_ID,
     disabled: !discardMode,
   });
   const player = log?.initialState.players[0];
-  let stamina = player?.stamina ?? data?.raw.stamina;
-  for (const event of events)
-    if (event.type === "STAMINA_CHANGE" && event.playerId === player?.id)
-      stamina = event.currentStamina;
+  const fatigue = data?.raw.fatigue ?? player?.fatigue;
+  const maxFatigue = data?.raw.maxFatigue ?? player?.maxFatigue;
+  const isExhausted = fatigue !== undefined && fatigue <= 0;
   const weight = data
     ? data.raw.equipment.reduce(
         (sum, item) => sum + (item.weaponMaster?.weight ?? 0),
@@ -49,11 +47,18 @@ const FieldStatusSection = ({ discardMode = false }: FieldStatusSectionProps) =>
         >
           <div className={styles.cellHeader}>
             <p className={styles.widgetLabel}>ENG</p>
-            <span className={styles.metricDot({ tone: "positive" })} />
+            <span
+              className={styles.metricDot({
+                tone: isExhausted ? "negative" : "positive",
+              })}
+            />
           </div>
-          <p className={styles.capacityText}>
-            {stamina ?? "—"} /{" "}
-            {player?.maxStamina ?? data?.raw.maxStamina ?? "—"}
+          <p
+            className={styles.capacityText({
+              tone: isExhausted ? "negative" : "default",
+            })}
+          >
+            {fatigue ?? "—"} / {maxFatigue ?? "—"}
           </p>
         </div>
         <div
@@ -64,7 +69,7 @@ const FieldStatusSection = ({ discardMode = false }: FieldStatusSectionProps) =>
             <p className={styles.widgetLabel}>WGT</p>
             <span className={styles.metricDot({ tone: "neutral" })} />
           </div>
-          <p className={styles.capacityText}>
+          <p className={styles.capacityText()}>
             {player?.weight ?? weight ?? "—"} /{" "}
             {player?.maxWeight ?? data?.raw.maxWeight ?? "—"} kg
           </p>

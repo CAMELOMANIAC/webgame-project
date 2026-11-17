@@ -69,6 +69,7 @@ export const metricDot = recipe({
   variants: {
     tone: {
       positive: { backgroundColor: vars.color.positive },
+      negative: { backgroundColor: vars.color.negative },
       neutral: { backgroundColor: vars.text.muted },
     },
   },
@@ -77,12 +78,22 @@ export const metricDot = recipe({
   },
 });
 
-export const capacityText = style({
-  fontFamily: vars.font.mono,
-  fontSize: "13px",
-  fontWeight: 600,
-  color: vars.text.primary,
-  fontVariantNumeric: "tabular-nums",
+export const capacityText = recipe({
+  base: {
+    fontFamily: vars.font.mono,
+    fontSize: "13px",
+    fontWeight: 600,
+    fontVariantNumeric: "tabular-nums",
+  },
+  variants: {
+    tone: {
+      default: { color: vars.text.primary },
+      negative: { color: vars.color.negative },
+    },
+  },
+  defaultVariants: {
+    tone: "default",
+  },
 });
 
 export const discardWidget = recipe({

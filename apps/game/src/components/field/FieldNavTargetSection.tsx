@@ -3,6 +3,7 @@ import {
   type BuildingActionInput,
   CRAFTING_RECIPES,
   type CraftingRecipe,
+  FATIGUE_RULES,
   findMaterialDistricts,
   firstMissionNodeId,
   formatRaidTime,
@@ -289,7 +290,11 @@ const FieldNavTargetSection = () => {
       ? navigationStartTime
       : (character?.activeRaid?.time ?? 0);
   const travelMinutes = canMove
-    ? estimatePathTravelMinutes(shortestPath, targetBuildingId !== null)
+    ? estimatePathTravelMinutes(
+        shortestPath,
+        targetBuildingId !== null,
+        character?.fatigue,
+      )
     : 0;
   const estimatedTime = currentTime + travelMinutes;
   const elapsedMinutes = isMoving
@@ -364,7 +369,11 @@ const FieldNavTargetSection = () => {
           isCurrent,
           travelMinutes: isCurrent
             ? 0
-            : estimatePathTravelMinutes(path, dest.buildingId !== undefined),
+            : estimatePathTravelMinutes(
+                path,
+                dest.buildingId !== undefined,
+                character?.fatigue,
+              ),
         };
       })
       .sort((a, b) => a.travelMinutes - b.travelMinutes);
@@ -374,6 +383,7 @@ const FieldNavTargetSection = () => {
     rules?.startNodeId,
     nodeId,
     currentLandmark?.id,
+    character?.fatigue,
   ]);
 
   const handleBuildingAction = (
@@ -421,7 +431,7 @@ const FieldNavTargetSection = () => {
       const minutes =
         district.centerNodeId === nodeId
           ? 0
-          : estimatePathTravelMinutes(path, false);
+          : estimatePathTravelMinutes(path, false, character?.fatigue);
       if (minutes < minMinutes) {
         minMinutes = minutes;
         nearestDistrict = district;
@@ -457,7 +467,11 @@ const FieldNavTargetSection = () => {
     for (const dest of matchingLandmarks) {
       const path =
         dest.nodeId === nodeId ? [nodeId] : findShortestPath(nodeId, dest.nodeId);
-      const minutes = estimatePathTravelMinutes(path, dest.buildingId !== undefined);
+      const minutes = estimatePathTravelMinutes(
+        path,
+        dest.buildingId !== undefined,
+        character?.fatigue,
+      );
       if (minutes < minMinutes) {
         minMinutes = minutes;
         nearest = dest;
@@ -1130,14 +1144,23 @@ const FieldNavTargetSection = () => {
                         choice,
                         ownedItemIds,
                       );
+                      const fatigueCost = choice.fatigueCost ?? 0;
+                      const hasEnoughFatigue =
+                        (character.fatigue ?? 0) >= fatigueCost;
                       const mins = choice.timeCostMinutes ?? 10;
                       const timeLabel = `+${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+                      const actionLabel =
+                        fatigueCost > 0
+                          ? `${timeLabel} · -${fatigueCost} ENG`
+                          : timeLabel;
                       return (
                         <button
                           key={choice.id}
                           type="button"
                           className={styles.buildingActionBtn}
-                          disabled={!canAct || !conditionMet}
+                          disabled={
+                            !canAct || !conditionMet || !hasEnoughFatigue
+                          }
                           onClick={() =>
                             handleBuildingAction(
                               "EVENT_CHOICE",
@@ -1155,7 +1178,7 @@ const FieldNavTargetSection = () => {
                             )}
                           </span>
                           <span className={styles.actionCode}>
-                            {timeLabel}
+                            {actionLabel}
                           </span>
                         </button>
                       );
@@ -1165,7 +1188,11 @@ const FieldNavTargetSection = () => {
                   <button
                     type="button"
                     className={styles.buildingActionBtn}
-                    disabled={!canAct}
+                    disabled={
+                      !canAct ||
+                      (character.fatigue ?? 0) <
+                        FATIGUE_RULES.buildingActionCosts.SEARCH
+                    }
                     onClick={() => handleBuildingAction("SEARCH")}
                   >
                     <span>
@@ -1173,7 +1200,9 @@ const FieldNavTargetSection = () => {
                         ? "탐색 중…"
                         : (activeIntroEvent?.searchLabel ?? "탐색하기")}
                     </span>
-                    <span className={styles.actionCode}>+00:10</span>
+                    <span className={styles.actionCode}>
+                      +00:10 · -{FATIGUE_RULES.buildingActionCosts.SEARCH} ENG
+                    </span>
                   </button>
                 ))}
 
@@ -1201,6 +1230,9 @@ const FieldNavTargetSection = () => {
                         ([mId, qty]) =>
                           (ownedItemCounts.get(mId) ?? 0) >= qty,
                       );
+                      const hasEnoughCraftFatigue =
+                        (character.fatigue ?? 0) >=
+                        FATIGUE_RULES.buildingActionCosts.CRAFT;
                       const baseName =
                         getCatalogItemById(recipe.baseEquipmentId)?.name ??
                         recipe.compatibleBaseNames[0] ??
@@ -1221,12 +1253,18 @@ const FieldNavTargetSection = () => {
                           <button
                             type="button"
                             className={styles.craftActionBtn}
-                            disabled={!canAct || !hasBase || !hasAllMats}
+                            disabled={
+                              !canAct ||
+                              !hasBase ||
+                              !hasAllMats ||
+                              !hasEnoughCraftFatigue
+                            }
                             onClick={() =>
                               handleBuildingAction("CRAFT", recipe.id)
                             }
                           >
-                            업그레이드 +10m
+                            업그레이드 +10m · -
+                            {FATIGUE_RULES.buildingActionCosts.CRAFT} ENG
                           </button>
                         </div>
                       );
