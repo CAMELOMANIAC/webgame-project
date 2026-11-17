@@ -180,6 +180,9 @@ const FieldNavTargetSection = () => {
     text: string;
   } | null>(null);
   const [isBuildingDismissed, setIsBuildingDismissed] = useState(false);
+  const [selectedCraftRecipeId, setSelectedCraftRecipeId] = useState<
+    string | null
+  >(null);
   const reduceMotion = useReducedMotion();
   const character = data?.raw;
   const locationName =
@@ -1206,71 +1209,123 @@ const FieldNavTargetSection = () => {
                   </button>
                 ))}
 
-              {activeBuilding.category && !isActiveCraftUsed && (
-                <div className={styles.craftList}>
-                  {activeCategoryRecipes.map((recipe) => {
-                      const resultItem = getCatalogItemById(
-                        recipe.resultEquipmentId,
-                      );
-                      const hasBase =
-                        character.equipment.some((s) =>
-                          matchesRecipeBase(recipe, s.weaponMaster),
-                        ) ||
-                        character.inventory.some((s) =>
-                          matchesRecipeBase(recipe, s.weaponMaster),
-                        );
-                      const matCountsNeeded = new Map<string, number>();
-                      for (const mId of recipe.materialIds) {
-                        matCountsNeeded.set(
-                          mId,
-                          (matCountsNeeded.get(mId) ?? 0) + 1,
-                        );
-                      }
-                      const hasAllMats = [...matCountsNeeded.entries()].every(
-                        ([mId, qty]) =>
-                          (ownedItemCounts.get(mId) ?? 0) >= qty,
-                      );
-                      const hasEnoughCraftFatigue =
-                        (character.fatigue ?? 0) >=
-                        FATIGUE_RULES.buildingActionCosts.CRAFT;
-                      const baseName =
-                        getCatalogItemById(recipe.baseEquipmentId)?.name ??
-                        recipe.compatibleBaseNames[0] ??
-                        recipe.baseEquipmentId;
-                      const matNames = recipe.materialIds
-                        .map((id) => getCatalogItemById(id)?.name ?? id)
-                        .join(" + ");
-                      return (
-                        <div key={recipe.id} className={styles.craftRow}>
-                          <div className={styles.craftInfo}>
-                            <span className={styles.craftName}>
-                              {resultItem?.name ?? recipe.resultEquipmentId}
-                            </span>
-                            <span className={styles.craftReqs}>
-                              {baseName} + {matNames}
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            className={styles.craftActionBtn}
-                            disabled={
-                              !canAct ||
-                              !hasBase ||
-                              !hasAllMats ||
-                              !hasEnoughCraftFatigue
-                            }
-                            onClick={() =>
-                              handleBuildingAction("CRAFT", recipe.id)
-                            }
+              {activeBuilding.category && !isActiveCraftUsed && (() => {
+                const craftEntries = activeCategoryRecipes.map((recipe) => {
+                  const resultItem = getCatalogItemById(
+                    recipe.resultEquipmentId,
+                  );
+                  const hasBase =
+                    character.equipment.some((s) =>
+                      matchesRecipeBase(recipe, s.weaponMaster),
+                    ) ||
+                    character.inventory.some((s) =>
+                      matchesRecipeBase(recipe, s.weaponMaster),
+                    );
+                  const matCountsNeeded = new Map<string, number>();
+                  for (const mId of recipe.materialIds) {
+                    matCountsNeeded.set(
+                      mId,
+                      (matCountsNeeded.get(mId) ?? 0) + 1,
+                    );
+                  }
+                  const hasAllMats = [...matCountsNeeded.entries()].every(
+                    ([mId, qty]) => (ownedItemCounts.get(mId) ?? 0) >= qty,
+                  );
+                  const baseName =
+                    getCatalogItemById(recipe.baseEquipmentId)?.name ??
+                    recipe.compatibleBaseNames[0] ??
+                    recipe.baseEquipmentId;
+                  const matNames = recipe.materialIds
+                    .map((id) => getCatalogItemById(id)?.name ?? id)
+                    .join(" + ");
+                  return {
+                    recipe,
+                    resultName: resultItem?.name ?? recipe.resultEquipmentId,
+                    reqsText: `${baseName} + ${matNames}`,
+                    canCraft: hasBase && hasAllMats,
+                  };
+                });
+                const selectedEntry =
+                  craftEntries.find(
+                    (entry) => entry.recipe.id === selectedCraftRecipeId,
+                  ) ??
+                  craftEntries.find((entry) => entry.canCraft) ??
+                  craftEntries[0];
+                const hasEnoughCraftFatigue =
+                  (character.fatigue ?? 0) >=
+                  FATIGUE_RULES.buildingActionCosts.CRAFT;
+                return (
+                  <>
+                    <div
+                      className={styles.craftList}
+                      role="radiogroup"
+                      aria-label="조합 레시피 선택"
+                    >
+                      {craftEntries.map((entry) => {
+                        const isSelected =
+                          selectedEntry?.recipe.id === entry.recipe.id;
+                        return (
+                          <label
+                            key={entry.recipe.id}
+                            className={styles.craftOption({
+                              selected: isSelected,
+                              unavailable: !entry.canCraft,
+                            })}
                           >
-                            업그레이드 +10m · -
-                            {FATIGUE_RULES.buildingActionCosts.CRAFT} ENG
-                          </button>
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
+                            <input
+                              type="radio"
+                              name={`craft-recipe-${activeBuilding.id}`}
+                              value={entry.recipe.id}
+                              checked={isSelected}
+                              disabled={!canAct}
+                              onChange={() =>
+                                setSelectedCraftRecipeId(entry.recipe.id)
+                              }
+                              className={styles.craftRadioInput}
+                            />
+                            <span
+                              className={styles.craftRadioIndicator({
+                                selected: isSelected,
+                              })}
+                              aria-hidden="true"
+                            />
+                            <div className={styles.craftInfo}>
+                              <span className={styles.craftName}>
+                                {entry.resultName}
+                              </span>
+                              <span className={styles.craftReqs}>
+                                {entry.reqsText}
+                              </span>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {selectedEntry && (
+                      <button
+                        type="button"
+                        className={styles.buildingActionBtn}
+                        disabled={
+                          !canAct ||
+                          !selectedEntry.canCraft ||
+                          !hasEnoughCraftFatigue
+                        }
+                        onClick={() =>
+                          handleBuildingAction("CRAFT", selectedEntry.recipe.id)
+                        }
+                      >
+                        <span>
+                          {buildingAction.isPending ? "조합 중…" : "조합하기"}
+                        </span>
+                        <span className={styles.actionCode}>
+                          +00:10 · -{FATIGUE_RULES.buildingActionCosts.CRAFT}{" "}
+                          ENG
+                        </span>
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
 
               <button
                 type="button"

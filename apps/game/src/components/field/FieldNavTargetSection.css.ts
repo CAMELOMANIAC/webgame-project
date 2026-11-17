@@ -869,15 +869,91 @@ export const craftList = style({
   borderTop: `1px solid ${vars.border.subtle}`,
 });
 
-export const craftRow = style({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "8px",
-  padding: "6px 8px",
-  borderRadius: vars.radius.control,
-  border: `1px solid ${vars.border.subtle}`,
-  backgroundColor: vars.surface.base,
+export const craftOption = recipe({
+  base: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "8px 10px",
+    borderRadius: vars.radius.control,
+    border: `1px solid ${vars.border.subtle}`,
+    backgroundColor: vars.surface.base,
+    cursor: "pointer",
+    transition: "border-color 0.15s ease, background-color 0.15s ease",
+    selectors: {
+      "&:hover": {
+        borderColor: vars.border.strong,
+      },
+      "&:has(input:focus-visible)": {
+        outline: `1px solid ${vars.text.primary}`,
+        outlineOffset: "1px",
+      },
+    },
+  },
+  variants: {
+    selected: {
+      true: {
+        borderColor: vars.text.primary,
+        backgroundColor: vars.surface.high,
+        selectors: {
+          "&:hover": {
+            borderColor: vars.text.primary,
+          },
+        },
+      },
+      false: {},
+    },
+    unavailable: {
+      true: {
+        opacity: 0.55,
+      },
+      false: {},
+    },
+  },
+  defaultVariants: {
+    selected: false,
+    unavailable: false,
+  },
+});
+
+export const craftRadioInput = style({
+  position: "absolute",
+  width: "1px",
+  height: "1px",
+  padding: 0,
+  margin: "-1px",
+  overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+});
+
+export const craftRadioIndicator = recipe({
+  base: {
+    flexShrink: 0,
+    width: "14px",
+    height: "14px",
+    borderRadius: "50%",
+    border: `1px solid ${vars.border.strong}`,
+    backgroundColor: "transparent",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "border-color 0.15s ease, background-color 0.15s ease",
+  },
+  variants: {
+    selected: {
+      true: {
+        borderColor: vars.text.primary,
+        backgroundColor: vars.text.primary,
+        boxShadow: `inset 0 0 0 3px ${vars.surface.high}`,
+      },
+      false: {},
+    },
+  },
+  defaultVariants: {
+    selected: false,
+  },
 });
 
 export const craftInfo = style({
@@ -885,6 +961,7 @@ export const craftInfo = style({
   flexDirection: "column",
   gap: "2px",
   minWidth: 0,
+  flex: 1,
 });
 
 export const craftName = style({
@@ -894,32 +971,11 @@ export const craftName = style({
 });
 
 export const craftReqs = style({
-  fontSize: "10px",
+  fontSize: "11px",
   fontFamily: vars.font.mono,
   color: vars.text.muted,
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-});
-
-export const craftActionBtn = style({
-  flexShrink: 0,
-  padding: "5px 8px",
-  borderRadius: vars.radius.control,
-  border: `1px solid ${vars.border.subtle}`,
-  backgroundColor: vars.surface.high,
-  color: vars.text.primary,
-  fontFamily: vars.font.mono,
-  fontVariantNumeric: "tabular-nums",
-  fontSize: "11px",
-  fontWeight: 600,
-  cursor: "pointer",
-  selectors: {
-    "&:disabled": {
-      opacity: 0.4,
-      cursor: "not-allowed",
-    },
-  },
+  whiteSpace: "normal",
+  wordBreak: "keep-all",
 });
 
 export const lootCard = style([
