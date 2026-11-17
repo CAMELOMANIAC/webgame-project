@@ -3,6 +3,7 @@ import {
   type BattleEvent,
   type BattleLog,
   type BattleLogEntry,
+  FATIGUE_RULES,
   getWeaponTags,
   type PlayerState,
   type SynergyTargetRule,
@@ -47,6 +48,10 @@ function capturePlayers(players: SimCombatant[]): PlayerState[] {
     shield: player.shield,
     stamina: player.stamina,
     maxStamina: player.maxStamina,
+    ...(player.fatigue !== undefined ? { fatigue: player.fatigue } : {}),
+    ...(player.maxFatigue !== undefined
+      ? { maxFatigue: player.maxFatigue }
+      : {}),
     weight: player.weight,
     maxWeight: player.maxWeight,
     time: player.time,
@@ -448,14 +453,18 @@ export function simulateBattle(
         }
       }
 
-      weapon.currentCooldown = weapon.cooldownTicks;
+      const effectiveCooldown =
+        actor.fatigue !== undefined && actor.fatigue <= 0
+          ? weapon.cooldownTicks + FATIGUE_RULES.exhaustedCooldownBonusTicks
+          : weapon.cooldownTicks;
+      weapon.currentCooldown = effectiveCooldown;
       actor.currentWeaponIndex = (weaponIndex + 1) % actor.weapons.length;
       emit({
         id: generateId(),
         type: "COOLDOWN",
         actorId: actor.id,
         weaponIndex,
-        duration: weapon.cooldownTicks,
+        duration: effectiveCooldown,
         timestamp: currentTick,
       });
     };

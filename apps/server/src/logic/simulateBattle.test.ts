@@ -559,3 +559,36 @@ test("TAG 시너지는 같은 태그의 모든 슬롯을 강화하고 perTag는 
   assert.equal(damages[0], 19);
   assert.equal(damages[1], 10);
 });
+
+test("피로도가 0인 전투원은 무기 사용 후 쿨다운이 2틱 증가한다", () => {
+  const exhausted = simulateBattle(
+    [
+      player("p", "A", {
+        fatigue: 0,
+        maxFatigue: 100,
+        weapons: [
+          weapon({ damage: 5, staminaCost: 0, cooldownTicks: 2 }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+      player("e", "B", { hp: 200, maxHp: 200 }),
+    ],
+    { random: () => 0.9, maxTicks: 2 },
+  );
+  const cooldownEvent = exhausted.timeline
+    .flatMap((entry) => entry.events)
+    .find(
+      (
+        event,
+      ): event is Extract<
+        import("@webgame/types").BattleEvent,
+        { type: "COOLDOWN" }
+      > => event.type === "COOLDOWN" && event.actorId === "p",
+    );
+  assert.ok(cooldownEvent);
+  assert.equal(cooldownEvent.duration, 4);
+});

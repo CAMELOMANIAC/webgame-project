@@ -286,6 +286,8 @@ export async function loadBattlePlayer(
     stamina: character.maxStamina,
     maxStamina: character.maxStamina,
     staminaRegen: character.staminaRegen,
+    fatigue: character.fatigue,
+    maxFatigue: character.maxFatigue,
     weight: character.weight,
     maxWeight: character.maxWeight,
     time: character.time,

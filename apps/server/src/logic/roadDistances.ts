@@ -1,3 +1,4 @@
+import { applyExhaustedTravelMinutes, FATIGUE_RULES } from "@webgame/types";
 import mapData from "../../../../packages/types/src/assets/map_graph.json";
 import { gameRules } from "./rules";
 
@@ -13,7 +14,7 @@ for (const { source, target } of mapData.edges) {
   roads[target]!.push({ nodeId: source, length });
 }
 
-export function roadTravelMinutes(from: number, to: number): number {
+export function baseRoadTravelMinutes(from: number, to: number): number {
   const {
     stepUnitMinutes,
     maxEdgeMinutes,
@@ -29,6 +30,32 @@ export function roadTravelMinutes(from: number, to: number): number {
   return Math.min(maxEdgeMinutes, Math.max(stepUnitMinutes, rawMinutes));
 }
 
+export function roadTravelMinutes(
+  from: number,
+  to: number,
+  fatigue?: number,
+): number {
+  return applyExhaustedTravelMinutes(baseRoadTravelMinutes(from, to), fatigue);
+}
+
+export function roadFatigueCost(from: number, to: number): number {
+  if (from === to) return FATIGUE_RULES.buildingMoveFatigueCost;
+  const baseMinutes = baseRoadTravelMinutes(from, to);
+  const steps = Math.max(
+    1,
+    Math.round(baseMinutes / gameRules.travel.stepUnitMinutes),
+  );
+  return steps * FATIGUE_RULES.fatiguePerStepUnit;
+}
+
+export function pathFatigueCost(path: number[]): number {
+  let total = 0;
+  for (let index = 1; index < path.length; index++) {
+    total += roadFatigueCost(path[index - 1]!, path[index]!);
+  }
+  return total;
+}
+
 export function hasRoad(from: number, to: number): boolean {
   return roads[from]?.some((road) => road.nodeId === to) ?? false;
 }
@@ -36,20 +63,21 @@ export function hasRoad(from: number, to: number): boolean {
 export function pathTravelVisits(
   path: number[],
   startTime = 0,
+  fatigue?: number,
 ): { nodeId: number; time: number }[] {
   let current = startTime;
   const visits: { nodeId: number; time: number }[] = [];
   for (let index = 1; index < path.length; index++) {
     const from = path[index - 1]!;
     const to = path[index]!;
-    current += roadTravelMinutes(from, to);
+    current += roadTravelMinutes(from, to, fatigue);
     visits.push({ nodeId: to, time: current });
   }
   return visits;
 }
 
-export function pathTravelMinutes(path: number[]): number {
-  return pathTravelVisits(path, 0).at(-1)?.time ?? 0;
+export function pathTravelMinutes(path: number[], fatigue?: number): number {
+  return pathTravelVisits(path, 0, fatigue).at(-1)?.time ?? 0;
 }
 
 export function nodesCloserThan(origin: number, minimumDistance: number) {

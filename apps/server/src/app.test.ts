@@ -9,8 +9,10 @@ import { buildApp } from "./app";
 import { createDatabase } from "./db";
 import { findEnemyNoiseSignals } from "./logic/ghostNoise";
 import {
+  pathFatigueCost,
   pathTravelMinutes,
   pathTravelVisits,
+  roadFatigueCost,
   roadTravelMinutes,
 } from "./logic/roadDistances";
 import { extractRaidExploration } from "./services/raid";
@@ -88,6 +90,18 @@ test("도로 이동 시간은 실제 간선 길이에 비례해 10분~60분 단�
     { nodeId: 28, time: 60 },
   ]);
   assert.equal(pathTravelMinutes([0, 1, 26, 28]), 60);
+
+  // 피로도 소모량 및 고갈(0) 시 이동 시간 1.5배(10분 단위 올림) 증가
+  assert.equal(roadFatigueCost(0, 1), 2);
+  assert.equal(roadFatigueCost(1, 26), 6);
+  assert.equal(roadFatigueCost(28, 28), 2);
+  assert.equal(pathFatigueCost([0, 1, 26, 28]), 12);
+
+  assert.equal(roadTravelMinutes(0, 1, 0), 20);
+  assert.equal(roadTravelMinutes(1, 26, 0), 50);
+  assert.equal(roadTravelMinutes(26, 28, 0), 30);
+  assert.equal(roadTravelMinutes(28, 28, 0), 20);
+  assert.equal(pathTravelMinutes([0, 1, 26, 28], 0), 100);
 });
 
 test("적 소음은 감지 범위 안의 서로 다른 구역을 모두 반환한다", () => {

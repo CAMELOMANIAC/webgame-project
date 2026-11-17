@@ -23,6 +23,11 @@ export const gameRules = {
 export function recoveryVitals(character: {
   maxHp: number;
   maxStamina: number;
+  maxFatigue: number;
 }) {
-  return { hp: character.maxHp, stamina: character.maxStamina };
+  return {
+    hp: character.maxHp,
+    stamina: character.maxStamina,
+    fatigue: character.maxFatigue,
+  };
 }

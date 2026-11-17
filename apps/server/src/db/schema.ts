@@ -80,6 +80,7 @@ export const characterVariants = pgTable(
     maxHp: integer("maxHp").notNull().default(100),
     maxStamina: integer("maxStamina").notNull().default(100),
     staminaRegen: integer("staminaRegen").notNull().default(10),
+    maxFatigue: integer("maxFatigue").notNull().default(100),
     maxWeight: integer("maxWeight").notNull().default(50),
   },
 );
@@ -112,6 +113,8 @@ export const characters = pgTable(
     stamina: integer("stamina").notNull().default(100),
     maxStamina: integer("maxStamina").notNull().default(100),
     staminaRegen: integer("staminaRegen").notNull().default(10),
+    fatigue: integer("fatigue").notNull().default(100),
+    maxFatigue: integer("maxFatigue").notNull().default(100),
     weight: integer("weight").notNull().default(0),
     maxWeight: integer("maxWeight").notNull().default(50),
     time: integer("time").notNull().default(0),

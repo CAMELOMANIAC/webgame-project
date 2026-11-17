@@ -103,6 +103,8 @@ export async function recruitDevelopmentCharacter(
         stamina: variant.maxStamina,
         maxStamina: variant.maxStamina,
         staminaRegen: variant.staminaRegen,
+        fatigue: variant.maxFatigue,
+        maxFatigue: variant.maxFatigue,
         maxWeight: variant.maxWeight,
       })
       .returning();
