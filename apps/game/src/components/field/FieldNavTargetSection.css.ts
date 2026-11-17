@@ -834,6 +834,29 @@ export const buildingActionBtn = style({
   },
 });
 
+export const craftSubmitBtn = style([
+  buildingActionBtn,
+  {
+    border: `1px solid ${vars.color.ctaBg}`,
+    backgroundColor: vars.color.ctaBg,
+    color: vars.color.ctaFg,
+    transition: "background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease",
+    selectors: {
+      "&:hover:not(:disabled)": {
+        borderColor: vars.color.ctaHover,
+        backgroundColor: vars.color.ctaHover,
+      },
+      "&:disabled": {
+        border: `1px solid ${vars.border.subtle}`,
+        backgroundColor: vars.surface.high,
+        color: vars.text.primary,
+        opacity: 0.45,
+        cursor: "not-allowed",
+      },
+    },
+  },
+]);
+
 export const buildingDismissBtn = style([
   buildingActionBtn,
   {

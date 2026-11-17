@@ -1285,7 +1285,7 @@ const FieldNavTargetSection = () => {
                     {selectedEntry && (
                       <button
                         type="button"
-                        className={styles.buildingActionBtn}
+                        className={styles.craftSubmitBtn}
                         disabled={
                           !canAct ||
                           !selectedEntry.canCraft ||
