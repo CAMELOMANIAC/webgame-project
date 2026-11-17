@@ -169,6 +169,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     queryKey: ["pending-battle", userId, characterId],
     enabled: !!characterId && !!characterData?.raw.isRaiding && !isCombat && !isMoving &&
       !pendingNavigation[pendingNavigationKey(userId, characterId)],
+    staleTime: Infinity,
     refetchOnWindowFocus: false,
     queryFn: () => requestJsonWithTimeout<{ battleLog: BattleLog | null }>(
       (signal) => apiFetch(battleEndpoint, { signal }),
