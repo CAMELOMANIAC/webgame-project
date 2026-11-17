@@ -16,7 +16,9 @@ const CombatLog = () => {
   );
 
   const logHistory = processedEvents
-    .filter((e) => "actorId" in e || e.type === "SHIELD")
+    .filter(
+      (e) => e.type === "ATTACK" || e.type === "SHIELD" || e.type === "HEAL",
+    )
     .slice(-10);
 
   return (
@@ -31,7 +33,7 @@ const CombatLog = () => {
             const participantId =
               "actorId" in event
                 ? event.actorId
-                : event.type === "SHIELD"
+                : event.type === "SHIELD" || event.type === "HEAL"
                   ? event.targetId
                   : null;
             const actorPlayer = participantId
@@ -65,10 +67,10 @@ const CombatLog = () => {
                 />
                 <div className={styles.actionLogText({ mirrored })}>
                   <p className={styles.actionLogType}>
-                    {event.type === "SYNERGY"
-                      ? `SYNERGY [${event.sourceSlotIndex + 1}→${event.targetSlotIndices.map((idx) => idx + 1).join(",")}]`
-                      : event.type === "SHIELD"
-                        ? `SHIELD +${event.amount}`
+                    {event.type === "SHIELD"
+                      ? `SHIELD +${event.amount}`
+                      : event.type === "HEAL"
+                        ? `HEAL +${event.amount}`
                         : event.type}
                   </p>
                   <p className={styles.actionLogActor}>{actorName}</p>
