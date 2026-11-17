@@ -1032,27 +1032,130 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       return null;
     };
 
+    const activePointers = new Map<number, { clientX: number; clientY: number }>();
+    let isPinching = false;
+    let pinchStartDistance = 0;
+    let pinchStartScale = 1;
+    let pinchWorldAnchor = { x: 0, y: 0 };
+
+    const applyWorldScaleAtPointer = (
+      world: NonNullable<typeof worldContainerRef.current>,
+      targetScale: number,
+      pointerX: number,
+      pointerY: number,
+      anchorWorldPoint: { x: number; y: number },
+    ) => {
+      const clampedScale = Math.max(
+        MIN_ZOOM_SCALE,
+        Math.min(MAX_ZOOM_SCALE, targetScale),
+      );
+      const newPos = clampWorldPosition(
+        pointerX - anchorWorldPoint.x * clampedScale,
+        pointerY - anchorWorldPoint.y * clampedScale,
+        clampedScale,
+        host.clientWidth,
+        host.clientHeight,
+      );
+
+      world.scale.set(clampedScale);
+      world.position.set(newPos.x, newPos.y);
+      syncFogVisibility(
+        sightMaskSpriteRef.current,
+        clampedScale,
+        Boolean(playerCoordsRef.current),
+      );
+
+      if (
+        playerMarkerSpriteRef.current &&
+        !playerMarkerSpriteRef.current.destroyed
+      ) {
+        const invScale = 1 / clampedScale;
+        playerMarkerSpriteRef.current.width = 50 * invScale;
+        playerMarkerSpriteRef.current.height = 50 * invScale;
+      }
+    };
+
     const handlePointerDown = (e: PointerEvent) => {
-      if (isCombatRef.current || e.button !== 0) return;
+      if (isCombatRef.current) return;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
       const world = worldContainerRef.current;
       if (!world) return;
 
       focusTweenRef.current?.destroy();
       focusTweenRef.current = null;
 
-      isDragging = true;
-      hasMovedBeyondThreshold = false;
-      dragStartClientX = e.clientX;
-      dragStartClientY = e.clientY;
-      dragStartWorldX = world.x;
-      dragStartWorldY = world.y;
-      benchmarkStatsRef.current.lastFrameTime = performance.now();
+      activePointers.set(e.pointerId, {
+        clientX: e.clientX,
+        clientY: e.clientY,
+      });
       host.setPointerCapture(e.pointerId);
+
+      if (activePointers.size === 2) {
+        const [p1, p2] = Array.from(activePointers.values());
+        if (p1 && p2) {
+          isPinching = true;
+          isDragging = false;
+          hasMovedBeyondThreshold = true;
+          pinchStartDistance = Math.hypot(
+            p2.clientX - p1.clientX,
+            p2.clientY - p1.clientY,
+          );
+          pinchStartScale = world.scale.x;
+          const rect = host.getBoundingClientRect();
+          const centerX = (p1.clientX + p2.clientX) / 2 - rect.left;
+          const centerY = (p1.clientY + p2.clientY) / 2 - rect.top;
+          pinchWorldAnchor = {
+            x: (centerX - world.x) / pinchStartScale,
+            y: (centerY - world.y) / pinchStartScale,
+          };
+        }
+        return;
+      }
+
+      if (activePointers.size === 1) {
+        isPinching = false;
+        isDragging = true;
+        hasMovedBeyondThreshold = false;
+        dragStartClientX = e.clientX;
+        dragStartClientY = e.clientY;
+        dragStartWorldX = world.x;
+        dragStartWorldY = world.y;
+        benchmarkStatsRef.current.lastFrameTime = performance.now();
+      }
     };
 
     const handlePointerMove = (e: PointerEvent) => {
       const world = worldContainerRef.current;
       if (!world || isCombatRef.current) return;
+
+      if (activePointers.has(e.pointerId)) {
+        activePointers.set(e.pointerId, {
+          clientX: e.clientX,
+          clientY: e.clientY,
+        });
+      }
+
+      if (isPinching && activePointers.size >= 2) {
+        const [p1, p2] = Array.from(activePointers.values());
+        if (p1 && p2 && pinchStartDistance > 0) {
+          const currentDist = Math.hypot(
+            p2.clientX - p1.clientX,
+            p2.clientY - p1.clientY,
+          );
+          const rect = host.getBoundingClientRect();
+          const centerX = (p1.clientX + p2.clientX) / 2 - rect.left;
+          const centerY = (p1.clientY + p2.clientY) / 2 - rect.top;
+          const nextScale = pinchStartScale * (currentDist / pinchStartDistance);
+          applyWorldScaleAtPointer(
+            world,
+            nextScale,
+            centerX,
+            centerY,
+            pinchWorldAnchor,
+          );
+        }
+        return;
+      }
 
       if (isDragging) {
         const dx = e.clientX - dragStartClientX;
@@ -1189,14 +1292,44 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     };
 
     const handlePointerUp = (e: PointerEvent) => {
-      if (!isDragging) return;
-      isDragging = false;
+      activePointers.delete(e.pointerId);
       if (host.hasPointerCapture(e.pointerId)) {
         host.releasePointerCapture(e.pointerId);
       }
 
       const world = worldContainerRef.current;
-      if (!world) return;
+      if (!world) {
+        isPinching = false;
+        isDragging = false;
+        return;
+      }
+
+      if (isPinching) {
+        if (activePointers.size === 1) {
+          const remaining = Array.from(activePointers.values())[0]!;
+          isPinching = false;
+          isDragging = true;
+          hasMovedBeyondThreshold = true;
+          dragStartClientX = remaining.clientX;
+          dragStartClientY = remaining.clientY;
+          dragStartWorldX = world.x;
+          dragStartWorldY = world.y;
+          return;
+        }
+        if (activePointers.size === 0) {
+          isPinching = false;
+          isDragging = false;
+          setStageTransform({
+            x: world.x,
+            y: world.y,
+            scale: world.scale.x,
+          });
+          return;
+        }
+      }
+
+      if (!isDragging) return;
+      isDragging = false;
 
       if (hasMovedBeyondThreshold) {
         // 드래그 종료 시 단 1회만 React State 동기화
@@ -1287,25 +1420,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
       const scaleBy = 1.15;
       const newScale = e.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
-      const clampedScale = Math.max(MIN_ZOOM_SCALE, Math.min(MAX_ZOOM_SCALE, newScale));
-
-      const newPos = clampWorldPosition(
-        pointerX - mousePointTo.x * clampedScale,
-        pointerY - mousePointTo.y * clampedScale,
-        clampedScale,
-        host.clientWidth,
-        host.clientHeight,
-      );
-
-      world.scale.set(clampedScale);
-      world.position.set(newPos.x, newPos.y);
-      syncFogVisibility(sightMaskSpriteRef.current, clampedScale, Boolean(playerCoordsRef.current));
-
-      if (playerMarkerSpriteRef.current && !playerMarkerSpriteRef.current.destroyed) {
-        const invScale = 1 / clampedScale;
-        playerMarkerSpriteRef.current.width = 50 * invScale;
-        playerMarkerSpriteRef.current.height = 50 * invScale;
-      }
+      applyWorldScaleAtPointer(world, newScale, pointerX, pointerY, mousePointTo);
 
       if (zoomTimeoutRef.current) {
         clearTimeout(zoomTimeoutRef.current);
