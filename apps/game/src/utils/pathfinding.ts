@@ -1,4 +1,4 @@
-import { applyExhaustedTravelMinutes } from "@webgame/types";
+import { applyExhaustedTravelMinutes, FATIGUE_RULES } from "@webgame/types";
 
 import mapData from "../../../../packages/types/src/assets/map_graph.json";
 
@@ -34,22 +34,70 @@ const MAX_EDGE_MINUTES = 60;
 const DISTANCE_PER_STEP_UNIT = 20;
 const BUILDING_MOVE_MINUTES = 10;
 
+function baseRoadTravelMinutes(from: number, to: number): number {
+  if (from === to) return BUILDING_MOVE_MINUTES;
+  const fromNode = nodes[from];
+  const toNode = nodes[to];
+  if (!fromNode || !toNode) return STEP_UNIT_MINUTES;
+  const length = getDistance(fromNode, toNode);
+  const rawMinutes =
+    Math.round(length / DISTANCE_PER_STEP_UNIT) * STEP_UNIT_MINUTES;
+  return Math.min(MAX_EDGE_MINUTES, Math.max(STEP_UNIT_MINUTES, rawMinutes));
+}
+
 export function roadTravelMinutes(
   from: number,
   to: number,
   fatigue?: number,
 ): number {
-  const baseMinutes = (() => {
-    if (from === to) return BUILDING_MOVE_MINUTES;
-    const fromNode = nodes[from];
-    const toNode = nodes[to];
-    if (!fromNode || !toNode) return STEP_UNIT_MINUTES;
-    const length = getDistance(fromNode, toNode);
-    const rawMinutes =
-      Math.round(length / DISTANCE_PER_STEP_UNIT) * STEP_UNIT_MINUTES;
-    return Math.min(MAX_EDGE_MINUTES, Math.max(STEP_UNIT_MINUTES, rawMinutes));
-  })();
-  return applyExhaustedTravelMinutes(baseMinutes, fatigue);
+  return applyExhaustedTravelMinutes(baseRoadTravelMinutes(from, to), fatigue);
+}
+
+export function roadFatigueCost(from: number, to: number): number {
+  if (from === to) return FATIGUE_RULES.buildingMoveFatigueCost;
+  const steps = Math.max(
+    1,
+    Math.round(baseRoadTravelMinutes(from, to) / STEP_UNIT_MINUTES),
+  );
+  return steps * FATIGUE_RULES.fatiguePerStepUnit;
+}
+
+export function estimateSpentFatigueAtProgress(
+  path: number[],
+  progress: number,
+  hasTargetBuilding = false,
+): number {
+  if (path.length === 0 || progress <= 0) return 0;
+  if (path.length === 1) {
+    return hasTargetBuilding && progress >= 1
+      ? FATIGUE_RULES.buildingMoveFatigueCost
+      : 0;
+  }
+
+  const edgesInfo: { dist: number; cost: number }[] = [];
+  let totalDist = 0;
+  for (let i = 1; i < path.length; i++) {
+    const from = path[i - 1]!;
+    const to = path[i]!;
+    const n1 = nodes[from];
+    const n2 = nodes[to];
+    const dist = n1 && n2 ? Math.max(1, getDistance(n1, n2)) : 1;
+    totalDist += dist;
+    edgesInfo.push({ dist, cost: roadFatigueCost(from, to) });
+  }
+
+  if (totalDist <= 0) return 0;
+  let cumDist = 0;
+  let spent = 0;
+  for (const edge of edgesInfo) {
+    cumDist += edge.dist;
+    if (progress >= cumDist / totalDist - 1e-6) {
+      spent += edge.cost;
+    } else {
+      break;
+    }
+  }
+  return spent;
 }
 
 export function estimatePathTravelMinutes(

@@ -3,8 +3,16 @@ import { useAtomValue } from "jotai";
 import { RiDeleteBinLine } from "react-icons/ri";
 
 import { battleLogAtom } from "@/atoms/globalAtom";
+import {
+  isNavigatingAtom,
+  navigationProgressAtom,
+  shortestPathAtom,
+  targetBuildingIdAtom,
+} from "@/atoms/raidAtom";
+import { RollingNumber } from "@/components/common/RollingValue";
 import FieldCharacterInfo from "@/components/field/FieldCharacterInfo";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
+import { estimateSpentFatigueAtProgress } from "@/utils/pathfinding";
 
 import * as styles from "./FieldStatusSection.css";
 
@@ -17,13 +25,29 @@ interface FieldStatusSectionProps {
 const FieldStatusSection = ({ discardMode = false }: FieldStatusSectionProps) => {
   const { data } = useGetCharacter();
   const log = useAtomValue(battleLogAtom);
+  const isNavigating = useAtomValue(isNavigatingAtom);
+  const navigationProgress = useAtomValue(navigationProgressAtom);
+  const shortestPath = useAtomValue(shortestPathAtom);
+  const targetBuildingId = useAtomValue(targetBuildingIdAtom);
   const { setNodeRef: setDiscardRef, isOver: isDiscardOver } = useDroppable({
     id: FIELD_DISCARD_DROP_ID,
     disabled: !discardMode,
   });
   const player = log?.initialState.players[0];
-  const fatigue = data?.raw.fatigue ?? player?.fatigue;
+  const baseFatigue = data?.raw.fatigue ?? player?.fatigue;
   const maxFatigue = data?.raw.maxFatigue ?? player?.maxFatigue;
+  const optimisticSpentFatigue =
+    isNavigating && !log
+      ? estimateSpentFatigueAtProgress(
+          shortestPath,
+          navigationProgress,
+          shortestPath.length === 1 && targetBuildingId !== null,
+        )
+      : 0;
+  const fatigue =
+    baseFatigue !== undefined
+      ? Math.max(0, baseFatigue - optimisticSpentFatigue)
+      : undefined;
   const isExhausted = fatigue !== undefined && fatigue <= 0;
   const weight = data
     ? data.raw.equipment.reduce(
@@ -35,6 +59,7 @@ const FieldStatusSection = ({ discardMode = false }: FieldStatusSectionProps) =>
         0,
       )
     : undefined;
+  const displayWeight = player?.weight ?? weight;
   return (
     <section className={styles.statusSection}>
       <div className={styles.primaryCol}>
@@ -58,7 +83,7 @@ const FieldStatusSection = ({ discardMode = false }: FieldStatusSectionProps) =>
               tone: isExhausted ? "negative" : "default",
             })}
           >
-            {fatigue ?? "—"} / {maxFatigue ?? "—"}
+            <RollingNumber value={fatigue} /> / {maxFatigue ?? "—"}
           </p>
         </div>
         <div
@@ -70,7 +95,7 @@ const FieldStatusSection = ({ discardMode = false }: FieldStatusSectionProps) =>
             <span className={styles.metricDot({ tone: "neutral" })} />
           </div>
           <p className={styles.capacityText()}>
-            {player?.weight ?? weight ?? "—"} /{" "}
+            <RollingNumber value={displayWeight} /> /{" "}
             {player?.maxWeight ?? data?.raw.maxWeight ?? "—"} kg
           </p>
         </div>

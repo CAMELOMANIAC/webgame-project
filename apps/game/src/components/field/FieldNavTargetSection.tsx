@@ -50,6 +50,7 @@ import {
   targetBuildingIdAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
+import { RollingText } from "@/components/common/RollingValue";
 import ItemSlotContent from "@/components/itemSlot/ItemSlotContent";
 import { useBuildingAction } from "@/utils/hooks/useBuildingAction";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
@@ -73,68 +74,6 @@ import {
 } from "@/utils/recommendedDestinations";
 
 import * as styles from "./FieldNavTargetSection.css";
-
-type RollDirection = "up" | "down";
-
-function RollingDigit({
-  digit,
-  direction,
-}: {
-  digit: string;
-  direction: RollDirection;
-}) {
-  const [digits, setDigits] = useState({ current: digit, previous: digit });
-  if (digits.current !== digit) {
-    setDigits({ current: digit, previous: digits.current });
-  }
-
-  return (
-    <span className={styles.digitWindow}>
-      {digits.previous === digit ? (
-        digit
-      ) : (
-        <span key={digit} className={styles.digitRoll({ direction })}>
-          <span>{direction === "up" ? digits.previous : digit}</span>
-          <span>{direction === "up" ? digit : digits.previous}</span>
-        </span>
-      )}
-    </span>
-  );
-}
-
-function TelemetryValue({
-  value,
-  direction,
-}: {
-  value: string;
-  direction?: RollDirection;
-}) {
-  return (
-    <span className={styles.cellValue}>
-      {direction ? (
-        <>
-          <span className={styles.accessibleValue}>{value}</span>
-          <span aria-hidden="true" className={styles.digitRow}>
-            {Array.from(value, (character, index) => {
-              const place = value.length - index;
-              return /[0-9]/.test(character) ? (
-                <RollingDigit
-                  key={place}
-                  digit={character}
-                  direction={direction}
-                />
-              ) : (
-                <span key={place}>{character}</span>
-              );
-            })}
-          </span>
-        </>
-      ) : (
-        value
-      )}
-    </span>
-  );
-}
 
 type ActiveFieldCard = "nav" | "building" | "loot";
 
@@ -937,14 +876,16 @@ const FieldNavTargetSection = () => {
             <div className={styles.telemetryGrid}>
               <div className={styles.telemetryCell}>
                 <span className={styles.cellLabel}>경과 시간</span>
-                <TelemetryValue
+                <RollingText
+                  className={styles.cellValue}
                   value={formatRaidTime(displayCurrentTime)}
                   direction={isMoving ? "up" : undefined}
                 />
               </div>
               <div className={styles.telemetryCell}>
                 <span className={styles.cellLabel}>예상 소모</span>
-                <TelemetryValue
+                <RollingText
+                  className={styles.cellValue}
                   value={
                     travelMinutes > 0
                       ? `+${formatRaidTime(displayRemainingMinutes)}`

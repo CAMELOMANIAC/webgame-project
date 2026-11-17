@@ -3,6 +3,7 @@ import { useMemo } from "react";
 
 import { battleLogAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { focusPlayerTriggerAtom } from "@/atoms/raidAtom";
+import { RollingNumber } from "@/components/common/RollingValue";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 
 import defaultSurvivorPortrait from "../../assets/survivor-portrait-tranparent.png";
@@ -96,7 +97,7 @@ const FieldCharacterInfo = () => {
               <p className={styles.shieldValue}>SHD +{stats.shield}</p>
             )}
             <p className={styles.metricValue({ critical: hpRatio <= 0.3 })}>
-              {stats.hp}/{stats.maxHp}
+              <RollingNumber value={stats.hp} />/{stats.maxHp}
             </p>
           </div>
         </div>
@@ -116,7 +117,7 @@ const FieldCharacterInfo = () => {
         <div className={styles.labelRow}>
           <p className={styles.metricLabel}>STM</p>
           <p className={styles.metricValue({ critical: false })}>
-            {stats.stamina}/{stats.maxStamina}
+            <RollingNumber value={stats.stamina} />/{stats.maxStamina}
           </p>
         </div>
         <div className={styles.segmentTrack}>
