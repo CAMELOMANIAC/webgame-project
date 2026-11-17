@@ -268,10 +268,21 @@ const FieldNavTargetSection = () => {
   const activeBuildingImage = activeBuilding
     ? resolveBuildingImage(activeBuilding, activeIntroEvent)
     : undefined;
+  const isCurrentBuildingCompleted =
+    activeBuildingId !== null &&
+    (activeBuilding?.category ? isActiveCraftUsed : isActiveBuildingLooted);
+  const isAtTargetBuilding =
+    shortestPath.length === 1 &&
+    targetBuildingId !== null &&
+    targetBuildingId === activeBuildingId;
+  const isReenteringCurrentBuilding =
+    isAtTargetBuilding && !isCurrentBuildingCompleted;
   const canMove =
     targetNodeId !== null &&
     (shortestPath.length > 1 ||
-      (shortestPath.length === 1 && targetBuildingId !== null));
+      (shortestPath.length === 1 &&
+        targetBuildingId !== null &&
+        !(isAtTargetBuilding && isCurrentBuildingCompleted)));
   const currentTime =
     isMoving && navigationStartTime !== null
       ? navigationStartTime
@@ -958,7 +969,11 @@ const FieldNavTargetSection = () => {
                     triggerStartNavigation((prev) => prev + 1);
                   }}
                 >
-                  {isMoving ? "이동 중…" : "이동"}
+                  {isMoving
+                    ? "이동 중…"
+                    : isReenteringCurrentBuilding
+                      ? "건물 진입"
+                      : "이동"}
                 </button>
               )
             ) : (
