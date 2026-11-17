@@ -217,7 +217,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
               raw: {
                 ...old.raw,
                 hp: finalPlayer.hp,
-                stamina: finalPlayer.stamina,
+                stamina: old.raw.maxStamina,
               },
             };
           },

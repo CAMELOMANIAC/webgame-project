@@ -283,7 +283,7 @@ export async function loadBattlePlayer(
     teamId: "TeamA",
     hp: character.hp,
     maxHp: character.maxHp,
-    stamina: character.stamina,
+    stamina: character.maxStamina,
     maxStamina: character.maxStamina,
     staminaRegen: character.staminaRegen,
     weight: character.weight,
@@ -427,7 +427,7 @@ export async function applyBattleSettlement(
     const weight = await calculateInventoryWeight(tx, characterId);
     await tx
       .update(characters)
-      .set({ hp: finalPlayer.hp, stamina: finalPlayer.stamina, weight })
+      .set({ hp: finalPlayer.hp, stamina: character.maxStamina, weight })
       .where(eq(characters.id, characterId));
     if (!playerWon) return { rewardItemName: null, rewardItem: null };
     const fallbackWeapon = (await tx.query.weaponMasters.findFirst()) as unknown as

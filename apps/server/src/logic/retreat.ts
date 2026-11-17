@@ -12,7 +12,6 @@ export interface PendingRetreat {
   key: string;
   rewardIds: string[];
   hp: number;
-  stamina: number;
   returnNodeId: number;
   returnBuildingId: number | null;
   missionEncounter: boolean;

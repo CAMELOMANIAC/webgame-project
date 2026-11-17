@@ -836,7 +836,7 @@ function prepareRetreat(
     };
     pending = {
       id, openingLog, fullLog: { ...log, timeline: [] }, key, rewardIds,
-      hp: player.hp, stamina: player.stamina, returnNodeId, returnBuildingId,
+      hp: player.hp, returnNodeId, returnBuildingId,
       missionEncounter, ready: false,
       deadline: Date.now() + retreatPlaybackLimitMs +
         openingLog.result.durationTicks * 1_000 +
@@ -901,7 +901,7 @@ export async function decideRaidBattle(
       currentNodeId = pending.returnNodeId;
       currentBuildingId = pending.returnBuildingId;
       await tx.update(characters).set({
-        hp: pending.hp, stamina: pending.stamina, currentNodeId,
+        hp: pending.hp, stamina: character.maxStamina, currentNodeId,
       }).where(eq(characters.id, characterId));
     } else {
       settled = await applyBattleSettlement(
@@ -949,7 +949,7 @@ export async function decideRaidBattle(
           decision: "CONTINUE", raid: view(nextRaid), key: pending.key,
           rewardItemName: settled.rewardItemName,
         }
-      : { decision: "RETREAT", raid: view(nextRaid), hp: pending.hp, stamina: pending.stamina };
+      : { decision: "RETREAT", raid: view(nextRaid), hp: pending.hp, stamina: character.maxStamina };
     await tx.update(raidSessions).set({
       currentNodeId, currentBuildingId, status, version: nextRaid.version, ghostRoster,
       ...(encounterTravel !== undefined ? { encounterTravel } : {}),

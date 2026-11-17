@@ -134,7 +134,7 @@ function fixture({ armed = true, enemyArmed = false, hp = 35 } = {}) {
   };
 }
 
-test("전투 정산은 회복을 포함한 최종 체력·스태미나와 보상을 함께 저장한다", async (t) => {
+test("전투 정산은 회복을 포함한 최종 체력을 유지하고 스태미너는 최대치로 복구한다", async (t) => {
   const { database, update, createItem, transaction } = fixture();
   t.after(() => database.$disconnect());
   const result = await executeMonsterBattle(database, "character");
@@ -146,7 +146,7 @@ test("전투 정산은 회복을 포함한 최종 체력·스태미나와 보상
   assert.equal(finalPlayer?.hp, 85);
   assert.deepEqual(update.mock.calls[0]?.arguments[0].data, {
     hp: finalPlayer?.hp,
-    stamina: finalPlayer?.stamina,
+    stamina: 120,
     weight: 2,
   });
   assert.equal(transaction.mock.callCount(), 1);
