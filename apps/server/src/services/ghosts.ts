@@ -108,7 +108,7 @@ export async function recordGhosts(
 
 export async function matchGhost(
   db: DbOrTx,
-  userId: string,
+  _userId: string,
   nodeId: number,
   time: number,
   now = new Date(),
@@ -118,7 +118,6 @@ export async function matchGhost(
   const minTime = Math.max(0, time - matchWindowMinutes);
   const maxTime = time + matchWindowMinutes;
   const conditions = [
-    ne(ghostSnapshots.userId, userId),
     eq(ghostSnapshots.nodeId, String(nodeId)),
     eq(ghostSnapshots.rulesVersion, rulesVersion),
     eq(ghostSnapshots.mapVersion, seopoMapVersion),
@@ -134,6 +133,7 @@ export async function matchGhost(
   ];
   if (raidId) {
     conditions.push(
+      ne(ghostSnapshots.raidId, raidId),
       notExists(
         db
           .select()

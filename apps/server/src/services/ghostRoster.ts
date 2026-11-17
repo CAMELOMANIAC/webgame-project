@@ -85,7 +85,7 @@ export async function loadGhostRoster(
 export function createGhostTracker(
   tx: TransactionClient,
   roster: GhostRoster,
-  userId: string,
+  _userId: string,
   lastTravelTime: number,
   raid: Pick<RaidSession, "id" | "entryNodeId">,
   now = new Date(),
@@ -94,7 +94,7 @@ export function createGhostTracker(
     gameRules.ghost;
   const oldest = new Date(now.getTime() - maxAgeDays * 86400000);
   const eligible = [
-    ne(ghostSnapshots.userId, userId),
+    ne(ghostSnapshots.raidId, raid.id),
     eq(ghostSnapshots.rulesVersion, rulesVersion),
     eq(ghostSnapshots.mapVersion, seopoMapVersion),
     gt(ghostSnapshots.hp, 0),

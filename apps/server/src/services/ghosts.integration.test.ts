@@ -70,7 +70,11 @@ test("실제 DB: 위치·시간 기록은 서버 장비를 복사하고 재시�
   assert.equal(match?.source.characterId, character.id);
   assert.equal(match?.time, moveTime);
   assert.equal(match?.combatant.weapons[0]?.damage, 1);
-  assert.equal(await matchGhost(db, user.id, node, moveTime), null);
+  assert.equal((await matchGhost(db, user.id, node, moveTime))?.source.characterId, character.id);
+  assert.equal(
+    await matchGhost(db, user.id, node, moveTime, new Date(), raid.id),
+    null,
+  );
 });
 
 test("실제 DB: 같은 도로 노드의 건물 이동은 시간 경과 뒤 같은 노드의 고스트와 조우한다", async (t) => {
