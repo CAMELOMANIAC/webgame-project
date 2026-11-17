@@ -50,22 +50,21 @@ const CombatLog = () => {
                     actorPlayer.teamId === selfPlayer.teamId
                   ? "ally"
                   : "enemy";
-            const mirrored = role !== "enemy";
 
             return (
               <motion.li
                 key={`${event.id}-${event.timestamp}`}
                 className={styles.actionLogItem({ role })}
                 layout
-                initial={{ opacity: 0, x: mirrored ? 12 : -12 }}
+                initial={{ opacity: 0, x: -12 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: mirrored ? -12 : 12 }}
+                exit={{ opacity: 0, x: 12 }}
               >
                 <div
-                  className={styles.actionLogPortrait({ mirrored })}
+                  className={styles.actionLogPortrait}
                   aria-hidden="true"
                 />
-                <div className={styles.actionLogText({ mirrored })}>
+                <div className={styles.actionLogText}>
                   <p className={styles.actionLogType}>
                     {event.type === "SHIELD"
                       ? `SHIELD +${event.amount}`

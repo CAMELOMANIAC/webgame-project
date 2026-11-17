@@ -56,10 +56,10 @@ export const actionLogItem = recipe({
   variants: {
     role: {
       self: {
-        borderRight: `2px solid ${vars.color.positive}`,
+        borderLeft: `2px solid ${vars.color.positive}`,
       },
       ally: {
-        borderRight: `2px solid ${vars.text.primary}`,
+        borderLeft: `2px solid ${vars.text.primary}`,
       },
       enemy: {
         borderLeft: `2px solid ${vars.color.negative}`,
@@ -71,69 +71,38 @@ export const actionLogItem = recipe({
   },
 });
 
-export const actionLogPortrait = recipe({
-  base: {
-    width: "46px",
-    height: "46px",
-    backgroundImage: `url(${survivorPortrait})`,
-    backgroundSize: "cover",
-    backgroundPosition: "top center",
-    backgroundRepeat: "no-repeat",
-    position: "absolute",
-    top: 0,
-    flexShrink: 0,
-    selectors: {
-      "&::after": {
-        content: '""',
-        position: "absolute",
-        inset: 0,
-        background: `linear-gradient(to right, rgba(12, 12, 15, 0) 0%, ${vars.surface.low} 100%)`,
-      },
+export const actionLogPortrait = style({
+  width: "46px",
+  height: "46px",
+  backgroundImage: `url(${survivorPortrait})`,
+  backgroundSize: "cover",
+  backgroundPosition: "top center",
+  backgroundRepeat: "no-repeat",
+  position: "absolute",
+  top: 0,
+  left: "-6px",
+  flexShrink: 0,
+  selectors: {
+    "&::after": {
+      content: '""',
+      position: "absolute",
+      inset: 0,
+      background: `linear-gradient(to right, rgba(12, 12, 15, 0) 0%, ${vars.surface.low} 100%)`,
     },
-  },
-  variants: {
-    mirrored: {
-      true: {
-        right: "-6px",
-        transform: "scaleX(-1)",
-      },
-      false: {
-        left: "-6px",
-      },
-    },
-  },
-  defaultVariants: {
-    mirrored: false,
   },
 });
 
-export const actionLogText = recipe({
-  base: {
-    position: "absolute",
-    inset: 0,
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    gap: "2px",
-    overflow: "hidden",
-  },
-  variants: {
-    mirrored: {
-      true: {
-        alignItems: "flex-start",
-        paddingLeft: "8px",
-        paddingRight: "32px",
-      },
-      false: {
-        alignItems: "flex-end",
-        paddingRight: "8px",
-        paddingLeft: "32px",
-      },
-    },
-  },
-  defaultVariants: {
-    mirrored: false,
-  },
+export const actionLogText = style({
+  position: "absolute",
+  inset: 0,
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+  alignItems: "flex-end",
+  gap: "2px",
+  paddingRight: "8px",
+  paddingLeft: "32px",
+  overflow: "hidden",
 });
 
 export const actionLogType = style({
