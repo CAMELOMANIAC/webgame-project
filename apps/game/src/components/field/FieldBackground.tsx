@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 
 import { BattleCanvas } from "@/components/combat/BattleCanvas";
 import MapGraphCanvas from "@/components/field/MapGraphCanvas";
+import type { EnemyPlacement } from "@/utils/battleLayout";
 import type { NavigateRaidResponse } from "@/utils/hooks/useNavigateRaid";
 
 import * as styles from "./FieldBackground.css";
@@ -11,7 +12,7 @@ import * as styles from "./FieldBackground.css";
 interface FieldBackgroundProps {
   isCombat: boolean;
   battleLog: BattleLog | null | undefined;
-  enemyPositions: Map<string, { x: number; y: number }>;
+  enemyPositions: Map<string, EnemyPlacement>;
   characterId: string | undefined;
   navigateRaid: UseMutationResult<
     NavigateRaidResponse,

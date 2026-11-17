@@ -1,14 +1,21 @@
 import type { BattleEvent, BattleLog } from "@webgame/types";
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { Application, Container, Sprite, Text, TextStyle } from "pixi.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import compass from "@/assets/compass.svg";
+import { battleCenterAtom, battleOccludersAtom } from "@/atoms/battleLayoutAtom";
 import { displayEventsAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { playerRotationAtom } from "@/atoms/raidAtom";
 import CanvasEnemyUnit from "@/components/combat/CanvasEnemyUnit";
 import MeleeSlashEffect from "@/components/combat/MeleeSlashEffect";
 import RadarAttackLine from "@/components/combat/RadarAttackLine";
+import {
+  type BattleRect,
+  computeBattleLayout,
+  type EnemyPlacement,
+  resolveEnemyPixelPositions,
+} from "@/utils/battleLayout";
 import { PixiParentContext, usePixiParent } from "@/utils/pixiContext";
 import { loadCompassTexture } from "@/utils/pixiTextures";
 import { Easings, runTween, type TweenHandle } from "@/utils/pixiTween";
@@ -18,8 +25,14 @@ import * as styles from "./BattleCanvas.css";
 interface BattleCanvasProps {
   isCombat: boolean;
   battleLog: BattleLog | null | undefined;
-  enemyPositions: Map<string, { x: number; y: number }>;
+  enemyPositions: Map<string, EnemyPlacement>;
   characterId: string | undefined;
+}
+
+function isSameRect(a: BattleRect | null, b: BattleRect) {
+  return (
+    !!a && a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom
+  );
 }
 
 interface DamagePopup {
@@ -76,6 +89,64 @@ export function BattleCanvas({
   }, []);
 
   const { width, height } = dimensions;
+
+  // --- HUD(전투 로그, 하단 패널)에 가려지지 않는 안전 영역 측정 ---
+  const occluders = useAtomValue(battleOccludersAtom);
+  const [safeArea, setSafeArea] = useState<BattleRect | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const measure = () => {
+      const containerRect = container.getBoundingClientRect();
+      let top = 0;
+      let bottom = containerRect.height;
+
+      for (const { element, edge } of occluders) {
+        const rect = element.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) continue;
+        if (edge === "top") {
+          top = Math.max(top, rect.bottom - containerRect.top);
+        } else {
+          bottom = Math.min(bottom, rect.top - containerRect.top);
+        }
+      }
+
+      const next = { left: 0, top, right: containerRect.width, bottom };
+      setSafeArea((prev) => (isSameRect(prev, next) ? prev : next));
+    };
+
+    measure();
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(container);
+    occluders.forEach(({ element }) => resizeObserver.observe(element));
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [occluders]);
+
+  const layout = useMemo(
+    () => computeBattleLayout(width, height, safeArea),
+    [width, height, safeArea],
+  );
+  const { center } = layout;
+  const setBattleCenter = useSetAtom(battleCenterAtom);
+
+  useEffect(() => {
+    if (width <= 0 || height <= 0) return;
+    setBattleCenter(center);
+  }, [center, width, height, setBattleCenter]);
+
+  useEffect(() => {
+    return () => setBattleCenter(null);
+  }, [setBattleCenter]);
+  const enemyPixelPositions = useMemo(
+    () => resolveEnemyPixelPositions(enemyPositions, layout),
+    [enemyPositions, layout],
+  );
+
   const processedEvents = useAtomValue(processedEventsAtom);
   const displayEvents = useAtomValue(displayEventsAtom);
   const activeAttacks = useMemo(() => {
@@ -167,9 +238,9 @@ export function BattleCanvas({
       appRef.current.renderer.resize(width, height);
     }
     if (playerRootGroupRef.current && !playerRootGroupRef.current.destroyed) {
-      playerRootGroupRef.current.position.set(width / 2, height / 2);
+      playerRootGroupRef.current.position.set(center.x, center.y);
     }
-  }, [width, height, pixiLayers]);
+  }, [width, height, center, pixiLayers]);
 
   // --- Visual Enhancement States ---
   const [showRedFlash, setShowRedFlash] = useState(false);
@@ -183,45 +254,6 @@ export function BattleCanvas({
       }
     };
   }, []);
-
-  // UI 영역(헤더/푸터)과 겹치지 않게 안전 픽셀 영역(Safe Zone)으로 좌표 변환하는 헬퍼 함수
-  const getSafeCoords = useMemo(() => {
-    const MIN_PIXEL_DIST = 100;
-
-    return (pos: { x: number; y: number }) => {
-      const safeLeft = 50;
-      const safeRight = width - 50;
-      const safeTop = 150;
-      const safeBottom = height - 250;
-
-      if (safeBottom <= safeTop || safeRight <= safeLeft) {
-        return {
-          x: (pos.x / 100) * width,
-          y: (pos.y / 100) * height,
-        };
-      }
-
-      let x = safeLeft + (pos.x / 100) * (safeRight - safeLeft);
-      let y = safeTop + (pos.y / 100) * (safeBottom - safeTop);
-
-      const cx = width / 2;
-      const cy = height / 2;
-      const dx = x - cx;
-      const dy = y - cy;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist > 0 && dist < MIN_PIXEL_DIST) {
-        const scale = MIN_PIXEL_DIST / dist;
-        x = cx + dx * scale;
-        y = cy + dy * scale;
-
-        x = Math.max(safeLeft, Math.min(safeRight, x));
-        y = Math.max(safeTop, Math.min(safeBottom, y));
-      }
-
-      return { x, y };
-    };
-  }, [width, height]);
 
   const deadEnemyIds = useMemo(() => {
     const ids = new Set<string>();
@@ -245,18 +277,17 @@ export function BattleCanvas({
     );
 
     if (firstAliveEnemy) {
-      const enemyPos = enemyPositions.get(firstAliveEnemy.id);
+      const enemyPos = enemyPixelPositions.get(firstAliveEnemy.id);
       if (enemyPos) {
-        const safePos = getSafeCoords(enemyPos);
-        const dx = safePos.x - width / 2;
-        const dy = safePos.y - height / 2;
+        const dx = enemyPos.x - center.x;
+        const dy = enemyPos.y - center.y;
         const angleRad = Math.atan2(dy, dx);
         return (angleRad * 180) / Math.PI + 90;
       }
     }
 
     return playerRotation;
-  }, [battleLog, deadEnemyIds, enemyPositions, characterId, width, height, playerRotation, getSafeCoords]);
+  }, [battleLog, deadEnemyIds, enemyPixelPositions, characterId, center, playerRotation]);
 
   // 플레이어 나침반 회전 동기화
   useEffect(() => {
@@ -306,15 +337,14 @@ export function BattleCanvas({
 
       const newPopups: DamagePopup[] = [];
       damageEvents.forEach((e) => {
-        let posX = width / 2;
-        let posY = height / 2;
+        let posX = center.x;
+        let posY = center.y;
 
         if (e.targetId !== characterId) {
-          const pos = enemyPositions.get(e.targetId);
+          const pos = enemyPixelPositions.get(e.targetId);
           if (pos) {
-            const safePos = getSafeCoords(pos);
-            posX = safePos.x;
-            posY = safePos.y;
+            posX = pos.x;
+            posY = pos.y;
           }
         }
 
@@ -335,7 +365,7 @@ export function BattleCanvas({
         setPopups((prev) => [...prev, ...newPopups]);
       }
     }
-  }, [displayEvents, characterId, enemyPositions, getSafeCoords, width, height, triggerShake]);
+  }, [displayEvents, characterId, enemyPixelPositions, center, triggerShake]);
 
   // 컴포넌트 언마운트 시에만 애니메이션 프레임 및 타이머 취소
   useEffect(() => {
@@ -370,16 +400,10 @@ export function BattleCanvas({
         clearTimeout(playerPauseTimerRef.current);
       }
 
-      const targetPos = enemyPositions.get(activePlayerMeleeAttack.targetId);
+      const targetPos = enemyPixelPositions.get(activePlayerMeleeAttack.targetId);
       if (targetPos) {
-        const safePos = getSafeCoords(targetPos);
-        const targetX = safePos.x;
-        const targetY = safePos.y;
-
-        const centerX = width / 2;
-        const centerY = height / 2;
-        const dx = targetX - centerX;
-        const dy = targetY - centerY;
+        const dx = targetPos.x - center.x;
+        const dy = targetPos.y - center.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance > 0) {
@@ -440,7 +464,7 @@ export function BattleCanvas({
         }
       }
     }
-  }, [activeAttacks, characterId, enemyPositions, getSafeCoords, width, height, isCombat, battleLog]);
+  }, [activeAttacks, characterId, enemyPixelPositions, center, width, height, isCombat, battleLog]);
 
   return (
     <div className={styles.container} ref={containerRef}>
@@ -459,7 +483,7 @@ export function BattleCanvas({
                     !deadEnemyIds.has(p.id),
                 )
                 .map((enemy) => {
-                  const pos = enemyPositions.get(enemy.id);
+                  const pos = enemyPixelPositions.get(enemy.id);
                   if (!pos) return null;
                   const activeAttack = activeAttacks.find(
                     (a) => a.type === "ATTACK" && a.actorId === enemy.id,
@@ -470,14 +494,11 @@ export function BattleCanvas({
                     (e) => e.type === "DAMAGE" && e.targetId === enemy.id,
                   );
 
-                  const safePos = getSafeCoords(pos);
-                  const pixelX = safePos.x;
-                  const pixelY = safePos.y;
+                  const pixelX = pos.x;
+                  const pixelY = pos.y;
 
-                  const centerX = width / 2;
-                  const centerY = height / 2;
-                  const dx = pixelX - centerX;
-                  const dy = pixelY - centerY;
+                  const dx = pixelX - center.x;
+                  const dy = pixelY - center.y;
                   const dist = Math.sqrt(dx * dx + dy * dy);
 
                   let spawnX = pixelX;
@@ -485,8 +506,8 @@ export function BattleCanvas({
 
                   if (dist > 0) {
                     const maxDim = Math.max(width, height);
-                    spawnX = centerX + (dx / dist) * maxDim;
-                    spawnY = centerY + (dy / dist) * maxDim;
+                    spawnX = center.x + (dx / dist) * maxDim;
+                    spawnY = center.y + (dy / dist) * maxDim;
                   }
 
                   return (
@@ -499,8 +520,8 @@ export function BattleCanvas({
                       spawnY={spawnY}
                       isAttacking={isAttacking}
                       isDamaged={isEnemyDamaged}
-                      targetX={width / 2}
-                      targetY={height / 2}
+                      targetX={center.x}
+                      targetY={center.y}
                       activeAttackId={activeAttackId}
                     />
                   );
@@ -509,33 +530,14 @@ export function BattleCanvas({
             {activeAttacks.map((attack) => {
               if (attack.type !== "ATTACK") return null;
 
-              const actorPos = enemyPositions.get(attack.actorId);
-              const targetPos = enemyPositions.get(attack.targetId);
-
-              const x1 =
-                attack.actorId === characterId
-                  ? width / 2
-                  : actorPos
-                    ? getSafeCoords(actorPos).x
-                    : width / 2;
-              const y1 =
-                attack.actorId === characterId
-                  ? height / 2
-                  : actorPos
-                    ? getSafeCoords(actorPos).y
-                    : height / 2;
-              const x2 =
-                attack.targetId === characterId
-                  ? width / 2
-                  : targetPos
-                    ? getSafeCoords(targetPos).x
-                    : width / 2;
-              const y2 =
-                attack.targetId === characterId
-                  ? height / 2
-                  : targetPos
-                    ? getSafeCoords(targetPos).y
-                    : height / 2;
+              const resolvePoint = (id: string) =>
+                id === characterId ? center : (enemyPixelPositions.get(id) ?? center);
+              const actorPoint = resolvePoint(attack.actorId);
+              const targetPoint = resolvePoint(attack.targetId);
+              const x1 = actorPoint.x;
+              const y1 = actorPoint.y;
+              const x2 = targetPoint.x;
+              const y2 = targetPoint.y;
 
               const attacker = battleLog?.initialState.players.find(
                 (p) => p.id === attack.actorId,

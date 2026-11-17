@@ -13,6 +13,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import compass from "@/assets/compass.svg";
 import { selectedUserIdAtom } from "@/atoms/authAtom";
+import { battleCenterAtom } from "@/atoms/battleLayoutAtom";
 import { pendingNavigationAtom, pendingNavigationKey } from "@/atoms/pendingNavigationAtom";
 import {
   currentNodeIdAtom,
@@ -309,6 +310,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const [isPixiReady, setIsPixiReady] = useState(false);
   const focusTweenRef = useRef<TweenHandle | null>(null);
   const focusPlayerTrigger = useAtomValue(focusPlayerTriggerAtom);
+  const battleCenter = useAtomValue(battleCenterAtom);
   const focusRouteTarget = useAtomValue(focusRouteTargetAtom);
   const highlightedDistrictIds = useAtomValue(highlightedDistrictIdsAtom);
   const startNavigationTrigger = useAtomValue(startNavigationTriggerAtom);
@@ -1508,8 +1510,11 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         ? playerCoords
         : { x: nodes[currentNodeId]?.x ?? 0, y: nodes[currentNodeId]?.y ?? 0 });
 
-    const targetX = dimensions.width / 2 - playerPos.x * targetScale;
-    const targetY = dimensions.height / 2 - playerPos.y * targetScale;
+    // 전투 캔버스의 플레이어 마커(안전 영역 중앙)와 같은 지점에 맞춘다
+    const focusX = battleCenter?.x ?? dimensions.width / 2;
+    const focusY = battleCenter?.y ?? dimensions.height / 2;
+    const targetX = focusX - playerPos.x * targetScale;
+    const targetY = focusY - playerPos.y * targetScale;
 
     const startScale = world.scale.x;
     const startX = world.x;
@@ -1548,7 +1553,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     return () => {
       tween.destroy();
     };
-  }, [isPixiReady, isCombat, dimensions.width, dimensions.height, currentNodeId, playerCoords]);
+  }, [isPixiReady, isCombat, dimensions.width, dimensions.height, currentNodeId, playerCoords, battleCenter]);
 
   const animateCameraTo = (targetPos: { x: number; y: number }, targetScale: number) => {
     const world = worldContainerRef.current;
@@ -2197,7 +2202,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
               hopGateWaitStart = performance.now();
             }
             const waitedMs = performance.now() - hopGateWaitStart;
-            if (waitedMs > 5000) {
+            if (waitedMs > 15000) {
               console.warn("[1-Hop Gate] Server response timed out; stopping navigation.");
               setTargetNodeId(null);
               setIsNavigating(false);
