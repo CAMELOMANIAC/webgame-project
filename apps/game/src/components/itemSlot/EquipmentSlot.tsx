@@ -1,11 +1,14 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { type Item, resolveCatalogWeaponData } from "@webgame/types";
+import { type BattleEvent, type Item, resolveCatalogWeaponData } from "@webgame/types";
 import { useAtomValue } from "jotai";
 import { motion } from "motion/react";
-import React from "react";
 
-import { currentTimeAtom, processedEventsAtom } from "@/atoms/globalAtom";
+import {
+  currentTimeAtom,
+  flattenedTimelineAtom,
+  processedEventsAtom,
+} from "@/atoms/globalAtom";
 import { isCombatAtom } from "@/atoms/raidAtom";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 import { useSlotInteraction } from "@/utils/hooks/useSlotInteraction";
@@ -13,6 +16,38 @@ import { useSlotInteraction } from "@/utils/hooks/useSlotInteraction";
 import * as styles from "./EquipmentSlot.css";
 import * as slotStyles from "./ItemSlot.css";
 import ItemSlotContent from "./ItemSlotContent";
+
+/**
+ * 현재 틱의 남은 이벤트 재생 시간을 기준으로 쿨다운 애니메이션 duration(초)을 계산한다.
+ */
+function getTickTransitionDuration(
+  timeline: BattleEvent[],
+  currentTime: number,
+  cooldownEventId: string | undefined,
+  isFirstCooldownTick: boolean,
+): number {
+  const tickEvents = timeline.filter((e) => e.timestamp === currentTime);
+  const startIndex =
+    isFirstCooldownTick && cooldownEventId
+      ? Math.max(
+          0,
+          tickEvents.findIndex((e) => e.id === cooldownEventId),
+        )
+      : 0;
+
+  let eventDelaySec = 0;
+  for (let i = startIndex; i < tickEvents.length; i++) {
+    const current = tickEvents[i];
+    const next = tickEvents[i + 1];
+    const isImmediate =
+      current?.type === "DEATH" || next?.type === "DEATH";
+    if (!isImmediate) {
+      eventDelaySec += 0.25;
+    }
+  }
+
+  return (isFirstCooldownTick ? 0 : 1) + eventDelaySec;
+}
 
 interface EquipmentSlotProps {
   item: Item;
@@ -27,6 +62,7 @@ const EquipmentSlot = ({
 }: EquipmentSlotProps) => {
   const isCombat = useAtomValue(isCombatAtom);
   const currentTime = useAtomValue(currentTimeAtom);
+  const timeline = useAtomValue(flattenedTimelineAtom);
   const processedEvents = useAtomValue(processedEventsAtom);
   const { onInspectSlot, isClickSuppressed } = useSlotInteraction();
 
@@ -71,7 +107,9 @@ const EquipmentSlot = ({
   let isCasting = false;
   let castProgress = 0;
   let isOnCooldown = false;
+  let cooldownKey: string | undefined;
   let cooldownProgress = 0;
+  let cooldownTransitionDuration = 0.95;
   let remainingCooldown = 0;
   let isAttacking = false;
 
@@ -106,25 +144,65 @@ const EquipmentSlot = ({
       }
     }
 
-    const lastAttack = [...processedEvents]
+    const lastCooldown = [...processedEvents]
       .reverse()
       .find(
         (e) =>
-          e.type === "ATTACK" &&
+          e.type === "COOLDOWN" &&
           e.actorId === actorId &&
           e.weaponIndex === index,
       );
 
-    if (lastAttack) {
-      const elapsed = currentTime - lastAttack.timestamp;
-      const cooldownDuration = resolvedWeapon.cooldownTicks;
-      if (elapsed < cooldownDuration) {
+    if (lastCooldown && lastCooldown.type === "COOLDOWN") {
+      const hasteReduction = processedEvents.reduce((total, e) => {
+        if (
+          e.type === "SYNERGY" &&
+          e.actorId === actorId &&
+          e.timestamp > lastCooldown.timestamp &&
+          e.hasteTicks &&
+          e.hasteTicks > 0 &&
+          e.targetSlotIndices.includes(index)
+        ) {
+          return total + e.hasteTicks;
+        }
+        return total;
+      }, 0);
+
+      const elapsed = currentTime - lastCooldown.timestamp + hasteReduction;
+      const cooldownDuration = lastCooldown.duration;
+      if (cooldownDuration > 0 && elapsed < cooldownDuration) {
         isOnCooldown = true;
+        cooldownKey = lastCooldown.id;
         remainingCooldown = cooldownDuration - elapsed;
-        cooldownProgress = 1 - elapsed / cooldownDuration;
+
+        const endTick =
+          lastCooldown.timestamp + cooldownDuration - hasteReduction;
+        let totalCooldownTime = 0;
+        let remainingTimeAfterTick = 0;
+
+        for (let tick = lastCooldown.timestamp; tick < endTick; tick++) {
+          const stepDuration = getTickTransitionDuration(
+            timeline,
+            tick,
+            lastCooldown.id,
+            tick === lastCooldown.timestamp,
+          );
+          totalCooldownTime += stepDuration;
+          if (tick > currentTime) {
+            remainingTimeAfterTick += stepDuration;
+          }
+          if (tick === currentTime) {
+            cooldownTransitionDuration = stepDuration;
+          }
+        }
+
+        cooldownProgress =
+          totalCooldownTime > 0
+            ? Math.max(0, remainingTimeAfterTick / totalCooldownTime)
+            : 0;
       }
 
-      if (currentTime === lastAttack.timestamp) {
+      if (currentTime === lastCooldown.timestamp) {
         isAttacking = true;
       }
     }
@@ -176,19 +254,18 @@ const EquipmentSlot = ({
 
           {isOnCooldown && (
             <motion.div
+              key={cooldownKey}
               className={styles.cooldownOverlay}
+              initial={
+                { "--cooldown-percent": 1 } as Record<string, number>
+              }
               animate={
                 { "--cooldown-percent": cooldownProgress } as Record<
                   string,
                   number
                 >
               }
-              transition={{ duration: 0.95, ease: "linear" }}
-              style={
-                {
-                  "--cooldown-percent": cooldownProgress,
-                } as React.CSSProperties
-              }
+              transition={{ duration: cooldownTransitionDuration, ease: "linear" }}
             >
               <span className={styles.cooldownText}>
                 {Math.ceil(remainingCooldown)}
