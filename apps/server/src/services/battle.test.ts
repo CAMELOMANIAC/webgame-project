@@ -156,7 +156,7 @@ test("전투 정산은 회복을 포함한 최종 체력을 유지하고 스태�
   assert.equal(result.rewardItemName, "Test Rifle");
 });
 
-test("사망 정산은 장비와 가방을 비우고 캐릭터 최대치로 복구한다", async (t) => {
+test("사망 정산은 장비와 가방을 비우고 HP 1·피로도 0 및 복귀 시각을 기록한다", async (t) => {
   const { database, update, createItem, deleteItems, deleteEquipment } =
     fixture({ armed: false, enemyArmed: true, hp: 1 });
   t.after(() => database.$disconnect());
@@ -167,15 +167,24 @@ test("사망 정산은 장비와 가방을 비우고 캐릭터 최대치로 복�
   assert.equal(createItem.mock.callCount(), 0);
   assert.equal(deleteItems.mock.callCount(), 1);
   assert.equal(deleteEquipment.mock.callCount(), 1);
-  assert.deepEqual(update.mock.calls[0]?.arguments[0].data, {
-    isRaiding: false,
-    hp: 150,
-    stamina: 120,
-    fatigue: 100,
-    time: 0,
-    currentNodeId: 0,
-    weight: 0,
-  });
+  const updateData = update.mock.calls[0]?.arguments[0].data as Record<
+    string,
+    unknown
+  >;
+  assert.ok(updateData.returnedAt instanceof Date);
+  assert.deepEqual(
+    { ...updateData, returnedAt: undefined },
+    {
+      isRaiding: false,
+      hp: 1,
+      stamina: 120,
+      fatigue: 0,
+      returnedAt: undefined,
+      time: 0,
+      currentNodeId: 0,
+      weight: 0,
+    },
+  );
 });
 
 test("최대 틱 종료는 승리 보상을 지급하지 않는다", async (t) => {
@@ -246,6 +255,7 @@ test("deferLootToPending 옵션 시 전투 승리 보상을 가방에 바로 넣
     time: 0,
     currentNodeId: 0,
     isRaiding: true,
+    returnedAt: null,
     variantLevel: 1,
     variantExp: 0,
   };

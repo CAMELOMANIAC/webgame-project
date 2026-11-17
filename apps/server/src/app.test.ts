@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import {
   STORY_BUILDING_EVENTS,
+  calculateBaseRecovery,
+  calculateLiveBaseRecovery,
   hasBuildingChoiceCondition,
   resolveBuildingIntroEvent,
 } from "@webgame/types";
@@ -236,3 +238,77 @@ test("건물 이벤트 선택지 조건 판정과 레이드당 1회 제한이 �
   assert.equal(hasBuildingChoiceCondition(shuntChoice, ["mat-battery"]), true);
   assert.equal(hasBuildingChoiceCondition(shuntChoice, ["mat-relay"]), true);
 });
+
+test("거점 복귀 시각 기반 자연 회복이 10초당 HP +1, 피로도 +1로 정확히 계산된다", () => {
+  const returnedAt = new Date("2026-11-17T00:00:00.000Z");
+
+  // 53초 경과 -> 5틱 완료, 다음 틱까지 7초 남음
+  const after53s = calculateBaseRecovery({
+    hp: 10,
+    maxHp: 100,
+    fatigue: 20,
+    maxFatigue: 100,
+    isRaiding: false,
+    returnedAt,
+    now: new Date("2026-11-17T00:00:53.000Z"),
+  });
+  assert.deepEqual(after53s, {
+    hp: 15,
+    fatigue: 25,
+    isRecovering: true,
+    nextTickInMs: 7000,
+  });
+
+  // 클라이언트 라이브 계산: 서버 응답(53초 시점 hp=15, fatigue=25) 후 7초 경과 -> 1틱 추가 (hp=16, fatigue=26)
+  const liveAfter7s = calculateLiveBaseRecovery({
+    hp: after53s.hp,
+    maxHp: 100,
+    fatigue: after53s.fatigue,
+    maxFatigue: 100,
+    isRaiding: false,
+    returnedAt,
+    serverTime: "2026-11-17T00:00:53.000Z",
+    elapsedSinceResponseMs: 7000,
+  });
+  assert.deepEqual(liveAfter7s, {
+    hp: 16,
+    fatigue: 26,
+    isRecovering: true,
+    nextTickInMs: 10_000,
+  });
+
+  // 최대치 도달 시 상한 고정 및 회복 종료
+  const maxed = calculateBaseRecovery({
+    hp: 95,
+    maxHp: 100,
+    fatigue: 98,
+    maxFatigue: 100,
+    isRaiding: false,
+    returnedAt,
+    now: new Date("2026-11-17T00:05:00.000Z"),
+  });
+  assert.deepEqual(maxed, {
+    hp: 100,
+    fatigue: 100,
+    isRecovering: false,
+    nextTickInMs: null,
+  });
+
+  // 탐사 중에는 회복하지 않는다
+  const whileRaiding = calculateBaseRecovery({
+    hp: 10,
+    maxHp: 100,
+    fatigue: 20,
+    maxFatigue: 100,
+    isRaiding: true,
+    returnedAt,
+    now: new Date("2026-11-17T00:05:00.000Z"),
+  });
+  assert.deepEqual(whileRaiding, {
+    hp: 10,
+    fatigue: 20,
+    isRecovering: false,
+    nextTickInMs: null,
+  });
+});
+

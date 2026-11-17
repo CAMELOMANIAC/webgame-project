@@ -1,3 +1,5 @@
+import { BASE_RECOVERY_RULES } from "@webgame/types";
+
 export const gameRules = {
   startNodeId: 0,
   entryNodeIds: [0, 37, 93] as number[],
@@ -26,8 +28,11 @@ export function recoveryVitals(character: {
   maxFatigue: number;
 }) {
   return {
-    hp: character.maxHp,
+    hp: Math.min(character.maxHp, BASE_RECOVERY_RULES.deathReturnHp),
     stamina: character.maxStamina,
-    fatigue: character.maxFatigue,
+    fatigue: Math.min(
+      character.maxFatigue,
+      BASE_RECOVERY_RULES.deathReturnFatigue,
+    ),
   };
 }

@@ -1,3 +1,4 @@
+import { calculateBaseRecovery } from "@webgame/types";
 import { and, asc, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -11,8 +12,41 @@ import {
 import { InventoryError } from "../services/inventory";
 import { extractRaidExploration } from "../services/raid";
 
+function applyBaseRecoveryToCharacter<
+  T extends {
+    hp: number;
+    maxHp: number;
+    fatigue: number;
+    maxFatigue: number;
+    isRaiding: boolean;
+    returnedAt: Date | null;
+  },
+>(character: T, now: Date) {
+  const recovered = calculateBaseRecovery({
+    hp: character.hp,
+    maxHp: character.maxHp,
+    fatigue: character.fatigue,
+    maxFatigue: character.maxFatigue,
+    isRaiding: character.isRaiding,
+    returnedAt: character.returnedAt,
+    now,
+  });
+  return {
+    ...character,
+    hp: recovered.hp,
+    fatigue: recovered.fatigue,
+    serverTime: now.toISOString(),
+  };
+}
+
 function formatCharacterResponse<
   T extends {
+    hp: number;
+    maxHp: number;
+    fatigue: number;
+    maxFatigue: number;
+    isRaiding: boolean;
+    returnedAt: Date | null;
     weapons: unknown[];
     displayName?: string | null;
     variant?: { definition?: { name?: string | null } | null } | null;
@@ -23,6 +57,7 @@ function formatCharacterResponse<
   },
 >(character: T) {
   const { weapons, activeRaid, ...rest } = character;
+  const recovered = applyBaseRecoveryToCharacter(rest, new Date());
   const formattedRaid = activeRaid
     ? (() => {
         const { encounterTravel, ...raidRest } = activeRaid;
@@ -34,10 +69,12 @@ function formatCharacterResponse<
       })()
     : activeRaid;
   return {
-    ...rest,
+    ...recovered,
     activeRaid: formattedRaid,
     displayName:
-      rest.displayName ?? rest.variant?.definition?.name ?? "생존자",
+      recovered.displayName ??
+      recovered.variant?.definition?.name ??
+      "생존자",
     equipment: weapons,
   };
 }
@@ -48,14 +85,21 @@ export function registerCharacterRoutes(
 ) {
   app.get<{ Params: { userId: string } }>(
     "/user/:userId/characters",
-    async (request) => ({
-      selectedCharacterId: await selectedCharacterId(db, request.params.userId),
-      characters: await db.query.characters.findMany({
+    async (request) => {
+      const now = new Date();
+      const rows = await db.query.characters.findMany({
         where: eq(characters.userId, request.params.userId),
         with: { variant: { with: { definition: true } } },
         orderBy: [asc(characters.createdAt), asc(characters.id)],
-      }),
-    }),
+      });
+      return {
+        selectedCharacterId: await selectedCharacterId(
+          db,
+          request.params.userId,
+        ),
+        characters: rows.map((row) => applyBaseRecoveryToCharacter(row, now)),
+      };
+    },
   );
   app.get<{ Params: { userId: string } }>(
     "/user/:userId/character",

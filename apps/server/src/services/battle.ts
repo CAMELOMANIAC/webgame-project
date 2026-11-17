@@ -418,6 +418,7 @@ export async function applyBattleSettlement(
         .set({
           isRaiding: false,
           ...recoveryVitals(character),
+          returnedAt: new Date(),
           time: 0,
           currentNodeId: 0,
           weight: 0,

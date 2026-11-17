@@ -3,6 +3,7 @@ import {
   type BuildingActionInput,
   type BuildingActionResult,
   type BuildingEventState,
+  calculateBaseRecovery,
   calculateEntryDelayMinutes,
   FATIGUE_RULES,
   firstMissionNodeId,
@@ -219,7 +220,13 @@ export async function resetRaidWithoutSession(
 
     await tx
       .update(characters)
-      .set({ isRaiding: false, activeRaidId: null, currentNodeId: 0, time: 0 })
+      .set({
+        isRaiding: false,
+        activeRaidId: null,
+        currentNodeId: 0,
+        time: 0,
+        returnedAt: new Date(),
+      })
       .where(eq(characters.id, characterId));
   });
 }
@@ -285,7 +292,16 @@ export async function startRaid(
         .update(users)
         .set({ selectedCharacterId: characterId })
         .where(eq(users.id, userId));
-    if (character.hp <= 0 || character.isRaiding)
+    const recovered = calculateBaseRecovery({
+      hp: character.hp,
+      maxHp: character.maxHp,
+      fatigue: character.fatigue,
+      maxFatigue: character.maxFatigue,
+      isRaiding: character.isRaiding,
+      returnedAt: character.returnedAt,
+      now: new Date(),
+    });
+    if (recovered.hp <= 0 || character.isRaiding)
       throw new InventoryError("Character is not ready to start a raid", 409);
     const loadoutSnapshot = loadout
       ? await syncLoadoutWithStashInTransaction(
@@ -315,6 +331,9 @@ export async function startRaid(
         currentNodeId: entryNodeId,
         time: initialTime,
         weight,
+        hp: recovered.hp,
+        fatigue: recovered.fatigue,
+        returnedAt: null,
       })
       .where(eq(characters.id, characterId));
     await recordGhosts(tx, characterId, raid.id, [
@@ -450,7 +469,13 @@ async function performRaidAction<T>(
       .set(
         status === "ACTIVE"
           ? { currentNodeId: updated.currentNodeId, time: updated.time }
-          : { isRaiding: false, activeRaidId: null, currentNodeId: 0, time: 0 },
+          : {
+              isRaiding: false,
+              activeRaidId: null,
+              currentNodeId: 0,
+              time: 0,
+              returnedAt: new Date(),
+            },
       )
       .where(eq(characters.id, characterId));
     const response = { ...result.payload, raid: view(updated) };

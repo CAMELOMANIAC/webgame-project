@@ -120,6 +120,7 @@ export const characters = pgTable(
     time: integer("time").notNull().default(0),
     isRaiding: boolean("isRaiding").notNull().default(false),
     currentNodeId: integer("currentNodeId").notNull().default(0),
+    returnedAt: timestamp("returnedAt", { precision: 3, mode: "date" }),
     activeRaidId: text("activeRaidId").references(
       (): AnyPgColumn => raidSessions.id,
       { onDelete: "set null", onUpdate: "cascade" },
