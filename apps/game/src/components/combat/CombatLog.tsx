@@ -2,12 +2,18 @@ import { useAtomValue } from "jotai";
 import { AnimatePresence, motion } from "motion/react";
 
 import { battleLogAtom, processedEventsAtom } from "@/atoms/globalAtom";
+import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 
 import * as styles from "./CombatLog.css";
 
 const CombatLog = () => {
   const processedEvents = useAtomValue(processedEventsAtom);
   const battle = useAtomValue(battleLogAtom);
+  const { data: characterData } = useGetCharacter();
+  const characterId = characterData?.raw.id;
+  const selfPlayer = battle?.initialState.players.find(
+    (player) => player.id === characterId,
+  );
 
   const logHistory = processedEvents
     .filter((e) => "actorId" in e || e.type === "SHIELD")
@@ -28,23 +34,36 @@ const CombatLog = () => {
                 : event.type === "SHIELD"
                   ? event.targetId
                   : null;
-            const actorName = participantId
-              ? (battle?.initialState.players.find(
+            const actorPlayer = participantId
+              ? battle?.initialState.players.find(
                   (player) => player.id === participantId,
-                )?.name ?? participantId)
-              : "SYSTEM";
+                )
+              : undefined;
+            const actorName = actorPlayer?.name ?? participantId ?? "SYSTEM";
+            const role: "self" | "ally" | "enemy" =
+              actorPlayer && actorPlayer.id === characterId
+                ? "self"
+                : actorPlayer &&
+                    selfPlayer &&
+                    actorPlayer.teamId === selfPlayer.teamId
+                  ? "ally"
+                  : "enemy";
+            const mirrored = role !== "enemy";
 
             return (
               <motion.li
                 key={`${event.id}-${event.timestamp}`}
-                className={styles.actionLogItem}
+                className={styles.actionLogItem({ role })}
                 layout
-                initial={{ opacity: 0, x: -12 }}
+                initial={{ opacity: 0, x: mirrored ? 12 : -12 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 12 }}
+                exit={{ opacity: 0, x: mirrored ? -12 : 12 }}
               >
-                <div className={styles.actionLogPortrait} aria-hidden="true" />
-                <div className={styles.actionLogText}>
+                <div
+                  className={styles.actionLogPortrait({ mirrored })}
+                  aria-hidden="true"
+                />
+                <div className={styles.actionLogText({ mirrored })}>
                   <p className={styles.actionLogType}>
                     {event.type === "SYNERGY"
                       ? `SYNERGY [${event.sourceSlotIndex + 1}→${event.targetSlotIndices.map((idx) => idx + 1).join(",")}]`
