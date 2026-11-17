@@ -68,7 +68,16 @@ export default async function handler(
   req: IncomingMessage,
   res: ServerResponse,
 ) {
-  cachedApp ??= buildApp();
-  await cachedApp.ready();
-  cachedApp.server.emit("request", req, res);
+  const app = (cachedApp ??= buildApp());
+  await app.ready();
+  await new Promise<void>((resolve) => {
+    const done = () => {
+      res.off("finish", done);
+      res.off("close", done);
+      resolve();
+    };
+    res.once("finish", done);
+    res.once("close", done);
+    app.server.emit("request", req, res);
+  });
 }
