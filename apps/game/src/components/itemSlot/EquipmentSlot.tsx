@@ -2,7 +2,13 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { type BattleEvent, type Item, resolveCatalogWeaponData } from "@webgame/types";
 import { useAtomValue } from "jotai";
-import { motion } from "motion/react";
+import {
+  animate,
+  motion,
+  useMotionTemplate,
+  useMotionValue,
+} from "motion/react";
+import { useEffect } from "react";
 
 import {
   currentTimeAtom,
@@ -47,6 +53,37 @@ function getTickTransitionDuration(
   }
 
   return (isFirstCooldownTick ? 0 : 1) + eventDelaySec;
+}
+
+interface CooldownOverlayProps {
+  targetProgress: number;
+  duration: number;
+  remainingCooldown: number;
+}
+
+function CooldownOverlay({
+  targetProgress,
+  duration,
+  remainingCooldown,
+}: CooldownOverlayProps) {
+  const progress = useMotionValue(1);
+  const background = useMotionTemplate`conic-gradient(rgba(9, 9, 11, 0.84) calc(${progress} * 360deg), rgba(9, 9, 11, 0.35) 0deg)`;
+
+  useEffect(() => {
+    const controls = animate(progress, targetProgress, {
+      duration,
+      ease: "linear",
+    });
+    return () => controls.stop();
+  }, [progress, targetProgress, duration]);
+
+  return (
+    <motion.div className={styles.cooldownOverlay} style={{ background }}>
+      <span className={styles.cooldownText}>
+        {Math.ceil(remainingCooldown)}
+      </span>
+    </motion.div>
+  );
 }
 
 interface EquipmentSlotProps {
@@ -253,24 +290,12 @@ const EquipmentSlot = ({
           />
 
           {isOnCooldown && (
-            <motion.div
+            <CooldownOverlay
               key={cooldownKey}
-              className={styles.cooldownOverlay}
-              initial={
-                { "--cooldown-percent": 1 } as Record<string, number>
-              }
-              animate={
-                { "--cooldown-percent": cooldownProgress } as Record<
-                  string,
-                  number
-                >
-              }
-              transition={{ duration: cooldownTransitionDuration, ease: "linear" }}
-            >
-              <span className={styles.cooldownText}>
-                {Math.ceil(remainingCooldown)}
-              </span>
-            </motion.div>
+              targetProgress={cooldownProgress}
+              duration={cooldownTransitionDuration}
+              remainingCooldown={remainingCooldown}
+            />
           )}
 
           {isCasting && (
