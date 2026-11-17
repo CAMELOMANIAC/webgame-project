@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useRef, useState } from "react";
 
 import * as styles from "./RetreatButton.css";
 
@@ -16,6 +17,7 @@ export interface RetreatButtonProps {
   gauge: number;
   expired?: boolean;
   countdown?: { endsAt: number; durationMs: number };
+  pending?: boolean;
   onRetreat?: () => void;
 }
 
@@ -23,6 +25,7 @@ export const RetreatButton = ({
   gauge,
   expired,
   countdown,
+  pending = false,
   onRetreat,
 }: RetreatButtonProps) => {
   const statusKey: RetreatStatusKey = expired
@@ -35,17 +38,57 @@ export const RetreatButton = ({
 
   const retreatStatus = RETREAT_STATUS[statusKey];
   const isReady = statusKey === "READY";
-  const remainingMs = countdown
-    ? Math.max(0, countdown.endsAt - performance.now())
-    : 0;
+
+  const countdownBarRef = useRef<HTMLDivElement | null>(null);
+  const [isDepleted, setIsDepleted] = useState(false);
+
+  useEffect(() => {
+    if (!isReady || !countdown) {
+      setIsDepleted(false);
+      return;
+    }
+
+    let frameId = 0;
+
+    const updateBar = () => {
+      const remaining = Math.max(0, countdown.endsAt - performance.now());
+      const progress =
+        countdown.durationMs > 0 ? Math.min(1, remaining / countdown.durationMs) : 0;
+
+      if (remaining <= 0) {
+        setIsDepleted(true);
+        return;
+      }
+
+      setIsDepleted(false);
+      if (countdownBarRef.current) {
+        countdownBarRef.current.style.transform = `scaleX(${progress})`;
+      }
+      frameId = requestAnimationFrame(updateBar);
+    };
+
+    updateBar();
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [isReady, countdown]);
+
+  const isAwaitingServer = isReady && (pending || isDepleted);
+
+  useEffect(() => {
+    if (isAwaitingServer && countdownBarRef.current) {
+      countdownBarRef.current.style.transform = "scaleX(1)";
+    }
+  }, [isAwaitingServer]);
 
   return (
     <div className={styles.container}>
       <button
         type="button"
         className={styles.button({ status: statusKey })}
-        onClick={isReady ? onRetreat : undefined}
-        disabled={!isReady || !onRetreat}
+        onClick={isReady && !pending ? onRetreat : undefined}
+        disabled={!isReady || !onRetreat || pending}
       >
         <div className={styles.contentHost}>
           <AnimatePresence initial={false}>
@@ -57,7 +100,12 @@ export const RetreatButton = ({
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               className={styles.contentRow}
             >
-              <span className={styles.statusDot({ status: statusKey })} />
+              <span
+                className={styles.statusDot({
+                  status: statusKey,
+                  blinking: isAwaitingServer,
+                })}
+              />
               <span>{retreatStatus}</span>
             </motion.div>
           </AnimatePresence>
@@ -73,18 +121,12 @@ export const RetreatButton = ({
             />
           )}
           {isReady && countdown && (
-            <motion.div
-              key={countdown.endsAt}
-              className={styles.gaugeBar({ status: statusKey })}
-              initial={{
-                width: `${Math.min(100, (100 * remainingMs) / countdown.durationMs)}%`,
-              }}
-              animate={{ width: "0%" }}
-              transition={{
-                type: "tween",
-                ease: "linear",
-                duration: remainingMs / 1_000,
-              }}
+            <div
+              ref={countdownBarRef}
+              className={styles.gaugeBar({
+                status: statusKey,
+                blinking: isAwaitingServer,
+              })}
             />
           )}
           <div className={styles.segmentMask({ ready: isReady })} />

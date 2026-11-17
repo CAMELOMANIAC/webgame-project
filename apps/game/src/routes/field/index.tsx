@@ -41,6 +41,7 @@ import ItemDetailModal, {
 } from "@/components/itemSlot/ItemDetailModal";
 import { SlotInteractionProvider } from "@/components/itemSlot/SlotInteractionContext";
 import { inheritMotionDiv, page } from "@/styles/theme.css";
+import { useBattleOccluder } from "@/utils/hooks/useBattleOccluder";
 import { useEnemyPositions } from "@/utils/hooks/useEnemyPositions";
 import { useFieldCombat } from "@/utils/hooks/useFieldCombat";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
@@ -78,7 +79,7 @@ function RouteComponent() {
   useRaidNoise();
 
   const { isCombat, setIsCombat, battleLog, navigateRaid, triggerCombat, retreatGauge,
-    retreatReady, retreatExpired, retreatWindow, chooseRetreat } =
+    retreatReady, retreatExpired, retreatWindow, retreatPending, chooseRetreat } =
     useFieldCombat(characterData);
   const { handleDragStart, handleDragEnd, moveSlots } =
     useInventoryDrag(characterData);
@@ -95,6 +96,7 @@ function RouteComponent() {
   const animatingSlotIds = useAtomValue(animatingSlotIdsAtom);
   const isSlotAnimating = animatingSlotIds.length > 0;
   const enemyPositions = useEnemyPositions(battleLog, characterData?.raw.id);
+  const fieldInfoRef = useBattleOccluder("bottom");
 
   const [isNavigating, setIsNavigating] = useAtom(isNavigatingAtom);
   const [, setTargetNodeId] = useAtom(targetNodeIdAtom);
@@ -317,6 +319,7 @@ function RouteComponent() {
               )}
               {!hideFieldInfo && (
                 <motion.div
+                  ref={fieldInfoRef}
                   className={`${inheritMotionDiv} ${styles.fieldInfo}`}
                   key="fieldInfo"
                   initial={{ height: 0, opacity: 0 }}
@@ -329,7 +332,7 @@ function RouteComponent() {
                 >
                   {isCombat && (
                     <RetreatButton gauge={retreatGauge} expired={retreatExpired} countdown={retreatWindow}
-                      onRetreat={retreatReady ? chooseRetreat : undefined} />
+                      pending={retreatPending} onRetreat={retreatReady ? chooseRetreat : undefined} />
                   )}
                   <FieldStatusSection discardMode={showDiscardDropZone} />
                   <Equipment

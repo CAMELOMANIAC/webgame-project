@@ -61,6 +61,9 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
   const isMoving = useAtomValue(isNavigatingAtom);
   const [retreatExpired, setRetreatExpired] = useState(false);
   const [retreatWindow, setRetreatWindow] = useState<{ endsAt: number; durationMs: number }>();
+  const [retreatOpened, setRetreatOpened] = useState(false);
+  const [retreatPending, setRetreatPending] = useState(false);
+  const queuedRetreatRef = useRef(false);
   const [retreatOutcome, setRetreatOutcome] = useState<{
     battleId: string;
     resolution: RetreatResolution;
@@ -92,25 +95,35 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
           signal,
         }),
       ),
-    onSuccess: async (decisionResult) => {
+    onSuccess: async (decisionResult, action) => {
       const store = getDefaultStore();
       const isCurrentBattle = () =>
         store.get(selectedUserIdAtom) === userId &&
         store.get(battleLogAtom)?.retreat?.battleId === retreat?.battleId;
       if (!retreat || !isCurrentBattle()) return;
       if (!decisionResult.resolution) {
+        setRetreatOpened(true);
         setRetreatWindow({
           endsAt: performance.now() + decisionResult.remainingMs,
           durationMs: decisionResult.windowMs,
         });
+        if (action === "OPEN" && queuedRetreatRef.current) {
+          queuedRetreatRef.current = false;
+          decision.mutate("RETREAT");
+        }
         return;
       }
       const continuation = decisionResult.resolution.decision === "CONTINUE"
         ? await openBattleTimeline(retreat, decisionResult.resolution.key)
         : null;
       if (isCurrentBattle()) {
+        setRetreatPending(false);
         setRetreatOutcome({ battleId: retreat.battleId, resolution: decisionResult.resolution, continuation });
       }
+    },
+    onError: () => {
+      queuedRetreatRef.current = false;
+      setRetreatPending(false);
     },
   });
 
@@ -155,15 +168,30 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
   }, [battleLog, characterId, queryClient, retreat?.battleId, retreatOutcome, setBattleLog,
     setCurrentNodeId, setPlayerCoords, setTime, userId, waitingForRetreat]);
   const { mutate: sendDecision, isPending: sendingDecision, isError: decisionFailed } = decision;
+
   useEffect(() => {
-    if (!atRetreatCheckpoint || sendingDecision || retreatOutcome) return;
-    const delay = retreatWindow ? Math.max(0, retreatWindow.endsAt - performance.now()) : 0;
+    if (!atRetreatCheckpoint || retreatWindow || retreatOutcome || retreatExpired) return;
+    // 게이지가 100%에 도달하자마자 낙관적 카운트다운을 시작한다.
+    setRetreatWindow({ endsAt: performance.now() + 5_000, durationMs: 5_000 });
+  }, [atRetreatCheckpoint, retreatExpired, retreatOutcome, retreatWindow]);
+
+  useEffect(() => {
+    if (!atRetreatCheckpoint || sendingDecision || retreatOutcome || retreatPending) return;
+    if (!retreatOpened) {
+      const timer = setTimeout(
+        () => sendDecision("OPEN"),
+        decisionFailed ? 1_000 : 0,
+      );
+      return () => clearTimeout(timer);
+    }
+    if (!retreatWindow) return;
+    const delay = Math.max(0, retreatWindow.endsAt - performance.now());
     const timer = setTimeout(
-      () => sendDecision(retreatWindow ? "CONTINUE" : "OPEN"),
+      () => sendDecision("CONTINUE"),
       Math.max(delay, decisionFailed ? 1_000 : 0),
     );
     return () => clearTimeout(timer);
-  }, [atRetreatCheckpoint, decisionFailed, retreatOutcome, retreatWindow, sendDecision, sendingDecision]);
+  }, [atRetreatCheckpoint, decisionFailed, retreatOpened, retreatOutcome, retreatPending, retreatWindow, sendDecision, sendingDecision]);
 
   const pendingBattle = useQuery({
     queryKey: ["pending-battle", userId, characterId],
@@ -354,6 +382,9 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
   const triggerCombat = useCallback(
     (log: BattleLog) => {
       setRetreatWindow(undefined);
+      setRetreatOpened(false);
+      setRetreatPending(false);
+      queuedRetreatRef.current = false;
       setRetreatOutcome(undefined);
       setRetreatExpired(false);
       setBattleLog(log);
@@ -409,8 +440,17 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     retreatGauge,
     retreatExpired,
     retreatWindow: retreat ? retreatWindow : undefined,
+    retreatPending,
     retreatReady: atRetreatCheckpoint && !!retreatWindow &&
-      retreatWindow.endsAt > performance.now() && !sendingDecision && !retreatOutcome,
-    chooseRetreat: () => sendDecision("RETREAT"),
+      retreatWindow.endsAt > performance.now() && !retreatPending && !retreatOutcome,
+    chooseRetreat: () => {
+      if (!atRetreatCheckpoint || retreatPending || retreatOutcome) return;
+      setRetreatPending(true);
+      if (!retreatOpened) {
+        queuedRetreatRef.current = true;
+        return;
+      }
+      sendDecision("RETREAT");
+    },
   };
 }

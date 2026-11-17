@@ -1,7 +1,12 @@
-import { style } from "@vanilla-extract/css";
+import { keyframes, style } from "@vanilla-extract/css";
 import { recipe } from "@vanilla-extract/recipes";
 
 import { vars } from "@/styles/theme.css";
+
+const pulseBlink = keyframes({
+  "0%, 100%": { opacity: 0.9 },
+  "50%": { opacity: 0.18 },
+});
 
 export const container = style({
   position: "relative",
@@ -99,9 +104,16 @@ export const statusDot = recipe({
       READY: { backgroundColor: vars.color.ctaFg },
       EXPIRED: { backgroundColor: vars.text.disabled },
     },
+    blinking: {
+      true: {
+        animation: `${pulseBlink} 0.75s ease-in-out infinite`,
+      },
+      false: {},
+    },
   },
   defaultVariants: {
     status: "DETECTED",
+    blinking: false,
   },
 });
 
@@ -127,17 +139,25 @@ export const track = recipe({
 export const gaugeBar = recipe({
   base: {
     height: "100%",
+    transformOrigin: "left center",
   },
   variants: {
     status: {
       DETECTED: { backgroundColor: vars.color.negative },
       PREPARING: { backgroundColor: vars.color.positive },
-      READY: { backgroundColor: vars.color.ctaFg },
+      READY: { backgroundColor: vars.color.ctaFg, width: "100%" },
       EXPIRED: { backgroundColor: vars.border.grid },
+    },
+    blinking: {
+      true: {
+        animation: `${pulseBlink} 0.75s ease-in-out infinite`,
+      },
+      false: {},
     },
   },
   defaultVariants: {
     status: "DETECTED",
+    blinking: false,
   },
 });
 
