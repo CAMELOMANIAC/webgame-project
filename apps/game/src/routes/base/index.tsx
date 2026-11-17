@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { BaseScreen } from "@/components/lobby/BaseScreen";
 import * as styles from "@/components/lobby/BaseScreen.css";
 import { CharacterCard } from "@/components/lobby/CharacterCard";
+import { useBaseRecovery } from "@/utils/hooks/useBaseRecovery";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useRaidSession } from "@/utils/hooks/useRaidSession";
 
@@ -13,6 +14,7 @@ function BaseHome() {
   const { data } = useGetCharacter();
   const { startRaid } = useRaidSession();
   const character = data?.raw;
+  const recovery = useBaseRecovery(character);
 
   const handleRaidAction = () => {
     if (!character) return;
@@ -37,7 +39,7 @@ function BaseHome() {
         <CharacterCard
           character={character}
           onRaidAction={handleRaidAction}
-          disabled={startRaid.isPending || (character ? character.hp <= 0 : false)}
+          disabled={startRaid.isPending || (character ? recovery.hp <= 0 : false)}
         />
         <section className={styles.sectionPanel}>
           <h2 className={styles.sectionHeader}>임무 통신</h2>

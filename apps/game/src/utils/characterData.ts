@@ -32,6 +32,8 @@ export interface CharacterResponse {
   time: number;
   isRaiding: boolean;
   currentNodeId: number;
+  returnedAt?: string | null;
+  serverTime?: string;
   activeRaidId: string | null;
   activeRaid: RaidView | null;
   user: {

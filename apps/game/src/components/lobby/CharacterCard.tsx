@@ -1,5 +1,7 @@
 import { motion } from "motion/react";
 
+import { RollingNumber } from "@/components/common/RollingValue";
+import { useBaseRecovery } from "@/utils/hooks/useBaseRecovery";
 import type { CharacterResponse } from "@/utils/hooks/useGetCharacter";
 
 import defaultSurvivorPortrait from "../../assets/survivor-portrait-tranparent.png";
@@ -21,6 +23,8 @@ export function CharacterCard({
   portraitSrc = defaultSurvivorPortrait,
 }: CharacterCardProps) {
   const isRaiding = !!character?.isRaiding;
+  const recovery = useBaseRecovery(character);
+  const liveHp = character ? recovery.hp : 0;
 
   // 장착된 무기 목록 추출
   const equippedWeapons = character?.equipment.filter((e) => e.weaponMaster).map((e) => e.weaponMaster!.name) ?? [];
@@ -38,13 +42,13 @@ export function CharacterCard({
         {character ? (
           <>
             <div className={styles.portraitWrap} aria-hidden="true">
-              <img src={portraitSrc} alt="" className={styles.portraitImage({ dead: character.hp <= 0 })} />
+              <img src={portraitSrc} alt="" className={styles.portraitImage({ dead: liveHp <= 0 })} />
             </div>
             <div className={styles.cardContent}>
               <h2 className={styles.characterName}>{character.displayName || "미확인 개체"}</h2>
               {/* 체력만 숫자로 크게 표현 */}
               <div className={styles.hpNumber}>
-                <span>{character.hp}</span>
+                <RollingNumber value={liveHp} />
                 <span className={styles.hpMax}>/ {character.maxHp}</span>
                 <span className={styles.hpUnit}>HP</span>
               </div>

@@ -28,6 +28,7 @@ import * as baseStyles from "@/components/lobby/BaseScreen.css";
 import CharacterCollection from "@/components/lobby/CharacterCollection";
 import { LoadoutEditor } from "@/components/lobby/LoadoutEditor";
 import { page } from "@/styles/theme.css";
+import { useBaseRecovery } from "@/utils/hooks/useBaseRecovery";
 import {
   characterKey,
   useCharacterCollectionActions,
@@ -231,11 +232,8 @@ function ExpeditionStagingScreen() {
   const selectedRosterCharacter = rosterQuery.data?.characters.find(
     (entry) => entry.id === effectiveSelectedId,
   );
-  const canProceedStep1 = Boolean(
-    effectiveSelectedId &&
-      ((character && character.hp > 0) ||
-        (selectedRosterCharacter && selectedRosterCharacter.hp > 0)),
-  );
+  const recovery = useBaseRecovery(character ?? selectedRosterCharacter);
+  const canProceedStep1 = Boolean(effectiveSelectedId && recovery.hp > 0);
   const defaultStartNodeId = rulesQuery.data?.startNodeId ?? 0;
   const startNodeCandidates = rulesQuery.data?.entryNodeIds ?? [];
   const effectiveStartNodeId =

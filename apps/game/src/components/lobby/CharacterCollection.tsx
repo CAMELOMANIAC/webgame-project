@@ -1,6 +1,9 @@
+import { calculateLiveBaseRecovery } from "@webgame/types";
 import { useAtomValue } from "jotai";
+import { useEffect, useState } from "react";
 
 import { pendingNavigationAtom } from "@/atoms/pendingNavigationAtom";
+import { useRecoveryClock } from "@/utils/hooks/useBaseRecovery";
 import {
   useCharacterCollectionActions,
   useCharacterRoster,
@@ -28,6 +31,18 @@ export default function CharacterCollection({
   const { select } = useCharacterCollectionActions();
   const pending = useAtomValue(pendingNavigationAtom);
   const characters = roster.data?.characters ?? [];
+  const [responseAtMs, setResponseAtMs] = useState(() => Date.now());
+  useEffect(() => {
+    setResponseAtMs(Date.now());
+  }, [roster.dataUpdatedAt]);
+  const hasRecovering = characters.some(
+    (character) =>
+      !character.isRaiding &&
+      Boolean(character.returnedAt) &&
+      (character.hp < character.maxHp || character.fatigue < character.maxFatigue),
+  );
+  const nowMs = useRecoveryClock(hasRecovering, 1000);
+  const elapsedSinceResponseMs = Math.max(0, nowMs - responseAtMs);
   const activeSelectedCharacterId =
     selectedCharacterId !== undefined
       ? selectedCharacterId
@@ -83,6 +98,16 @@ export default function CharacterCollection({
               ? "selected"
               : "idle";
           const isExpanded = cardState === "selected";
+          const live = calculateLiveBaseRecovery({
+            hp: character.hp,
+            maxHp: character.maxHp,
+            fatigue: character.fatigue,
+            maxFatigue: character.maxFatigue,
+            isRaiding: character.isRaiding,
+            returnedAt: character.returnedAt,
+            serverTime: character.serverTime,
+            elapsedSinceResponseMs,
+          });
           return (
             <Card
               key={character.id}
@@ -132,7 +157,16 @@ export default function CharacterCollection({
                 </strong>
                 <div className={styles.statBlock({ expanded: isExpanded })}>
                   <span>
-                    HP {character.hp}/{character.maxHp}
+                    HP {live.hp}/{character.maxHp}
+                  </span>
+                  <span
+                    className={styles.statDivider({ expanded: isExpanded })}
+                    aria-hidden="true"
+                  >
+                    ·
+                  </span>
+                  <span>
+                    ENG {live.fatigue}/{character.maxFatigue}
                   </span>
                   <span
                     className={styles.statDivider({ expanded: isExpanded })}
