@@ -519,6 +519,38 @@ export function LoadoutEditor({
         (entry) => entry.weaponMasterId === inspectedTarget.weaponMasterId,
       );
       if (!stashItem) return null;
+      const firstEmptyEquipIndex =
+        characterData?.raw.equipment.findIndex((slot) => !slot.weaponMaster) ??
+        -1;
+      const stashActions: ItemDetailAction[] = [];
+
+      if (commitMode === "deferred") {
+        stashActions.push({
+          label: "장착",
+          tone: "primary",
+          disabled: isBusy || firstEmptyEquipIndex < 0,
+          onClick: () => {
+            if (firstEmptyEquipIndex >= 0) {
+              handleMoveToEquipment(
+                stashItem.weaponMasterId,
+                firstEmptyEquipIndex,
+              );
+            }
+            setInspectedTarget(null);
+          },
+        });
+      }
+
+      stashActions.push({
+        label: "가방에 넣기",
+        ...(commitMode !== "deferred" ? { tone: "primary" as const } : {}),
+        disabled: isBusy,
+        onClick: () => {
+          handleMoveToBackpack(stashItem.weaponMasterId);
+          setInspectedTarget(null);
+        },
+      });
+
       return {
         id: stashItem.id,
         masterId: stashItem.weaponMasterId,
@@ -529,17 +561,7 @@ export function LoadoutEditor({
         value: stashItem.weaponMaster.value,
         weaponData: stashItem.weaponMaster,
         slotLabel: "거점 창고",
-        actions: [
-          {
-            label: "가방에 넣기",
-            tone: "primary",
-            disabled: isBusy,
-            onClick: () => {
-              handleMoveToBackpack(stashItem.weaponMasterId);
-              setInspectedTarget(null);
-            },
-          },
-        ],
+        actions: stashActions,
       };
     }
 
