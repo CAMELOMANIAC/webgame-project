@@ -1367,13 +1367,13 @@ export async function executeRaidBuildingAction(
           exp.lootedBuildingIds.push(building.id);
           exp.buildingEvents[buildingKey] = {
             stage: "CLEARED",
-            text: "이 지역에서 얻을 건 다 얻은 것 같다.",
+            text: "이 지역에서 얻을 건 다 얻은 것 같습니다.",
           };
           const payload: Omit<BuildingActionResult, "raid"> = {
             action: "SEARCH",
             encounterTriggered: false,
             obtainedItems: [],
-            message: "이 지역에서 얻을 건 다 얻은 것 같다.",
+            message: "이 지역에서 얻을 건 다 얻은 것 같습니다.",
           };
           return {
             payload,
