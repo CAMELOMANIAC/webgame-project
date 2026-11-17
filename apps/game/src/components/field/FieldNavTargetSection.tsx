@@ -1214,6 +1214,16 @@ const FieldNavTargetSection = () => {
                   const resultItem = getCatalogItemById(
                     recipe.resultEquipmentId,
                   );
+                  const resultName =
+                    resultItem?.name ?? recipe.resultEquipmentId;
+                  const baseName =
+                    getCatalogItemById(recipe.baseEquipmentId)?.name ??
+                    recipe.compatibleBaseNames[0] ??
+                    recipe.baseEquipmentId;
+                  const itemBackdrop = resolveItemImageSrc(
+                    recipe.resultEquipmentId,
+                    resultName,
+                  );
                   const hasBase =
                     character.equipment.some((s) =>
                       matchesRecipeBase(recipe, s.weaponMaster),
@@ -1231,17 +1241,12 @@ const FieldNavTargetSection = () => {
                   const hasAllMats = [...matCountsNeeded.entries()].every(
                     ([mId, qty]) => (ownedItemCounts.get(mId) ?? 0) >= qty,
                   );
-                  const baseName =
-                    getCatalogItemById(recipe.baseEquipmentId)?.name ??
-                    recipe.compatibleBaseNames[0] ??
-                    recipe.baseEquipmentId;
-                  const matNames = recipe.materialIds
-                    .map((id) => getCatalogItemById(id)?.name ?? id)
-                    .join(" + ");
                   return {
                     recipe,
-                    resultName: resultItem?.name ?? recipe.resultEquipmentId,
-                    reqsText: `${baseName} + ${matNames}`,
+                    resultName,
+                    baseName,
+                    itemBackdrop,
+                    hasBase,
                     canCraft: hasBase && hasAllMats,
                   };
                 });
@@ -1264,6 +1269,7 @@ const FieldNavTargetSection = () => {
                       {craftEntries.map((entry) => {
                         const isSelected =
                           selectedEntry?.recipe.id === entry.recipe.id;
+                        const matSeenCounts = new Map<string, number>();
                         return (
                           <label
                             key={entry.recipe.id}
@@ -1283,19 +1289,64 @@ const FieldNavTargetSection = () => {
                               }
                               className={styles.craftRadioInput}
                             />
+                            {entry.itemBackdrop && (
+                              <span
+                                aria-hidden="true"
+                                className={styles.recipeBackdropWrap}
+                              >
+                                <span
+                                  className={styles.recipeBackdrop}
+                                  style={{
+                                    backgroundImage: `url(${entry.itemBackdrop})`,
+                                  }}
+                                />
+                              </span>
+                            )}
                             <span
                               className={styles.craftRadioIndicator({
                                 selected: isSelected,
                               })}
                               aria-hidden="true"
                             />
-                            <div className={styles.craftInfo}>
-                              <span className={styles.craftName}>
-                                {entry.resultName}
-                              </span>
-                              <span className={styles.craftReqs}>
-                                {entry.reqsText}
-                              </span>
+                            <div className={styles.craftCardContent}>
+                              <div className={styles.recipeHeader}>
+                                <div className={styles.recipeTitleGroup}>
+                                  <span className={styles.recommendTag}>
+                                    T{entry.recipe.tier}
+                                  </span>
+                                  <span className={styles.recipeName}>
+                                    {entry.resultName}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className={styles.recipeIngredientsRow}>
+                                <span
+                                  className={styles.recipeBaseBadge({
+                                    owned: entry.hasBase,
+                                  })}
+                                >
+                                  {entry.baseName}
+                                </span>
+                                {entry.recipe.materialIds.map((matId, idx) => {
+                                  const seen =
+                                    (matSeenCounts.get(matId) ?? 0) + 1;
+                                  matSeenCounts.set(matId, seen);
+                                  const matName =
+                                    getCatalogItemById(matId)?.name ?? matId;
+                                  const hasMat =
+                                    (ownedItemCounts.get(matId) ?? 0) >= seen;
+                                  return (
+                                    <span
+                                      key={`${matId}-${idx}`}
+                                      className={styles.ingredientChip({
+                                        owned: hasMat,
+                                      })}
+                                    >
+                                      {matName}
+                                    </span>
+                                  );
+                                })}
+                              </div>
                             </div>
                           </label>
                         );

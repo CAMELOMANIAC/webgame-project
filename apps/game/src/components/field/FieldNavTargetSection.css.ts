@@ -870,26 +870,30 @@ export const craftList = style({
 });
 
 export const craftOption = recipe({
-  base: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    padding: "8px 10px",
-    borderRadius: vars.radius.control,
-    border: `1px solid ${vars.border.subtle}`,
-    backgroundColor: vars.surface.base,
-    cursor: "pointer",
-    transition: "border-color 0.15s ease, background-color 0.15s ease",
-    selectors: {
-      "&:hover": {
-        borderColor: vars.border.strong,
-      },
-      "&:has(input:focus-visible)": {
-        outline: `1px solid ${vars.text.primary}`,
-        outlineOffset: "1px",
+  base: [
+    cornerBrackets({ tone: "default" }),
+    {
+      position: "relative",
+      display: "flex",
+      alignItems: "flex-start",
+      gap: "10px",
+      padding: "10px",
+      borderRadius: vars.radius.control,
+      border: `1px solid ${vars.border.subtle}`,
+      backgroundColor: vars.surface.base,
+      cursor: "pointer",
+      transition: "border-color 0.15s ease, background-color 0.15s ease",
+      selectors: {
+        "&:hover": {
+          borderColor: vars.border.strong,
+        },
+        "&:has(input:focus-visible)": {
+          outline: `1px solid ${vars.text.primary}`,
+          outlineOffset: "1px",
+        },
       },
     },
-  },
+  ],
   variants: {
     selected: {
       true: {
@@ -905,7 +909,7 @@ export const craftOption = recipe({
     },
     unavailable: {
       true: {
-        opacity: 0.55,
+        opacity: 0.6,
       },
       false: {},
     },
@@ -930,7 +934,10 @@ export const craftRadioInput = style({
 
 export const craftRadioIndicator = recipe({
   base: {
+    position: "relative",
+    zIndex: 1,
     flexShrink: 0,
+    marginTop: "3px",
     width: "14px",
     height: "14px",
     borderRadius: "50%",
@@ -956,27 +963,13 @@ export const craftRadioIndicator = recipe({
   },
 });
 
-export const craftInfo = style({
-  display: "flex",
-  flexDirection: "column",
-  gap: "2px",
-  minWidth: 0,
-  flex: 1,
-});
-
-export const craftName = style({
-  fontSize: "12px",
-  fontWeight: 600,
-  color: vars.text.primary,
-});
-
-export const craftReqs = style({
-  fontSize: "11px",
-  fontFamily: vars.font.mono,
-  color: vars.text.muted,
-  whiteSpace: "normal",
-  wordBreak: "keep-all",
-});
+export const craftCardContent = style([
+  recipeCardContent,
+  {
+    flex: 1,
+    minWidth: 0,
+  },
+]);
 
 export const lootCard = style([
   fieldWidget({ tone: "default" }),
