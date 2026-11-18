@@ -60,6 +60,8 @@ export function createNoiseRipple(world: Container, mapLayer: Container) {
     world.addChild(sprite);
     // Pixi는 렌더링 시점의 월드 경계를 화면 크기로 제한한다.
     const filter = new DisplacementFilter({ sprite, clipToViewport: true });
+    filter.enabled = false;
+    filter.scale.set(0);
     const displayRadius = area.radius * displayRadiusScale;
 
     const ring = new Graphics();
@@ -75,6 +77,7 @@ export function createNoiseRipple(world: Container, mapLayer: Container) {
       baseY: area.y,
       displayRadius,
       diameter: (displayRadius * 2) / crestRadius,
+      maxScale: Math.min(18, Math.max(8, displayRadius * 0.35)),
       maxRingAlpha: isEcho ? echoRingAlpha : primaryRingAlpha,
       ringWidth: isEcho ? 1.25 : 1.75,
     };
@@ -87,20 +90,22 @@ export function createNoiseRipple(world: Container, mapLayer: Container) {
   const hide = () => {
     if (!mapLayer.destroyed) mapLayer.filters = null;
     for (const { primary, echo } of pairs) {
+      primary.filter.enabled = false;
+      echo.filter.enabled = false;
       if (!primary.ring.destroyed) primary.ring.visible = false;
       if (!echo.ring.destroyed) echo.ring.visible = false;
     }
   };
 
   const updateWave = (
-    { sprite, filter, ring, displayRadius, diameter, maxRingAlpha, ringWidth }: Wave,
+    { sprite, filter, ring, displayRadius, diameter, maxScale, maxRingAlpha, ringWidth }: Wave,
     wave?: RippleWave,
   ) => {
     const active = !!wave && wave.strength > 0;
     filter.enabled = active;
     if (wave && active) {
       sprite.setSize(diameter * wave.radiusScale);
-      filter.scale.set(wave.strength * 18);
+      filter.scale.set(wave.strength * maxScale);
       if (!ring.destroyed) {
         ring.visible = true;
         ring
