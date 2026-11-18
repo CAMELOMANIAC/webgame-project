@@ -92,10 +92,10 @@ const edges = mapData.edges as unknown as Edge[];
 const MIN_ZOOM_SCALE = 0.2;
 const MAX_ZOOM_SCALE = 10;
 const FOG_VISIBLE_MIN_SCALE = 1.0;
-const NOISE_PULSE_SECONDS = 1.35;
-const NOISE_ECHO_DELAY_SECONDS = 0.3;
+const NOISE_PULSE_SECONDS = 1.1;
+const NOISE_ECHO_DELAY_SECONDS = 0.25;
 const NOISE_ECHO_STRENGTH = 0.55;
-const NOISE_PULSE_INTERVAL_MS = 3000;
+const NOISE_PULSE_INTERVAL_MS = 1600;
 const DISTRICT_DASH_PX = 4;
 const DISTRICT_DASH_GAP_PX = 7;
 const DISTRICT_DASH_PERIOD_PX = DISTRICT_DASH_PX + DISTRICT_DASH_GAP_PX;
@@ -490,7 +490,6 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     focusTweenRef.current?.destroy();
     focusTweenRef.current = null;
     navigateRaidResponseRef.current = null;
-    setNoiseSignals(null);
     navigationPathCoordsRef.current = coords;
     setTargetNodeId(path[path.length - 1]);
     setShortestPath(path);
@@ -1895,10 +1894,6 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     }
   }, [characterData, isNavigating, isCombat, currentNodeId, setCurrentNodeId, setPlayerCoords]);
 
-  const hasNoiseAreas = Boolean(
-    noiseSignals && noiseSignals.raidId === activeRaidId && noiseSignals.areas.length > 0,
-  );
-
   useEffect(() => {
     const ripple = noiseRippleRef.current;
     if (!isPixiReady || !ripple) return;
@@ -1908,11 +1903,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         ? noiseSignals.areas
         : [];
     ripple.setAreas(areas);
-  }, [activeRaidId, isCombat, isPixiReady, noiseSignals]);
-
-  useEffect(() => {
-    const ripple = noiseRippleRef.current;
-    if (!isPixiReady || !ripple || !hasNoiseAreas || isCombat) return;
+    if (areas.length === 0) return;
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       ripple.show({ radiusScale: 1, strength: 0.45 });
@@ -1957,7 +1948,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       tween?.destroy();
       ripple.hide();
     };
-  }, [activeRaidId, hasNoiseAreas, isCombat, isPixiReady]);
+  }, [activeRaidId, isCombat, isPixiReady, noiseSignals]);
 
   // 5.5. requestAnimationFrame 기반 등속(Constant Speed) 부드러운 네비게이션 보간 루프
   useEffect(() => {
