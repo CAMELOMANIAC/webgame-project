@@ -1,11 +1,157 @@
 # SF 생존 게임 개발 TODO
 
-작성일: 2026-10-25
+작성일: 2026-10-25 (갱신일: 2026-11-18)
 
-상태: 01–14 완료 — 첫 플레이 구간 구현·검증 완료
-기준: 현재 코드 분석 및 회성시·한림그룹 세계관 논의
+상태:
+- **1~4단계 (01–14): 완료** — 첫 플레이 구간 및 기본 안정성·동기화·조합·소모품·소환수 기반 구현 완료
+- **5단계 (15–22): 진행 대기** — 게임 전반의 '밋밋함' 해소를 위한 코어 루프·적 밸런스·탐사 긴장감·정산/경제·연출 고도화 과제
 
-## 목표와 진행 방식
+기준: 현재 코드베이스(`packages/types`, `apps/server`, `apps/game`) 정밀 분석 및 회성시·한림그룹 세계관([`docs/SF-생존-게임-세계관.md`](./docs/SF-생존-게임-세계관.md))·디자인 시스템([`DESIGN.md`](./DESIGN.md))
+
+---
+
+## 🚨 다른 세션 및 에이전트를 위한 인수인계: 왜 현재 게임이 밋밋하게 느껴지는가?
+
+현재 게임은 **하위 메커니즘(6슬롯 순차 발동, 인접/양끝/태그별 시너지, 보호막, 소환수, 피로도, 구역별 재료 파밍 및 1·2차 무기 조합)** 이 매우 정교하게 구현되어 있음에도, 실제 플레이 시 **"밋밋하고 긴장감과 성취감이 부족하다"** 는 문제가 있습니다. 다른 세션의 에이전트는 작업 착수 전 아래 4가지 구조적 원인을 반드시 숙지하세요.
+
+### 1. 코어 루프 & 메타 성장의 단절 ("탈출해서 창고에 쌓아도 할 수 있는 게 없다")
+- **아이템 가치(`value`)가 보상이 아닌 페널티로만 작동:** [`packages/types/src/itemCatalog.ts`](./packages/types/src/itemCatalog.ts)의 모든 아이템에는 `value`(15~300)가 책정되어 있으나, 재화(크레딧)나 거래소([`apps/game/src/routes/base/market.tsx`](./apps/game/src/routes/base/market.tsx) — 현재 `"거래소는 준비 중입니다."` 플레이스홀더)가 없습니다. 현재 `value`가 쓰이는 유일한 곳은 출격 시 [`calculateEntryDelayMinutes`](./packages/types/src/world.ts)로 **장비 가치가 높을수록 탐사 시작 시각(`time`)만 늦어지는 페널티**뿐입니다.
+- **탈출/사망 결과 화면의 허무함:** 익스트랙션 장르에서 도파민이 가장 크게 터져야 할 탈출 정산 화면([`apps/game/src/routes/field/result.tsx`](./apps/game/src/routes/field/result.tsx))에 **획득한 전리품 목록, 총 획득 가치, 처치한 적/고스트 수, 경과 시간**이 전혀 표시되지 않고 `생존자 / 결과: 탈출 완료` 두 줄만 출력됩니다.
+- **생존자 개체(`CharacterVariant`) 차별화 및 누적 성장 부재:** 다중우주 복수 개체라는 핵심 설정에도 불구하고 [`apps/server/src/db/schema.ts`](./apps/server/src/db/schema.ts)의 `CharacterVariant` 스탯이 기본값(`HP 100 / STM 100 / ENG 100 / 50KG`)으로 획일화되어 있으며, 개체별 고유 패시브·선호 무기 태그·초상화 변주나 거점 누적 성장이 없어 반복 플레이 동기가 약합니다.
+
+### 2. 탐사(Exploration) & 월드 긴장감 부족 ("시간이 흘러도 위험해지지 않는 안전한 산책")
+- **시간(`time`) 경과에 따른 압박(Tension) 부재:** 이동(10~60분), 건물 행동(10분), 의약품 사용(10분), 피로도 고갈 시 이동 시간 1.5배 증가([`packages/types/src/fatigue.ts`](./packages/types/src/fatigue.ts)) 등 시간 소모 규칙은 있으나, **시간이 흐를수록 도시 중첩 불안정도가 상승해 적이 강해지거나 탈출 조건이 까다로워지는 시간 압박 메커니즘**이 없습니다.
+- **넓은 도로망 대비 낮은 조우 밀도와 단조로운 소음 신호:** 수백 개 노드 중 최대 3개의 고스트(및 [`apps/server/src/logic/ghostPatrols.ts`](./apps/server/src/logic/ghostPatrols.ts)의 고정 경로 순찰 잔상 2기)만 추적하며 정확히 같은 시간대(`±30분`)·노드/간선에서 교차해야만 조우하므로 이동의 대부분이 빈 구간입니다. 또한 소음 파동(`EnemyNoiseSignal`)만으로는 상대의 위험도(강적 여부)를 알 수 없습니다.
+- **건물 이벤트 볼륨 부족 및 조합 건물의 수색 차단:** 조건부 태그 선택지가 있는 [`STORY_BUILDING_EVENTS`](./packages/types/src/buildingEvents.ts)는 게임 전체에 **5개**뿐(`oncePerRaid: true`)이며, 일반 건물은 2줄짜리 정적 텍스트와 `[탐색]` 버튼만 반복됩니다. 특히 **무기 조합 설비가 있는 건물(`building.category` 존재)에서는 아예 수색(`SEARCH`)이 에러로 막혀 있어**([`apps/server/src/services/raid.ts`](./apps/server/src/services/raid.ts) `action === "SEARCH"` 분기) 파밍과 조합 동선이 기계적으로 끊깁니다.
+
+### 3. 전투(Combat) 밸런스 불균형 & 6슬롯 시너지 피드백 부족 ("깊은 빌드 엔진 vs 허수아비 적")
+- **적대 NPC·몬스터가 너무 약하고 시너지를 전혀 쓰지 않음:**
+  - 기업 통제 요원([`hanlimNpcs.control`](./apps/server/src/logic/npcs.ts)): **HP 30**, 피해량 6 충격봉 1개 장착.
+  - 순찰 잔상([`patrolCombat`](./apps/server/src/logic/ghostPatrols.ts)): **HP 30**, 피해량 6 충격봉 1개 장착.
+  - 건물 조우 몬스터([`apps/server/src/db/seed.ts`](./apps/server/src/db/seed.ts)): SF 세계관과 무관한 판타지 더미 데이터(`Slime` HP 30, `Goblin` HP 60, `Orc Warrior` HP 150)가 기본 무기 1~2개만 든 채 사용되고 있습니다.
+  - 기본 지급 무기인 `기업 구호용 카빈`(피해량 16, 쿨다운 2틱) 하나만 장착해도 HP 30 적이 2타 만에 죽기 때문에, 플레이어가 2티어 조합 무기·소환수·6슬롯 태그 시너지를 맞출 이유도, 빌드가 회전하는 쾌감을 느낄 시간도 없습니다.
+- **핵심 재미인 '슬롯 간 시너지 연쇄(`SYNERGY`)'의 시각화 부재:** [`simulateBattle.ts`](./apps/server/src/logic/simulateBattle.ts)는 매 공격마다 `SYNERGY` 이벤트(`sourceSlotIndex` → `targetSlotIndices`, `hasteTicks`, `damageBonus`, `critChanceBonus`, `shieldBonus`, `staminaRestore`)를 정확히 방출하지만, 클라이언트([`BattleCanvas.tsx`](./apps/game/src/components/combat/BattleCanvas.tsx), [`EquipmentSlot.tsx`](./apps/game/src/components/itemSlot/EquipmentSlot.tsx), [`CombatLog.tsx`](./apps/game/src/components/combat/CombatLog.tsx))에서 슬롯 간 버프 전달이나 가속·강화 수치가 시각적으로 강조되지 않아 빌드의 작동 원리와 쾌감이 묻혀 있습니다.
+
+### 4. 서사(Narrative) 볼륨 & 감각적 피드백 부족
+- **단일 임무 이후의 공백과 중복 보상:** [`apps/server/src/logic/story.ts`](./apps/server/src/logic/story.ts)에 구현된 임무는 `중계 시설 기록 회수` 단 1개뿐이며, 수락 시 지급하는 무기와 완료 보고 시 지급하는 보상이 동일한 `기업 구호용 카빈 1개`입니다. 완료 후 `storyTier`가 1에서 멈춰 `storyTier 2~3` 콘텐츠로 이어지지 않습니다.
+- **거점 담당자 3인 구도 미반영:** [`docs/SF-생존-게임-세계관.md`](./docs/SF-생존-게임-세계관.md)에 기획된 거점 담당자 3인(구호·운영 '조 시설과장', 연구·진실 '윤 책임연구원', 비공식 거래 '최 사장')이 실제 거점 UI([`/base`](./apps/game/src/routes/base/index.tsx))에 등장하지 않습니다.
+
+---
+
+## 5단계: 게임성·코어 루프·전투·탐사 고도화 로드맵 (TODO 15–22)
+
+> **에이전트 작업 원칙 (`AGENTS.md` 준수):**
+> 1. 각 항목을 구현할 때 기획 수치·세부 규칙·UI 구성에서 모호한 부분이 있으면 임의로 추측하지 말고 **작업을 중단한 뒤 사용자에게 질문하여 확정**하세요.
+> 2. UI를 추가하거나 수정할 때는 반드시 [`DESIGN.md`](./DESIGN.md)의 **"Precision Tactical Instrument"** 규칙(무채색 솔리드/HUD 서피스, 1px 헤어라인, `tabular-nums`, 이극성 시맨틱 컬러 Blue `#85adff` / Red `#ff7162`, **호버·선택 시 파란색 사용 금지 및 `#fafafa` 화이트 보더 사용**, 코너 브래킷 `⌜ ⌟`)을 준수하세요.
+> 3. 요청 범위에 없는 툴팁이나 장황한 안내 문구를 임의로 추가하지 마세요.
+
+| 순서 | 작업                                                | 우선순위 | 핵심 목표                                                    |
+| ---- | --------------------------------------------------- | -------- | ------------------------------------------------------------ |
+| 15   | 적대 NPC·몬스터 SF 개편 및 6슬롯 시너지 적 아키타입 | 최우선   | 판타지 더미 몬스터 제거, 구역·위험도별 SF 적 및 6슬롯 빌드화 |
+| 16   | 전투 6슬롯 시너지 연쇄 시각화 및 전투 정보 피드백   | 최우선   | 슬롯 간 가속·증폭 연쇄 연출 및 적 장착 빌드 가시성 확보      |
+| 17   | 탐사 시간(`time`) 기반 위험도·보상 스케일링         | 높음     | 시간 경과에 따른 긴장감(위험-보상 줄다리기) 및 소음 신호 개선 |
+| 18   | 탈출·사망 정산 리포트 고도화                        | 높음     | 전리품 목록·총 가치·교전 기록·탐사 시간 정산 화면 구현       |
+| 19   | 거점 거래소(`/base/market`) 및 가치 기반 경제 루프  | 높음     | 파밍한 아이템·가치(`value`)의 소비처(보급·교환·영입) 구축    |
+| 20   | 건물 이벤트 확충 및 조합 건물 파밍 동선 개선        | 중간     | 구역별 분기형 이벤트 추가 및 랜드마크 건물 탐색·조합 흐름 개선 |
+| 21   | 다중우주 생존자 개체(`CharacterVariant`) 차별화     | 중간     | 개체별 스탯·초기 장비·고유 특성 차별화 및 수집 동기 부여     |
+| 22   | 후속 임무 체인(`storyTier 2~3`) 및 거점 담당자 연결 | 중간     | 첫 임무 보상 차별화, 2·3차 임무 및 거점 3인 NPC 서사 연결    |
+
+---
+
+### [ ] 15. 적대 NPC·몬스터 SF 개편 및 6슬롯 시너지 적 아키타입 도입
+
+- [ ] [`apps/server/src/db/seed.ts`](./apps/server/src/db/seed.ts) 및 DB 동기화 로직에서 세계관에 맞지 않는 판타지 몬스터(`Slime`, `Goblin`, `Orc Warrior`)를 제거하고, 회성시·한림그룹 세계관에 맞는 **SF 적대 개체 카탈로그**(예: 구역 순찰 드론, 기업 회수부서 타격조, 방역 격리 요원, 중첩 잔류 변이체, 중장갑 보안 유닛 등)를 `packages/types`와 서버에 정의한다.
+- [ ] [`hanlimNpcs`](./apps/server/src/logic/npcs.ts)와 [`patrolCombat`](./apps/server/src/logic/ghostPatrols.ts)의 단일 무기·HP 30 고정 구성을 개편하여, 구역 등급(주거/상업 vs 산업/의료/기반)과 진입 지점, 탐사 경과 시간에 따라 **2~6슬롯의 무기·방호·시너지·소환 장비를 실제로 조합해 장착한 적**이 등장하도록 확장한다.
+- [ ] 적 개체도 `BLADE`, `FIREARM`, `BLUNT`, `TECH`, `BIO`, `CHEM`, `ARMOR` 태그 시너지나 보호막(`SHIELD`), 캐스팅 무기(`castTicks > 0`), 소환수(`SUMMON`)를 활용하게 하여 플레이어의 1·2티어 조합 빌드가 실질적인 공방을 주고받도록 밸런스를 조정한다.
+- [ ] 적 처치 시 드랍 테이블(`rewardIds`)이 해당 적의 컨셉 및 장착 장비/구역 특산 재료와 자연스럽게 연동되도록 정비한다.
+
+대상: `packages/types/src/`, `apps/server/src/logic/npcs.ts`, `apps/server/src/logic/ghostPatrols.ts`, `apps/server/src/services/battle.ts`, `apps/server/src/services/raid.ts`, `apps/server/src/db/seed.ts`.
+
+완료 기준: 판타지 명칭 몬스터가 완전히 제거되고, 구역별로 차별화된 SF 적대 개체가 복수 슬롯과 시너지 효과를 사용하며, 관련 전투 단위·통합 테스트가 통과한다.
+
+---
+
+### [ ] 16. 전투 6슬롯 시너지 연쇄 시각화 및 전투 정보 피드백 강화
+
+- [ ] 전투 재생 중 `SYNERGY` 이벤트(`sourceSlotIndex`, `targetSlotIndices`, `hasteTicks`, `damageBonus`, `critChanceBonus`, `shieldBonus`, `staminaRestore`)가 발생할 때, 하단 [`Equipment`](./apps/game/src/components/itemSlot/Equipment.tsx) / [`EquipmentSlot`](./apps/game/src/components/itemSlot/EquipmentSlot.tsx)에서 **발동 슬롯 → 대상 슬롯으로의 시너지 전달과 버프 수치(`-1t`, `+DMG`, `+CRIT`, `+SHD`)** 가 직관적으로 보이도록 시각 피드백을 추가한다 (`DESIGN.md`의 시맨틱 컬러 `#85adff` / `#fafafa` 규격 준수).
+- [ ] [`BattleCanvas.tsx`](./apps/game/src/components/combat/BattleCanvas.tsx) 및 전투 HUD에서 보호막(`SHIELD`) 획득/차감, 치유(`HEAL`), 시전 중(`CAST_START` ~ `CAST_COMPLETE`), 장기전 과부하 피해(40틱 이후) 상태를 플레이어가 명확히 인지할 수 있도록 시각 연출을 보완한다.
+- [ ] 조우 직후 또는 전투 중 상대(고스트·NPC)의 주요 장착 장비/위협도를 파악할 수 있는 전술 텔레메트리 표시 방법을 설계·반영한다.
+
+대상: `apps/game/src/components/itemSlot/Equipment.tsx`, `apps/game/src/components/itemSlot/EquipmentSlot.tsx`, `apps/game/src/components/combat/BattleCanvas.tsx`, `apps/game/src/components/combat/CombatLog.tsx`, `apps/game/src/utils/hooks/useFieldCombat.ts`.
+
+완료 기준: 전투 중 어떤 슬롯이 어떤 슬롯을 가속·강화했는지 슬롯 UI에서 즉시 식별할 수 있고, `DESIGN.md`의 컬러·타이포그래피(`tabular-nums`) 규칙을 위반하지 않는다.
+
+---
+
+### [ ] 17. 탐사 시간(`time`) 기반 위험도·보상 스케일링 및 조우 밀도 개선
+
+- [ ] 탐사 경과 시간(`time`, 분)이 누적될수록 도시의 중첩 불안정도(또는 기업 통제 단계)가 상승하여 **조우 확률, 적 전투력 등급, 건물 수색 시 상위 재료/장비 획득 확률**이 함께 변화하는 위험-보상(Risk vs Reward) 규칙을 정의한다.
+- [ ] 현재 위치와 경과 시간에 따른 현재 위험 단계(예: 안정 / 주의 / 통제 강화 등)를 필드 상·하단 전술 HUD에 간결한 텔레메트리 지표로 표시한다.
+- [ ] 고스트 매칭 및 순찰 잔상([`ghostRoster.ts`](./apps/server/src/services/ghostRoster.ts), [`ghostPatrols.ts`](./apps/server/src/logic/ghostPatrols.ts))의 경로와 밀도를 점검하여, 넓은 맵에서도 의미 있는 조우와 우회 판단이 일어나도록 개선한다.
+
+대상: `packages/types/src/`, `apps/server/src/logic/rules.ts`, `apps/server/src/services/raid.ts`, `apps/server/src/services/ghostRoster.ts`, `apps/game/src/components/field/`.
+
+완료 기준: 시간 소모가 단순 숫자가 아니라 실질적인 위험도 및 파밍 기대값 변화로 이어져, 플레이어가 탈출 시점을 전략적으로 결정하게 된다.
+
+---
+
+### [ ] 18. 탈출·사망 정산 리포트 고도화 (`apps/game/src/routes/field/result.tsx`)
+
+- [ ] 서버의 탈출(`extractRaid`) 및 사망 정산 결과(또는 마지막 탐사 세션 요약)에서 **이번 탐사 중 회수한 아이템 목록과 수량, 총 획득 가치(`value` 합산), 총 경과 시간(`time`), 교전 횟수 및 처치한 고스트/NPC 기록, 임무 진행 변화**를 클라이언트로 전달하거나 조회할 수 있게 구성한다.
+- [ ] [`apps/game/src/routes/field/result.tsx`](./apps/game/src/routes/field/result.tsx)의 결과 화면을 [`DESIGN.md`](./DESIGN.md)의 **1px 밀착 데이터 그리드(`Exposed 1px Hairline Data Grid`)** 와 전술 정산 리포트 형태로 개편하여, 탈출 시 획득한 전리품과 가치를 한눈에 보여주고 사망 시 소실된 장비/물품을 명확히 피드백한다.
+
+대상: `packages/types/src/index.ts`, `apps/server/src/services/raid.ts`, `apps/game/src/routes/field/result.tsx`, `apps/game/src/routes/field/result.css.ts`, `apps/game/src/atoms/raidAtom.ts`.
+
+완료 기준: 탈출 및 사망 직후 결과 화면에서 해당 레이드의 전리품·가치·시간·교전 요약이 정확한 수치(`tabular-nums`)로 표시된다.
+
+---
+
+### [ ] 19. 거점 거래소(`/base/market`) 및 아이템 가치(`value`) 기반 경제·보급 루프 구현
+
+- [ ] 현재 플레이스홀더 상태인 [`apps/game/src/routes/base/market.tsx`](./apps/game/src/routes/base/market.tsx)를 실제 작동하는 거점 거래/보급 기능으로 구현한다 (착수 전 사용자와 재화 도입 방식 또는 물자 가치 교환 방식 합의 필수).
+- [ ] 창고(`StashItem`)에 쌓인 잉여 재료와 노획 장비를 가치(`value`)에 기반해 처분·교환하거나, 다음 탐사에 필요한 기초 장비·소모품(음식·의약품)·특수 재료·신규 개체 영입에 활용할 수 있는 경제 순환 구조(Sink & Faucet)를 만든다.
+- [ ] 사망으로 모든 장비를 잃었을 때도 창고 자산이나 기본 보급을 통해 재기할 수 있는 안전장치를 정비한다.
+
+대상: `packages/types/src/`, `apps/server/src/db/schema.ts`, `apps/server/src/services/`, `apps/server/src/routes/`, `apps/game/src/routes/base/market.tsx`.
+
+완료 기준: 탐사에서 가져온 전리품의 `value`가 거점 거래소에서 실질적인 보급·성장으로 전환되며, 모든 거래가 서버 트랜잭션으로 원자적 검증된다.
+
+---
+
+### [ ] 20. 건물 이벤트 확충 및 조합 건물 수색·파밍 동선 개선
+
+- [ ] 현재 5종뿐인 [`STORY_BUILDING_EVENTS`](./packages/types/src/buildingEvents.ts)를 구역 성격(`RESIDENTIAL`, `COMMERCIAL`, `INDUSTRIAL`, `MEDICAL`, `INFRA`)과 건물 유형별로 대폭 확충하여 탐사마다 새로운 상황과 태그/아이템 조건 분기를 경험할 수 있게 한다.
+- [ ] 조합 설비 건물(`building.category`가 지정된 랜드마크)에서 현재 무조건 차단되어 있는 수색(`SEARCH`) 또는 조사 행동의 규칙을 개선하여, 랜드마크 건물 방문의 매력을 높인다.
+
+대상: `packages/types/src/buildingEvents.ts`, `apps/server/src/services/raid.ts`, `apps/game/src/components/field/FieldNavTargetSection.tsx`.
+
+완료 기준: 구역별 신규 스토리 이벤트가 추가되고 조건부 선택지·보상·피로도/체력 증감이 서버와 클라이언트에서 일관되게 동작한다.
+
+---
+
+### [ ] 21. 다중우주 생존자 개체(`CharacterVariant`) 차별화 및 수집·운용 재미 강화
+
+- [ ] [`CharacterVariant`](./apps/server/src/db/schema.ts)별로 최대 체력(`maxHp`), 스태미나(`maxStamina`), 스태미나 회복(`staminaRegen`), 피로도(`maxFatigue`), 최대 중량(`maxWeight`)의 개성을 뚜렷하게 부여하고, 세계선 배경 설명이나 특화 태그(예: 기계·원거리 특화, 생체·근접 특화, 고중량 파밍 특화 등)를 정의한다.
+- [ ] 거점 숙소([`/base/quarters`](./apps/game/src/routes/base/quarters.tsx))와 출격 준비([`/base/staging`](./apps/game/src/routes/base/staging.tsx))에서 각 개체의 변주 특성과 스탯 차이를 비교해 탐사 목적(파밍 위주 vs 교전 위주)에 맞는 개체를 골라 투입하는 전략성을 만든다.
+
+대상: `packages/types/src/`, `apps/server/src/db/schema.ts`, `apps/server/src/services/characters.ts`, `apps/game/src/components/lobby/CharacterCard.tsx`, `apps/game/src/components/lobby/CharacterCollection.tsx`.
+
+완료 기준: 보유한 개체마다 능력치와 운용 방식이 실질적으로 구분되며, 회복 중인 개체를 대신해 다른 개체를 교대 투입하는 로테이션 플레이가 유의미해진다.
+
+---
+
+### [ ] 22. 후속 임무 체인(`storyTier 2~3`) 및 거점 담당자 3인 서사 연결
+
+- [ ] 첫 임무([`firstMission`](./apps/server/src/logic/story.ts))의 수락 지급품(`기업 구호용 카빈`)과 최종 보고 보상이 동일한 문제를 해결하여, 첫 임무 완료 시 실질적인 성취감을 주는 고유 보상(상위 장비, 소모품 패키지 등)을 지급한다.
+- [ ] [`docs/SF-생존-게임-세계관.md`](./docs/SF-생존-게임-세계관.md)의 거점 담당자 3인 구도(구호·운영 담당, 연구·분석 담당, 비공식 물자 거래 담당)와 연계된 **후속 임무 체인(2차·3차 임무)** 을 추가하고, 진행에 따라 `storyTier 2`(단일 경영 책임자 인식) → `storyTier 3`(복수 개체 확인) 기록과 연락처가 자연스럽게 해금되도록 연결한다.
+
+대상: `packages/types/src/`, `apps/server/src/logic/story.ts`, `apps/server/src/services/quests.ts`, `apps/game/src/components/lobby/MissionJournal.tsx`, `apps/game/src/routes/base/`.
+
+완료 기준: 첫 임무 완료 후 후속 임무로 자연스럽게 이어지며, `storyTier` 상승에 따른 기록·인물 해금이 끝까지 플레이 가능한 루프로 연결된다.
+
+---
+
+## 1~4단계 (01–14) 목표와 완료 내역 (아카이브)
 
 첫 번째 목표는 **정비 → 배치 → 이동 → 전투 → 보상 → 탈출 또는 사망 → 거점 복귀**를 데이터 손실이나 중복 없이 완료하는 것이다. 그다음 다중우주 개체와 위치·라운드 기반 고스트를 연결하고, 한림그룹의 첫 임무를 플레이 가능한 형태로 만든다.
 
@@ -17,7 +163,7 @@
 - 문서만으로 구현 완료를 판단하지 않는다. 코드 검증과 실제 플레이·데이터베이스 검증 결과를 구분해 기록한다.
 - 세계관상 미확정 사항은 기술 구현 편의만으로 확정하지 않는다. 해당 항목 착수 전에 필요한 결정만 확인한다.
 
-## 작업 순서
+## 1~4단계 작업 순서
 
 | 순서 | 작업                                   | 선행 작업 | 완료 결과                               |
 | ---- | -------------------------------------- | --------- | --------------------------------------- |
@@ -253,3 +399,4 @@
 | 2026-10-31 | 12 구역·기업 NPC·장비   | 완료 | 지도 단일 원본·버전, 구역·시설·중첩별 조우, 구호·통제 역할과 적대 이유, 명시적 공격·아이콘·효과 데이터 적용. 일회성 이전·동작 검증. 명칭·경계·주기는 제안으로 유지.                                                                                                               |
 | 2026-10-31 | 13 임무·단계별 공개     | 완료 | 수락·회수·탈출·보고·보상 상태 저장, 미공개 인물 서버 필터. 동시 수락·보고·사망·재접속·공개 단계 검증. 단위/API 36건·DB 통합 34건 통과. 오너 후기 단계는 구조와 검증용 표식이며 후속 서사는 미확정.                                                                                |
 | 2026-10-31 | 14 첫 임무·문서         | 완료 | 브라우저에서 구호 장비 수령·장착 → 고스트 전투 → 기록 회수 → 탈출 → 보고·보상·연구 기록 공개 및 새로고침 확인. README·PLAN·세계관·개발·QA 갱신. 빈 DB 마이그레이션 7개·검증 서버 준비/정리·빌드된 서버 실행 확인. 단위/API 36건·DB 통합 34건·타입·린트·빌드 통과. 외부 DB 미변경. |
+| 2026-11-18 | 15–22 게임성 개선 계획  | 완료 | 게임 전반의 밋밋함 원인(코어 루프·경제 단절, 시간 경과 긴장감 부재, 적 밸런스 및 6슬롯 시너지 피드백 부족, 서사 볼륨) 분석 및 5단계 개선 과제(15–22) 문서화. |
