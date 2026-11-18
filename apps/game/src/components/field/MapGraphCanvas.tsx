@@ -2130,7 +2130,6 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         setTargetBuilding(null);
         setTargetBuildingId(null);
         setIsNavigating(false);
-        void queryClient.invalidateQueries({ queryKey: ["character"] });
 
         if (worldContainerRef.current) {
           const world = worldContainerRef.current;
@@ -2154,8 +2153,11 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         if (res && res.encounterTriggered && res.stopNodeId === finalNodeId && res.battleLog) {
           console.log("[Arrival Check] Triggering combat now!");
           triggerCombat(res.battleLog);
-        } else if (res && !res.encounterTriggered) {
-          setNoiseSignals(raidNoiseState(res.raid.id, res));
+        } else {
+          void queryClient.invalidateQueries({ queryKey: ["character"] });
+          if (res && !res.encounterTriggered) {
+            setNoiseSignals(raidNoiseState(res.raid.id, res));
+          }
         }
         return;
       }

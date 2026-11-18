@@ -80,20 +80,38 @@ export const useNavigateRaid = () => {
               old.raw.activeRaid.version > result.raid.version)
           )
             return old;
+          const preserveCombatField =
+            Boolean(result.encounterTriggered && result.battleLog) &&
+            result.raid.status !== "ACTIVE";
           return old
             ? {
                 ...old,
                 raw: {
                   ...old.raw,
                   activeRaid:
-                    result.raid.status === "ACTIVE" ? result.raid : null,
+                    result.raid.status === "ACTIVE"
+                      ? result.raid
+                      : preserveCombatField
+                        ? old.raw.activeRaid
+                        : null,
                   activeRaidId:
-                    result.raid.status === "ACTIVE" ? result.raid.id : null,
-                  isRaiding: result.raid.status === "ACTIVE",
+                    result.raid.status === "ACTIVE"
+                      ? result.raid.id
+                      : preserveCombatField
+                        ? old.raw.activeRaidId
+                        : null,
+                  isRaiding:
+                    result.raid.status === "ACTIVE"
+                      ? true
+                      : preserveCombatField
+                        ? old.raw.isRaiding
+                        : false,
                   currentNodeId:
                     result.raid.status === "ACTIVE"
                       ? result.raid.currentNodeId
-                      : 0,
+                      : preserveCombatField
+                        ? result.raid.currentNodeId
+                        : 0,
                 },
               }
             : old;
