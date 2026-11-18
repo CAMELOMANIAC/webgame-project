@@ -15,10 +15,31 @@ const CombatLog = () => {
     (player) => player.id === characterId,
   );
 
-  const logHistory = processedEvents
-    .filter(
-      (e) => e.type === "ATTACK" || e.type === "SHIELD" || e.type === "HEAL",
-    )
+  const logEntries = processedEvents
+    .flatMap((event, index) => {
+      if (
+        event.type !== "ATTACK" &&
+        event.type !== "SHIELD" &&
+        event.type !== "HEAL"
+      ) {
+        return [];
+      }
+
+      let damageAmount: number | null = null;
+      if (event.type === "ATTACK") {
+        for (let i = index + 1; i < processedEvents.length; i++) {
+          const next = processedEvents[i]!;
+          if (next.timestamp !== event.timestamp) break;
+          if (next.type === "ATTACK") break;
+          if (next.type === "DAMAGE" && next.targetId === event.targetId) {
+            damageAmount = next.amount;
+            break;
+          }
+        }
+      }
+
+      return [{ event, damageAmount }];
+    })
     .slice(-10);
 
   return (
@@ -29,7 +50,7 @@ const CombatLog = () => {
 
       <ul className={styles.actionLogList}>
         <AnimatePresence initial={false} mode="popLayout">
-          {[...logHistory].reverse().map((event) => {
+          {[...logEntries].reverse().map(({ event, damageAmount }) => {
             const participantId =
               "actorId" in event
                 ? event.actorId
@@ -51,6 +72,29 @@ const CombatLog = () => {
                   ? "ally"
                   : "enemy";
 
+            const title =
+              event.type === "ATTACK"
+                ? (actorPlayer?.weapons?.[event.weaponIndex]?.name ?? "공격")
+                : event.type === "SHIELD"
+                  ? "보호막"
+                  : "회복";
+
+            const amountText =
+              event.type === "ATTACK"
+                ? damageAmount !== null
+                  ? `-${damageAmount}`
+                  : ""
+                : `+${event.amount}`;
+
+            const amountTone: "damage" | "heal" | "shield" | "neutral" =
+              event.type === "ATTACK"
+                ? damageAmount !== null && damageAmount > 0
+                  ? "damage"
+                  : "neutral"
+                : event.type === "HEAL"
+                  ? "heal"
+                  : "shield";
+
             return (
               <motion.li
                 key={`${event.id}-${event.timestamp}`}
@@ -65,13 +109,16 @@ const CombatLog = () => {
                   aria-hidden="true"
                 />
                 <div className={styles.actionLogText}>
-                  <p className={styles.actionLogType}>
-                    {event.type === "SHIELD"
-                      ? `SHIELD +${event.amount}`
-                      : event.type === "HEAL"
-                        ? `HEAL +${event.amount}`
-                        : event.type}
-                  </p>
+                  <div className={styles.actionLogHeader}>
+                    <span className={styles.actionLogTitle}>{title}</span>
+                    {amountText && (
+                      <span
+                        className={styles.actionLogAmount({ tone: amountTone })}
+                      >
+                        {amountText}
+                      </span>
+                    )}
+                  </div>
                   <p className={styles.actionLogActor}>{actorName}</p>
                 </div>
               </motion.li>

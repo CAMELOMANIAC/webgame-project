@@ -45,7 +45,7 @@ export const actionLogItem = recipe({
     display: "flex",
     flexDirection: "column",
     position: "relative",
-    width: "96px",
+    width: "140px",
     height: "44px",
     flex: "none",
     backgroundColor: vars.surface.low,
@@ -98,29 +98,61 @@ export const actionLogText = style({
   display: "flex",
   flexDirection: "column",
   justifyContent: "center",
-  alignItems: "flex-end",
+  alignItems: "stretch",
   gap: "2px",
   paddingRight: "8px",
-  paddingLeft: "32px",
+  paddingLeft: "34px",
   overflow: "hidden",
 });
 
-export const actionLogType = style({
-  fontFamily: vars.font.mono,
+export const actionLogHeader = style({
+  display: "flex",
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "6px",
+  width: "100%",
+  minWidth: 0,
+});
+
+export const actionLogTitle = style({
   fontSize: "11px",
   fontWeight: 600,
   color: vars.text.primary,
-  maxWidth: "100%",
+  minWidth: 0,
+  flex: 1,
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+});
+
+export const actionLogAmount = recipe({
+  base: {
+    fontFamily: vars.font.mono,
+    fontVariantNumeric: "tabular-nums",
+    fontSize: "11px",
+    fontWeight: 700,
+    flexShrink: 0,
+  },
+  variants: {
+    tone: {
+      damage: { color: vars.color.negative },
+      heal: { color: vars.color.positive },
+      shield: { color: vars.text.primary },
+      neutral: { color: vars.text.secondary },
+    },
+  },
+  defaultVariants: {
+    tone: "neutral",
+  },
 });
 
 export const actionLogActor = style({
   fontSize: "11px",
   fontWeight: 500,
   color: vars.text.secondary,
-  maxWidth: "100%",
+  textAlign: "right",
+  width: "100%",
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
