@@ -236,7 +236,7 @@ export default function ItemDetailModal({ item, onClose }: ItemDetailModalProps)
                 </span>
               </div>
               <div className={styles.statCell}>
-                <span className={styles.statLabel}>ENG</span>
+                <span className={styles.statLabel}>STM</span>
                 <span className={styles.statValue}>
                   {mergedWeapon.staminaCost}
                 </span>
