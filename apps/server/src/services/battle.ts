@@ -55,9 +55,50 @@ const WeaponTagSchema = z.enum([
 
 const WeaponEffectSchema = z
   .object({
-    type: z.enum(["HEAL", "SYNERGY", "MATERIAL", "SHIELD"]).optional(),
-    itemKind: z.enum(["EQUIPMENT", "MATERIAL"]).optional(),
+    type: z
+      .enum(["HEAL", "SYNERGY", "MATERIAL", "SHIELD", "CONSUMABLE", "SUMMON"])
+      .optional(),
+    itemKind: z.enum(["EQUIPMENT", "MATERIAL", "CONSUMABLE"]).optional(),
     tags: z.array(WeaponTagSchema).optional(),
+    summon: z
+      .object({
+        id: z.string(),
+        name: z.string(),
+        hp: z.number().int().positive(),
+        damage: z.number().int().nonnegative(),
+        cooldownTicks: z.number().int().positive(),
+        attackType: z.enum(["MELEE", "RANGED"]),
+        tags: z.array(WeaponTagSchema).optional(),
+        count: z.number().int().positive().optional(),
+        maxActive: z.number().int().positive().optional(),
+        strategy: z.enum(["RANDOM", "WEAKEST", "STRONGEST"]).optional(),
+        shieldOnSummon: z.number().int().nonnegative().optional(),
+        respawnOnlyWhenEmpty: z.boolean().optional(),
+        healOnReactivate: z.number().int().positive().optional(),
+      })
+      .optional(),
+    consumable: z
+      .object({
+        category: z.enum(["FOOD", "MEDICAL"]),
+        useMinutes: z.number().int().nonnegative(),
+        hpRestore: z.number().int().positive().optional(),
+        fatigueRestore: z.number().int().positive().optional(),
+        buff: z
+          .object({
+            maxHpBonus: z.number().int().positive().optional(),
+            meleeDamageBonus: z.number().int().positive().optional(),
+            rangedCooldownReductionTicks: z.number().int().positive().optional(),
+            critChanceBonus: z.number().positive().max(1).optional(),
+            tagDamageBonus: z
+              .object({
+                tag: WeaponTagSchema,
+                amount: z.number().int().positive(),
+              })
+              .optional(),
+          })
+          .optional(),
+      })
+      .optional(),
     amount: z.number().int().positive().optional(),
     hpThreshold: z.number().positive().max(1).optional(),
     oncePerBattle: z.boolean().optional(),
@@ -291,6 +332,7 @@ export async function loadBattlePlayer(
     weight: character.weight,
     maxWeight: character.maxWeight,
     time: character.time,
+    activeFoodBuff: character.activeFoodBuff ?? null,
     currentWeaponIndex: 0,
     weapons: [null, null, null, null, null, null],
   };
@@ -422,6 +464,7 @@ export async function applyBattleSettlement(
           time: 0,
           currentNodeId: 0,
           weight: 0,
+          activeFoodBuff: null,
         })
         .where(eq(characters.id, characterId));
       return { rewardItemName: null, rewardItem: null };
@@ -430,7 +473,11 @@ export async function applyBattleSettlement(
     const weight = await calculateInventoryWeight(tx, characterId);
     await tx
       .update(characters)
-      .set({ hp: finalPlayer.hp, stamina: character.maxStamina, weight })
+      .set({
+        hp: Math.min(character.maxHp, finalPlayer.hp),
+        stamina: character.maxStamina,
+        weight,
+      })
       .where(eq(characters.id, characterId));
     if (!playerWon) return { rewardItemName: null, rewardItem: null };
     const fallbackWeapon = (await tx.query.weaponMasters.findFirst()) as unknown as

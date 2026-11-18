@@ -6,7 +6,30 @@ export * from "./crafting";
 export * from "./buildingEvents";
 export * from "./fatigue";
 export type TargetingStrategy = "WEAKEST" | "STRONGEST" | "RANDOM";
-export type ItemKind = "EQUIPMENT" | "MATERIAL";
+export type ItemKind = "EQUIPMENT" | "MATERIAL" | "CONSUMABLE";
+export type ConsumableCategory = "FOOD" | "MEDICAL";
+
+export interface FoodBuffEffect {
+  id: string;
+  name: string;
+  maxHpBonus?: number;
+  meleeDamageBonus?: number;
+  rangedCooldownReductionTicks?: number;
+  critChanceBonus?: number;
+  tagDamageBonus?: {
+    tag: WeaponTag;
+    amount: number;
+  };
+}
+
+export interface ConsumableEffect {
+  category: ConsumableCategory;
+  useMinutes: number;
+  hpRestore?: number;
+  fatigueRestore?: number;
+  buff?: Omit<FoodBuffEffect, "id" | "name">;
+}
+
 export type WeaponTag =
   | "BLADE"
   | "FIREARM"
@@ -36,10 +59,28 @@ export interface Item {
   iconKey?: string;
 }
 
+export interface SummonDefinition {
+  id: string;
+  name: string;
+  hp: number;
+  damage: number;
+  cooldownTicks: number;
+  attackType: "MELEE" | "RANGED";
+  tags?: WeaponTag[];
+  count?: number;
+  maxActive?: number;
+  strategy?: TargetingStrategy;
+  shieldOnSummon?: number;
+  respawnOnlyWhenEmpty?: boolean;
+  healOnReactivate?: number;
+}
+
 export interface WeaponEffect {
-  type?: "HEAL" | "SYNERGY" | "MATERIAL" | "SHIELD";
+  type?: "HEAL" | "SYNERGY" | "MATERIAL" | "SHIELD" | "CONSUMABLE" | "SUMMON";
   itemKind?: ItemKind;
   tags?: WeaponTag[];
+  consumable?: ConsumableEffect;
+  summon?: SummonDefinition;
   amount?: number;
   hpThreshold?: number;
   oncePerBattle?: boolean;
@@ -98,6 +139,7 @@ export type WeaponSlots = [
 
 export interface BattleCombatant extends Omit<User, "weapons"> {
   weapons: WeaponSlots;
+  activeFoodBuff?: FoodBuffEffect | null;
 }
 
 export type BattleEndReason = "VICTORY" | "DRAW" | "MAX_TICKS" | "RETREAT_PENDING";
@@ -122,6 +164,8 @@ export interface PlayerState {
   weight: number;
   maxWeight: number;
   time: number;
+  isSummon?: boolean;
+  summonerId?: string;
   weapons: Array<{
     id: string;
     name: string;
@@ -227,6 +271,12 @@ export type BattleEvent = { id: string; timestamp: number } & (
       critChanceBonus?: number;
       shieldBonus?: number;
       staminaRestore?: number;
+    }
+  | {
+      type: "SUMMON";
+      summonerId: string;
+      weaponIndex: number;
+      combatant: PlayerState;
     }
   | { type: "DEATH"; playerId: string }
   | { type: "BATTLE_END"; winnerTeamId: string | null; reason: BattleEndReason }

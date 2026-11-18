@@ -592,3 +592,375 @@ test("피로도가 0인 전투원은 무기 사용 후 쿨다운이 2틱 증가�
   assert.ok(cooldownEvent);
   assert.equal(cooldownEvent.duration, 4);
 });
+
+test("음식 버프는 피로도가 0보다 클 때만 최대 체력·피해·쿨다운·치명타 보너스를 적용한다", () => {
+  const buff = {
+    id: "food-test",
+    name: "테스트 식량",
+    maxHpBonus: 10,
+    meleeDamageBonus: 2,
+    rangedCooldownReductionTicks: 1,
+    critChanceBonus: 0.2,
+    tagDamageBonus: { tag: "BLADE" as const, amount: 3 },
+  };
+  const buffed = simulateBattle(
+    [
+      player("p", "A", {
+        hp: 100,
+        maxHp: 100,
+        fatigue: 30,
+        activeFoodBuff: buff,
+        weapons: [
+          weapon({ damage: 10, attackType: "MELEE", tags: ["BLADE"], staminaCost: 0, cooldownTicks: 2 }),
+          weapon({ id: "r", damage: 5, attackType: "RANGED", staminaCost: 0, cooldownTicks: 3 }),
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+      player("e", "B", { hp: 200, maxHp: 200 }),
+    ],
+    { random: () => 0.25, maxTicks: 1 },
+  );
+  assert.equal(buffed.initialState.players[0]?.maxHp, 110);
+  assert.equal(buffed.initialState.players[0]?.hp, 110);
+  assert.equal(buffed.initialState.players[0]?.weapons[0]?.damage, 15);
+  assert.equal(buffed.initialState.players[0]?.weapons[1]?.cooldownTicks, 2);
+  const firstDamage = buffed.timeline[0]?.events.find(
+    (event): event is Extract<import("@webgame/types").BattleEvent, { type: "DAMAGE" }> =>
+      event.type === "DAMAGE" && event.targetId === "e",
+  );
+  assert.ok(firstDamage);
+  assert.equal(firstDamage.isCritical, true);
+  assert.equal(firstDamage.amount, 22);
+
+  const exhausted = simulateBattle(
+    [
+      player("p", "A", {
+        hp: 100,
+        maxHp: 100,
+        fatigue: 0,
+        activeFoodBuff: buff,
+        weapons: [
+          weapon({ damage: 10, attackType: "MELEE", tags: ["BLADE"], staminaCost: 0, cooldownTicks: 2 }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+      player("e", "B", { hp: 200, maxHp: 200 }),
+    ],
+    { random: () => 0.25, maxTicks: 1 },
+  );
+  assert.equal(exhausted.initialState.players[0]?.maxHp, 100);
+  assert.equal(exhausted.initialState.players[0]?.weapons[0]?.damage, 10);
+});
+
+test("소환 무기는 독립 아군 유닛을 소환하고 maxActive 상한 내에서 재소환하며 공격한다", () => {
+  const log = simulateBattle(
+    [
+      player("p", "A", {
+        hp: 200,
+        maxHp: 200,
+        weapons: [
+          weapon({
+            id: "eq-summon-drone",
+            damage: 0,
+            staminaCost: 5,
+            cooldownTicks: 2,
+            effect: {
+              type: "SUMMON",
+              summon: {
+                id: "summon-recon-drone",
+                name: "전술 정찰 드론",
+                hp: 18,
+                damage: 5,
+                cooldownTicks: 2,
+                attackType: "RANGED",
+                count: 1,
+                maxActive: 2,
+              },
+            },
+          }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+      player("e", "B", {
+        hp: 200,
+        maxHp: 200,
+        weapons: [
+          weapon({ damage: 1, staminaCost: 0, cooldownTicks: 5 }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+    ],
+    { random: () => 0.9, maxTicks: 10 },
+  );
+
+  const allEvents = log.timeline.flatMap((entry) => entry.events);
+  const summonEvents = allEvents.filter((e) => e.type === "SUMMON");
+  assert.equal(summonEvents.length, 2);
+
+  const summonAttacks = allEvents.filter(
+    (e) => e.type === "ATTACK" && e.actorId.startsWith("p:summon:"),
+  );
+  assert.ok(summonAttacks.length > 0);
+});
+
+test("다중 소환 아이템은 한 번에 여러 기를 소환하고 소환자 사망 시 동반 소멸한다", () => {
+  const log = simulateBattle(
+    [
+      player("p", "A", {
+        hp: 15,
+        maxHp: 15,
+        weapons: [
+          weapon({
+            id: "eq-summon-swarm",
+            damage: 0,
+            staminaCost: 0,
+            cooldownTicks: 5,
+            effect: {
+              type: "SUMMON",
+              oncePerBattle: true,
+              summon: {
+                id: "summon-nano-swarm",
+                name: "나노 생체 군체",
+                hp: 30,
+                damage: 2,
+                cooldownTicks: 3,
+                attackType: "MELEE",
+                count: 3,
+                maxActive: 3,
+              },
+            },
+          }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+      player("e", "B", {
+        hp: 200,
+        maxHp: 200,
+        weapons: [
+          weapon({
+            damage: 20,
+            staminaCost: 0,
+            cooldownTicks: 1,
+            strategy: "WEAKEST",
+          }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+    ],
+    { random: () => 0.9, maxTicks: 5 },
+  );
+
+  const allEvents = log.timeline.flatMap((entry) => entry.events);
+  const summonEvents = allEvents.filter((e) => e.type === "SUMMON");
+  assert.equal(summonEvents.length, 3);
+
+  const deathIds = new Set(
+    allEvents.filter((e) => e.type === "DEATH").map((e) => e.playerId),
+  );
+  assert.equal(deathIds.has("p"), true);
+  for (const se of summonEvents) {
+    if (se.type === "SUMMON") {
+      assert.equal(deathIds.has(se.combatant.id), true);
+    }
+  }
+  assert.equal(log.result.winnerTeamId, "B");
+});
+
+test("정예 소환수 재사용 시 살아있으면 체력·보호막을 보충하고 군체는 전멸 후 재소환한다", () => {
+  const turretLog = simulateBattle(
+    [
+      player("p", "A", {
+        hp: 150,
+        maxHp: 200,
+        weapons: [
+          weapon({
+            id: "eq-summon-turret",
+            damage: 0,
+            staminaCost: 0,
+            cooldownTicks: 3,
+            effect: {
+              type: "SUMMON",
+              summon: {
+                id: "summon-heavy-turret",
+                name: "중장갑 경비 포탑",
+                hp: 50,
+                damage: 5,
+                cooldownTicks: 5,
+                attackType: "RANGED",
+                count: 1,
+                maxActive: 1,
+                shieldOnSummon: 10,
+                healOnReactivate: 20,
+              },
+            },
+          }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+      player("e", "B", {
+        hp: 200,
+        maxHp: 200,
+        weapons: [
+          weapon({
+            damage: 25,
+            staminaCost: 0,
+            cooldownTicks: 2,
+            strategy: "STRONGEST",
+          }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+    ],
+    { random: () => 0.9, maxTicks: 10 },
+  );
+
+  const turretEvents = turretLog.timeline.flatMap((entry) => entry.events);
+  const turretSummons = turretEvents.filter((e) => e.type === "SUMMON");
+  assert.equal(turretSummons.length, 1);
+  const turretId =
+    turretSummons[0]?.type === "SUMMON" ? turretSummons[0].combatant.id : "";
+  const turretHeals = turretEvents.filter(
+    (e) => e.type === "HEAL" && e.targetId === turretId,
+  );
+  const turretShields = turretEvents.filter(
+    (e) => e.type === "SHIELD" && e.targetId === turretId,
+  );
+  assert.ok(turretHeals.length > 0);
+  assert.ok(turretShields.length > 0);
+
+  const swarmLog = simulateBattle(
+    [
+      player("p", "A", {
+        hp: 200,
+        maxHp: 200,
+        weapons: [
+          weapon({
+            id: "eq-summon-swarm",
+            damage: 0,
+            staminaCost: 0,
+            cooldownTicks: 2,
+            effect: {
+              type: "SUMMON",
+              summon: {
+                id: "summon-nano-swarm",
+                name: "나노 생체 군체",
+                hp: 10,
+                damage: 2,
+                cooldownTicks: 5,
+                attackType: "MELEE",
+                count: 2,
+                maxActive: 2,
+                respawnOnlyWhenEmpty: true,
+              },
+            },
+          }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+      player("e", "B", {
+        hp: 200,
+        maxHp: 200,
+        weapons: [
+          weapon({
+            damage: 15,
+            staminaCost: 0,
+            cooldownTicks: 1,
+            strategy: "WEAKEST",
+          }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+    ],
+    { random: () => 0.9, maxTicks: 8 },
+  );
+
+  const swarmEvents = swarmLog.timeline.flatMap((entry) => entry.events);
+  const swarmSummons = swarmEvents.filter((e) => e.type === "SUMMON");
+  assert.ok(swarmSummons.length >= 4);
+});
+
+test("장기전 교착 상태는 30틱 이후 유지력 감쇠와 40틱 이후 과부하 피해로 종료된다", () => {
+  const log = simulateBattle(
+    [
+      player("a", "A", {
+        hp: 100,
+        maxHp: 100,
+        weapons: [
+          weapon({
+            damage: 0,
+            staminaCost: 0,
+            cooldownTicks: 3,
+            effect: { type: "SHIELD", shieldGain: 20 },
+          }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+      player("b", "B", {
+        hp: 100,
+        maxHp: 100,
+        weapons: [
+          weapon({
+            damage: 0,
+            staminaCost: 0,
+            cooldownTicks: 3,
+            effect: { type: "SHIELD", shieldGain: 20 },
+          }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+    ],
+    { random: () => 0.5, maxTicks: 200 },
+  );
+
+  assert.notEqual(log.result.reason, "MAX_TICKS");
+  assert.ok(log.result.durationTicks >= 40 && log.result.durationTicks < 100);
+});
+
+

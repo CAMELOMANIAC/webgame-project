@@ -36,6 +36,9 @@ interface SimCombatant extends Omit<BattleCombatant, "weapons"> {
   weapons: Array<SimWeapon | null>;
   castingWeaponIndex: number | null;
   castingTicksRemaining: number;
+  isSummon?: boolean;
+  summonerId?: string;
+  summonMasterId?: string;
 }
 
 function capturePlayers(players: SimCombatant[]): PlayerState[] {
@@ -55,6 +58,8 @@ function capturePlayers(players: SimCombatant[]): PlayerState[] {
     weight: player.weight,
     maxWeight: player.maxWeight,
     time: player.time,
+    ...(player.isSummon ? { isSummon: true } : {}),
+    ...(player.summonerId ? { summonerId: player.summonerId } : {}),
     weapons: player.weapons.map((weapon) =>
       weapon
         ? {
@@ -79,7 +84,24 @@ function aliveTeams(players: SimCombatant[]) {
   );
 }
 
-function canUseEffect(actor: SimCombatant, weapon: SimWeapon) {
+function getActiveSummons(
+  players: SimCombatant[],
+  summonerId: string,
+  summonMasterId: string,
+): SimCombatant[] {
+  return players.filter(
+    (p) =>
+      p.hp > 0 &&
+      p.summonerId === summonerId &&
+      p.summonMasterId === summonMasterId,
+  );
+}
+
+function canUseEffect(
+  actor: SimCombatant,
+  weapon: SimWeapon,
+  players: SimCombatant[],
+) {
   const effect = weapon.effect;
   const hasAction =
     weapon.damage > 0 ||
@@ -87,9 +109,39 @@ function canUseEffect(actor: SimCombatant, weapon: SimWeapon) {
     Boolean(effect?.shieldGain) ||
     Boolean(effect?.target) ||
     Boolean(effect?.staminaRestore) ||
-    Boolean(effect?.perTag);
+    Boolean(effect?.perTag) ||
+    Boolean(effect?.summon);
   if (!hasAction) return false;
   if (effect?.oncePerBattle && weapon.isTriggered) return false;
+  if (
+    effect?.type === "SUMMON" &&
+    effect.summon &&
+    weapon.damage <= 0 &&
+    !effect.amount &&
+    !effect.shieldGain &&
+    !effect.target &&
+    !effect.staminaRestore &&
+    !effect.perTag
+  ) {
+    const active = getActiveSummons(players, actor.id, effect.summon.id);
+    if (effect.summon.respawnOnlyWhenEmpty && active.length > 0) {
+      return false;
+    }
+    if (
+      effect.summon.maxActive !== undefined &&
+      active.length >= effect.summon.maxActive
+    ) {
+      if (effect.summon.healOnReactivate) {
+        const targetShield = effect.summon.shieldOnSummon ?? 0;
+        const needsRefresh = active.some(
+          (s) => s.hp < s.maxHp || s.shield < targetShield,
+        );
+        if (!needsRefresh) return false;
+      } else {
+        return false;
+      }
+    }
+  }
   const isPureHeal =
     effect?.type === "HEAL" &&
     weapon.damage <= 0 &&
@@ -196,31 +248,62 @@ export function simulateBattle(
     throw new Error("Duplicate combatant id");
   }
 
-  const simPlayers: SimCombatant[] = players.map((player) => ({
-    ...player,
-    shield: 0,
-    weapons: player.weapons.map((weapon) =>
-      weapon
-        ? {
-            ...weapon,
-            tags: getWeaponTags(weapon),
-            effect: weapon.effect ? { ...weapon.effect } : undefined,
-            currentCooldown: 0,
-            isTriggered: false,
-            activationCount: 0,
-            pendingDamageBonus: 0,
-            pendingCritBonus: 0,
-            pendingShieldBonus: 0,
+  const simPlayers: SimCombatant[] = players.map((player) => {
+    const buff = (player.fatigue ?? 1) > 0 ? player.activeFoodBuff : null;
+    const maxHpBonus = buff?.maxHpBonus ?? 0;
+    const maxHp = player.maxHp + maxHpBonus;
+    const hp = Math.min(maxHp, player.hp + maxHpBonus);
+    return {
+      ...player,
+      hp,
+      maxHp,
+      shield: 0,
+      weapons: player.weapons.map((weapon) => {
+        if (!weapon) return null;
+        const tags = getWeaponTags(weapon);
+        let damage = weapon.damage;
+        let cooldownTicks = weapon.cooldownTicks;
+        if (buff) {
+          if (weapon.damage > 0 && weapon.attackType === "MELEE" && buff.meleeDamageBonus) {
+            damage += buff.meleeDamageBonus;
           }
-        : null,
-    ),
-    currentWeaponIndex: player.currentWeaponIndex ?? 0,
-    castingWeaponIndex: null,
-    castingTicksRemaining: 0,
-  }));
+          if (
+            weapon.attackType === "RANGED" &&
+            buff.rangedCooldownReductionTicks
+          ) {
+            cooldownTicks = Math.max(1, cooldownTicks - buff.rangedCooldownReductionTicks);
+          }
+          if (
+            weapon.damage > 0 &&
+            buff.tagDamageBonus &&
+            tags.includes(buff.tagDamageBonus.tag)
+          ) {
+            damage += buff.tagDamageBonus.amount;
+          }
+        }
+        return {
+          ...weapon,
+          damage,
+          cooldownTicks,
+          tags,
+          effect: weapon.effect ? { ...weapon.effect } : undefined,
+          currentCooldown: 0,
+          isTriggered: false,
+          activationCount: 0,
+          pendingDamageBonus: 0,
+          pendingCritBonus: 0,
+          pendingShieldBonus: 0,
+        };
+      }),
+      currentWeaponIndex: player.currentWeaponIndex ?? 0,
+      castingWeaponIndex: null,
+      castingTicksRemaining: 0,
+    };
+  });
   const initialState = { players: capturePlayers(simPlayers) };
   const timeline: BattleLogEntry[] = [];
   let eventCounter = 0;
+  let summonCounter = 0;
   let currentTick = 0;
   let retreatGauge = 0;
   let retreatDamage = 0;
@@ -229,6 +312,7 @@ export function simulateBattle(
   while (aliveTeams(simPlayers).size > 1 && currentTick < maxTicks) {
     currentTick++;
     const events: BattleEvent[] = [];
+    const pendingSummons: SimCombatant[] = [];
     const emit = (event: BattleEvent) => events.push(event);
     const changeStamina = (actor: SimCombatant, stamina: number) => {
       if (actor.stamina === stamina) return;
@@ -270,10 +354,15 @@ export function simulateBattle(
       const perTagHeal = (perTagRule?.healAmount ?? 0) * perTagCount;
       const perTagStamina = (perTagRule?.staminaRestore ?? 0) * perTagCount;
 
+      const sustainMultiplier =
+        currentTick < 30 ? 1 : Math.max(0, 1 - (currentTick - 30) * 0.02);
+
       const selfShieldGain = effectTriggered
         ? (eff?.shieldGain ?? 0) + perTagShield
         : 0;
-      const totalShieldGain = selfShieldGain + weapon.pendingShieldBonus;
+      const totalShieldGain = Math.floor(
+        (selfShieldGain + weapon.pendingShieldBonus) * sustainMultiplier,
+      );
       weapon.pendingShieldBonus = 0;
       if (totalShieldGain > 0) {
         actor.shield += totalShieldGain;
@@ -293,7 +382,9 @@ export function simulateBattle(
         eff.amount !== undefined &&
         eff.amount > 0 &&
         actor.hp < actor.maxHp * (eff.hpThreshold ?? 1);
-      const healPower = (canHeal ? (eff.amount ?? 0) : 0) + perTagHeal;
+      const healPower = Math.floor(
+        ((canHeal ? (eff.amount ?? 0) : 0) + perTagHeal) * sustainMultiplier,
+      );
       if (healPower > 0 && actor.hp < actor.maxHp) {
         const beforeHp = actor.hp;
         actor.hp = Math.min(actor.maxHp, actor.hp + healPower);
@@ -312,7 +403,11 @@ export function simulateBattle(
         const target = findTarget(actor, weapon, simPlayers, random);
         if (target) {
           const totalDamage = baseDamage + weapon.pendingDamageBonus;
-          const critChance = Math.min(1, 0.1 + weapon.pendingCritBonus);
+          const foodCritBonus =
+            (actor.fatigue ?? 1) > 0
+              ? (actor.activeFoodBuff?.critChanceBonus ?? 0)
+              : 0;
+          const critChance = Math.min(1, 0.1 + foodCritBonus + weapon.pendingCritBonus);
           weapon.pendingDamageBonus = 0;
           weapon.pendingCritBonus = 0;
 
@@ -384,6 +479,30 @@ export function simulateBattle(
               target.castingWeaponIndex = null;
               target.castingTicksRemaining = 0;
             }
+            for (const dependent of [...simPlayers, ...pendingSummons]) {
+              if (dependent.summonerId === target.id && dependent.hp > 0) {
+                dependent.hp = 0;
+                dependent.shield = 0;
+                emit({
+                  id: generateId(),
+                  type: "DEATH",
+                  playerId: dependent.id,
+                  timestamp: currentTick,
+                });
+                if (dependent.castingWeaponIndex !== null) {
+                  emit({
+                    id: generateId(),
+                    type: "CAST_CANCEL",
+                    actorId: dependent.id,
+                    weaponIndex: dependent.castingWeaponIndex,
+                    reason: "DEATH",
+                    timestamp: currentTick,
+                  });
+                  dependent.castingWeaponIndex = null;
+                  dependent.castingTicksRemaining = 0;
+                }
+              }
+            }
           }
         }
       }
@@ -453,6 +572,116 @@ export function simulateBattle(
         }
       }
 
+      if (eff?.type === "SUMMON" && eff.summon) {
+        const summonDef = eff.summon;
+        const activeSummons = getActiveSummons(
+          [...simPlayers, ...pendingSummons],
+          actor.id,
+          summonDef.id,
+        );
+        const currentActive = activeSummons.length;
+        const canSpawn = !summonDef.respawnOnlyWhenEmpty || currentActive === 0;
+        const desiredCount = summonDef.count ?? 1;
+        const availableSlots =
+          summonDef.maxActive !== undefined
+            ? Math.max(0, summonDef.maxActive - currentActive)
+            : desiredCount;
+        const spawnCount = canSpawn ? Math.min(desiredCount, availableSlots) : 0;
+
+        for (let i = 0; i < spawnCount; i++) {
+          const summonId = `${actor.id}:summon:${summonDef.id}:${summonCounter++}`;
+          const summonShield = Math.floor(
+            (summonDef.shieldOnSummon ?? 0) * sustainMultiplier,
+          );
+          const summonUnit: SimCombatant = {
+            id: summonId,
+            displayName: summonDef.name,
+            teamId: actor.teamId,
+            hp: summonDef.hp,
+            maxHp: summonDef.hp,
+            shield: summonShield,
+            stamina: 100,
+            maxStamina: 100,
+            staminaRegen: 10,
+            weight: 0,
+            maxWeight: 10,
+            time: actor.time,
+            currentWeaponIndex: 0,
+            castingWeaponIndex: null,
+            castingTicksRemaining: 0,
+            isSummon: true,
+            summonerId: actor.id,
+            summonMasterId: summonDef.id,
+            weapons: [
+              {
+                id: `${summonDef.id}-attack`,
+                name: summonDef.name,
+                damage: summonDef.damage,
+                staminaCost: 0,
+                cooldownTicks: summonDef.cooldownTicks,
+                castTicks: 0,
+                weight: 0,
+                value: 0,
+                attackType: summonDef.attackType,
+                strategy: summonDef.strategy,
+                tags: summonDef.tags,
+                currentCooldown: 0,
+                isTriggered: false,
+                activationCount: 0,
+                pendingDamageBonus: 0,
+                pendingCritBonus: 0,
+                pendingShieldBonus: 0,
+              },
+            ],
+          };
+          pendingSummons.push(summonUnit);
+          emit({
+            id: generateId(),
+            type: "SUMMON",
+            summonerId: actor.id,
+            weaponIndex,
+            combatant: capturePlayers([summonUnit])[0]!,
+            timestamp: currentTick,
+          });
+        }
+
+        if (spawnCount === 0 && currentActive > 0 && summonDef.healOnReactivate) {
+          const scaledHeal = Math.floor(
+            summonDef.healOnReactivate * sustainMultiplier,
+          );
+          const targetShield = Math.floor(
+            (summonDef.shieldOnSummon ?? 0) * sustainMultiplier,
+          );
+          for (const summon of activeSummons) {
+            if (scaledHeal > 0 && summon.hp < summon.maxHp) {
+              const beforeHp = summon.hp;
+              summon.hp = Math.min(summon.maxHp, summon.hp + scaledHeal);
+              emit({
+                id: generateId(),
+                type: "HEAL",
+                targetId: summon.id,
+                amount: summon.hp - beforeHp,
+                remainingHp: summon.hp,
+                timestamp: currentTick,
+              });
+            }
+            if (targetShield > summon.shield) {
+              const shieldGain = targetShield - summon.shield;
+              summon.shield = targetShield;
+              emit({
+                id: generateId(),
+                type: "SHIELD",
+                targetId: summon.id,
+                amount: shieldGain,
+                currentShield: summon.shield,
+                weaponIndex,
+                timestamp: currentTick,
+              });
+            }
+          }
+        }
+      }
+
       const effectiveCooldown =
         actor.fatigue !== undefined && actor.fatigue <= 0
           ? weapon.cooldownTicks + FATIGUE_RULES.exhaustedCooldownBonusTicks
@@ -506,7 +735,7 @@ export function simulateBattle(
         if (
           !weapon ||
           weapon.currentCooldown > 0 ||
-          !canUseEffect(actor, weapon)
+          !canUseEffect(actor, weapon, [...simPlayers, ...pendingSummons])
         )
           continue;
         if (actor.stamina < weapon.staminaCost) {
@@ -529,6 +758,50 @@ export function simulateBattle(
           useWeapon(actor, weaponIndex, weapon);
         }
         break;
+      }
+    }
+    if (pendingSummons.length > 0) {
+      simPlayers.push(...pendingSummons);
+    }
+    if (
+      currentTick >= 40 &&
+      currentTick % 5 === 0 &&
+      aliveTeams(simPlayers).size > 1 &&
+      simPlayers.some((u) => u.weapons.some((w) => w !== null))
+    ) {
+      const overloadDamage = Math.floor((currentTick - 35) / 5) * 8;
+      for (const unit of simPlayers) {
+        if (unit.hp <= 0) continue;
+        unit.hp = Math.max(0, unit.hp - overloadDamage);
+        emit({
+          id: generateId(),
+          type: "DAMAGE",
+          targetId: unit.id,
+          amount: overloadDamage,
+          remainingHp: unit.hp,
+          isCritical: false,
+          timestamp: currentTick,
+        });
+        if (unit.hp <= 0) {
+          emit({
+            id: generateId(),
+            type: "DEATH",
+            playerId: unit.id,
+            timestamp: currentTick,
+          });
+          if (unit.castingWeaponIndex !== null) {
+            emit({
+              id: generateId(),
+              type: "CAST_CANCEL",
+              actorId: unit.id,
+              weaponIndex: unit.castingWeaponIndex,
+              reason: "DEATH",
+              timestamp: currentTick,
+            });
+            unit.castingWeaponIndex = null;
+            unit.castingTicksRemaining = 0;
+          }
+        }
       }
     }
     if (events.length > 0) timeline.push({ timestamp: currentTick, events });

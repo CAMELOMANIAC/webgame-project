@@ -265,6 +265,28 @@ export function BattleCanvas({
     return ids;
   }, [processedEvents]);
 
+  const summonedUnits = useMemo(() => {
+    return processedEvents
+      .filter((event): event is BattleEvent & { type: "SUMMON" } => event.type === "SUMMON")
+      .map((event) => event.combatant);
+  }, [processedEvents]);
+
+  const summonPixelPositions = useMemo(() => {
+    const map = new Map<string, { x: number; y: number }>();
+    const aliveSummons = summonedUnits.filter((s) => !deadEnemyIds.has(s.id));
+    const total = aliveSummons.length;
+    if (total === 0) return map;
+    const radius = 68;
+    aliveSummons.forEach((summon, idx) => {
+      const angle = -Math.PI / 2 + (idx * Math.PI * 2) / total;
+      map.set(summon.id, {
+        x: center.x + Math.cos(angle) * radius,
+        y: center.y + Math.sin(angle) * radius,
+      });
+    });
+    return map;
+  }, [summonedUnits, deadEnemyIds, center]);
+
   // 전투 중에는 플레이어가 항시 살아있는 적을 바라보도록 회전각 계산
   const activeRotation = useMemo(() => {
     if (!characterId || !battleLog) return playerRotation;
@@ -341,7 +363,9 @@ export function BattleCanvas({
         let posY = center.y;
 
         if (e.targetId !== characterId) {
-          const pos = enemyPixelPositions.get(e.targetId);
+          const pos =
+            enemyPixelPositions.get(e.targetId) ??
+            summonPixelPositions.get(e.targetId);
           if (pos) {
             posX = pos.x;
             posY = pos.y;
@@ -365,7 +389,14 @@ export function BattleCanvas({
         setPopups((prev) => [...prev, ...newPopups]);
       }
     }
-  }, [displayEvents, characterId, enemyPixelPositions, center, triggerShake]);
+  }, [
+    displayEvents,
+    characterId,
+    enemyPixelPositions,
+    summonPixelPositions,
+    center,
+    triggerShake,
+  ]);
 
   // 컴포넌트 언마운트 시에만 애니메이션 프레임 및 타이머 취소
   useEffect(() => {
@@ -527,11 +558,51 @@ export function BattleCanvas({
                   );
                 })}
 
+            {isCombat &&
+              summonedUnits
+                .filter((s) => !deadEnemyIds.has(s.id))
+                .map((summon) => {
+                  const pos = summonPixelPositions.get(summon.id);
+                  if (!pos) return null;
+                  const activeAttack = activeAttacks.find(
+                    (a) => a.type === "ATTACK" && a.actorId === summon.id,
+                  );
+                  const isAttacking = !!activeAttack;
+                  const activeAttackId = activeAttack?.id;
+                  const isSummonDamaged = displayEvents.some(
+                    (e) => e.type === "DAMAGE" && e.targetId === summon.id,
+                  );
+                  const targetPos =
+                    (activeAttack?.type === "ATTACK"
+                      ? enemyPixelPositions.get(activeAttack.targetId)
+                      : undefined) ?? center;
+
+                  return (
+                    <CanvasEnemyUnit
+                      key={`summon-${summon.id}`}
+                      name={summon.name}
+                      x={pos.x}
+                      y={pos.y}
+                      spawnX={center.x}
+                      spawnY={center.y}
+                      isAttacking={isAttacking}
+                      isDamaged={isSummonDamaged}
+                      targetX={targetPos.x}
+                      targetY={targetPos.y}
+                      activeAttackId={activeAttackId}
+                    />
+                  );
+                })}
+
             {activeAttacks.map((attack) => {
               if (attack.type !== "ATTACK") return null;
 
               const resolvePoint = (id: string) =>
-                id === characterId ? center : (enemyPixelPositions.get(id) ?? center);
+                id === characterId
+                  ? center
+                  : (enemyPixelPositions.get(id) ??
+                    summonPixelPositions.get(id) ??
+                    center);
               const actorPoint = resolvePoint(attack.actorId);
               const targetPoint = resolvePoint(attack.targetId);
               const x1 = actorPoint.x;
@@ -539,9 +610,10 @@ export function BattleCanvas({
               const x2 = targetPoint.x;
               const y2 = targetPoint.y;
 
-              const attacker = battleLog?.initialState.players.find(
-                (p) => p.id === attack.actorId,
-              );
+              const attacker =
+                battleLog?.initialState.players.find(
+                  (p) => p.id === attack.actorId,
+                ) ?? summonedUnits.find((s) => s.id === attack.actorId);
               const weapon = attacker?.weapons[attack.weaponIndex];
               const isRanged = weapon?.attackType === "RANGED";
 

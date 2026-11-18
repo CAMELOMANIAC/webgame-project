@@ -15,12 +15,20 @@ const CombatLog = () => {
     (player) => player.id === characterId,
   );
 
+  const summonedPlayers = processedEvents
+    .filter(
+      (e): e is (typeof processedEvents)[number] & { type: "SUMMON" } =>
+        e.type === "SUMMON",
+    )
+    .map((e) => e.combatant);
+
   const logEntries = processedEvents
     .flatMap((event, index) => {
       if (
         event.type !== "ATTACK" &&
         event.type !== "SHIELD" &&
-        event.type !== "HEAL"
+        event.type !== "HEAL" &&
+        event.type !== "SUMMON"
       ) {
         return [];
       }
@@ -54,13 +62,16 @@ const CombatLog = () => {
             const participantId =
               "actorId" in event
                 ? event.actorId
-                : event.type === "SHIELD" || event.type === "HEAL"
-                  ? event.targetId
-                  : null;
+                : event.type === "SUMMON"
+                  ? event.summonerId
+                  : event.type === "SHIELD" || event.type === "HEAL"
+                    ? event.targetId
+                    : null;
             const actorPlayer = participantId
-              ? battle?.initialState.players.find(
+              ? (battle?.initialState.players.find(
                   (player) => player.id === participantId,
-                )
+                ) ??
+                summonedPlayers.find((player) => player.id === participantId))
               : undefined;
             const actorName = actorPlayer?.name ?? participantId ?? "SYSTEM";
             const role: "self" | "ally" | "enemy" =
@@ -77,14 +88,18 @@ const CombatLog = () => {
                 ? (actorPlayer?.weapons?.[event.weaponIndex]?.name ?? "공격")
                 : event.type === "SHIELD"
                   ? "보호막"
-                  : "회복";
+                  : event.type === "HEAL"
+                    ? "회복"
+                    : `소환 · ${event.combatant.name}`;
 
             const amountText =
               event.type === "ATTACK"
                 ? damageAmount !== null
                   ? `-${damageAmount}`
                   : ""
-                : `+${event.amount}`;
+                : event.type === "SUMMON"
+                  ? ""
+                  : `+${event.amount}`;
 
             const amountTone: "damage" | "heal" | "shield" | "neutral" =
               event.type === "ATTACK"
@@ -93,7 +108,9 @@ const CombatLog = () => {
                   : "neutral"
                 : event.type === "HEAL"
                   ? "heal"
-                  : "shield";
+                  : event.type === "SHIELD"
+                    ? "shield"
+                    : "neutral";
 
             return (
               <motion.li

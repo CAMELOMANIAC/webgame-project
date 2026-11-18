@@ -183,6 +183,7 @@ test("사망 정산은 장비와 가방을 비우고 HP 1·피로도 0 및 복�
       time: 0,
       currentNodeId: 0,
       weight: 0,
+      activeFoodBuff: null,
     },
   );
 });
@@ -258,6 +259,7 @@ test("deferLootToPending 옵션 시 전투 승리 보상을 가방에 바로 넣
     returnedAt: null,
     variantLevel: 1,
     variantExp: 0,
+    activeFoodBuff: null,
   };
 
   const deferredResult = await applyBattleSettlement(
