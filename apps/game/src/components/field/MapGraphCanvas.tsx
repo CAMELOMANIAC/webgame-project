@@ -1920,41 +1920,64 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         strength: strength * (1 - progress),
       };
     };
-    let tween: TweenHandle | undefined;
-    let nextPulse: number | undefined;
+    const cleanups: (() => void)[] = [];
     let cancelled = false;
-    const pulse = () => {
-      if (cancelled) return;
-      if (!isNavigating) {
-        ripple.randomizeOffsets(NOISE_IDLE_JITTER_PX);
-      }
-      ripple.show(waveAt(0, 1));
-      tween = runTween({
-        duration,
-        onUpdate: (progress) => {
-          const elapsed = progress * duration;
-          const echoElapsed = elapsed - NOISE_ECHO_DELAY_SECONDS;
-          ripple.show(
-            waveAt(elapsed, 1),
-            echoElapsed >= 0 ? waveAt(echoElapsed, NOISE_ECHO_STRENGTH) : undefined,
-          );
-        },
-        onFinish: () => {
-          ripple.hide();
-          if (cancelled || isNavigating) return;
-          const delayMs =
-            NOISE_IDLE_MIN_DELAY_MS +
-            Math.random() * (NOISE_IDLE_MAX_DELAY_MS - NOISE_IDLE_MIN_DELAY_MS);
-          nextPulse = window.setTimeout(pulse, delayMs);
-        },
-      });
-    };
 
-    pulse();
+    areas.forEach((_, index) => {
+      let tween: TweenHandle | undefined;
+      let timer: number | undefined;
+
+      const pulse = () => {
+        if (cancelled) return;
+        if (!isNavigating) {
+          ripple.randomizeOffset(index, NOISE_IDLE_JITTER_PX);
+        }
+        ripple.updatePair(index, waveAt(0, 1));
+        tween = runTween({
+          duration,
+          onUpdate: (progress) => {
+            const elapsed = progress * duration;
+            const echoElapsed = elapsed - NOISE_ECHO_DELAY_SECONDS;
+            ripple.updatePair(
+              index,
+              waveAt(elapsed, 1),
+              echoElapsed >= 0 ? waveAt(echoElapsed, NOISE_ECHO_STRENGTH) : undefined,
+            );
+          },
+          onFinish: () => {
+            ripple.updatePair(index);
+            if (cancelled || isNavigating) return;
+            const delayMs =
+              NOISE_IDLE_MIN_DELAY_MS +
+              Math.random() * (NOISE_IDLE_MAX_DELAY_MS - NOISE_IDLE_MIN_DELAY_MS);
+            timer = window.setTimeout(pulse, delayMs);
+          },
+        });
+      };
+
+      const initialDelayMs = isNavigating
+        ? index === 0
+          ? 0
+          : Math.random() * 220
+        : index === 0
+          ? Math.random() * 250
+          : Math.random() * 1100;
+
+      if (initialDelayMs === 0) {
+        pulse();
+      } else {
+        timer = window.setTimeout(pulse, initialDelayMs);
+      }
+
+      cleanups.push(() => {
+        window.clearTimeout(timer);
+        tween?.destroy();
+      });
+    });
+
     return () => {
       cancelled = true;
-      window.clearTimeout(nextPulse);
-      tween?.destroy();
+      cleanups.forEach((cleanup) => cleanup());
       ripple.hide();
     };
   }, [activeRaidId, isCombat, isNavigating, isPixiReady, noiseSignals]);
