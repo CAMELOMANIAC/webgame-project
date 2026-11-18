@@ -5,6 +5,7 @@ import {
   type BuildingEventState,
   calculateBaseRecovery,
   calculateEntryDelayMinutes,
+  type EnemyNoiseSignal,
   FATIGUE_RULES,
   firstMissionNodeId,
   getBuildingDistrict,
@@ -634,6 +635,7 @@ export async function navigateRaid(
       );
       if (!raid.ghostRoster && raid.time === 0)
         await tracker.initialize(raid.entryNodeId);
+      const hopNoiseSignals: EnemyNoiseSignal[][] = [];
       for (let stopIndex = 1; stopIndex < path.length; stopIndex++) {
         const visit = plannedVisits[stopIndex - 1]!;
         const stopNodeId = visit.nodeId;
@@ -716,7 +718,12 @@ export async function navigateRaid(
               ? writeExplorationState(raid, moveExp)
               : undefined;
           return {
-            payload: { encounterTriggered: true, stopNodeId, battleLog },
+            payload: {
+              encounterTriggered: true,
+              stopNodeId,
+              battleLog,
+              ...(hopNoiseSignals.length > 0 ? { hopNoiseSignals } : {}),
+            },
             currentNodeId: stopNodeId,
             currentBuildingId: isBuildingMove ? parsed.destinationBuildingId ?? null : null,
             pendingRetreat,
@@ -726,6 +733,7 @@ export async function navigateRaid(
             status: battleLog.playerDied ? "DEAD" : "ACTIVE",
           };
         }
+        hopNoiseSignals.push(await tracker.noiseSignalsAt(stopNodeId, stopTime));
       }
       await recordGhosts(tx, characterId, raid.id, plannedVisits);
       const spentFatigue = pathFatigueCost(path);
@@ -737,9 +745,15 @@ export async function navigateRaid(
           .where(eq(characters.id, characterId));
       }
       const currentNodeId = path.at(-1)!;
-      const noiseSignals = await tracker.noiseSignalsAt(currentNodeId, lastTravelTime);
+      const noiseSignals =
+        hopNoiseSignals.at(-1) ??
+        (await tracker.noiseSignalsAt(currentNodeId, lastTravelTime));
       return {
-        payload: { encounterTriggered: false, noiseSignals },
+        payload: {
+          encounterTriggered: false,
+          noiseSignals,
+          ...(hopNoiseSignals.length > 0 ? { hopNoiseSignals } : {}),
+        },
         currentNodeId,
         currentBuildingId: parsed.destinationBuildingId ?? null,
         time: lastTravelTime,

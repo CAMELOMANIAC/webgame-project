@@ -411,6 +411,7 @@ export interface RaidNavigationResult extends RaidNoiseSignals {
   encounterTriggered: boolean;
   stopNodeId?: number;
   battleLog?: RaidBattleResult;
+  hopNoiseSignals?: EnemyNoiseSignal[][];
   raid: RaidView;
 }
 

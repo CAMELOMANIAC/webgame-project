@@ -1895,19 +1895,24 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     }
   }, [characterData, isNavigating, isCombat, currentNodeId, setCurrentNodeId, setPlayerCoords]);
 
+  const hasNoiseAreas = Boolean(
+    noiseSignals && noiseSignals.raidId === activeRaidId && noiseSignals.areas.length > 0,
+  );
+
   useEffect(() => {
     const ripple = noiseRippleRef.current;
-    if (
-      !isPixiReady ||
-      !ripple ||
-      !noiseSignals ||
-      noiseSignals.raidId !== activeRaidId ||
-      isCombat ||
-      isNavigating
-    )
-      return;
+    if (!isPixiReady || !ripple) return;
 
-    ripple.setAreas(noiseSignals.areas);
+    const areas =
+      !isCombat && noiseSignals && noiseSignals.raidId === activeRaidId
+        ? noiseSignals.areas
+        : [];
+    ripple.setAreas(areas);
+  }, [activeRaidId, isCombat, isPixiReady, noiseSignals]);
+
+  useEffect(() => {
+    const ripple = noiseRippleRef.current;
+    if (!isPixiReady || !ripple || !hasNoiseAreas || isCombat) return;
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       ripple.show({ radiusScale: 1, strength: 0.45 });
@@ -1952,7 +1957,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       tween?.destroy();
       ripple.hide();
     };
-  }, [activeRaidId, isCombat, isNavigating, isPixiReady, noiseSignals]);
+  }, [activeRaidId, hasNoiseAreas, isCombat, isPixiReady]);
 
   // 5.5. requestAnimationFrame 기반 등속(Constant Speed) 부드러운 네비게이션 보간 루프
   useEffect(() => {
@@ -2228,6 +2233,17 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
               path = path.slice(0, stopIndex + 1);
               coords = coords.slice(0, stopIndex + (hasStartPos ? 2 : 1));
             }
+          }
+        }
+
+        const hopRes = navigateRaidResponseRef.current;
+        const pathIdx = hasStartPos ? stepIdx - 1 : stepIdx;
+        if (hopRes?.hopNoiseSignals && pathIdx >= 1) {
+          const hopAreas = hopRes.hopNoiseSignals[pathIdx - 1];
+          if (hopAreas) {
+            setNoiseSignals(
+              hopAreas.length ? { raidId: hopRes.raid.id, areas: hopAreas } : null,
+            );
           }
         }
 
