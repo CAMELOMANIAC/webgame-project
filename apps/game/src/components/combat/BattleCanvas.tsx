@@ -1,22 +1,24 @@
 import type { BattleEvent, BattleLog } from "@webgame/types";
 import { useAtomValue, useSetAtom } from "jotai";
 import { Application, Container, Sprite, Text, TextStyle } from "pixi.js";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import compass from "@/assets/compass.svg";
 import { battleCenterAtom, battleOccludersAtom } from "@/atoms/battleLayoutAtom";
 import { displayEventsAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { playerRotationAtom } from "@/atoms/raidAtom";
 import CanvasEnemyUnit from "@/components/combat/CanvasEnemyUnit";
+import ImpactSparks from "@/components/combat/ImpactSparks";
 import MeleeSlashEffect from "@/components/combat/MeleeSlashEffect";
 import RadarAttackLine from "@/components/combat/RadarAttackLine";
-import { resolveAttackEffect } from "@/utils/attackEffect";
+import { type AttackEffectKind, resolveAttackEffect } from "@/utils/attackEffect";
 import {
   type BattleRect,
   computeBattleLayout,
   type EnemyPlacement,
   resolveEnemyPixelPositions,
 } from "@/utils/battleLayout";
+import { MELEE_IMPACT_DELAY_SECONDS, runMeleeLunge } from "@/utils/meleeLunge";
 import { PixiParentContext, usePixiParent } from "@/utils/pixiContext";
 import { loadCompassTexture } from "@/utils/pixiTextures";
 import { Easings, runTween, type TweenHandle } from "@/utils/pixiTween";
@@ -35,6 +37,13 @@ function isSameRect(a: BattleRect | null, b: BattleRect) {
     !!a && a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom
   );
 }
+
+const SHAKE_BY_EFFECT: Readonly<Record<AttackEffectKind, number>> = {
+  SLASH: 5,
+  BLUNT: 9,
+  BURST: 3,
+  SNIPE: 8,
+};
 
 interface DamagePopup {
   id: string;
@@ -64,8 +73,7 @@ export function BattleCanvas({
   } | null>(null);
 
   const lastAttackIdRef = useRef<string | null>(null);
-  const playerAnimFrameIdRef = useRef<number | null>(null);
-  const playerPauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playerLungeRef = useRef<TweenHandle | null>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
@@ -330,13 +338,14 @@ export function BattleCanvas({
     const attackEvents = displayEvents.filter(
       (e): e is BattleEvent & { type: "ATTACK" } => e.type === "ATTACK",
     );
-    if (attackEvents.length > 0) {
-      const isPlayerActor = attackEvents.some((e) => e.actorId === characterId);
-      if (isPlayerActor) {
-        triggerShake(4);
-      } else {
-        triggerShake(2);
-      }
+    for (const attack of attackEvents) {
+      const attacker =
+        battleLog?.initialState.players.find((p) => p.id === attack.actorId) ??
+        summonedUnits.find((u) => u.id === attack.actorId);
+      const kind = resolveAttackEffect(attacker?.weapons[attack.weaponIndex]);
+      const isPlayerActor = attack.actorId === characterId;
+      const base = SHAKE_BY_EFFECT[kind];
+      triggerShake(isPlayerActor ? base : Math.max(2, base * 0.5));
     }
 
     const damageEvents = displayEvents.filter(
@@ -356,6 +365,10 @@ export function BattleCanvas({
           setShowRedFlash(false);
           redFlashTimerRef.current = null;
         }, 180);
+      }
+
+      if (damageEvents.some((e) => e.isCritical && e.targetId !== characterId)) {
+        triggerShake(10);
       }
 
       const newPopups: DamagePopup[] = [];
@@ -397,17 +410,14 @@ export function BattleCanvas({
     summonPixelPositions,
     center,
     triggerShake,
+    battleLog,
+    summonedUnits,
   ]);
 
-  // 컴포넌트 언마운트 시에만 애니메이션 프레임 및 타이머 취소
+  // 컴포넌트 언마운트 시 진행 중인 플레이어 공격 모션 취소
   useEffect(() => {
     return () => {
-      if (playerAnimFrameIdRef.current) {
-        cancelAnimationFrame(playerAnimFrameIdRef.current);
-      }
-      if (playerPauseTimerRef.current) {
-        clearTimeout(playerPauseTimerRef.current);
-      }
+      playerLungeRef.current?.destroy();
     };
   }, []);
 
@@ -425,12 +435,7 @@ export function BattleCanvas({
     if (activePlayerMeleeAttack && activePlayerMeleeAttack.id !== lastAttackIdRef.current) {
       lastAttackIdRef.current = activePlayerMeleeAttack.id;
 
-      if (playerAnimFrameIdRef.current) {
-        cancelAnimationFrame(playerAnimFrameIdRef.current);
-      }
-      if (playerPauseTimerRef.current) {
-        clearTimeout(playerPauseTimerRef.current);
-      }
+      playerLungeRef.current?.destroy();
 
       const targetPos = enemyPixelPositions.get(activePlayerMeleeAttack.targetId);
       if (targetPos) {
@@ -442,57 +447,17 @@ export function BattleCanvas({
           const ux = dx / distance;
           const uy = dy / distance;
 
-          const dashX = dx - ux * 45;
-          const dashY = dy - uy * 45;
-
-          const dashDuration = 250;
-          const pauseDuration = 300;
-          const returnDuration = 350;
-
-          const setDashOffset = (ox: number, oy: number) => {
-            if (playerDashGroupRef.current && !playerDashGroupRef.current.destroyed) {
-              playerDashGroupRef.current.position.set(ox, oy);
-            }
-          };
-
-          const startReturn = () => {
-            const returnStart = performance.now();
-            const tickReturn = (now: number) => {
-              const t = Math.min((now - returnStart) / returnDuration, 1);
-              const ease = 1 - Math.pow(1 - t, 3);
-              setDashOffset(dashX * (1 - ease), dashY * (1 - ease));
-              if (t < 1) {
-                playerAnimFrameIdRef.current = requestAnimationFrame(tickReturn);
-              } else {
-                setDashOffset(0, 0);
-                playerAnimFrameIdRef.current = null;
+          playerLungeRef.current = runMeleeLunge({
+            ux,
+            uy,
+            dashX: dx - ux * 45,
+            dashY: dy - uy * 45,
+            setOffset: (ox, oy) => {
+              if (playerDashGroupRef.current && !playerDashGroupRef.current.destroyed) {
+                playerDashGroupRef.current.position.set(ox, oy);
               }
-            };
-            playerAnimFrameIdRef.current = requestAnimationFrame(tickReturn);
-          };
-
-          const startPause = () => {
-            setDashOffset(dashX, dashY);
-            playerPauseTimerRef.current = setTimeout(() => {
-              playerPauseTimerRef.current = null;
-              startReturn();
-            }, pauseDuration);
-          };
-
-          const dashStart = performance.now();
-          const tickDash = (now: number) => {
-            const t = Math.min((now - dashStart) / dashDuration, 1);
-            const ease = Math.pow(t, 5);
-            setDashOffset(dashX * ease, dashY * ease);
-            if (t < 1) {
-              playerAnimFrameIdRef.current = requestAnimationFrame(tickDash);
-            } else {
-              playerAnimFrameIdRef.current = null;
-              startPause();
-            }
-          };
-
-          playerAnimFrameIdRef.current = requestAnimationFrame(tickDash);
+            },
+          });
         }
       }
     }
@@ -520,8 +485,18 @@ export function BattleCanvas({
                   const activeAttack = activeAttacks.find(
                     (a) => a.type === "ATTACK" && a.actorId === enemy.id,
                   );
-                  const isAttacking = !!activeAttack;
-                  const activeAttackId = activeAttack?.id;
+                  const activeEffectKind =
+                    activeAttack?.type === "ATTACK"
+                      ? resolveAttackEffect(enemy.weapons[activeAttack.weaponIndex])
+                      : undefined;
+                  const isMeleeAttack =
+                    activeEffectKind !== undefined &&
+                    activeEffectKind !== "BURST" &&
+                    activeEffectKind !== "SNIPE";
+                  const isAttacking = isMeleeAttack;
+                  const activeAttackId = isMeleeAttack
+                    ? activeAttack?.id
+                    : undefined;
                   const isEnemyDamaged = displayEvents.some(
                     (e) => e.type === "DAMAGE" && e.targetId === enemy.id,
                   );
@@ -568,8 +543,18 @@ export function BattleCanvas({
                   const activeAttack = activeAttacks.find(
                     (a) => a.type === "ATTACK" && a.actorId === summon.id,
                   );
-                  const isAttacking = !!activeAttack;
-                  const activeAttackId = activeAttack?.id;
+                  const activeEffectKind =
+                    activeAttack?.type === "ATTACK"
+                      ? resolveAttackEffect(summon.weapons[activeAttack.weaponIndex])
+                      : undefined;
+                  const isMeleeAttack =
+                    activeEffectKind !== undefined &&
+                    activeEffectKind !== "BURST" &&
+                    activeEffectKind !== "SNIPE";
+                  const isAttacking = isMeleeAttack;
+                  const activeAttackId = isMeleeAttack
+                    ? activeAttack?.id
+                    : undefined;
                   const isSummonDamaged = displayEvents.some(
                     (e) => e.type === "DAMAGE" && e.targetId === summon.id,
                   );
@@ -591,6 +576,7 @@ export function BattleCanvas({
                       targetX={targetPos.x}
                       targetY={targetPos.y}
                       activeAttackId={activeAttackId}
+                      tone="ally"
                     />
                   );
                 })}
@@ -618,17 +604,46 @@ export function BattleCanvas({
               const weapon = attacker?.weapons[attack.weaponIndex];
               const effectKind = resolveAttackEffect(weapon);
 
+              const direction = Math.atan2(y2 - y1, x2 - x1);
+
               if (effectKind === "BURST" || effectKind === "SNIPE") {
+                const hitDelay = effectKind === "SNIPE" ? 0.33 : 0.2;
                 return (
-                  <RadarAttackLine
-                    key={attack.id}
-                    points={[x1, y1, x2, y2]}
-                    variant={effectKind}
-                  />
+                  <Fragment key={attack.id}>
+                    <RadarAttackLine points={[x1, y1, x2, y2]} variant={effectKind} />
+                    <ImpactSparks
+                      x={x1 + Math.cos(direction) * 14}
+                      y={y1 + Math.sin(direction) * 14}
+                      variant="MUZZLE"
+                      direction={direction}
+                      delay={effectKind === "SNIPE" ? 0.25 : 0}
+                    />
+                    <ImpactSparks
+                      x={x2}
+                      y={y2}
+                      variant={effectKind}
+                      direction={direction}
+                      delay={hitDelay}
+                    />
+                  </Fragment>
                 );
               }
               return (
-                <MeleeSlashEffect key={attack.id} x={x2} y={y2} variant={effectKind} />
+                <Fragment key={attack.id}>
+                  <MeleeSlashEffect
+                    x={x2}
+                    y={y2}
+                    variant={effectKind}
+                    delay={MELEE_IMPACT_DELAY_SECONDS}
+                  />
+                  <ImpactSparks
+                    x={x2}
+                    y={y2}
+                    variant={effectKind}
+                    direction={direction}
+                    delay={MELEE_IMPACT_DELAY_SECONDS}
+                  />
+                </Fragment>
               );
             })}
           </PixiParentContext.Provider>

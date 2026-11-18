@@ -36,43 +36,37 @@ export function FieldBackground({
     const container = containerRef.current;
     if (!container) return;
 
-    let activeInterval: ReturnType<typeof setInterval> | null = null;
+    let frameId: number | null = null;
 
     const handleShake = (e: Event) => {
-      const customEvent = e as CustomEvent;
+      const customEvent = e as CustomEvent<{ intensity?: number; duration?: number }>;
       const intensity = customEvent.detail?.intensity ?? 8;
-      const duration = customEvent.detail?.duration ?? 500;
-
+      const duration = customEvent.detail?.duration ?? 280;
       const start = performance.now();
-      const maxCount = Math.floor(duration / 50);
-      let count = 0;
 
-      if (activeInterval) {
-        clearInterval(activeInterval);
-      }
+      if (frameId !== null) cancelAnimationFrame(frameId);
 
-      activeInterval = setInterval(() => {
-        if (performance.now() - start > duration) {
+      const tick = (now: number) => {
+        const t = Math.min((now - start) / duration, 1);
+        if (t >= 1) {
           container.style.transform = "";
-          clearInterval(activeInterval!);
-          activeInterval = null;
+          frameId = null;
           return;
         }
+        // 감쇠 진동: 매 프레임 무작위 방향, 시간에 따라 제곱 감쇠
+        const amplitude = intensity * (1 - t) * (1 - t);
         const angle = Math.random() * Math.PI * 2;
-        const currentIntensity = intensity * (1 - count / maxCount);
-        const dx = Math.cos(angle) * currentIntensity;
-        const dy = Math.sin(angle) * currentIntensity;
-        container.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
-        count++;
-      }, 50);
+        container.style.transform = `translate3d(${Math.cos(angle) * amplitude}px, ${Math.sin(angle) * amplitude}px, 0)`;
+        frameId = requestAnimationFrame(tick);
+      };
+      frameId = requestAnimationFrame(tick);
     };
 
     window.addEventListener("combat-shake", handleShake);
     return () => {
       window.removeEventListener("combat-shake", handleShake);
-      if (activeInterval) {
-        clearInterval(activeInterval);
-      }
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      container.style.transform = "";
     };
   }, []);
 

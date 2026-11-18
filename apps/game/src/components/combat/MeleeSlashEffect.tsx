@@ -2,15 +2,17 @@ import { Graphics } from "pixi.js";
 import { useEffect } from "react";
 
 import { usePixiParent } from "@/utils/pixiContext";
-import { Easings, runTween } from "@/utils/pixiTween";
+import { Easings, runTween, type TweenHandle } from "@/utils/pixiTween";
 
 interface MeleeSlashEffectProps {
   x: number;
   y: number;
   variant?: "SLASH" | "BLUNT";
+  /** 이펙트 시작 지연(초) */
+  delay?: number;
 }
 
-const MeleeSlashEffect = ({ x, y, variant = "SLASH" }: MeleeSlashEffectProps) => {
+const MeleeSlashEffect = ({ x, y, variant = "SLASH", delay = 0 }: MeleeSlashEffectProps) => {
   const parent = usePixiParent();
 
   useEffect(() => {
@@ -18,6 +20,7 @@ const MeleeSlashEffect = ({ x, y, variant = "SLASH" }: MeleeSlashEffectProps) =>
 
     const graphics = new Graphics();
     graphics.position.set(x, y);
+    graphics.visible = false;
     parent.addChild(graphics);
 
     const isBlunt = variant === "BLUNT";
@@ -25,7 +28,11 @@ const MeleeSlashEffect = ({ x, y, variant = "SLASH" }: MeleeSlashEffectProps) =>
       graphics.angle = Math.random() * 20 - 10;
     }
 
-    const tween = runTween({
+    let tween: TweenHandle | null = null;
+    const timer = setTimeout(() => {
+      if (graphics.destroyed) return;
+      graphics.visible = true;
+      tween = runTween({
       duration: isBlunt ? 0.3 : 0.25,
       easing: Easings.EaseOut,
       onUpdate: (progress) => {
@@ -67,15 +74,17 @@ const MeleeSlashEffect = ({ x, y, variant = "SLASH" }: MeleeSlashEffectProps) =>
           graphics.clear();
         }
       },
-    });
+      });
+    }, delay * 1000);
 
     return () => {
-      tween.destroy();
+      clearTimeout(timer);
+      tween?.destroy();
       if (!graphics.destroyed) {
         graphics.destroy();
       }
     };
-  }, [parent, x, y, variant]);
+  }, [parent, x, y, variant, delay]);
 
   return null;
 };

@@ -1,6 +1,7 @@
 import { Container, Graphics, Sprite, Text, TextStyle, Ticker } from "pixi.js";
 import { useEffect, useRef, useState } from "react";
 
+import { runMeleeLunge } from "@/utils/meleeLunge";
 import { usePixiParent } from "@/utils/pixiContext";
 import { getGlowingDotTexture } from "@/utils/pixiTextures";
 import { Easings, runTween, type TweenHandle } from "@/utils/pixiTween";
@@ -16,6 +17,7 @@ interface CanvasEnemyUnitProps {
   targetX?: number;
   targetY?: number;
   activeAttackId?: string;
+  tone?: "enemy" | "ally";
 }
 
 const CanvasEnemyUnit = ({
@@ -29,18 +31,21 @@ const CanvasEnemyUnit = ({
   targetX,
   targetY,
   activeAttackId,
+  tone = "enemy",
 }: CanvasEnemyUnitProps) => {
   const parent = usePixiParent();
   const rootGroupRef = useRef<Container | null>(null);
+  const hitGroupRef = useRef<Container | null>(null);
   const innerGroupRef = useRef<Container | null>(null);
+  const flashRef = useRef<Graphics | null>(null);
   const labelGroupRef = useRef<Container | null>(null);
   const tagBgRef = useRef<Graphics | null>(null);
   const nameTextRef = useRef<Text | null>(null);
 
   const [isIntroFinished, setIsIntroFinished] = useState(false);
   const lastAttackIdRef = useRef<string | null>(null);
-  const animFrameIdRef = useRef<number | null>(null);
-  const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lungeRef = useRef<TweenHandle | null>(null);
+  const hitTweenRef = useRef<TweenHandle | null>(null);
 
   // 1. Pixi 컨테이너 및 기본 노드 생성/마운트
   useEffect(() => {
@@ -50,13 +55,18 @@ const CanvasEnemyUnit = ({
     rootGroup.position.set(spawnX, spawnY);
     rootGroup.alpha = 0;
 
+    const hitGroup = new Container();
+    rootGroup.addChild(hitGroup);
+
     const innerGroup = new Container();
-    rootGroup.addChild(innerGroup);
+    hitGroup.addChild(innerGroup);
+
+    const unitColor = tone === "ally" ? "#fafafa" : "#ff716c";
 
     const { texture, logicalSize } = getGlowingDotTexture({
       radius: 5,
-      fill: "#ff716c",
-      shadowColor: "#ff716c",
+      fill: unitColor,
+      shadowColor: unitColor,
       shadowBlur: 8,
       shadowAlpha: 0.9,
     });
@@ -67,6 +77,10 @@ const CanvasEnemyUnit = ({
     dotSprite.height = logicalSize;
     innerGroup.addChild(dotSprite);
 
+    const flash = new Graphics();
+    flash.alpha = 0;
+    innerGroup.addChild(flash);
+
     const labelGroup = new Container();
     labelGroup.y = 15;
 
@@ -74,7 +88,7 @@ const CanvasEnemyUnit = ({
     const textStyle = new TextStyle({
       fontFamily: "Inter, sans-serif",
       fontSize: 8,
-      fill: "#ff716c",
+      fill: unitColor,
       fontWeight: "300",
     });
     const nameText = new Text({
@@ -97,14 +111,18 @@ const CanvasEnemyUnit = ({
     parent.addChild(rootGroup);
 
     rootGroupRef.current = rootGroup;
+    hitGroupRef.current = hitGroup;
     innerGroupRef.current = innerGroup;
+    flashRef.current = flash;
     labelGroupRef.current = labelGroup;
     tagBgRef.current = tagBg;
     nameTextRef.current = nameText;
 
     return () => {
       rootGroupRef.current = null;
+      hitGroupRef.current = null;
       innerGroupRef.current = null;
+      flashRef.current = null;
       labelGroupRef.current = null;
       tagBgRef.current = null;
       nameTextRef.current = null;
@@ -197,15 +215,10 @@ const CanvasEnemyUnit = ({
     };
   }, [isIntroFinished, isAttacking, x, y]);
 
-  // 5. 컴포넌트 언마운트 시 애니메이션 프레임 및 타이머 취소
+  // 5. 컴포넌트 언마운트 시 진행 중인 공격 모션 취소
   useEffect(() => {
     return () => {
-      if (animFrameIdRef.current) {
-        cancelAnimationFrame(animFrameIdRef.current);
-      }
-      if (pauseTimerRef.current) {
-        clearTimeout(pauseTimerRef.current);
-      }
+      lungeRef.current?.destroy();
     };
   }, []);
 
@@ -216,7 +229,7 @@ const CanvasEnemyUnit = ({
     }
   }, [isAttacking, x, y]);
 
-  // 7. RAF(Phase1·3) + setTimeout(Phase2) 기반의 결정론적 돌진-멈춤-복귀 애니메이션
+  // 7. 윈드업 → 돌진 → 정지 → 복귀 공격 모션
   useEffect(() => {
     if (
       !activeAttackId ||
@@ -227,13 +240,7 @@ const CanvasEnemyUnit = ({
       return;
     }
     lastAttackIdRef.current = activeAttackId;
-
-    if (animFrameIdRef.current) {
-      cancelAnimationFrame(animFrameIdRef.current);
-    }
-    if (pauseTimerRef.current) {
-      clearTimeout(pauseTimerRef.current);
-    }
+    lungeRef.current?.destroy();
 
     const dx = targetX - x;
     const dy = targetY - y;
@@ -244,112 +251,68 @@ const CanvasEnemyUnit = ({
     const uy = dy / distance;
 
     // 대상을 덮지 않도록 45px 앞에 도달
-    const dashX = dx - ux * 45;
-    const dashY = dy - uy * 45;
-
-    const dashDuration = 250; // 돌격 시간 (0.25초)
-    const pauseDuration = 300; // 타격 접점 대기 시간 (0.3초)
-    const returnDuration = 350; // 제자리 복귀 시간 (0.35초)
-
-    const setDashPos = (ox: number, oy: number) => {
-      if (innerGroupRef.current && !innerGroupRef.current.destroyed) {
-        innerGroupRef.current.position.set(ox, oy);
-      }
-    };
-
-    // Phase 3: 제자리 슬라이딩 복귀 (Ease-Out) — RAF 루프
-    const startReturn = () => {
-      const returnStart = performance.now();
-      const tickReturn = (now: number) => {
-        const t = Math.min((now - returnStart) / returnDuration, 1);
-        const ease = 1 - Math.pow(1 - t, 3);
-        setDashPos(dashX * (1 - ease), dashY * (1 - ease));
-        if (t < 1) {
-          animFrameIdRef.current = requestAnimationFrame(tickReturn);
-        } else {
-          setDashPos(0, 0);
-          animFrameIdRef.current = null;
+    lungeRef.current = runMeleeLunge({
+      ux,
+      uy,
+      dashX: dx - ux * 45,
+      dashY: dy - uy * 45,
+      setOffset: (ox, oy) => {
+        if (innerGroupRef.current && !innerGroupRef.current.destroyed) {
+          innerGroupRef.current.position.set(ox, oy);
         }
-      };
-      animFrameIdRef.current = requestAnimationFrame(tickReturn);
-    };
-
-    // Phase 2: 타격 지점 대기
-    const startPause = () => {
-      setDashPos(dashX, dashY);
-      pauseTimerRef.current = setTimeout(() => {
-        pauseTimerRef.current = null;
-        startReturn();
-      }, pauseDuration);
-    };
-
-    // Phase 1: 돌격 (Quintic Ease-In)
-    const dashStart = performance.now();
-    const tickDash = (now: number) => {
-      const t = Math.min((now - dashStart) / dashDuration, 1);
-      const ease = Math.pow(t, 5);
-      setDashPos(dashX * ease, dashY * ease);
-      if (t < 1) {
-        animFrameIdRef.current = requestAnimationFrame(tickDash);
-      } else {
-        animFrameIdRef.current = null;
-        startPause();
-      }
-    };
-
-    animFrameIdRef.current = requestAnimationFrame(tickDash);
-  }, [activeAttackId, x, y, targetX, targetY]);
-
-  // 8. 피격 시 미세한 피격 쉐이크
-  useEffect(() => {
-    const rootGroup = rootGroupRef.current;
-    if (!isDamaged || !rootGroup || rootGroup.destroyed) return;
-
-    const baseX = rootGroup.x;
-    const tweens: TweenHandle[] = [];
-
-    const t1 = runTween({
-      duration: 0.04,
-      onUpdate: (p) => {
-        if (!rootGroup.destroyed) {
-          rootGroup.x = baseX - 4 * p;
-        }
-      },
-      onFinish: () => {
-        if (rootGroup.destroyed) return;
-        const startX2 = rootGroup.x;
-        const targetX2 = baseX + 6;
-        const t2 = runTween({
-          duration: 0.04,
-          onUpdate: (p) => {
-            if (!rootGroup.destroyed) {
-              rootGroup.x = startX2 + (targetX2 - startX2) * p;
-            }
-          },
-          onFinish: () => {
-            if (rootGroup.destroyed) return;
-            const startX3 = rootGroup.x;
-            const t3 = runTween({
-              duration: 0.04,
-              easing: Easings.ElasticEaseOut,
-              onUpdate: (p) => {
-                if (!rootGroup.destroyed) {
-                  rootGroup.x = startX3 + (baseX - startX3) * p;
-                }
-              },
-            });
-            tweens.push(t3);
-          },
-        });
-        tweens.push(t2);
       },
     });
-    tweens.push(t1);
+  }, [activeAttackId, x, y, targetX, targetY]);
 
+  // 8. 피격 반응: 흰색 플래시 + 스케일 펀치 + 공격 반대 방향 넉백
+  useEffect(() => {
+    const hitGroup = hitGroupRef.current;
+    const flash = flashRef.current;
+    if (!isDamaged || !hitGroup || !flash || hitGroup.destroyed || flash.destroyed) return;
+
+    // 적은 피격 시 중심(targetX, targetY)에서 멀어지는 방향으로 밀려난다
+    const awayX = targetX === undefined ? 0 : x - targetX;
+    const awayY = targetY === undefined ? -1 : y - targetY;
+    const awayLength = Math.hypot(awayX, awayY) || 1;
+    const knockX = (awayX / awayLength) * 9;
+    const knockY = (awayY / awayLength) * 9;
+
+    flash.clear();
+    flash.circle(0, 0, 9).fill({ color: 0xffffff });
+
+    hitTweenRef.current?.destroy();
+    hitTweenRef.current = runTween({
+      duration: 0.28,
+      onUpdate: (p) => {
+        if (hitGroup.destroyed || flash.destroyed) return;
+
+        // 플래시: 첫 40% 동안 선형 감쇠
+        flash.alpha = Math.max(0, 1 - p / 0.4);
+
+        // 스케일 펀치: 빠르게 커졌다가 탄성 복귀
+        const punch = p < 0.2 ? p / 0.2 : 1 - Easings.EaseOut((p - 0.2) / 0.8);
+        hitGroup.scale.set(1 + 0.4 * punch);
+
+        // 넉백: 순간적으로 밀려난 뒤 제자리로 탄성 복귀
+        const knock = p < 0.15 ? p / 0.15 : 1 - Easings.ElasticEaseOut((p - 0.15) / 0.85);
+        hitGroup.position.set(knockX * knock, knockY * knock);
+      },
+      onFinish: () => {
+        if (hitGroup.destroyed || flash.destroyed) return;
+        flash.alpha = 0;
+        hitGroup.scale.set(1);
+        hitGroup.position.set(0, 0);
+      },
+    });
+
+  }, [isDamaged, x, y, targetX, targetY]);
+
+  // 피격 모션은 isDamaged가 먼저 꺼져도 끝까지 재생하고, 언마운트 시에만 취소
+  useEffect(() => {
     return () => {
-      tweens.forEach((t) => t.destroy());
+      hitTweenRef.current?.destroy();
     };
-  }, [isDamaged, x, y]);
+  }, []);
 
   return null;
 };
