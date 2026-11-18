@@ -1,5 +1,6 @@
 import { getCatalogItemByName } from "@webgame/types";
 
+import eqChemCanister from "./eq-chem-canister.png";
 import eqComT1 from "./eq-com-t1.png";
 import eqComT2a from "./eq-com-t2a.png";
 import eqComT2b from "./eq-com-t2b.png";
@@ -15,9 +16,16 @@ import eqLogT2b from "./eq-log-t2b.png";
 import eqMedT1 from "./eq-med-t1.png";
 import eqMedT2a from "./eq-med-t2a.png";
 import eqMedT2b from "./eq-med-t2b.png";
+import eqMonoKatana from "./eq-mono-katana.png";
 import eqPubT1 from "./eq-pub-t1.png";
 import eqPubT2a from "./eq-pub-t2a.png";
 import eqPubT2b from "./eq-pub-t2b.png";
+import eqReactivePlate from "./eq-reactive-plate.png";
+import foodBladeGel from "./food-blade-gel.png";
+import foodCombatRation from "./food-combat-ration.png";
+import foodEnergyBar from "./food-energy-bar.png";
+import foodEspressoShot from "./food-espresso-shot.png";
+import foodIonDrink from "./food-ion-drink.png";
 import hanlimControlBaton from "./hanlim-control-baton.png";
 import hanlimReliefCarbine from "./hanlim-relief-carbine.png";
 import matAnticoagulant from "./mat-anticoagulant.png";
@@ -36,6 +44,9 @@ import matStimulant from "./mat-stimulant.png";
 import matTape from "./mat-tape.png";
 import matTitanium from "./mat-titanium.png";
 import matWire from "./mat-wire.png";
+import medBandage from "./med-bandage.png";
+import medTourniquet from "./med-tourniquet.png";
+import medTraumaKit from "./med-trauma-kit.png";
 import wpnDagger from "./wpn_dagger.png";
 import wpnGiantSlayer from "./wpn_giant_slayer.png";
 import wpnLifesaver from "./wpn_lifesaver.png";
@@ -84,6 +95,17 @@ export const ITEM_IMAGE_BY_ID: Readonly<Record<string, string>> = {
   "eq-cul-t1": eqCulT1,
   "eq-cul-t2a": eqCulT2a,
   "eq-cul-t2b": eqCulT2b,
+  "food-ion-drink": foodIonDrink,
+  "food-energy-bar": foodEnergyBar,
+  "food-combat-ration": foodCombatRation,
+  "food-espresso-shot": foodEspressoShot,
+  "food-blade-gel": foodBladeGel,
+  "med-bandage": medBandage,
+  "med-tourniquet": medTourniquet,
+  "med-trauma-kit": medTraumaKit,
+  "eq-chem-canister": eqChemCanister,
+  "eq-reactive-plate": eqReactivePlate,
+  "eq-mono-katana": eqMonoKatana,
 };
 
 export function resolveItemImageSrc(
