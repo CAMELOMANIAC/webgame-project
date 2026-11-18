@@ -15,6 +15,7 @@ import {
   stashItems,
   weaponMasters,
 } from "../db";
+import { gameRules } from "../logic/rules";
 import { integrationFixture } from "../testing/integrationFixture";
 import { decideRaidBattle, extractRaid, fightRaidMonster, getRaidNavigationResult, navigateRaid, startRaid } from "./raid";
 
@@ -337,8 +338,8 @@ test("실제 DB: 선택한 진입 지점에서 배치하고 중복 배치는 원
     entryNodeIds: number[];
     extractionNodeIds: number[];
   }>();
-  assert.deepEqual(entryNodeIds, [0, 37, 93]);
-  assert.deepEqual(extractionNodeIds, [0]);
+  assert.deepEqual(entryNodeIds, gameRules.entryNodeIds);
+  assert.deepEqual(extractionNodeIds, gameRules.extractionNodeIds);
 
   await db.insert(stashItems).values({
     userId: user.id,

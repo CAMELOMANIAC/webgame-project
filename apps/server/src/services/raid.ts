@@ -8,6 +8,7 @@ import {
   type EnemyNoiseSignal,
   FATIGUE_RULES,
   firstMissionNodeId,
+  type FoodBuffEffect,
   getBuildingDistrict,
   getCatalogItemById,
   getRecipeById,
@@ -29,6 +30,7 @@ import {
   type RetreatResolution,
   seopoMapVersion,
   type StartRaidResult,
+  type WeaponEffect,
 } from "@webgame/types";
 import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -770,7 +772,10 @@ export async function extractRaid(
         .where(eq(raidInventoryItems.characterId, characterId));
       await tx
         .update(characters)
-        .set({ weight: await calculateInventoryWeight(tx, characterId) })
+        .set({
+          weight: await calculateInventoryWeight(tx, characterId),
+          activeFoodBuff: null,
+        })
         .where(eq(characters.id, characterId));
       const exp = readExplorationState(raid);
       const hadPendingLoot = exp.pendingLoot.length > 0;
@@ -781,6 +786,219 @@ export async function extractRaid(
         ...(hadPendingLoot
           ? { encounterTravel: writeExplorationState(raid, exp) }
           : {}),
+      };
+    },
+  );
+}
+
+export interface UseRaidConsumableInput extends RaidActionInput {
+  slotIndex: number;
+}
+
+export interface UseRaidConsumableResult {
+  status: "success";
+  encounterTriggered: boolean;
+  hp: number;
+  fatigue: number;
+  weight: number;
+  time: number;
+  activeFoodBuff: FoodBuffEffect | null;
+  battleLog?: import("@webgame/types").RaidBattleResult;
+  noiseSignals?: EnemyNoiseSignal[];
+}
+
+export async function useRaidConsumable(
+  database: Database,
+  userId: string,
+  characterId: string,
+  input: UseRaidConsumableInput,
+) {
+  return performRaidAction<UseRaidConsumableResult>(
+    database,
+    userId,
+    characterId,
+    input,
+    "USE_ITEM",
+    { slotIndex: input.slotIndex },
+    async (tx, raid) => {
+      const character = await ownedCharacter(tx, userId, characterId);
+      const row = await tx.query.raidInventoryItems.findFirst({
+        where: and(
+          eq(raidInventoryItems.characterId, characterId),
+          eq(raidInventoryItems.slotIndex, input.slotIndex),
+        ),
+        with: { weaponMaster: true },
+      });
+      if (!row) throw new InventoryError("Item not found in backpack");
+
+      const effect = row.weaponMaster.effect as WeaponEffect | null;
+      const consumable = effect?.consumable;
+      if (!consumable) {
+        throw new InventoryError("Item is not consumable");
+      }
+
+      if (row.quantity > 1) {
+        await tx
+          .update(raidInventoryItems)
+          .set({ quantity: sql`${raidInventoryItems.quantity} - 1` })
+          .where(eq(raidInventoryItems.id, row.id));
+      } else {
+        await tx
+          .delete(raidInventoryItems)
+          .where(eq(raidInventoryItems.id, row.id));
+      }
+
+      const nextHp = Math.min(
+        character.maxHp,
+        character.hp + (consumable.hpRestore ?? 0),
+      );
+      const nextFatigue = Math.min(
+        character.maxFatigue,
+        character.fatigue + (consumable.fatigueRestore ?? 0),
+      );
+      const nextBuff: FoodBuffEffect | null | undefined =
+        consumable.category === "FOOD" && consumable.buff
+          ? {
+              id: row.weaponMaster.id,
+              name: row.weaponMaster.name,
+              ...consumable.buff,
+            }
+          : undefined;
+      const nextWeight = await calculateInventoryWeight(tx, characterId);
+      const nextTime = raid.time + consumable.useMinutes;
+
+      await tx
+        .update(characters)
+        .set({
+          hp: nextHp,
+          fatigue: nextFatigue,
+          weight: nextWeight,
+          time: nextTime,
+          ...(nextBuff !== undefined ? { activeFoodBuff: nextBuff } : {}),
+        })
+        .where(eq(characters.id, characterId));
+
+      const resolvedBuff =
+        nextBuff !== undefined ? nextBuff : (character.activeFoodBuff ?? null);
+
+      if (consumable.useMinutes <= 0) {
+        return {
+          payload: {
+            status: "success" as const,
+            encounterTriggered: false,
+            hp: nextHp,
+            fatigue: nextFatigue,
+            weight: nextWeight,
+            time: nextTime,
+            activeFoodBuff: resolvedBuff,
+          },
+        };
+      }
+
+      const ghostRoster = await loadGhostRoster(tx, raid);
+      const tracker = createGhostTracker(
+        tx,
+        ghostRoster,
+        userId,
+        nextTime,
+        raid,
+      );
+      const encounter = await tracker.match(
+        raid.currentNodeId,
+        raid.currentNodeId,
+        nextTime,
+        raid.currentNodeId === gameRules.startNodeId,
+      );
+      await recordGhosts(tx, characterId, raid.id, [
+        { nodeId: raid.currentNodeId, time: nextTime },
+      ]);
+
+      if (encounter) {
+        const exp = readExplorationState(raid);
+        const hadPendingLoot = exp.pendingLoot.length > 0;
+        const retreat = prepareRetreat(
+          raid,
+          raid.currentNodeId,
+          raid.currentBuildingId,
+          false,
+        );
+        const battleLog =
+          encounter.kind === "GHOST"
+            ? await executeGhostBattleInTransaction(
+                tx,
+                characterId,
+                raid.id,
+                encounter.ghost,
+                retreat.defer,
+                { deferLootToPending: true },
+              )
+            : await executePatrolGhostBattleInTransaction(
+                tx,
+                characterId,
+                encounter.patrolId,
+                encounter.time,
+                retreat.defer,
+                { deferLootToPending: true },
+              );
+        const pendingRetreat = retreat.finish(battleLog);
+        if (
+          battleLog.result.winnerTeamId === "TeamA" &&
+          !battleLog.playerDied
+        ) {
+          if (encounter.kind === "GHOST" && encounter.ghost.source.characterId) {
+            tracker.defeat(encounter.ghost.source.characterId);
+          }
+          if (encounter.kind === "NPC_GHOST") {
+            tracker.defeatPatrol(encounter.patrolId);
+          }
+        }
+        if (!pendingRetreat && !battleLog.playerDied && battleLog.rewardItem) {
+          exp.pendingLoot.push({
+            id: randomUUID(),
+            ...battleLog.rewardItem,
+            source: "COMBAT",
+          });
+        }
+        const encounterTravel =
+          hadPendingLoot || exp.pendingLoot.length > 0
+            ? writeExplorationState(raid, exp)
+            : undefined;
+        return {
+          payload: {
+            status: "success" as const,
+            encounterTriggered: true,
+            hp: nextHp,
+            fatigue: nextFatigue,
+            weight: nextWeight,
+            time: nextTime,
+            activeFoodBuff: resolvedBuff,
+            battleLog,
+          },
+          pendingRetreat,
+          time: nextTime,
+          ghostRoster,
+          ...(encounterTravel !== undefined ? { encounterTravel } : {}),
+          status: battleLog.playerDied ? "DEAD" : "ACTIVE",
+        };
+      }
+
+      const noiseSignals = await tracker.noiseSignalsAt(
+        raid.currentNodeId,
+        nextTime,
+      );
+      return {
+        payload: {
+          status: "success" as const,
+          encounterTriggered: false,
+          hp: nextHp,
+          fatigue: nextFatigue,
+          weight: nextWeight,
+          time: nextTime,
+          activeFoodBuff: resolvedBuff,
+          noiseSignals,
+        },
+        time: nextTime,
+        ghostRoster,
       };
     },
   );

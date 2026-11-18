@@ -11,6 +11,8 @@ import {
   syncSlots,
   unequipAllEquipment,
   unequipOtherCharactersEquipment,
+  useBaseConsumable,
+  UseBaseConsumableSchema,
 } from "../services/inventory";
 
 export function sendInventoryError(reply: FastifyReply, error: unknown) {
@@ -87,6 +89,26 @@ export function registerInventoryRoutes(
       try {
         const { characterId } = request.params as { characterId: string };
         return await unequipOtherCharactersEquipment(database, characterId);
+      } catch (error) {
+        fastify.log.error(error);
+        return sendInventoryError(reply, error);
+      }
+    },
+  );
+  fastify.post(
+    "/character/:characterId/consumables/use",
+    async (request, reply) => {
+      try {
+        if (!request.actorUserId) {
+          throw new InventoryError("Missing X-Dev-User-Id header", 401);
+        }
+        const { characterId } = request.params as { characterId: string };
+        return await useBaseConsumable(
+          database,
+          request.actorUserId,
+          characterId,
+          UseBaseConsumableSchema.parse(request.body),
+        );
       } catch (error) {
         fastify.log.error(error);
         return sendInventoryError(reply, error);

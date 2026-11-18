@@ -94,10 +94,10 @@ test("도로 이동 시간은 실제 간선 길이에 비례해 10분~60분 단�
   assert.equal(pathTravelMinutes([0, 1, 26, 28]), 60);
 
   // 피로도 소모량 및 고갈(0) 시 이동 시간 1.5배(10분 단위 올림) 증가
-  assert.equal(roadFatigueCost(0, 1), 2);
-  assert.equal(roadFatigueCost(1, 26), 6);
+  assert.equal(roadFatigueCost(0, 1), 1);
+  assert.equal(roadFatigueCost(1, 26), 3);
   assert.equal(roadFatigueCost(28, 28), 2);
-  assert.equal(pathFatigueCost([0, 1, 26, 28]), 12);
+  assert.equal(pathFatigueCost([0, 1, 26, 28]), 6);
 
   assert.equal(roadTravelMinutes(0, 1, 0), 20);
   assert.equal(roadTravelMinutes(1, 26, 0), 50);
@@ -239,10 +239,10 @@ test("건물 이벤트 선택지 조건 판정과 레이드당 1회 제한이 �
   assert.equal(hasBuildingChoiceCondition(shuntChoice, ["mat-relay"]), true);
 });
 
-test("거점 복귀 시각 기반 자연 회복이 10초당 HP +1, 피로도 +1로 정확히 계산된다", () => {
+test("거점 복귀 시각 기반 자연 회복이 15초당 HP +1, 피로도 +1로 정확히 계산된다", () => {
   const returnedAt = new Date("2026-11-17T00:00:00.000Z");
 
-  // 53초 경과 -> 5틱 완료, 다음 틱까지 7초 남음
+  // 53초 경과 -> 3틱(45초) 완료, 다음 틱(60초)까지 7초 남음
   const after53s = calculateBaseRecovery({
     hp: 10,
     maxHp: 100,
@@ -253,13 +253,13 @@ test("거점 복귀 시각 기반 자연 회복이 10초당 HP +1, 피로도 +1�
     now: new Date("2026-11-17T00:00:53.000Z"),
   });
   assert.deepEqual(after53s, {
-    hp: 15,
-    fatigue: 25,
+    hp: 13,
+    fatigue: 23,
     isRecovering: true,
     nextTickInMs: 7000,
   });
 
-  // 클라이언트 라이브 계산: 서버 응답(53초 시점 hp=15, fatigue=25) 후 7초 경과 -> 1틱 추가 (hp=16, fatigue=26)
+  // 클라이언트 라이브 계산: 서버 응답(53초 시점 hp=13, fatigue=23) 후 7초 경과 -> 1틱 추가 (hp=14, fatigue=24)
   const liveAfter7s = calculateLiveBaseRecovery({
     hp: after53s.hp,
     maxHp: 100,
@@ -271,10 +271,10 @@ test("거점 복귀 시각 기반 자연 회복이 10초당 HP +1, 피로도 +1�
     elapsedSinceResponseMs: 7000,
   });
   assert.deepEqual(liveAfter7s, {
-    hp: 16,
-    fatigue: 26,
+    hp: 14,
+    fatigue: 24,
     isRecovering: true,
-    nextTickInMs: 10_000,
+    nextTickInMs: 15_000,
   });
 
   // 최대치 도달 시 상한 고정 및 회복 종료

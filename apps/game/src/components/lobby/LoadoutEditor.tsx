@@ -43,6 +43,7 @@ import { SlotInteractionProvider } from "@/components/itemSlot/SlotInteractionCo
 import SlotManager from "@/components/itemSlot/SlotManager";
 import * as baseStyles from "@/components/lobby/BaseScreen.css";
 import { useCharacterRoster } from "@/utils/hooks/useCharacterCollection";
+import { useBaseConsumable } from "@/utils/hooks/useConsumable";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 import type { StashItemResponse } from "@/utils/hooks/useGetStash";
 import { useInventoryDrag } from "@/utils/hooks/useInventoryDrag";
@@ -171,6 +172,7 @@ export function LoadoutEditor({
   const syncMutation = useSyncItemsMutation();
   const unequipAllMutation = useUnequipAllEquipment();
   const unequipOthersMutation = useUnequipOtherEquipment();
+  const baseConsumableMutation = useBaseConsumable();
 
   const character = characterData?.raw;
   const equipment = character?.equipment ?? [];
@@ -524,7 +526,11 @@ export function LoadoutEditor({
         -1;
       const stashActions: ItemDetailAction[] = [];
 
-      if (commitMode === "deferred") {
+      const isConsumable = Boolean(
+        stashItem.weaponMaster.effect?.itemKind === "CONSUMABLE" ||
+          stashItem.weaponMaster.effect?.consumable,
+      );
+      if (commitMode === "deferred" && !isConsumable) {
         stashActions.push({
           label: "장착",
           tone: "primary",
@@ -541,9 +547,27 @@ export function LoadoutEditor({
         });
       }
 
+      if (isConsumable && characterData && commitMode !== "deferred") {
+        stashActions.push({
+          label: "사용",
+          tone: "primary",
+          disabled: isBusy || baseConsumableMutation.isPending,
+          onClick: () => {
+            baseConsumableMutation.mutate({
+              characterId: characterData.raw.id,
+              source: "stash",
+              weaponMasterId: stashItem.weaponMasterId,
+            });
+            setInspectedTarget(null);
+          },
+        });
+      }
+
       stashActions.push({
         label: "가방에 넣기",
-        ...(commitMode !== "deferred" ? { tone: "primary" as const } : {}),
+        ...(!isConsumable && commitMode !== "deferred"
+          ? { tone: "primary" as const }
+          : {}),
         disabled: isBusy,
         onClick: () => {
           handleMoveToBackpack(stashItem.weaponMasterId);
@@ -591,17 +615,37 @@ export function LoadoutEditor({
           });
         }
       } else {
-        actions.push({
-          label: "장착",
-          tone: "primary",
-          disabled: !firstEmptyEquipId,
-          onClick: () => {
-            if (firstEmptyEquipId) {
-              moveSlots(inspectedTarget.item.id, firstEmptyEquipId);
-            }
-            setInspectedTarget(null);
-          },
-        });
+        const isConsumable = Boolean(
+          baseItem.weaponData?.effect?.itemKind === "CONSUMABLE" ||
+            baseItem.weaponData?.effect?.consumable,
+        );
+        if (isConsumable && commitMode !== "deferred" && rawSlotIndex !== undefined) {
+          actions.push({
+            label: "사용",
+            tone: "primary",
+            disabled: baseConsumableMutation.isPending,
+            onClick: () => {
+              baseConsumableMutation.mutate({
+                characterId: characterData.raw.id,
+                source: "backpack",
+                slotIndex: rawSlotIndex,
+              });
+              setInspectedTarget(null);
+            },
+          });
+        } else if (!isConsumable) {
+          actions.push({
+            label: "장착",
+            tone: "primary",
+            disabled: !firstEmptyEquipId,
+            onClick: () => {
+              if (firstEmptyEquipId) {
+                moveSlots(inspectedTarget.item.id, firstEmptyEquipId);
+              }
+              setInspectedTarget(null);
+            },
+          });
+        }
         actions.push({
           label: "창고로 보관",
           onClick: () => {

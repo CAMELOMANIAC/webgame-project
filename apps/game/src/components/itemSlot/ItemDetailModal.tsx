@@ -174,11 +174,15 @@ export default function ItemDetailModal({ item, onClose }: ItemDetailModalProps)
                   {item.slotLabel
                     ? `${item.slotLabel} · `
                     : ""}
-                  {itemKind === "MATERIAL"
-                    ? "재료 / 소모품"
-                    : mergedWeapon.attackType === "RANGED"
-                      ? "장비 · 원거리"
-                      : "장비 · 근접"}
+                  {itemKind === "CONSUMABLE"
+                    ? mergedWeapon.effect?.consumable?.category === "FOOD"
+                      ? "소모품 · 음식"
+                      : "소모품 · 치료"
+                    : itemKind === "MATERIAL"
+                      ? "재료 / 모듈"
+                      : mergedWeapon.attackType === "RANGED"
+                        ? "장비 · 원거리"
+                        : "장비 · 근접"}
                 </span>
                 <div className={styles.titleRow}>
                   <h2 id={titleId} className={styles.title}>

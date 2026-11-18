@@ -1,10 +1,12 @@
 import {
   findNextAvailableBackpackSlotIndex,
+  type FoodBuffEffect,
   type InventoryUpdateResponse,
   type RecoveredStashDelta,
   type StashMoveResponse,
   type UnequippedCharacterSummary,
   type UnequipOthersResponse,
+  type WeaponEffect,
 } from "@webgame/types";
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -17,6 +19,7 @@ import {
   type StashItem,
   stashItems,
   type TransactionClient,
+  weaponMasters,
 } from "../db";
 
 const equipmentEntry = z.object({
@@ -214,6 +217,20 @@ export async function syncSlotsInTransaction(
     [...actual].some(([id, count]) => requested.get(id) !== count)
   ) {
     throw new InventoryError("Item quantities must be preserved");
+  }
+  if (data.equipment.length) {
+    const equippedMasters = await tx.query.weaponMasters.findMany({
+      where: inArray(
+        weaponMasters.id,
+        data.equipment.map((item) => item.weaponMasterId),
+      ),
+    });
+    for (const master of equippedMasters) {
+      const effect = master.effect as WeaponEffect | null;
+      if (effect?.itemKind === "CONSUMABLE" || effect?.consumable) {
+        throw new InventoryError("Consumable items cannot be equipped");
+      }
+    }
   }
   await tx
     .delete(characterWeapons)
@@ -668,9 +685,17 @@ export async function equipItem(
             eq(raidInventoryItems.characterId, characterId),
             eq(raidInventoryItems.weaponMasterId, weaponMasterId),
           ),
+          with: { weaponMaster: true },
           orderBy: [asc(raidInventoryItems.slotIndex)],
         });
         if (!source) throw new InventoryError("Item not in inventory");
+        const sourceEffect = source.weaponMaster?.effect as
+          | WeaponEffect
+          | null
+          | undefined;
+        if (sourceEffect?.itemKind === "CONSUMABLE" || sourceEffect?.consumable) {
+          throw new InventoryError("Consumable items cannot be equipped");
+        }
         countItems([], [source]);
         if (source.quantity > 1)
           await tx
@@ -696,6 +721,118 @@ export async function equipItem(
     return {
       status: "success",
       weight: await updateInventoryWeight(tx, character),
+    };
+  });
+}
+
+export const UseBaseConsumableSchema = z.discriminatedUnion("source", [
+  z.object({
+    source: z.literal("backpack"),
+    slotIndex: z.number().int().min(0),
+  }),
+  z.object({
+    source: z.literal("stash"),
+    weaponMasterId: z.string().min(1),
+  }),
+]);
+
+export async function useBaseConsumable(
+  database: Database,
+  userId: string,
+  characterId: string,
+  input: z.infer<typeof UseBaseConsumableSchema>,
+) {
+  const parsed = UseBaseConsumableSchema.parse(input);
+  return withInventoryTransaction(database, async (tx) => {
+    const character = await getCharacter(tx, characterId);
+    if (character.userId !== userId) {
+      throw new InventoryError("Character does not belong to user", 403);
+    }
+    if (character.isRaiding) {
+      throw new InventoryError("Cannot use base consumable endpoint while raiding");
+    }
+
+    let master: { id: string; name: string; effect: unknown } | undefined;
+    if (parsed.source === "backpack") {
+      const row = await tx.query.raidInventoryItems.findFirst({
+        where: and(
+          eq(raidInventoryItems.characterId, characterId),
+          eq(raidInventoryItems.slotIndex, parsed.slotIndex),
+        ),
+        with: { weaponMaster: true },
+      });
+      if (!row) throw new InventoryError("Item not found in backpack");
+      master = row.weaponMaster;
+      if (row.quantity > 1) {
+        await tx
+          .update(raidInventoryItems)
+          .set({ quantity: sql`${raidInventoryItems.quantity} - 1` })
+          .where(eq(raidInventoryItems.id, row.id));
+      } else {
+        await tx
+          .delete(raidInventoryItems)
+          .where(eq(raidInventoryItems.id, row.id));
+      }
+    } else {
+      const row = await tx.query.stashItems.findFirst({
+        where: and(
+          eq(stashItems.userId, userId),
+          eq(stashItems.weaponMasterId, parsed.weaponMasterId),
+        ),
+        with: { weaponMaster: true },
+      });
+      if (!row) throw new InventoryError("Item not found in stash");
+      master = row.weaponMaster;
+      if (row.quantity > 1) {
+        await tx
+          .update(stashItems)
+          .set({ quantity: sql`${stashItems.quantity} - 1` })
+          .where(eq(stashItems.id, row.id));
+      } else {
+        await tx.delete(stashItems).where(eq(stashItems.id, row.id));
+      }
+    }
+
+    const effect = master.effect as WeaponEffect | null;
+    const consumable = effect?.consumable;
+    if (!consumable) {
+      throw new InventoryError("Item is not consumable");
+    }
+
+    const nextHp = Math.min(
+      character.maxHp,
+      character.hp + (consumable.hpRestore ?? 0),
+    );
+    const nextFatigue = Math.min(
+      character.maxFatigue,
+      character.fatigue + (consumable.fatigueRestore ?? 0),
+    );
+    const nextBuff: FoodBuffEffect | null | undefined =
+      consumable.category === "FOOD" && consumable.buff
+        ? { id: master.id, name: master.name, ...consumable.buff }
+        : undefined;
+    const nextWeight =
+      parsed.source === "backpack"
+        ? await calculateInventoryWeight(tx, characterId)
+        : character.weight;
+
+    await tx
+      .update(characters)
+      .set({
+        hp: nextHp,
+        fatigue: nextFatigue,
+        weight: nextWeight,
+        ...(nextBuff !== undefined ? { activeFoodBuff: nextBuff } : {}),
+      })
+      .where(eq(characters.id, characterId));
+
+    return {
+      status: "success" as const,
+      hp: nextHp,
+      fatigue: nextFatigue,
+      weight: nextWeight,
+      activeFoodBuff:
+        nextBuff !== undefined ? nextBuff : (character.activeFoodBuff ?? null),
     };
   });
 }

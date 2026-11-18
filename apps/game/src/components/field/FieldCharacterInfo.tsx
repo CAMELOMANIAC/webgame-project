@@ -72,6 +72,28 @@ const FieldCharacterInfo = () => {
   const filledStaminaSegments = Math.ceil(staminaRatio * SEGMENT_COUNT);
   const hpTone = hpRatio <= 0.3 || battleLog ? "negative" : "positive";
 
+  const activeBuff = characterData?.raw.activeFoodBuff;
+  const buffLabel = activeBuff
+    ? [
+        activeBuff.maxHpBonus ? `MAXHP +${activeBuff.maxHpBonus}` : null,
+        activeBuff.meleeDamageBonus
+          ? `MELEE +${activeBuff.meleeDamageBonus}`
+          : null,
+        activeBuff.rangedCooldownReductionTicks
+          ? `RANGED -${activeBuff.rangedCooldownReductionTicks}t`
+          : null,
+        activeBuff.critChanceBonus
+          ? `CRIT +${Math.round(activeBuff.critChanceBonus * 100)}%`
+          : null,
+        activeBuff.tagDamageBonus
+          ? `[${activeBuff.tagDamageBonus.tag}] +${activeBuff.tagDamageBonus.amount}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
+  const isBuffActive = (characterData?.raw.fatigue ?? 0) > 0;
+
   return (
     <button
       type="button"
@@ -86,6 +108,11 @@ const FieldCharacterInfo = () => {
             className={styles.portraitImage({ dead: stats.hp <= 0 })}
           />
         </div>
+        {buffLabel && (
+          <span className={styles.buffPill({ active: isBuffActive })}>
+            {buffLabel}
+          </span>
+        )}
         <p className={styles.name}>{stats.name}</p>
       </div>
 

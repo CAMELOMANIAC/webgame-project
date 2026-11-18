@@ -154,3 +154,34 @@ export const segmentCell = recipe({
     state: "empty",
   },
 });
+
+export const buffPill = recipe({
+  base: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "2px 6px",
+    fontFamily: vars.font.mono,
+    fontVariantNumeric: "tabular-nums",
+    fontSize: "10px",
+    lineHeight: 1.2,
+    letterSpacing: "0.04em",
+    border: `1px solid ${vars.border.grid}`,
+    borderRadius: "2px",
+    marginRight: "6px",
+  },
+  variants: {
+    active: {
+      true: {
+        color: vars.color.positive,
+        borderColor: vars.border.positive,
+      },
+      false: {
+        color: vars.text.muted,
+        opacity: 0.65,
+      },
+    },
+  },
+  defaultVariants: {
+    active: true,
+  },
+});

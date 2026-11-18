@@ -42,6 +42,7 @@ import ItemDetailModal, {
 import { SlotInteractionProvider } from "@/components/itemSlot/SlotInteractionContext";
 import { inheritMotionDiv, page } from "@/styles/theme.css";
 import { useBattleOccluder } from "@/utils/hooks/useBattleOccluder";
+import { useRaidConsumable } from "@/utils/hooks/useConsumable";
 import { useEnemyPositions } from "@/utils/hooks/useEnemyPositions";
 import { useFieldCombat } from "@/utils/hooks/useFieldCombat";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
@@ -84,6 +85,7 @@ function RouteComponent() {
   const { handleDragStart, handleDragEnd, moveSlots } =
     useInventoryDrag(characterData);
   const lootAction = useLootAction();
+  const raidConsumable = useRaidConsumable({ onEncounter: triggerCombat });
   const [activeId, setActiveId] = useAtom(activeDragIdAtom);
   const [inspectedTarget, setInspectedTarget] =
     useState<SlotInspectTarget | null>(null);
@@ -218,17 +220,36 @@ function RouteComponent() {
           });
         }
       } else {
-        actions.push({
-          label: "장착",
-          tone: "primary",
-          disabled: !firstEmptyEquipId,
-          onClick: () => {
-            if (firstEmptyEquipId) {
-              moveSlots(inspectedTarget.item.id, firstEmptyEquipId);
-            }
-            setInspectedTarget(null);
-          },
-        });
+        const isConsumable = Boolean(
+          baseItem.weaponData?.effect?.itemKind === "CONSUMABLE" ||
+            baseItem.weaponData?.effect?.consumable,
+        );
+        if (isConsumable && characterData.raw.isRaiding && rawSlotIndex !== undefined) {
+          actions.push({
+            label: "사용",
+            tone: "primary",
+            disabled: raidConsumable.isPending,
+            onClick: () => {
+              raidConsumable.mutate({
+                characterId: characterData.raw.id,
+                slotIndex: rawSlotIndex,
+              });
+              setInspectedTarget(null);
+            },
+          });
+        } else if (!isConsumable) {
+          actions.push({
+            label: "장착",
+            tone: "primary",
+            disabled: !firstEmptyEquipId,
+            onClick: () => {
+              if (firstEmptyEquipId) {
+                moveSlots(inspectedTarget.item.id, firstEmptyEquipId);
+              }
+              setInspectedTarget(null);
+            },
+          });
+        }
         if (characterData.raw.isRaiding && rawSlotIndex !== undefined) {
           actions.push({
             label: "버리기",

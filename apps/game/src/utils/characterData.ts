@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import {
   calculateBackpackSlotCount,
+  type FoodBuffEffect,
   type InventorySnapshot,
   type Item,
   type RaidView,
@@ -37,6 +38,7 @@ export interface CharacterResponse {
   currentNodeId: number;
   returnedAt?: string | null;
   serverTime?: string;
+  activeFoodBuff?: FoodBuffEffect | null;
   activeRaidId: string | null;
   activeRaid: RaidView | null;
   user: {

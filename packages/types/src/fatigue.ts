@@ -2,7 +2,7 @@ export const FATIGUE_RULES = {
   defaultMaxFatigue: 100,
   exhaustedTravelMultiplier: 1.5,
   exhaustedCooldownBonusTicks: 2,
-  fatiguePerStepUnit: 2,
+  fatiguePerStepUnit: 1,
   buildingMoveFatigueCost: 2,
   buildingActionCosts: {
     INVESTIGATE: 4,
@@ -27,7 +27,7 @@ export function applyExhaustedTravelMinutes(
 }
 
 export const BASE_RECOVERY_RULES = {
-  intervalMs: 10_000,
+  intervalMs: 15_000,
   hpPerInterval: 1,
   fatiguePerInterval: 1,
   deathReturnHp: 1,

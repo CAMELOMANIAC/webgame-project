@@ -16,6 +16,7 @@ import {
 
 import type {
   BuildingEventState,
+  FoodBuffEffect,
   PendingLootItem,
   WeaponEffect,
 } from "@webgame/types";
@@ -121,6 +122,7 @@ export const characters = pgTable(
     isRaiding: boolean("isRaiding").notNull().default(false),
     currentNodeId: integer("currentNodeId").notNull().default(0),
     returnedAt: timestamp("returnedAt", { precision: 3, mode: "date" }),
+    activeFoodBuff: jsonb("activeFoodBuff").$type<FoodBuffEffect | null>(),
     activeRaidId: text("activeRaidId").references(
       (): AnyPgColumn => raidSessions.id,
       { onDelete: "set null", onUpdate: "cascade" },

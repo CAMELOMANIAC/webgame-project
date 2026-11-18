@@ -27,6 +27,7 @@ import {
   RaidLootActionSchema,
   resetRaidWithoutSession,
   startRaid,
+  useRaidConsumable,
 } from "../services/raid";
 import { sendInventoryError } from "./inventory";
 
@@ -201,6 +202,26 @@ export function registerRaidRoutes(
           actor(request),
           characterId,
           RaidActionSchema.parse(request.body) as RaidActionInput,
+        );
+      } catch (error) {
+        fastify.log.error(error);
+        return sendInventoryError(reply, error);
+      }
+    },
+  );
+  fastify.post(
+    "/character/:characterId/raid/use-item",
+    async (request, reply) => {
+      try {
+        const { characterId } = request.params as { characterId: string };
+        const body = RaidActionSchema.extend({
+          slotIndex: z.number().int().min(0),
+        }).parse(request.body);
+        return await useRaidConsumable(
+          database,
+          actor(request),
+          characterId,
+          body as RaidActionInput & { slotIndex: number },
         );
       } catch (error) {
         fastify.log.error(error);
