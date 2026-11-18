@@ -559,34 +559,6 @@ export async function navigateRaid(
     async (tx, raid, character) => {
       if (raid.mapVersion !== seopoMapVersion)
         throw new InventoryError("Raid map version is not supported", 409);
-      if (
-        raid.currentBuildingId !== null &&
-        raid.currentBuildingId !== undefined &&
-        parsed.destinationBuildingId !== raid.currentBuildingId
-      ) {
-        const currentBuilding = (
-          mapData.buildings as unknown as MapBuilding[]
-        ).find((b) => b.id === raid.currentBuildingId);
-        if (currentBuilding && !currentBuilding.category) {
-          const exp = readExplorationState(raid);
-          const isResolved =
-            exp.lootedBuildingIds.includes(currentBuilding.id) ||
-            exp.buildingEvents[String(currentBuilding.id)]?.stage === "CLEARED";
-          if (!isResolved) {
-            const introEvent = resolveBuildingIntroEvent(
-              currentBuilding,
-              getBuildingDistrict(currentBuilding),
-              exp.completedEventIds,
-            );
-            if (introEvent.choices && introEvent.choices.length > 0) {
-              throw new InventoryError(
-                "진행 중인 건물 이벤트를 먼저 완료해야 이동할 수 있습니다.",
-                409,
-              );
-            }
-          }
-        }
-      }
       if (parsed.path[0] !== raid.currentNodeId)
         throw new InventoryError("Path must start at the current node");
       const isBuildingMove = parsed.path.length === 1;
