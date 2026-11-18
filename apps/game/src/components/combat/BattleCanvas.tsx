@@ -10,6 +10,7 @@ import { playerRotationAtom } from "@/atoms/raidAtom";
 import CanvasEnemyUnit from "@/components/combat/CanvasEnemyUnit";
 import MeleeSlashEffect from "@/components/combat/MeleeSlashEffect";
 import RadarAttackLine from "@/components/combat/RadarAttackLine";
+import { resolveAttackEffect } from "@/utils/attackEffect";
 import {
   type BattleRect,
   computeBattleLayout,
@@ -615,13 +616,20 @@ export function BattleCanvas({
                   (p) => p.id === attack.actorId,
                 ) ?? summonedUnits.find((s) => s.id === attack.actorId);
               const weapon = attacker?.weapons[attack.weaponIndex];
-              const isRanged = weapon?.attackType === "RANGED";
+              const effectKind = resolveAttackEffect(weapon);
 
-              if (isRanged) {
-                return <RadarAttackLine key={attack.id} points={[x1, y1, x2, y2]} />;
-              } else {
-                return <MeleeSlashEffect key={attack.id} x={x2} y={y2} />;
+              if (effectKind === "BURST" || effectKind === "SNIPE") {
+                return (
+                  <RadarAttackLine
+                    key={attack.id}
+                    points={[x1, y1, x2, y2]}
+                    variant={effectKind}
+                  />
+                );
               }
+              return (
+                <MeleeSlashEffect key={attack.id} x={x2} y={y2} variant={effectKind} />
+              );
             })}
           </PixiParentContext.Provider>
 

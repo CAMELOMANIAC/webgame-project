@@ -7,69 +7,75 @@ import { Easings, runTween } from "@/utils/pixiTween";
 interface MeleeSlashEffectProps {
   x: number;
   y: number;
+  variant?: "SLASH" | "BLUNT";
 }
 
-const MeleeSlashEffect = ({ x, y }: MeleeSlashEffectProps) => {
+const MeleeSlashEffect = ({ x, y, variant = "SLASH" }: MeleeSlashEffectProps) => {
   const parent = usePixiParent();
 
   useEffect(() => {
     if (!parent || parent.destroyed) return;
 
-    const slashGraphics = new Graphics();
-    slashGraphics.position.set(x, y);
-    slashGraphics.angle = Math.random() * 20 - 10;
-    parent.addChild(slashGraphics);
+    const graphics = new Graphics();
+    graphics.position.set(x, y);
+    parent.addChild(graphics);
+
+    const isBlunt = variant === "BLUNT";
+    if (!isBlunt) {
+      graphics.angle = Math.random() * 20 - 10;
+    }
 
     const tween = runTween({
-      duration: 0.25,
+      duration: isBlunt ? 0.3 : 0.25,
       easing: Easings.EaseOut,
       onUpdate: (progress) => {
-        if (slashGraphics.destroyed) return;
+        if (graphics.destroyed) return;
 
         const alpha = Math.max(0, 1 - progress);
+        graphics.clear();
+
+        if (isBlunt) {
+          // 타격: 충격파 링이 퍼지고 중심 플래시가 사라진다
+          const radius = 6 + 20 * progress;
+          graphics.circle(0, 0, radius).stroke({ width: 3, color: 0xffffff, alpha });
+          graphics
+            .circle(0, 0, radius * 0.6)
+            .stroke({ width: 1.5, color: 0xff716c, alpha });
+          graphics.circle(0, 0, 5 * (1 - progress)).fill({ color: 0xffffff, alpha });
+          return;
+        }
+
         const startX = -18;
         const startY = 18;
         const endX = startX + 36 * progress;
         const endY = startY - 36 * progress;
 
-        slashGraphics.clear();
-
         // White outer slash stroke
-        slashGraphics
+        graphics
           .moveTo(startX, startY)
           .lineTo(endX, endY)
-          .stroke({
-            width: 4,
-            color: 0xffffff,
-            alpha,
-            cap: "round",
-          });
+          .stroke({ width: 4, color: 0xffffff, alpha, cap: "round" });
 
         // Inner crimson core stroke
-        slashGraphics
+        graphics
           .moveTo(startX, startY)
           .lineTo(endX, endY)
-          .stroke({
-            width: 1.5,
-            color: 0xff716c,
-            alpha,
-            cap: "round",
-          });
+          .stroke({ width: 1.5, color: 0xff716c, alpha, cap: "round" });
       },
       onFinish: () => {
-        if (!slashGraphics.destroyed) {
-          slashGraphics.clear();
+        if (!graphics.destroyed) {
+          graphics.clear();
         }
       },
     });
 
     return () => {
       tween.destroy();
-      if (!slashGraphics.destroyed) {
-        slashGraphics.destroy();
+      if (!graphics.destroyed) {
+        graphics.destroy();
       }
     };
-  }, [parent, x, y]);
+  }, [parent, x, y, variant]);
 
   return null;
 };
