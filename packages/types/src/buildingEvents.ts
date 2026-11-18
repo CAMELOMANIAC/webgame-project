@@ -152,9 +152,14 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         outcomes: [
           {
             chance: 0.65,
-            text: "굳어버린 배낭 지퍼를 힘으로 뜯어내자 밀봉 상태의 구호 부품과 보급품이 나왔습니다. 시신의 손목 단말기는 전원이 꺼지기 직전까지 복귀 거점 좌표를 계속 갱신하고 있었습니다.",
+            text: "굳어버린 배낭 지퍼를 힘으로 뜯어내자 밀봉 상태의 구호 부품과 중장갑 포탑 코어가 나왔습니다. 시신의 손목 단말기는 전원이 꺼지기 직전까지 복귀 거점 좌표를 계속 갱신하고 있었습니다.",
             timeCostMinutes: 10,
-            rewardItemIds: ["mat-wire", "mat-tape", "mat-electrolyte"],
+            rewardItemIds: [
+              "mat-wire",
+              "mat-tape",
+              "mat-electrolyte",
+              "eq-summon-turret",
+            ],
           },
           {
             text: "버클을 당기는 순간 방호복 어깨의 무단 회수 차단 장치가 작동해 손목을 감전시켰습니다. 고음의 경보와 함께 위층 방화문이 열리고 발소리가 내려오기 시작해, 1층 창문을 넘어 빈손으로 빠져나왔습니다.",
@@ -189,9 +194,14 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         },
         outcomes: [
           {
-            text: "의료 포트를 연결하자 방호복 단말기가 '생체 서명 일치'를 띄우며 보안 잠금을 해제했습니다. 인물의 맥박은 이미 멎어 있었지만 무전기 경보가 꺼지며 특수 수납함이 조용히 열렸고, 안에는 온전한 부품들과 오늘 날짜가 찍힌 구역 이동 허가서가 들어 있었습니다.",
+            text: "의료 포트를 연결하자 방호복 단말기가 '생체 서명 일치'를 띄우며 보안 잠금을 해제했습니다. 인물의 맥박은 이미 멎어 있었지만 무전기 경보가 꺼지며 특수 수납함이 조용히 열렸고, 안에는 온전한 부품들과 자동 지혈 장비가 들어 있었습니다.",
             timeCostMinutes: 5,
-            rewardItemIds: ["mat-tape", "mat-wire", "mat-battery"],
+            rewardItemIds: [
+              "mat-tape",
+              "mat-wire",
+              "mat-battery",
+              "eq-trauma-autoinjector",
+            ],
           },
         ],
       },
@@ -218,7 +228,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
             chance: 0.55,
             text: "컨테이너 뒤편에서 쇠파이프 구르는 소리가 나자 두 인원이 일제히 손전등을 돌렸습니다. 그 틈에 천막 선반에서 가장 가벼운 상자 하나를 끌어안고 화물차 아래로 빠져나왔습니다. 뒤늦게 고함이 들렸지만 추격은 이어지지 않았습니다.",
             timeCostMinutes: 10,
-            rewardItemIds: ["mat-titanium", "mat-fuel"],
+            rewardItemIds: ["mat-titanium", "mat-fuel", "wpn_giant_slayer"],
           },
           {
             text: "철제 상자를 들어 올리는 순간 바닥의 공구함이 넘어지며 쇳소리가 울렸습니다. 돌아선 인원이 경고 없이 쏜 진압탄이 허벅지를 강타했고, 상자를 버린 채 컨테이너 틈으로 굴러 빠져나왔습니다.",
@@ -254,9 +264,9 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         },
         outcomes: [
           {
-            text: "빛 아래로 걸어 나가 표식을 내밀자 인원이 서류철과 단말기를 번갈아 대조한 뒤 바리케이드 틈을 열어 주었습니다. 지나가는 길목에서 검문소가 떼어 놓은 예비 물자 일부까지 덤으로 건네받았습니다.",
+            text: "빛 아래로 걸어 나가 표식을 내밀자 인원이 서류철과 단말기를 번갈아 대조한 뒤 바리케이드 틈을 열어 주었습니다. 지나가는 길목에서 검문소가 떼어 놓은 예비 물자와 특수 도검까지 건네받았습니다.",
             timeCostMinutes: 0,
-            rewardItemIds: ["mat-fuel", "mat-tape"],
+            rewardItemIds: ["mat-fuel", "mat-tape", "eq-mono-katana"],
           },
         ],
       },
@@ -281,9 +291,14 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         outcomes: [
           {
             chance: 0.6,
-            text: "녹슨 나사를 꺾고 후면 패널을 젖히자 비상 수동 개방 레버가 그대로 드러났습니다. 레버를 당기자 하단 덮개가 열리며 미지급 상태이던 전자 부품과 예비 전지가 쏟아져 나왔습니다.",
+            text: "녹슨 나사를 꺾고 후면 패널을 젖히자 비상 수동 개방 레버가 그대로 드러났습니다. 레버를 당기자 하단 덮개가 열리며 미지급 상태이던 전자 부품과 특수 연무 탄창이 쏟아져 나왔습니다.",
             timeCostMinutes: 10,
-            rewardItemIds: ["mat-battery", "mat-relay", "mat-ceramic"],
+            rewardItemIds: [
+              "mat-battery",
+              "mat-relay",
+              "mat-ceramic",
+              "eq-chem-canister",
+            ],
           },
           {
             text: "덮개를 젖히는 순간 무단 파손 방지 회로가 작동해 고압 방전과 함께 강철 셔터를 끝까지 내려버렸습니다. 손등을 찢기며 팔을 빼낸 직후, 상가 천장 확성기에서 10초간 시설 파손 경보음이 울려 퍼졌습니다.",
@@ -321,7 +336,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
           {
             text: "하단 점검 덮개를 열고 센서 신호선을 단락시키자 단말기가 정상 인증으로 오인해 내부 잠금을 순차적으로 해제했습니다. 아래쪽 예비 배출구로 밀봉된 상자 두 개가 밀려 나오며 화면에 '정상 수령 완료 — 시민 협조에 감사드립니다'라는 문구가 출력됩니다.",
             timeCostMinutes: 5,
-            rewardItemIds: ["mat-battery", "mat-lens", "mat-relay"],
+            rewardItemIds: ["mat-battery", "mat-lens", "mat-relay", "wpn_sniper"],
           },
         ],
       },
@@ -345,9 +360,9 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         outcomes: [
           {
             chance: 0.5,
-            text: "잠금 볼트가 풀리자 여성이 문틈으로 뛰쳐나와 뒤도 돌아보지 않고 복도 반대편 비상 계단으로 사라졌습니다. 열린 격리실 안쪽 약품 카트에는 미처 챙겨 가지 못한 의료 물자들이 그대로 남아 있었습니다.",
+            text: "잠금 볼트가 풀리자 여성이 문틈으로 뛰쳐나와 뒤도 돌아보지 않고 복도 반대편 비상 계단으로 사라졌습니다. 열린 격리실 안쪽 약품 카트에는 의료 물자와 밀봉된 개미떼 통조림이 남아 있었습니다.",
             timeCostMinutes: 10,
-            rewardItemIds: ["mat-biogel", "mat-stimulant"],
+            rewardItemIds: ["mat-biogel", "mat-stimulant", "eq-summon-swarm"],
           },
           {
             text: "문이 열리자마자 천장에서 고농도 방역 기체와 경보가 쏟아져 시야를 가렸습니다. 공황에 빠진 여성이 당신을 기업 회수 인력으로 오인해 금속 트레이를 휘두른 뒤 어둠 속으로 달아났습니다.",
@@ -384,9 +399,14 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         },
         outcomes: [
           {
-            text: "문이 열리며 독한 소독 연무가 쏟아졌지만 시야와 호흡을 잃지 않고 여성을 복도 밖으로 이끌어 냈습니다. 그녀는 거친 숨을 고른 뒤 약품 카트에서 쥐고 나온 의료 상자를 건네고 비상구로 사라졌습니다. 단말기에는 '회수 대상 유실 — 소독 완료'라는 한 줄이 기록됩니다.",
+            text: "문이 열리며 독한 소독 연무가 쏟아졌지만 시야와 호흡을 잃지 않고 여성을 복도 밖으로 이끌어 냈습니다. 그녀는 거친 숨을 고른 뒤 약품 카트에서 쥐고 나온 의료 상자와 장갑판을 건네고 비상구로 사라졌습니다.",
             timeCostMinutes: 5,
-            rewardItemIds: ["mat-biogel", "mat-anticoagulant", "mat-stimulant"],
+            rewardItemIds: [
+              "mat-biogel",
+              "mat-anticoagulant",
+              "mat-stimulant",
+              "eq-reactive-plate",
+            ],
           },
         ],
       },
@@ -411,9 +431,14 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         outcomes: [
           {
             chance: 0.55,
-            text: "절연 장갑 위로 미세한 정전기가 스쳤지만 합선을 일으키지 않고 동력 부품들을 분리해 냈습니다. 부품을 뽑아내자 사흘 뒤 날짜의 안내 방송은 즉시 끊기고 중계실에는 빗물 떨어지는 소리만 남았습니다.",
+            text: "절연 장갑 위로 미세한 정전기가 스쳤지만 합선을 일으키지 않고 동력 부품과 정찰 드론 포트를 분리해 냈습니다. 부품을 뽑아내자 사흘 뒤 날짜의 안내 방송은 즉시 끊겼습니다.",
             timeCostMinutes: 10,
-            rewardItemIds: ["mat-relay", "mat-solenoid", "mat-battery"],
+            rewardItemIds: [
+              "mat-relay",
+              "mat-solenoid",
+              "mat-battery",
+              "eq-summon-drone",
+            ],
           },
           {
             text: "릴레이 모듈을 당기는 순간 배전반 상단에서 굵은 아크 방전이 터지며 손끝과 팔을 때렸습니다. 동시에 천장 모서리의 기업 감시 카메라가 경보음을 울리기 시작해 부품을 포기하고 계단 위로 뛰어올랐습니다.",
@@ -450,9 +475,14 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         },
         outcomes: [
           {
-            text: "우회 단자에 부품을 물리자 스파크가 멎고 랙 상단 패널이 정상 점검 모드로 전환됩니다. 경보나 감전 없이 배전반의 고출력 부품을 모두 분리해 냈으며, 출력창에 남아 있던 인근 순찰 경로 기록까지 확인했습니다. 단말기 화면에는 '정기 점검 완료 — 도시 기간망 정상'이라는 문구가 떠오릅니다.",
+            text: "우회 단자에 부품을 물리자 스파크가 멎고 랙 상단 패널이 정상 점검 모드로 전환됩니다. 경보나 감전 없이 배전반의 고출력 부품과 고압 전기파리채까지 분리해 냈습니다.",
             timeCostMinutes: 5,
-            rewardItemIds: ["mat-solenoid", "mat-battery", "mat-relay"],
+            rewardItemIds: [
+              "mat-solenoid",
+              "mat-battery",
+              "mat-relay",
+              "eq-arc-emitter",
+            ],
           },
         ],
       },

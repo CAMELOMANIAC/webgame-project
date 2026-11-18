@@ -1,4 +1,5 @@
 import type {
+  ConsumableEffect,
   ItemKind,
   SynergyTargetRule,
   TargetingStrategy,
@@ -71,12 +72,45 @@ function makeMaterial(
   };
 }
 
+function makeConsumable(input: {
+  id: string;
+  name: string;
+  weight: number;
+  value: number;
+  description: string;
+  iconKey?: string;
+  tags?: WeaponTag[];
+  consumable: ConsumableEffect;
+}): CatalogWeaponMaster {
+  const tags = input.tags ?? [];
+  return {
+    id: input.id,
+    name: input.name,
+    damage: 0,
+    staminaCost: 0,
+    cooldownTicks: 1,
+    castTicks: 0,
+    weight: input.weight,
+    value: input.value,
+    description: input.description,
+    attackType: "MELEE",
+    iconKey: input.iconKey ?? (input.consumable.category === "FOOD" ? "FOOD" : "MEDICAL"),
+    tags,
+    effect: {
+      type: "CONSUMABLE",
+      itemKind: "CONSUMABLE",
+      tags: [...tags],
+      consumable: input.consumable,
+    },
+  };
+}
+
 /** 기본 장비 5종 */
 export const BASE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
   makeEquipment({
     id: "wpn_primary",
-    name: "Primary Sword",
-    aliases: ["primary"],
+    name: "표준 도검",
+    aliases: ["Primary Sword", "primary"],
     damage: 10,
     staminaCost: 10,
     cooldownTicks: 10,
@@ -90,8 +124,8 @@ export const BASE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
   }),
   makeEquipment({
     id: "wpn_dagger",
-    name: "Secondary Dagger",
-    aliases: ["Dagger", "secondary"],
+    name: "전술 단검",
+    aliases: ["Secondary Dagger", "Dagger", "secondary"],
     damage: 5,
     staminaCost: 5,
     cooldownTicks: 8,
@@ -105,7 +139,8 @@ export const BASE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
   }),
   makeEquipment({
     id: "wpn_lifesaver",
-    name: "Life-saver",
+    name: "응급 생체 팩",
+    aliases: ["Life-saver"],
     damage: 0,
     staminaCost: 20,
     cooldownTicks: 0,
@@ -125,14 +160,15 @@ export const BASE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
   }),
   makeEquipment({
     id: "wpn_sniper",
-    name: "Sniper Rifle",
+    name: "편도 티켓 발권기",
+    aliases: ["정밀 저격 소총", "Sniper Rifle"],
     damage: 25,
     staminaCost: 30,
     cooldownTicks: 20,
     castTicks: 15,
     weight: 15,
     value: 300,
-    description: "긴 조준을 거쳐 원거리에서 높은 피해를 입히는 소총.",
+    description: "긴 조준을 거쳐 원거리에서 높은 피해를 입히는 개조 저격총.",
     attackType: "RANGED",
     iconKey: "RIFLE",
     strategy: "WEAKEST",
@@ -140,14 +176,15 @@ export const BASE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
   }),
   makeEquipment({
     id: "wpn_giant_slayer",
-    name: "Giant Slayer",
+    name: "뚝배기 분쇄기",
+    aliases: ["중량 파쇄 해머", "Giant Slayer"],
     damage: 15,
     staminaCost: 15,
     cooldownTicks: 12,
     castTicks: 5,
     weight: 10,
     value: 200,
-    description: "체력이 높은 대상을 우선 노리는 중량 타격 무기.",
+    description: "체력이 높은 대상을 우선 노려 내려찍는 육중한 파쇄 해머.",
     attackType: "MELEE",
     iconKey: "AXE",
     strategy: "STRONGEST",
@@ -815,11 +852,369 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
   }),
 ];
 
+/** 소모품: 음식·음료(5종) + 치료 도구(4종) */
+export const CONSUMABLES: readonly CatalogWeaponMaster[] = [
+  makeConsumable({
+    id: "food-ion-drink",
+    name: "전해질 이온 음료",
+    weight: 1,
+    value: 25,
+    description: "피로도를 25 회복하고 피로도가 남아 있는 동안 원거리 무기 쿨다운을 1틱 줄입니다.",
+    consumable: {
+      category: "FOOD",
+      useMinutes: 0,
+      fatigueRestore: 25,
+      buff: { rangedCooldownReductionTicks: 1 },
+    },
+  }),
+  makeConsumable({
+    id: "food-energy-bar",
+    name: "고열량 에너지 바",
+    weight: 1,
+    value: 30,
+    description: "피로도를 35 회복하고 피로도가 남아 있는 동안 근접 무기 공격력을 2 높입니다.",
+    consumable: {
+      category: "FOOD",
+      useMinutes: 0,
+      fatigueRestore: 35,
+      buff: { meleeDamageBonus: 2 },
+    },
+  }),
+  makeConsumable({
+    id: "food-combat-ration",
+    name: "따뜻한 전투식량",
+    weight: 2,
+    value: 45,
+    description: "피로도를 50 회복하고 피로도가 남아 있는 동안 최대 체력을 10 높입니다.",
+    consumable: {
+      category: "FOOD",
+      useMinutes: 0,
+      fatigueRestore: 50,
+      buff: { maxHpBonus: 10 },
+    },
+  }),
+  makeConsumable({
+    id: "food-espresso-shot",
+    name: "고카페인 에스프레소 샷",
+    weight: 1,
+    value: 30,
+    description: "피로도를 20 회복하고 피로도가 남아 있는 동안 치명타 확률을 10% 높입니다.",
+    consumable: {
+      category: "FOOD",
+      useMinutes: 0,
+      fatigueRestore: 20,
+      buff: { critChanceBonus: 0.1 },
+    },
+  }),
+  makeConsumable({
+    id: "food-blade-gel",
+    name: "근신경 강화 영양 젤",
+    weight: 1,
+    value: 35,
+    description: "피로도를 30 회복하고 피로도가 남아 있는 동안 도검 태그 무기 공격력을 3 높입니다.",
+    tags: ["BLADE"],
+    consumable: {
+      category: "FOOD",
+      useMinutes: 0,
+      fatigueRestore: 30,
+      buff: { tagDamageBonus: { tag: "BLADE", amount: 3 } },
+    },
+  }),
+  makeConsumable({
+    id: "med-bandage",
+    name: "압박 붕대",
+    weight: 1,
+    value: 25,
+    description: "10분을 소모해 체력을 25 회복합니다. 탐사 중 사용 시 조우 판정이 발생합니다.",
+    consumable: {
+      category: "MEDICAL",
+      useMinutes: 10,
+      hpRestore: 25,
+    },
+  }),
+  makeConsumable({
+    id: "med-tourniquet",
+    name: "전술 지혈대",
+    weight: 1,
+    value: 45,
+    description: "10분을 소모해 체력을 45 회복합니다. 탐사 중 사용 시 조우 판정이 발생합니다.",
+    consumable: {
+      category: "MEDICAL",
+      useMinutes: 10,
+      hpRestore: 45,
+    },
+  }),
+  makeConsumable({
+    id: "med-trauma-kit",
+    name: "외상 응급 처치 키트",
+    weight: 2,
+    value: 75,
+    description: "10분을 소모해 체력을 70 회복합니다. 탐사 중 사용 시 조우 판정이 발생합니다.",
+    consumable: {
+      category: "MEDICAL",
+      useMinutes: 10,
+      hpRestore: 70,
+    },
+  }),
+  makeConsumable({
+    id: "med-hemostatic-injector",
+    name: "고급 지혈 주사기",
+    weight: 1,
+    value: 95,
+    description: "시간 소모 없이 즉시 체력을 40 회복합니다.",
+    consumable: {
+      category: "MEDICAL",
+      useMinutes: 0,
+      hpRestore: 40,
+    },
+  }),
+];
+
+/** 특별 이벤트 보상용 유니크 장비 8종 (조합 불가, 고유 효과 및 태그 시너지) */
+export const STANDALONE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
+  makeEquipment({
+    id: "eq-chem-canister",
+    name: "매운맛 스프레이",
+    aliases: ["부식성 연무 탄창"],
+    damage: 8,
+    staminaCost: 6,
+    cooldownTicks: 6,
+    castTicks: 0,
+    weight: 3,
+    value: 180,
+    description:
+      "부식성 연무를 뿜어 다음 슬롯을 1틱 가속하고 피해량(+5)과 치명타율(+12%)을 높입니다. 화학 장비 수만큼 자신의 피해도 증가합니다.",
+    attackType: "RANGED",
+    iconKey: "RIFLE",
+    tags: ["CHEM", "FIREARM"],
+    effect: {
+      type: "SYNERGY",
+      target: "NEXT",
+      damageBonus: 5,
+      critChanceBonus: 0.12,
+      hasteTicks: 1,
+      perTag: {
+        tag: "CHEM",
+        damageBonus: 2,
+      },
+    },
+  }),
+  makeEquipment({
+    id: "eq-reactive-plate",
+    name: "떼어온 방화문짝",
+    aliases: ["반응 장갑판"],
+    damage: 4,
+    staminaCost: 5,
+    cooldownTicks: 7,
+    castTicks: 0,
+    weight: 6,
+    value: 210,
+    description:
+      "즉시 보호막(+12, 방호 장비당 +4)을 전개하고 양끝 슬롯의 다음 발동에 추가 보호막(+6)을 부여합니다.",
+    attackType: "MELEE",
+    iconKey: "AXE",
+    tags: ["ARMOR", "TECH"],
+    effect: {
+      type: "SYNERGY",
+      target: "EDGES",
+      shieldGain: 12,
+      shieldBonus: 6,
+      perTag: {
+        tag: "ARMOR",
+        shieldGain: 4,
+      },
+    },
+  }),
+  makeEquipment({
+    id: "eq-arc-emitter",
+    name: "고압 전기파리채",
+    aliases: ["소형 아크 방전기"],
+    damage: 7,
+    staminaCost: 4,
+    cooldownTicks: 5,
+    castTicks: 0,
+    weight: 2,
+    value: 170,
+    description:
+      "가장 체력이 높은 적을 지져 양옆 슬롯을 1틱 가속·치명타 +10% 강화하고, 기술 장비 수에 비례해 스태미나를 회복합니다.",
+    attackType: "RANGED",
+    iconKey: "STAFF",
+    strategy: "STRONGEST",
+    tags: ["TECH", "CHEM"],
+    effect: {
+      type: "SYNERGY",
+      target: "ADJACENT",
+      hasteTicks: 1,
+      critChanceBonus: 0.1,
+      staminaRestore: 5,
+      perTag: {
+        tag: "TECH",
+        staminaRestore: 2,
+      },
+    },
+  }),
+  makeEquipment({
+    id: "eq-trauma-autoinjector",
+    name: "일단 안 죽는 주사기",
+    aliases: ["전장 자동 지혈기"],
+    damage: 0,
+    staminaCost: 12,
+    cooldownTicks: 10,
+    castTicks: 0,
+    weight: 2,
+    value: 190,
+    description:
+      "체력이 75% 이하일 때 체력(+14, 생체당 +3)·보호막(+6)·스태미나(+6)를 채우고 양옆 슬롯을 1틱 가속·보호막(+5) 강화합니다.",
+    attackType: "MELEE",
+    iconKey: "HEAL",
+    tags: ["BIO", "ARMOR"],
+    effect: {
+      type: "HEAL",
+      amount: 14,
+      hpThreshold: 0.75,
+      oncePerBattle: false,
+      shieldGain: 6,
+      staminaRestore: 6,
+      target: "ADJACENT",
+      hasteTicks: 1,
+      shieldBonus: 5,
+      perTag: {
+        tag: "BIO",
+        healAmount: 3,
+      },
+    },
+  }),
+  makeEquipment({
+    id: "eq-mono-katana",
+    name: "고기 자르개",
+    aliases: ["고주파 단분자도"],
+    damage: 12,
+    staminaCost: 9,
+    cooldownTicks: 7,
+    castTicks: 1,
+    weight: 4,
+    value: 260,
+    description:
+      "체력이 약한 적을 우선 베며 도검 장비 수만큼 피해를 보태고, 모든 화학 장비의 피해량(+6)과 치명타율(+15%)을 끌어올립니다.",
+    attackType: "MELEE",
+    iconKey: "SWORD",
+    strategy: "WEAKEST",
+    tags: ["BLADE", "CHEM"],
+    effect: {
+      type: "SYNERGY",
+      target: "TAG",
+      targetTag: "CHEM",
+      damageBonus: 6,
+      critChanceBonus: 0.15,
+      perTag: {
+        tag: "BLADE",
+        damageBonus: 2,
+      },
+    },
+  }),
+  makeEquipment({
+    id: "eq-summon-drone",
+    name: "로케트 배송 기사",
+    aliases: ["전술 정찰 드론 포트"],
+    damage: 0,
+    staminaCost: 8,
+    cooldownTicks: 9,
+    castTicks: 0,
+    weight: 3,
+    value: 210,
+    description:
+      "쿨다운마다 원거리 로케트 배송 드론을 계속 배치합니다. 동시에 최대 2기까지 유지됩니다.",
+    attackType: "MELEE",
+    iconKey: "STAFF",
+    tags: ["TECH"],
+    effect: {
+      type: "SUMMON",
+      summon: {
+        id: "summon-recon-drone",
+        name: "로케트 배송 드론",
+        hp: 18,
+        damage: 5,
+        cooldownTicks: 3,
+        attackType: "RANGED",
+        tags: ["TECH"],
+        count: 1,
+        maxActive: 2,
+      },
+    },
+  }),
+  makeEquipment({
+    id: "eq-summon-swarm",
+    name: "개미떼 통조림",
+    aliases: ["나노 생체 군체 캡슐"],
+    damage: 0,
+    staminaCost: 14,
+    cooldownTicks: 12,
+    castTicks: 0,
+    weight: 2,
+    value: 230,
+    description:
+      "배고픈 나노 개미떼 3기를 한꺼번에 풀어놓습니다. 모두 소멸하면 쿨다운 후 다시 3기를 소환합니다.",
+    attackType: "MELEE",
+    iconKey: "DAGGER",
+    tags: ["BIO", "CHEM"],
+    effect: {
+      type: "SUMMON",
+      summon: {
+        id: "summon-nano-swarm",
+        name: "배고픈 나노 개미떼",
+        hp: 12,
+        damage: 4,
+        cooldownTicks: 2,
+        attackType: "MELEE",
+        tags: ["BIO", "CHEM"],
+        count: 3,
+        maxActive: 3,
+        respawnOnlyWhenEmpty: true,
+      },
+    },
+  }),
+  makeEquipment({
+    id: "eq-summon-turret",
+    name: "자동 문지기 깡통",
+    aliases: ["중장갑 방어 포탑 코어"],
+    damage: 0,
+    staminaCost: 18,
+    cooldownTicks: 15,
+    castTicks: 2,
+    weight: 6,
+    value: 280,
+    description:
+      "집 지키는 깡통 포탑을 전개합니다. 포탑이 살아있을 때 재사용하면 체력을 25 회복하고 보호막을 보충합니다.",
+    attackType: "MELEE",
+    iconKey: "AXE",
+    tags: ["TECH", "ARMOR"],
+    effect: {
+      type: "SUMMON",
+      summon: {
+        id: "summon-heavy-turret",
+        name: "집 지키는 깡통 포탑",
+        hp: 55,
+        damage: 11,
+        cooldownTicks: 4,
+        attackType: "RANGED",
+        tags: ["TECH", "ARMOR"],
+        count: 1,
+        maxActive: 1,
+        shieldOnSummon: 15,
+        healOnReactivate: 25,
+        strategy: "STRONGEST",
+      },
+    },
+  }),
+];
+
 export const ALL_CATALOG_ITEMS: readonly CatalogWeaponMaster[] = [
   ...BASE_EQUIPMENTS,
   ...HANLIM_EQUIPMENTS,
   ...CRAFTING_MATERIALS,
   ...CRAFTED_EQUIPMENTS,
+  ...STANDALONE_EQUIPMENTS,
+  ...CONSUMABLES,
 ];
 
 const CATALOG_BY_ID = new Map(
@@ -945,6 +1340,24 @@ export function formatSynergySummary(
 ): string | null {
   if (!effect) return null;
   const parts: string[] = [];
+  if (effect.consumable) {
+    const c = effect.consumable;
+    if (c.hpRestore) parts.push(`HP +${c.hpRestore}`);
+    if (c.fatigueRestore) parts.push(`FAT +${c.fatigueRestore}`);
+    if (c.buff?.maxHpBonus) parts.push(`MAXHP +${c.buff.maxHpBonus}`);
+    if (c.buff?.meleeDamageBonus) parts.push(`MELEE +${c.buff.meleeDamageBonus}DMG`);
+    if (c.buff?.rangedCooldownReductionTicks) {
+      parts.push(`RANGED -${c.buff.rangedCooldownReductionTicks}t`);
+    }
+    if (c.buff?.critChanceBonus) {
+      parts.push(`CRIT +${Math.round(c.buff.critChanceBonus * 100)}%`);
+    }
+    if (c.buff?.tagDamageBonus) {
+      parts.push(`[${c.buff.tagDamageBonus.tag}] +${c.buff.tagDamageBonus.amount}DMG`);
+    }
+    if (c.useMinutes > 0) parts.push(`${c.useMinutes}m`);
+    return parts.length > 0 ? parts.join(" · ") : null;
+  }
   if (effect.shieldGain) parts.push(`SHD +${effect.shieldGain}`);
   if (effect.target) {
     const label =

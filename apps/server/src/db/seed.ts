@@ -84,11 +84,11 @@ async function main() {
     },
   ];
 
-  const primarySword = weaponData.find((w) => w.name === "Primary Sword");
-  const secondaryDagger = weaponData.find((w) => w.name === "Secondary Dagger");
-  const giantSlayer = weaponData.find((w) => w.name === "Giant Slayer");
-  const sniperRifle = weaponData.find((w) => w.name === "Sniper Rifle");
-  const lifeSaver = weaponData.find((w) => w.name === "Life-saver");
+  const primarySword = weaponData.find((w) => w.id === "wpn_primary" || w.name === "표준 도검");
+  const secondaryDagger = weaponData.find((w) => w.id === "wpn_dagger" || w.name === "전술 단검");
+  const giantSlayer = weaponData.find((w) => w.id === "wpn_giant_slayer" || w.name === "중량 파쇄 해머");
+  const sniperRifle = weaponData.find((w) => w.id === "wpn_sniper" || w.name === "정밀 저격 소총");
+  const lifeSaver = weaponData.find((w) => w.id === "wpn_lifesaver" || w.name === "응급 생체 팩");
 
   for (const m of monsters) {
     const [createdMonster] = await db

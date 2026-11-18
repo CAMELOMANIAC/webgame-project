@@ -69,7 +69,7 @@ export const defaultWeapon2: Weapon = {
 
 export const healingWeapon: Weapon = {
   id: "wpn_lifesaver",
-  name: "Life-saver",
+  name: "응급 생체 팩",
   damage: 0,
   cooldownTicks: 0,
   currentCooldown: 0,
@@ -102,7 +102,7 @@ export const healingWeapon: Weapon = {
 
 export const sniperRifle: Weapon = {
   id: "wpn_sniper",
-  name: "Sniper Rifle",
+  name: "편도 티켓 발권기",
   damage: 25,
   cooldownTicks: 20,
   currentCooldown: 0,
@@ -117,7 +117,7 @@ export const sniperRifle: Weapon = {
 
 export const giantSlayer: Weapon = {
   id: "wpn_giant_slayer",
-  name: "Giant Slayer",
+  name: "뚝배기 분쇄기",
   damage: 15,
   cooldownTicks: 12,
   currentCooldown: 0,
