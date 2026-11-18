@@ -71,6 +71,8 @@ export function createNoiseRipple(world: Container, mapLayer: Container) {
       sprite,
       filter,
       ring,
+      baseX: area.x,
+      baseY: area.y,
       displayRadius,
       diameter: (displayRadius * 2) / crestRadius,
       maxRingAlpha: isEcho ? echoRingAlpha : primaryRingAlpha,
@@ -134,6 +136,18 @@ export function createNoiseRipple(world: Container, mapLayer: Container) {
 
   return {
     setAreas,
+    randomizeOffsets(maxOffset = 8) {
+      for (const { primary, echo } of pairs) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * maxOffset;
+        const x = primary.baseX + Math.cos(angle) * dist;
+        const y = primary.baseY + Math.sin(angle) * dist;
+        if (!primary.sprite.destroyed) primary.sprite.position.set(x, y);
+        if (!primary.ring.destroyed) primary.ring.position.set(x, y);
+        if (!echo.sprite.destroyed) echo.sprite.position.set(x, y);
+        if (!echo.ring.destroyed) echo.ring.position.set(x, y);
+      }
+    },
     show(primary: RippleWave, echo?: RippleWave) {
       if (mapLayer.destroyed || filters.length === 0) return;
       for (const pair of pairs) {

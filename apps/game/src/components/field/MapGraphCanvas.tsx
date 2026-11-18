@@ -95,7 +95,9 @@ const FOG_VISIBLE_MIN_SCALE = 1.0;
 const NOISE_PULSE_SECONDS = 1.1;
 const NOISE_ECHO_DELAY_SECONDS = 0.25;
 const NOISE_ECHO_STRENGTH = 0.55;
-const NOISE_PULSE_INTERVAL_MS = 1600;
+const NOISE_IDLE_MIN_DELAY_MS = 250;
+const NOISE_IDLE_MAX_DELAY_MS = 1450;
+const NOISE_IDLE_JITTER_PX = 8;
 const DISTRICT_DASH_PX = 4;
 const DISTRICT_DASH_GAP_PX = 7;
 const DISTRICT_DASH_PERIOD_PX = DISTRICT_DASH_PX + DISTRICT_DASH_GAP_PX;
@@ -1920,7 +1922,12 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     };
     let tween: TweenHandle | undefined;
     let nextPulse: number | undefined;
+    let cancelled = false;
     const pulse = () => {
+      if (cancelled) return;
+      if (!isNavigating) {
+        ripple.randomizeOffsets(NOISE_IDLE_JITTER_PX);
+      }
       ripple.show(waveAt(0, 1));
       tween = runTween({
         duration,
@@ -1934,21 +1941,23 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         },
         onFinish: () => {
           ripple.hide();
-          nextPulse = window.setTimeout(
-            pulse,
-            NOISE_PULSE_INTERVAL_MS - duration * 1000,
-          );
+          if (cancelled || isNavigating) return;
+          const delayMs =
+            NOISE_IDLE_MIN_DELAY_MS +
+            Math.random() * (NOISE_IDLE_MAX_DELAY_MS - NOISE_IDLE_MIN_DELAY_MS);
+          nextPulse = window.setTimeout(pulse, delayMs);
         },
       });
     };
 
     pulse();
     return () => {
+      cancelled = true;
       window.clearTimeout(nextPulse);
       tween?.destroy();
       ripple.hide();
     };
-  }, [activeRaidId, isCombat, isPixiReady, noiseSignals]);
+  }, [activeRaidId, isCombat, isNavigating, isPixiReady, noiseSignals]);
 
   // 5.5. requestAnimationFrame 기반 등속(Constant Speed) 부드러운 네비게이션 보간 루프
   useEffect(() => {
