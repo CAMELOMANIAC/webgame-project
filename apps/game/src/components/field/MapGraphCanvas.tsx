@@ -1781,11 +1781,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
     for (const b of buildings) {
       if (b.flatPoints.length < 6) continue;
-      if (isBuildingLockedDown(b, activeRaidTime, seed)) {
-        g.poly(b.flatPoints, true)
-          .fill({ color: 0x180a0a, alpha: 0.74 })
-          .stroke({ width: 1, color: 0xff7162, alpha: 0.45 });
-      } else if (lootedSet.has(b.id)) {
+      if (isBuildingLockedDown(b, activeRaidTime, seed) || lootedSet.has(b.id)) {
         g.poly(b.flatPoints, true).fill({ color: 0x0a0a0c, alpha: 0.48 });
       }
     }
