@@ -727,6 +727,520 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
       },
     ],
   },
+  {
+    id: "story-blackmarket-shutter",
+    title: "셔터 안쪽의 암거래상",
+    districtKind: "COMMERCIAL",
+    imageKey: "commercial_street",
+    oncePerRaid: true,
+    introText:
+      "지하 보도 상가 끝, 반쯤 내려진 철제 셔터 아래로 주황색 건전지 랜턴 불빛과 희미한 탄내가 새어 나옵니다. 안쪽 간이 의자에 앉은 남자가 상표가 깎여 나간 기업 보급품을 천 위에 늘어놓고는, 발치의 휴대 버너가 칙칙거리며 꺼져 가는 것을 노려보고 있습니다. 셔터 모서리에는 개폐 레버와 이어진 굵은 낚싯줄이 발목 높이에 팽팽하게 묶여 있습니다.",
+    choices: [
+      {
+        id: "raid-curtain-crate",
+        label: "흥정하는 척 시선을 돌리고 커튼 뒤 부품 상자를 노린다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 8,
+        outcomes: [
+          {
+            chance: 0.5,
+            text: "남자가 반대편 소리에 고개를 돌린 사이 랜턴을 걷어차 어둠을 만든 뒤, 커튼 너머 상자에서 쓸 만한 물건만 낚아채 빠져나왔습니다.",
+            timeCostMinutes: 10,
+            rewardItemIds: ["mat-wire", "mat-titanium", "mat-electrolyte"],
+          },
+          {
+            text: "발목에 걸린 낚싯줄이 당겨지며 철제 셔터가 굉음과 함께 내려앉았습니다. 셔터 날에 등을 찍힌 채 겨우 기어 나왔습니다.",
+            timeCostMinutes: 15,
+            hpDelta: -18,
+            fatigueDelta: -6,
+          },
+        ],
+      },
+      {
+        id: "bypass-shutter",
+        label: "거래에 응하지 않고 반대편 지상 출구로 우회한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "투박한 목소리를 뒤로한 채 상가 외곽으로 돌아 나왔습니다. 시간은 지체되었지만 불필요한 마찰은 피했습니다.",
+            timeCostMinutes: 10,
+          },
+        ],
+      },
+      {
+        id: "fuel-burner-trade",
+        label: "꺼져 가는 휴대 버너의 점화와 연료를 보태고 물품 교환을 제안한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        condition: {
+          requireAnyItemIds: ["mat-lighter", "mat-fuel"],
+          label: "휴대용 라이터 또는 특수 산업용 연료",
+        },
+        outcomes: [
+          {
+            text: "버너에 푸른 불꽃이 오르자 남자는 커튼 뒤에서 천에 감싼 꾸러미를 밀어 주었습니다. 데운 물 한 잔까지 건네받아 기력을 조금 추슬렀습니다.",
+            timeCostMinutes: 5,
+            hpDelta: 8,
+            rewardItemIds: ["mat-biogel", "mat-tape"],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "story-luxury-safe-vault",
+    title: "잠긴 지하 서재의 방범 금고",
+    districtKind: "RESIDENTIAL",
+    imageKey: "luxury_house",
+    oncePerRaid: true,
+    introText:
+      "고급 주택 지하 서재 벽면의 액자가 비뚤어져 있고, 그 뒤로 예비 전원이 들어온 전자식 방범 금고가 드러나 있습니다. 바닥에는 누군가 서둘러 짐을 싼 흔적과 함께 보안 패널이 반쯤 열려 있습니다.",
+    choices: [
+      {
+        id: "force-safe-vault",
+        label: "보안 패널 배선을 강제로 뜯어 금고 잠금을 해제한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 8,
+        outcomes: [
+          {
+            chance: 0.6,
+            text: "단말기가 짧은 스파크를 튀기며 금고 볼트가 풀렸습니다. 안쪽에는 고급 광학 부품과 밀봉 비상 식량이 정리되어 있었습니다.",
+            timeCostMinutes: 10,
+            rewardItemIds: ["mat-lens", "mat-titanium", "food-combat-ration"],
+          },
+          {
+            text: "강제 개방 경보가 울리자 구역을 순찰하던 자경단원이 지하 계단으로 들이닥쳤습니다.",
+            timeCostMinutes: 15,
+            encounterEnemyId: "npc-res-blade",
+          },
+        ],
+      },
+      {
+        id: "rest-study-room",
+        label: "금고는 건드리지 않고 서재에서 잠시 숨을 고른다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "조용한 지하 서재에서 잠시 호흡을 가다듬고 다음 이동 경로를 정리했습니다.",
+            timeCostMinutes: 5,
+            fatigueDelta: 6,
+          },
+        ],
+      },
+      {
+        id: "bypass-vault-tech",
+        label: "기계 장비로 보안 터미널의 예비 회로를 우회한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 4,
+        condition: {
+          requireTag: "TECH",
+          label: "기계 계열 장비",
+        },
+        outcomes: [
+          {
+            text: "경보 회로를 먼저 차단한 뒤 금고를 소리 없이 개방했습니다. 예비 배터리와 반응 장갑판까지 온전히 회수했습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["mat-battery", "mat-relay", "eq-reactive-plate"],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "story-res-luxury-pantry",
+    title: "대피 직전의 비상 저장실",
+    districtKind: "RESIDENTIAL",
+    imageKey: "luxury_house",
+    oncePerRaid: true,
+    introText:
+      "주방 안쪽의 숨겨진 비상 저장실 문이 반쯤 열려 있습니다. 선반에는 대피 당시 챙기지 못한 보존 식량이 남아 있고, 한쪽 벽에는 강화 유리로 잠긴 가정용 응급 약품함이 걸려 있습니다.",
+    choices: [
+      {
+        id: "collect-pantry-supplies",
+        label: "열린 선반의 식량과 기본 구급품만 빠르게 챙긴다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 4,
+        outcomes: [
+          {
+            text: "유통기한이 넉넉한 에너지 바와 이온 음료, 붕대를 배낭에 챙겼습니다.",
+            timeCostMinutes: 10,
+            rewardItemIds: ["food-energy-bar", "food-ion-drink", "med-bandage"],
+          },
+        ],
+      },
+      {
+        id: "pry-glass-cabinet",
+        label: "강화 유리 약품함을 억지로 비틀어 열어본다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 6,
+        outcomes: [
+          {
+            chance: 0.65,
+            text: "경첩이 부서지며 약품함이 열렸습니다. 외상 응급 키트와 멸균 생체 젤을 확보했습니다.",
+            timeCostMinutes: 10,
+            rewardItemIds: ["med-trauma-kit", "mat-biogel"],
+          },
+          {
+            text: "강화 유리가 깨지며 팔목에 깊은 상처를 입었습니다. 약품 대부분도 파편에 손상되었습니다.",
+            timeCostMinutes: 10,
+            hpDelta: -10,
+          },
+        ],
+      },
+      {
+        id: "smash-lock-blunt",
+        label: "타격 장비로 약품함 잠금장치만 정확히 파쇄한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 2,
+        condition: {
+          requireTag: "BLUNT",
+          label: "타격 계열 장비",
+        },
+        outcomes: [
+          {
+            text: "잠금쇠만 깔끔하게 부수어 유리를 깨지 않고 외상 응급 키트와 전투 식량을 꺼냈습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["med-trauma-kit", "food-combat-ration"],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "story-com-office-server",
+    title: "비상 전원으로 버티는 오피스 전산실",
+    districtKind: "COMMERCIAL",
+    imageKey: "office_building",
+    oncePerRaid: true,
+    introText:
+      "오피스 빌딩 3층 전산실은 UPS 비상 배터리 덕분에 아직도 낮은 팬 소음을 내며 가동 중입니다. 서버 랙 사이로 고출력 릴레이와 예비 셀이 반짝이고, 복도 끝 휴게실에는 전원이 꺼진 자판기가 서 있습니다.",
+    choices: [
+      {
+        id: "strip-server-rack",
+        label: "전원이 들어온 서버 랙에서 예비 부품을 직접 분리한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 6,
+        outcomes: [
+          {
+            chance: 0.6,
+            text: "절연 피복만 조심스레 잡아당겨 릴레이와 배터리, 구리 배선을 회수했습니다.",
+            timeCostMinutes: 10,
+            rewardItemIds: ["mat-relay", "mat-battery", "mat-wire"],
+          },
+          {
+            text: "전원 버스 바에 손등이 스치며 강한 전류가 흘렀습니다. 부품을 포기하고 물러났습니다.",
+            timeCostMinutes: 10,
+            hpDelta: -12,
+          },
+        ],
+      },
+      {
+        id: "check-breakroom",
+        label: "전산실은 피하고 휴게실 자판기에서 음료만 챙긴다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "자판기 하단 보관함에서 에스프레소 샷과 이온 음료를 건졌습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["food-espresso-shot", "food-ion-drink"],
+          },
+        ],
+      },
+      {
+        id: "shutdown-rack-tech",
+        label: "기계 장비로 UPS 차단 시퀀스를 실행한 뒤 부품을 분리한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 4,
+        condition: {
+          requireTag: "TECH",
+          label: "기계 계열 장비",
+        },
+        outcomes: [
+          {
+            text: "안전 차단 절차를 거쳐 솔레노이드 코일과 고효율 배터리, 릴레이를 손상 없이 회수했습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["mat-solenoid", "mat-battery", "mat-relay"],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "story-ind-warehouse-crane",
+    title: "천장 호이스트에 매달린 화물 팔레트",
+    districtKind: "INDUSTRIAL",
+    imageKey: "warehouse",
+    oncePerRaid: true,
+    introText:
+      "물류 창고 중앙 천장 크레인에 공업용 자재 팔레트가 지상 3미터 높이로 멈춰 있습니다. 수동 윈치 레버가 기둥 옆에 남아 있지만 녹이 슬어 삐걱거리는 소리가 크게 날 것 같습니다.",
+    choices: [
+      {
+        id: "lower-winch-pallet",
+        label: "수동 윈치를 돌려 팔레트를 바닥으로 내린다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 8,
+        outcomes: [
+          {
+            chance: 0.65,
+            text: "천천히 팔레트를 내려 티타늄 프레임과 세라믹 판재, 산업용 연료를 확보했습니다.",
+            timeCostMinutes: 10,
+            rewardItemIds: ["mat-titanium", "mat-ceramic", "mat-fuel"],
+          },
+          {
+            text: "녹슨 쇠사슬 소리가 창고 전체에 울려 퍼졌고, 인근을 점거하던 과격한 노조원들이 몰려들었습니다.",
+            timeCostMinutes: 15,
+            encounterEnemyId: "npc-ind-enforcer",
+          },
+        ],
+      },
+      {
+        id: "gather-floor-parts",
+        label: "윈치는 건드리지 않고 바닥에 떨어진 자재만 챙긴다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "소음을 내지 않고 팔레트 아래 흩어진 고강도 테이프와 구리 배선만 챙겨 나왔습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["mat-tape", "mat-wire"],
+          },
+        ],
+      },
+      {
+        id: "cut-straps-blade",
+        label: "도검 장비로 하단 결속 벨트만 절단해 가벼운 상자를 받아낸다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 4,
+        condition: {
+          requireTag: "BLADE",
+          label: "도검 계열 장비",
+        },
+        outcomes: [
+          {
+            text: "결속 벨트를 조용히 끊어내어 소음 없이 고급 부품 상자만 안전하게 회수했습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["mat-titanium", "mat-ceramic", "mat-solenoid"],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "story-ind-factory-furnace",
+    title: "잔열이 남은 열처리 주조 라인",
+    districtKind: "INDUSTRIAL",
+    imageKey: "factory",
+    oncePerRaid: true,
+    introText:
+      "가동이 중단된 지 오래된 공장 주조 라인이지만, 비상 보온로 안쪽에서는 아직도 희미한 열기가 뿜어져 나옵니다. 로 앞 철제 선반에는 열처리를 마친 특수 합금과 코어 부품 상자가 놓여 있습니다.",
+    choices: [
+      {
+        id: "grab-furnace-crate",
+        label: "작업용 집게로 선반 위 상자를 끌어낸다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 8,
+        outcomes: [
+          {
+            chance: 0.6,
+            text: "열기를 견디며 상자를 끌어내어 세라믹 판재와 산업용 연료, 고밀도 코어를 챙겼습니다.",
+            timeCostMinutes: 10,
+            rewardItemIds: ["mat-ceramic", "mat-fuel", "mat-core"],
+          },
+          {
+            text: "달궈진 철제 손잡이가 미끄러지며 팔과 손바닥에 심한 화상을 입었습니다.",
+            timeCostMinutes: 10,
+            hpDelta: -14,
+          },
+        ],
+      },
+      {
+        id: "cool-down-corridor",
+        label: "열처리 구역을 벗어나 냉각 통로에서 잠시 휴식한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "시원한 환기구 아래에서 숨을 고르며 피로를 덜어냈습니다.",
+            timeCostMinutes: 5,
+            fatigueDelta: 10,
+          },
+        ],
+      },
+      {
+        id: "shield-heat-armor",
+        label: "방호 장비로 복사열을 막아내며 선반 물자를 전량 회수한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 4,
+        condition: {
+          requireTag: "ARMOR",
+          label: "방호 계열 장비",
+        },
+        outcomes: [
+          {
+            text: "방호 장구 덕분에 열기 피해를 입지 않고 최상급 합금과 코어를 모두 확보했습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["mat-ceramic", "mat-titanium", "mat-core"],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "story-med-cold-storage",
+    title: "성에가 낀 의약품 저온 보관고",
+    districtKind: "MEDICAL",
+    imageKey: "lab_building",
+    oncePerRaid: true,
+    introText:
+      "연구동 지하 의약품 보관고의 냉각 장치가 오작동해 문 주변이 두꺼운 성에로 얼어붙었습니다. 강화 유리창 너머로는 밀봉된 지혈제와 나노 봉합사 케이스가 보입니다.",
+    choices: [
+      {
+        id: "force-frozen-door",
+        label: "얼어붙은 손잡이를 힘으로 젖혀 보관고 문을 연다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 8,
+        outcomes: [
+          {
+            chance: 0.65,
+            text: "얼음층이 부서지며 문이 열렸습니다. 지혈대와 항응고제, 생체 젤을 챙겼습니다.",
+            timeCostMinutes: 10,
+            rewardItemIds: [
+              "med-tourniquet",
+              "mat-anticoagulant",
+              "mat-biogel",
+            ],
+          },
+          {
+            text: "배관이 터지며 냉매가 뿜어져 나와 동상과 호흡 곤란을 겪었습니다.",
+            timeCostMinutes: 10,
+            hpDelta: -10,
+            fatigueDelta: -6,
+          },
+        ],
+      },
+      {
+        id: "take-cart-supplies",
+        label: "보관고는 두고 입구 카트 위의 응급 물품만 챙긴다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "입구 카트에서 응급 붕대와 이온 음료를 안전하게 챙겨 나왔습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["med-bandage", "food-ion-drink"],
+          },
+        ],
+      },
+      {
+        id: "defrost-chem-catalyst",
+        label: "화학 장비의 해동 촉매로 배관 손상 없이 문을 개방한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 4,
+        condition: {
+          requireTag: "CHEM",
+          label: "화학 계열 장비",
+        },
+        outcomes: [
+          {
+            text: "성에를 안전하게 녹여내어 자동 지혈 주사기와 나노 봉합사, 항응고제를 온전히 회수했습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: [
+              "med-hemostatic-injector",
+              "mat-nanosuture",
+              "mat-anticoagulant",
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "story-inf-substation-cache",
+    title: "고전압 변전실의 정비 캐비닛",
+    districtKind: "INFRA",
+    imageKey: "utility_facility",
+    oncePerRaid: true,
+    introText:
+      "관리동 변전실 안쪽에서 간헐적인 전기 스파크가 튀고 있습니다. 차단기 레버가 절반만 내려간 상태라 캐비닛 주변에 잔류 전압이 흐르지만, 안쪽에는 고밀도 코어와 솔레노이드 부품이 보관되어 있습니다.",
+    choices: [
+      {
+        id: "reach-live-cabinet",
+        label: "스파크가 멎는 틈을 노려 캐비닛 부품을 빠르게 꺼낸다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 8,
+        outcomes: [
+          {
+            chance: 0.55,
+            text: "타이밍을 맞춰 솔레노이드와 고밀도 코어, 배터리를 재빨리 회수했습니다.",
+            timeCostMinutes: 10,
+            rewardItemIds: ["mat-solenoid", "mat-core", "mat-battery"],
+          },
+          {
+            text: "갑작스러운 아크 방전이 캐비닛을 덮쳐 강한 충격을 받았습니다.",
+            timeCostMinutes: 10,
+            hpDelta: -16,
+          },
+        ],
+      },
+      {
+        id: "take-entry-rations",
+        label: "변전실 안쪽은 포기하고 입구 정비반의 비상 물자만 챙긴다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "입구 정비함에서 에너지 바와 구리 배선을 챙겨 안전하게 물러났습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["food-energy-bar", "mat-wire"],
+          },
+        ],
+      },
+      {
+        id: "shoot-breaker-firearm",
+        label: "총기로 원거리에서 비상 차단기 레버를 내려 전원을 끊는다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 4,
+        condition: {
+          requireTag: "FIREARM",
+          label: "총기 계열 장비",
+        },
+        outcomes: [
+          {
+            text: "정확한 사격으로 차단기가 떨어지며 스파크가 완전히 멎었습니다. 캐비닛의 고급 부품을 안전하게 회수했습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["mat-solenoid", "mat-battery", "mat-lens"],
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 /**
@@ -953,13 +1467,19 @@ export function resolveBuildingIntroEvent(
       }
 
       if (baseEvent.imageKey) {
-        const storyEvent = STORY_BUILDING_EVENTS.find(
+        const matchingStoryEvents = STORY_BUILDING_EVENTS.filter(
           (e) =>
             e.districtKind === district.kind &&
             e.imageKey === baseEvent.imageKey &&
             (!e.oncePerRaid || !completedEventIds.includes(e.id)),
         );
-        if (storyEvent) return storyEvent;
+        if (matchingStoryEvents.length > 0) {
+          const picked =
+            matchingStoryEvents[
+              Math.abs(building.id) % matchingStoryEvents.length
+            ];
+          if (picked) return picked;
+        }
       }
       return baseEvent;
     }
