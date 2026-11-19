@@ -260,6 +260,7 @@ test("deferLootToPending 옵션 시 전투 승리 보상을 가방에 바로 넣
     variantLevel: 1,
     variantExp: 0,
     activeFoodBuff: null,
+    geneProfile: null,
   };
 
   const deferredResult = await applyBattleSettlement(

@@ -130,10 +130,10 @@
 
 ---
 
-### [ ] 21. 캐릭터 유전자 풀 조합 및 거점 과학자 NPC 유전자 변경 시스템
+### [x] 21. 캐릭터 유전자 풀 조합 및 거점 과학자 NPC 유전자 변경 시스템
 
-- [ ] 모든 캐릭터는 동일한 기본 능력치(`BASE_CHARACTER_STATS`)를 공유하되, 캐릭터별 **고유 유전자 풀** + **공통 유전자 풀**을 정의하고 캐릭터 획득 시 유전자를 랜덤 조합해 개체를 생성한다.
-- [ ] 거점의 과학자 NPC(윤 책임연구원)를 통해 보유 개체의 특정 유전자 슬롯을 변경(재조합)할 수 있는 기능을 구현한다.
+- [x] 모든 캐릭터는 동일한 기본 능력치(`BASE_CHARACTER_STATS`)를 공유하되, 캐릭터별 **고유 유전자 풀** + **공통 유전자 풀**을 정의하고 캐릭터 획득 시 유전자를 랜덤 조합해 개체를 생성한다.
+- [x] 거점의 과학자 NPC(윤 책임연구원)를 통해 보유 개체의 특정 유전자 슬롯을 변경(재조합)할 수 있는 기능을 구현한다.
 
 대상: `packages/types/src/`, `apps/server/src/db/schema.ts`, `apps/server/src/services/characters.ts`, `apps/game/src/components/lobby/CharacterCard.tsx`, `apps/game/src/components/lobby/CharacterCollection.tsx`.
 
