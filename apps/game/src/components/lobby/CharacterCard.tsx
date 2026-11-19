@@ -1,4 +1,3 @@
-import { getCharacterVariantSpec, WEAPON_TAG_LABELS } from "@webgame/types";
 import { motion } from "motion/react";
 
 import { RollingNumber } from "@/components/common/RollingValue";
@@ -26,14 +25,9 @@ export function CharacterCard({
   const isRaiding = !!character?.isRaiding;
   const recovery = useBaseRecovery(character);
   const liveHp = character ? recovery.hp : 0;
-  const variantSpec = getCharacterVariantSpec(character?.variant?.id);
 
   // 장착된 무기 목록 추출
   const equippedWeapons = character?.equipment.filter((e) => e.weaponMaster).map((e) => e.weaponMaster!.name) ?? [];
-  const variantSpecialtyText =
-    variantSpec && variantSpec.specialtyTags.length > 0
-      ? `${variantSpec.specialtyTags.map((t) => WEAPON_TAG_LABELS[t]).join("·")} +${variantSpec.specialtyBonusPct}%`
-      : null;
 
   return (
     <motion.button
@@ -52,13 +46,6 @@ export function CharacterCard({
             </div>
             <div className={styles.cardContent}>
               <h2 className={styles.characterName}>{character.displayName || "미확인 개체"}</h2>
-              {variantSpec && (
-                <p className={styles.variantMeta}>
-                  {variantSpec.roleLabel}
-                  {variantSpecialtyText ? ` · ${variantSpecialtyText}` : ""}
-                  {` · 적재 ${character.maxWeight}kg`}
-                </p>
-              )}
               {/* 체력만 숫자로 크게 표현 */}
               <div className={styles.hpNumber}>
                 <RollingNumber value={liveHp} />

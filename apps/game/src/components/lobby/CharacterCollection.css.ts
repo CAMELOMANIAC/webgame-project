@@ -286,67 +286,16 @@ export const radioIndicator = recipe({
   },
 });
 
-export const cardNameRow = style({
-  gridArea: "name",
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
-  minWidth: 0,
-  maxWidth: "100%",
-  flexWrap: "wrap",
-});
-
 export const cardName = style({
+  gridArea: "name",
   fontSize: "13px",
   fontWeight: 600,
   color: vars.text.primary,
   minWidth: 0,
+  maxWidth: "100%",
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
-});
-
-export const roleBadge = style({
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "1px 6px",
-  borderRadius: "4px",
-  border: `1px solid ${vars.border.subtle}`,
-  backgroundColor: "rgba(255, 255, 255, 0.05)",
-  color: vars.text.secondary,
-  fontFamily: vars.font.mono,
-  fontSize: "10px",
-  fontWeight: 600,
-  whiteSpace: "nowrap",
-});
-
-export const variantMeta = style({
-  display: "flex",
-  flexWrap: "wrap",
-  alignItems: "center",
-  gap: "4px",
-  marginTop: "4px",
-});
-
-export const specialtyTag = style({
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "1px 5px",
-  borderRadius: "3px",
-  border: "1px solid rgba(255, 255, 255, 0.14)",
-  backgroundColor: "rgba(255, 255, 255, 0.07)",
-  color: vars.text.primary,
-  fontFamily: vars.font.mono,
-  fontSize: "10px",
-  fontWeight: 600,
-  fontVariantNumeric: "tabular-nums",
-});
-
-export const variantSummary = style({
-  margin: "4px 0 0",
-  fontSize: "11px",
-  lineHeight: 1.4,
-  color: vars.text.muted,
 });
 
 export const statBlock = recipe({

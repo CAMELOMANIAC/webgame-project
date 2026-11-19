@@ -1,7 +1,4 @@
-import {
-  CHARACTER_VARIANT_CATALOG,
-  getCharacterVariantSpec,
-} from "@webgame/types";
+import { CHARACTER_VARIANT_CATALOG } from "@webgame/types";
 import { and, asc, eq, sql } from "drizzle-orm";
 import {
   characterDefinitions,
@@ -138,17 +135,12 @@ export async function recruitDevelopmentCharacter(
       with: { definition: true },
     });
     if (!variant) throw new InventoryError("Character variant not found", 404);
-    const spec = getCharacterVariantSpec(variantId);
-    const displayName =
-      spec && spec.id !== "legacy-origin"
-        ? `${variant.definition.name} · ${spec.worldlineLabel}`
-        : variant.definition.name;
     const [created] = await tx
       .insert(characters)
       .values({
         userId,
         variantId,
-        displayName,
+        displayName: variant.definition.name,
         hp: variant.maxHp,
         maxHp: variant.maxHp,
         stamina: variant.maxStamina,

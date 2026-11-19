@@ -4,7 +4,6 @@ import {
   type BattleLog,
   type BattleLogEntry,
   FATIGUE_RULES,
-  getVariantTagMultiplier,
   getWeaponTags,
   type PlayerState,
   type SynergyTargetRule,
@@ -262,7 +261,6 @@ export function simulateBattle(
       weapons: player.weapons.map((weapon) => {
         if (!weapon) return null;
         const tags = getWeaponTags(weapon);
-        const variantMult = getVariantTagMultiplier(player.variantId, tags);
         let damage = weapon.damage;
         let cooldownTicks = weapon.cooldownTicks;
         if (buff) {
@@ -283,27 +281,12 @@ export function simulateBattle(
             damage += buff.tagDamageBonus.amount;
           }
         }
-        if (variantMult > 1 && damage > 0) {
-          damage = Math.max(1, Math.round(damage * variantMult));
-        }
-        const effect = weapon.effect ? { ...weapon.effect } : undefined;
-        if (effect && variantMult > 1) {
-          if (effect.amount && effect.amount > 0) {
-            effect.amount = Math.max(1, Math.round(effect.amount * variantMult));
-          }
-          if (effect.shieldGain && effect.shieldGain > 0) {
-            effect.shieldGain = Math.max(
-              1,
-              Math.round(effect.shieldGain * variantMult),
-            );
-          }
-        }
         return {
           ...weapon,
           damage,
           cooldownTicks,
           tags,
-          effect,
+          effect: weapon.effect ? { ...weapon.effect } : undefined,
           currentCooldown: 0,
           isTriggered: false,
           activationCount: 0,

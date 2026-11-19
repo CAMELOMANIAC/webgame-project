@@ -130,14 +130,14 @@
 
 ---
 
-### [x] 21. 다중우주 생존자 개체(`CharacterVariant`) 차별화 및 수집·운용 재미 강화
+### [ ] 21. 캐릭터 유전자 풀 조합 및 거점 과학자 NPC 유전자 변경 시스템
 
-- [x] [`CharacterVariant`](./apps/server/src/db/schema.ts)별로 최대 체력(`maxHp`), 스태미나(`maxStamina`), 스태미나 회복(`staminaRegen`), 피로도(`maxFatigue`), 최대 중량(`maxWeight`)의 개성을 뚜렷하게 부여하고, 세계선 배경 설명이나 특화 태그(예: 기계·원거리 특화, 생체·근접 특화, 고중량 파밍 특화 등)를 정의한다.
-- [x] 거점 숙소([`/base/quarters`](./apps/game/src/routes/base/quarters.tsx))와 출격 준비([`/base/staging`](./apps/game/src/routes/base/staging.tsx))에서 각 개체의 변주 특성과 스탯 차이를 비교해 탐사 목적(파밍 위주 vs 교전 위주)에 맞는 개체를 골라 투입하는 전략성을 만든다.
+- [ ] 모든 캐릭터는 동일한 기본 능력치(`BASE_CHARACTER_STATS`)를 공유하되, 캐릭터별 **고유 유전자 풀** + **공통 유전자 풀**을 정의하고 캐릭터 획득 시 유전자를 랜덤 조합해 개체를 생성한다.
+- [ ] 거점의 과학자 NPC(윤 책임연구원)를 통해 보유 개체의 특정 유전자 슬롯을 변경(재조합)할 수 있는 기능을 구현한다.
 
 대상: `packages/types/src/`, `apps/server/src/db/schema.ts`, `apps/server/src/services/characters.ts`, `apps/game/src/components/lobby/CharacterCard.tsx`, `apps/game/src/components/lobby/CharacterCollection.tsx`.
 
-완료 기준: 보유한 개체마다 능력치와 운용 방식이 실질적으로 구분되며, 회복 중인 개체를 대신해 다른 개체를 교대 투입하는 로테이션 플레이가 유의미해진다.
+완료 기준: 캐릭터 생성 시 고유+공통 유전자 풀에서 랜덤 조합이 부여되고, 거점 과학자 NPC를 통해 특정 유전자를 변경할 수 있으며, 전투·탐사에 유전자 효과가 반영된다.
 
 ---
 
