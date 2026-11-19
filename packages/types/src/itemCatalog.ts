@@ -1208,10 +1208,56 @@ export const STANDALONE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
   }),
 ];
 
+export const GENE_AMPOULES: readonly CatalogWeaponMaster[] = [
+  makeMaterial({
+    id: "gene-ampoule-doyun",
+    name: "강도윤 유전자 앰플",
+    damage: 0,
+    staminaCost: 0,
+    cooldownTicks: 0,
+    weight: 1,
+    value: 260,
+    description:
+      "고스트 잔상에서 추출한 강도윤 계통 유전자 샘플. 거점 연구실에서 다른 개체에게 이식할 수 있습니다.",
+    iconKey: "HEAL",
+    tags: ["BIO"],
+    effect: { type: "MATERIAL" },
+  }),
+  makeMaterial({
+    id: "gene-ampoule-haerin",
+    name: "서해린 유전자 앰플",
+    damage: 0,
+    staminaCost: 0,
+    cooldownTicks: 0,
+    weight: 1,
+    value: 260,
+    description:
+      "고스트 잔상에서 추출한 서해린 계통 유전자 샘플. 거점 연구실에서 다른 개체에게 이식할 수 있습니다.",
+    iconKey: "HEAL",
+    tags: ["BIO"],
+    effect: { type: "MATERIAL" },
+  }),
+  makeMaterial({
+    id: "gene-ampoule-jiwon",
+    name: "한지원 유전자 앰플",
+    damage: 0,
+    staminaCost: 0,
+    cooldownTicks: 0,
+    weight: 1,
+    value: 260,
+    description:
+      "고스트 잔상에서 추출한 한지원 계통 유전자 샘플. 거점 연구실에서 다른 개체에게 이식할 수 있습니다.",
+    iconKey: "HEAL",
+    tags: ["BIO"],
+    effect: { type: "MATERIAL" },
+  }),
+];
+
 export const ALL_CATALOG_ITEMS: readonly CatalogWeaponMaster[] = [
   ...BASE_EQUIPMENTS,
   ...HANLIM_EQUIPMENTS,
   ...CRAFTING_MATERIALS,
+  ...GENE_AMPOULES,
   ...CRAFTED_EQUIPMENTS,
   ...STANDALONE_EQUIPMENTS,
   ...CONSUMABLES,
