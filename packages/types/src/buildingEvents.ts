@@ -556,7 +556,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
     imageKey: "office_building",
     oncePerRaid: true,
     introText:
-      "유리 로비 2층 난간 너머에서 광학 조준경의 희미한 반사광이 스쳤습니다. 기업 외곽을 맴도는 무장 개체가 엘리베이터 앞 보급 케이스를 미끼로 삼아 진입자를 감시하고 있습니다.",
+      "유리 로비 2층 난간 너머에서 광학 조준경의 희미한 반사광이 스쳤습니다. 상업지구를 점거한 무장 개체가 엘리베이터 앞 보급 케이스를 미끼로 삼아 진입자를 감시하고 있습니다.",
     choices: [
       {
         id: "rush-ambush",
@@ -609,22 +609,22 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
   },
   {
     id: "story-ind-factory-sweep",
-    title: "작업장 야간 수색조",
+    title: "작업장 야간 약탈조",
     districtKind: "INDUSTRIAL",
     imageKey: "factory",
     oncePerRaid: true,
     introText:
-      "공업사 내부 컨베이어 라인 사이로 한림그룹 회수부서의 적외선 표식등이 움직이고 있습니다. 중앙 공구함 옆에는 중장비 부품 상자가 묶여 있지만, 수색조가 출입구 방향을 주시하고 있습니다.",
+      "공업사 내부 컨베이어 라인 사이로 산업지구 약탈단의 적외선 표식등이 움직이고 있습니다. 중앙 공구함 옆에는 중장비 부품 상자가 묶여 있지만, 약탈조가 출입구 방향을 주시하고 있습니다.",
     choices: [
       {
         id: "engage-sweep",
-        label: "선제 기습으로 수색조를 제압하고 부품 상자를 차지한다",
+        label: "선제 기습으로 약탈조를 제압하고 부품 상자를 차지한다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 10,
         fatigueCost: 8,
         outcomes: [
           {
-            text: "기계 설비 뒤에서 뛰쳐나가자 회수부서 수색조가 즉시 방호 태세를 갖추며 교전이 시작되었습니다.",
+            text: "기계 설비 뒤에서 뛰쳐나가자 약탈조가 즉시 방호 태세를 갖추며 교전이 시작되었습니다.",
             timeCostMinutes: 10,
             triggerDistrictEncounter: true,
             rewardItemIds: ["mat-titanium", "mat-fuel"],
@@ -633,7 +633,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
       },
       {
         id: "wait-outside",
-        label: "수색조와 마주치지 않고 환기구 통로로 물러난다",
+        label: "약탈조와 마주치지 않고 환기구 통로로 물러난다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 5,
         fatigueCost: 0,
@@ -649,22 +649,22 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
   },
   {
     id: "story-med-lab-containment",
-    title: "연구동 생체 회수팀",
+    title: "연구동 격리 붕괴 구역",
     districtKind: "MEDICAL",
     imageKey: "lab_building",
     oncePerRaid: true,
     introText:
-      "바이오 연구동 냉장 보관실 앞에서 방호복을 입은 기업 방역 인원이 생체 시료 캐리어를 봉인하고 있습니다. 출입 센서가 울리자마자 인원이 소독 분무기 대신 전투 장비를 들어 올립니다.",
+      "바이오 연구동 냉장 보관실 앞, 깨진 배양조 파편 사이로 비인가 생체실험의 흔적이 널브러져 있습니다. 붉은 경보등 아래에서 변질된 피험체가 생체 시료 캐리어를 껴안은 채 출입 센서 소리에 맞춰 고개를 꺾습니다.",
     choices: [
       {
         id: "fight-containment",
-        label: "방역 인원을 제압하고 밀봉된 생체 시료와 약품을 확보한다",
+        label: "폭주한 실험체를 제압하고 밀봉된 생체 시료와 약품을 확보한다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 10,
         fatigueCost: 8,
         outcomes: [
           {
-            text: "복도 조명이 붉게 점멸하며 방역 회수 인원과의 근접 교전이 벌어졌습니다.",
+            text: "복도 조명이 붉게 점멸하며 격리에서 풀려난 실험체와의 근접 교전이 벌어졌습니다.",
             timeCostMinutes: 10,
             triggerDistrictEncounter: true,
             rewardItemIds: ["mat-biogel", "mat-nanosuture"],
