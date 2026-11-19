@@ -58,12 +58,12 @@
 
 ---
 
-### [ ] 15. 적대 NPC·몬스터 SF 개편 및 6슬롯 시너지 적 아키타입 도입
+### [x] 15. 적대 NPC·몬스터 SF 개편 및 6슬롯 시너지 적 아키타입 도입
 
-- [ ] [`apps/server/src/db/seed.ts`](./apps/server/src/db/seed.ts) 및 DB 동기화 로직에서 세계관에 맞지 않는 판타지 몬스터(`Slime`, `Goblin`, `Orc Warrior`)를 제거하고, 회성시·한림그룹 세계관에 맞는 **SF 적대 개체 카탈로그**(예: 구역 순찰 드론, 기업 회수부서 타격조, 방역 격리 요원, 중첩 잔류 변이체, 중장갑 보안 유닛 등)를 `packages/types`와 서버에 정의한다.
-- [ ] [`hanlimNpcs`](./apps/server/src/logic/npcs.ts)와 [`patrolCombat`](./apps/server/src/logic/ghostPatrols.ts)의 단일 무기·HP 30 고정 구성을 개편하여, 구역 등급(주거/상업 vs 산업/의료/기반)과 진입 지점, 탐사 경과 시간에 따라 **2~6슬롯의 무기·방호·시너지·소환 장비를 실제로 조합해 장착한 적**이 등장하도록 확장한다.
-- [ ] 적 개체도 `BLADE`, `FIREARM`, `BLUNT`, `TECH`, `BIO`, `CHEM`, `ARMOR` 태그 시너지나 보호막(`SHIELD`), 캐스팅 무기(`castTicks > 0`), 소환수(`SUMMON`)를 활용하게 하여 플레이어의 1·2티어 조합 빌드가 실질적인 공방을 주고받도록 밸런스를 조정한다.
-- [ ] 적 처치 시 드랍 테이블(`rewardIds`)이 해당 적의 컨셉 및 장착 장비/구역 특산 재료와 자연스럽게 연동되도록 정비한다.
+- [x] [`apps/server/src/db/seed.ts`](./apps/server/src/db/seed.ts) 및 DB 동기화 로직에서 세계관에 맞지 않는 판타지 몬스터(`Slime`, `Goblin`, `Orc Warrior`)를 제거하고, 회성시·한림그룹 세계관에 맞는 **SF 적대 개체 카탈로그**(예: 구역 순찰 드론, 기업 회수부서 타격조, 방역 격리 요원, 중첩 잔류 변이체, 중장갑 보안 유닛 등)를 `packages/types`와 서버에 정의한다.
+- [x] [`hanlimNpcs`](./apps/server/src/logic/npcs.ts)와 [`patrolCombat`](./apps/server/src/logic/ghostPatrols.ts)의 단일 무기·HP 30 고정 구성을 개편하여, 구역 등급(주거/상업 vs 산업/의료/기반)과 진입 지점, 탐사 경과 시간에 따라 **2~6슬롯의 무기·방호·시너지·소환 장비를 실제로 조합해 장착한 적**이 등장하도록 확장한다.
+- [x] 적 개체도 `BLADE`, `FIREARM`, `BLUNT`, `TECH`, `BIO`, `CHEM`, `ARMOR` 태그 시너지나 보호막(`SHIELD`), 캐스팅 무기(`castTicks > 0`), 소환수(`SUMMON`)를 활용하게 하여 플레이어의 1·2티어 조합 빌드가 실질적인 공방을 주고받도록 밸런스를 조정한다.
+- [x] 적 처치 시 드랍 테이블(`rewardIds`)이 해당 적의 컨셉 및 장착 장비/구역 특산 재료와 자연스럽게 연동되도록 정비한다.
 
 대상: `packages/types/src/`, `apps/server/src/logic/npcs.ts`, `apps/server/src/logic/ghostPatrols.ts`, `apps/server/src/services/battle.ts`, `apps/server/src/services/raid.ts`, `apps/server/src/db/seed.ts`.
 
@@ -400,3 +400,4 @@
 | 2026-10-31 | 13 임무·단계별 공개     | 완료 | 수락·회수·탈출·보고·보상 상태 저장, 미공개 인물 서버 필터. 동시 수락·보고·사망·재접속·공개 단계 검증. 단위/API 36건·DB 통합 34건 통과. 오너 후기 단계는 구조와 검증용 표식이며 후속 서사는 미확정.                                                                                |
 | 2026-10-31 | 14 첫 임무·문서         | 완료 | 브라우저에서 구호 장비 수령·장착 → 고스트 전투 → 기록 회수 → 탈출 → 보고·보상·연구 기록 공개 및 새로고침 확인. README·PLAN·세계관·개발·QA 갱신. 빈 DB 마이그레이션 7개·검증 서버 준비/정리·빌드된 서버 실행 확인. 단위/API 36건·DB 통합 34건·타입·린트·빌드 통과. 외부 DB 미변경. |
 | 2026-11-18 | 15–22 게임성 개선 계획  | 완료 | 게임 전반의 밋밋함 원인(코어 루프·경제 단절, 시간 경과 긴장감 부재, 적 밸런스 및 6슬롯 시너지 피드백 부족, 서사 볼륨) 분석 및 5단계 개선 과제(15–22) 문서화. |
+| 2026-11-18 | 15 SF 적 개편·시너지 적 | 완료 | 13종 SF 2~6슬롯 적 아키타입(`enemyCatalog.ts`), 시간대(0~60/61~140/141+분)·구역 위험도 3티어 스케일링, 8개 순찰 경로 및 추적 수(6기) 확장, 건물 이벤트 전투 분기 연결, `seed.ts` 판타지 몬스터 제거. 단위/API 테스트 65건·타입·빌드·린트 통과. |
