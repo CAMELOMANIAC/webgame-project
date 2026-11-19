@@ -208,8 +208,14 @@ const FieldNavTargetSection = () => {
     : [];
   const completedEventIds =
     character?.activeRaid?.exploration?.completedEventIds ?? [];
+  const isUnarmed = (character?.equipment?.length ?? 0) === 0;
   const activeIntroEvent = activeBuilding
-    ? resolveBuildingIntroEvent(activeBuilding, activeDistrict, completedEventIds)
+    ? resolveBuildingIntroEvent(
+        activeBuilding,
+        activeDistrict,
+        completedEventIds,
+        { isUnarmed },
+      )
     : undefined;
   const activeBuildingImage = activeBuilding
     ? resolveBuildingImage(activeBuilding, activeIntroEvent)
