@@ -3,13 +3,15 @@ import {
   getCatalogItemById,
   getCatalogItemByName,
 } from "@webgame/types";
-import { useAtomValue } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo } from "react";
 
 import { selectedCombatantIdAtom } from "@/atoms/battleLayoutAtom";
 import {
   battleLogAtom,
+  type BattlePlaybackSpeed,
+  battlePlaybackSpeedAtom,
   currentTimeAtom,
   displayEventsAtom,
   processedEventsAtom,
@@ -21,10 +23,22 @@ import * as styles from "./CombatLog.css";
 
 const OVERLOAD_START_TICK = 40;
 
+const PLAYBACK_SPEED_OPTIONS: readonly {
+  value: BattlePlaybackSpeed;
+  label: string;
+  ariaLabel: string;
+}[] = [
+  { value: 0, label: "||", ariaLabel: "전투 일시정지" },
+  { value: 0.5, label: "0.5x", ariaLabel: "0.5배속 재생" },
+  { value: 1, label: "1x", ariaLabel: "1배속 재생" },
+  { value: 2, label: "2x", ariaLabel: "2배속 재생" },
+];
+
 const CombatLog = () => {
   const processedEvents = useAtomValue(processedEventsAtom);
   const displayEvents = useAtomValue(displayEventsAtom);
   const currentTime = useAtomValue(currentTimeAtom);
+  const [playbackSpeed, setPlaybackSpeed] = useAtom(battlePlaybackSpeedAtom);
   const battle = useAtomValue(battleLogAtom);
   const selectedCombatantId = useAtomValue(selectedCombatantIdAtom);
   const { onInspectSlot } = useSlotInteraction();
@@ -204,6 +218,26 @@ const CombatLog = () => {
           <h3 className={styles.subTitle}>전투 로그</h3>
         </div>
         <div className={styles.headerRight}>
+          <div
+            className={styles.speedControlGroup}
+            role="group"
+            aria-label="전투 재생 속도"
+          >
+            {PLAYBACK_SPEED_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={styles.speedButton({
+                  active: playbackSpeed === option.value,
+                })}
+                aria-label={option.ariaLabel}
+                aria-pressed={playbackSpeed === option.value}
+                onClick={() => setPlaybackSpeed(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
           <span className={styles.tickBadge({ overload: isOverload })}>
             {isOverload
               ? `OVERLOAD · T${String(currentTime).padStart(2, "0")}`

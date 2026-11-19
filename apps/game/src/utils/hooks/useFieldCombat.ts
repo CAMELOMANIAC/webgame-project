@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { selectedUserIdAtom } from "@/atoms/authAtom";
 import {
   battleLogAtom,
+  battlePlaybackSpeedAtom,
   currentTimeAtom,
   displayEventsAtom,
   flattenedTimelineAtom,
@@ -33,6 +34,7 @@ import { useBattleData } from "@/utils/hooks/useBattleData";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 import { useNavigateRaid } from "@/utils/hooks/useNavigateRaid";
 import { raidNoiseKey } from "@/utils/hooks/useRaidNoise";
+import { beginRaidOutro } from "@/utils/raidOutro";
 import { requestJsonWithTimeout } from "@/utils/request";
 import { openBattleTimeline } from "@/utils/retreatBattle";
 
@@ -45,6 +47,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
   const { setBattleLog } = useBattleData();
 
   const [time, setTime] = useAtom(currentTimeAtom);
+  const [playbackSpeed, setPlaybackSpeed] = useAtom(battlePlaybackSpeedAtom);
   const [battleLog] = useAtom(battleLogAtom);
   const timeline = useAtomValue(flattenedTimelineAtom);
   const setDisplayEvents = useSetAtom(displayEventsAtom);
@@ -204,9 +207,16 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     ),
   });
 
-  // 전투 타이머 로직: 1초마다 다음 틱으로 넘어가려 시도
+  // 전투 타이머 로직: 재생 배율에 맞춰 다음 틱으로 넘어가려 시도
   useEffect(() => {
-    if (!isCombat || !battleLog || isProcessing || waitingForRetreat) return;
+    if (
+      !isCombat ||
+      !battleLog ||
+      isProcessing ||
+      waitingForRetreat ||
+      playbackSpeed === 0
+    )
+      return;
 
     const maxTimestamp =
       timeline.length > 0
@@ -220,6 +230,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       const playerDied = finalPlayer !== undefined && finalPlayer.hp <= 0;
 
       if (playerDied && userId) {
+        beginRaidOutro();
         setRaidResults((results) => ({ ...results, [userId]: "DEAD" }));
       }
 
@@ -255,6 +266,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       // 전투 관련 전역 상태 초기화
       setBattleLog(null);
       setTime(0);
+      setPlaybackSpeed(1);
       setDisplayEvents([]);
       setProcessedEvents([]);
 
@@ -315,7 +327,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       } else {
         setTime((prev) => prev + 1);
       }
-    }, 1000);
+    }, 1000 / playbackSpeed);
 
     return () => clearInterval(timer);
   }, [
@@ -323,6 +335,8 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     battleLog,
     setTime,
     time,
+    playbackSpeed,
+    setPlaybackSpeed,
     timeline,
     isProcessing,
     waitingForRetreat,
@@ -346,7 +360,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
 
   // 이벤트 순차 처리 로직
   useEffect(() => {
-    if (!isProcessing) return;
+    if (!isProcessing || playbackSpeed === 0) return;
 
     const processNextEvent = () => {
       if (pendingEventsRef.current.length > 0) {
@@ -361,7 +375,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
           const nextPeek = pendingEventsRef.current[0];
           const isImmediate =
             nextEvent.type === "DEATH" || nextPeek?.type === "DEATH";
-          const delay = isImmediate ? 0 : 250;
+          const delay = isImmediate ? 0 : 250 / playbackSpeed;
 
           timeoutRef.current = setTimeout(processNextEvent, delay);
         }
@@ -377,7 +391,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [isProcessing, setTime, setDisplayEvents, time, setProcessedEvents]);
+  }, [isProcessing, playbackSpeed, setTime, setDisplayEvents, time, setProcessedEvents]);
 
   const triggerCombat = useCallback(
     (log: BattleLog) => {
@@ -389,13 +403,14 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       setRetreatExpired(false);
       setBattleLog(log);
       setTime(0);
+      setPlaybackSpeed(1);
       setDisplayEvents([]);
       setProcessedEvents([]);
       setIsProcessing(false);
       setNoiseSignals(null);
       setIsCombat(true);
     },
-    [setBattleLog, setTime, setDisplayEvents, setProcessedEvents, setNoiseSignals, setIsCombat],
+    [setBattleLog, setTime, setPlaybackSpeed, setDisplayEvents, setProcessedEvents, setNoiseSignals, setIsCombat],
   );
 
   useEffect(() => {

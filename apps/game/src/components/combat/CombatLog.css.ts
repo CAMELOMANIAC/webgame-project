@@ -73,10 +73,69 @@ export const tickBadge = recipe({
   },
 });
 
+export const speedControlGroup = style({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "2px",
+});
+
+export const speedButton = recipe({
+  base: {
+    fontFamily: vars.font.mono,
+    fontVariantNumeric: "tabular-nums",
+    fontSize: "10px",
+    fontWeight: 700,
+    padding: "2px 5px",
+    borderRadius: vars.radius.badge,
+    border: `1px solid ${vars.border.subtle}`,
+    backgroundColor: vars.surface.low,
+    color: vars.text.secondary,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    transition: "border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease",
+    selectors: {
+      "&:hover": {
+        borderColor: vars.text.primary,
+        color: vars.text.primary,
+      },
+      "&:focus-visible": {
+        outline: "none",
+        borderColor: vars.text.primary,
+        color: vars.text.primary,
+      },
+    },
+  },
+  variants: {
+    active: {
+      true: {
+        borderColor: vars.text.primary,
+        backgroundColor: vars.text.primary,
+        color: vars.surface.base,
+        selectors: {
+          "&:hover": {
+            borderColor: vars.text.primary,
+            color: vars.surface.base,
+          },
+          "&:focus-visible": {
+            outline: "none",
+            borderColor: vars.text.primary,
+            color: vars.surface.base,
+          },
+        },
+      },
+      false: {},
+    },
+  },
+  defaultVariants: {
+    active: false,
+  },
+});
+
 export const enemyTelemetry = style({
   display: "flex",
   flexDirection: "column",
   gap: "6px",
+  minHeight: "52px",
   paddingBottom: "8px",
   borderBottom: `1px solid ${vars.border.subtle}`,
 });
@@ -201,6 +260,7 @@ export const actionLogList = style({
   flexDirection: "row",
   gap: "6px",
   width: "100%",
+  minHeight: "44px",
   overflowX: "auto",
 });
 

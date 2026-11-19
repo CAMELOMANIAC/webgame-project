@@ -6,9 +6,12 @@ export const globalAtom = atomWithReset({
   counter: 0,
 });
 
+export type BattlePlaybackSpeed = 0 | 0.5 | 1 | 2;
+
 export const battleLogAtom = atom<BattleLog | null>(null);
 export const flattenedTimelineAtom = atom<BattleEvent[]>([]);
 export const processedEventsAtom = atom<BattleEvent[]>([]);
 export const currentTimeAtom = atom<number>(0);
+export const battlePlaybackSpeedAtom = atom<BattlePlaybackSpeed>(1);
 export const battleStatusAtom = atom<"idle" | "playing" | "finished">("idle");
 export const displayEventsAtom = atom<BattleEvent[]>([]);

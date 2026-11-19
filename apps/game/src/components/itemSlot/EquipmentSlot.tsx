@@ -12,6 +12,7 @@ import {
 import { useEffect } from "react";
 
 import {
+  battlePlaybackSpeedAtom,
   currentTimeAtom,
   displayEventsAtom,
   flattenedTimelineAtom,
@@ -61,23 +62,26 @@ interface CooldownOverlayProps {
   targetProgress: number;
   duration: number;
   remainingCooldown: number;
+  paused: boolean;
 }
 
 function CooldownOverlay({
   targetProgress,
   duration,
   remainingCooldown,
+  paused,
 }: CooldownOverlayProps) {
   const progress = useMotionValue(1);
   const background = useMotionTemplate`conic-gradient(rgba(9, 9, 11, 0.84) calc(${progress} * 360deg), rgba(9, 9, 11, 0.35) 0deg)`;
 
   useEffect(() => {
+    if (paused) return;
     const controls = animate(progress, targetProgress, {
       duration,
       ease: "linear",
     });
     return () => controls.stop();
-  }, [progress, targetProgress, duration]);
+  }, [progress, targetProgress, duration, paused]);
 
   return (
     <motion.div className={styles.cooldownOverlay} style={{ background }}>
@@ -101,6 +105,7 @@ const EquipmentSlot = ({
 }: EquipmentSlotProps) => {
   const isCombat = useAtomValue(isCombatAtom);
   const currentTime = useAtomValue(currentTimeAtom);
+  const playbackSpeed = useAtomValue(battlePlaybackSpeedAtom);
   const timeline = useAtomValue(flattenedTimelineAtom);
   const processedEvents = useAtomValue(processedEventsAtom);
   const displayEvents = useAtomValue(displayEventsAtom);
@@ -272,7 +277,8 @@ const EquipmentSlot = ({
             remainingTimeAfterTick += stepDuration;
           }
           if (tick === currentTime) {
-            cooldownTransitionDuration = stepDuration;
+            cooldownTransitionDuration =
+              playbackSpeed > 0 ? stepDuration / playbackSpeed : 0;
           }
         }
 
@@ -342,6 +348,7 @@ const EquipmentSlot = ({
               targetProgress={cooldownProgress}
               duration={cooldownTransitionDuration}
               remainingCooldown={remainingCooldown}
+              paused={playbackSpeed === 0}
             />
           )}
 
