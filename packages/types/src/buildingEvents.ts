@@ -26,6 +26,10 @@ export interface BuildingEventOutcome {
   rewardItemIds?: readonly string[];
   /** 선택적 성공 확률 (0~1). 미지정 시 확정 또는 이전 분기 실패 fallback */
   chance?: number;
+  /** 결과로 지정된 SF 적대 NPC 아키타입과 즉시 전투를 발생시킵니다. */
+  encounterEnemyId?: string;
+  /** 결과로 현재 구역·경과 시간에 맞는 SF 적대 NPC와 즉시 전투를 발생시킵니다. */
+  triggerDistrictEncounter?: boolean;
 }
 
 export interface BuildingEventChoiceCondition {
@@ -162,9 +166,9 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
             ],
           },
           {
-            text: "버클을 당기는 순간 방호복 어깨의 무단 회수 차단 장치가 작동해 손목을 감전시켰습니다. 고음의 경보와 함께 위층 방화문이 열리고 발소리가 내려오기 시작해, 1층 창문을 넘어 빈손으로 빠져나왔습니다.",
+            text: "버클을 당기는 순간 방호복 어깨의 무단 회수 차단 장치가 경보를 울렸습니다. 위층 방화문이 열리며 물자를 노리던 무장 수집가가 계단으로 뛰어들어와 교전이 벌어졌습니다.",
             timeCostMinutes: 15,
-            hpDelta: -12,
+            encounterEnemyId: "npc-res-scavenger",
           },
         ],
       },
@@ -231,10 +235,9 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
             rewardItemIds: ["mat-titanium", "mat-fuel", "wpn_giant_slayer"],
           },
           {
-            text: "철제 상자를 들어 올리는 순간 바닥의 공구함이 넘어지며 쇳소리가 울렸습니다. 돌아선 인원이 경고 없이 쏜 진압탄이 허벅지를 강타했고, 상자를 버린 채 컨테이너 틈으로 굴러 빠져나왔습니다.",
+            text: "철제 상자를 들어 올리는 순간 바닥의 공구함이 넘어지며 쇳소리가 울렸습니다. 돌아선 회수부서 진압조가 경고 없이 진압 장비를 전개하며 앞을 막아섰습니다.",
             timeCostMinutes: 15,
-            hpDelta: -15,
-            fatigueDelta: -10,
+            encounterEnemyId: "npc-ind-enforcer",
           },
         ],
       },
@@ -365,9 +368,9 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
             rewardItemIds: ["mat-biogel", "mat-stimulant", "eq-summon-swarm"],
           },
           {
-            text: "문이 열리자마자 천장에서 고농도 방역 기체와 경보가 쏟아져 시야를 가렸습니다. 공황에 빠진 여성이 당신을 기업 회수 인력으로 오인해 금속 트레이를 휘두른 뒤 어둠 속으로 달아났습니다.",
+            text: "문이 열리자마자 천장에서 고농도 방역 경보가 울려 퍼졌습니다. 경보를 듣고 복도 끝에서 달려온 방역 격리 요원이 즉시 생체 무장을 전개하며 앞을 가로막았습니다.",
             timeCostMinutes: 15,
-            hpDelta: -16,
+            encounterEnemyId: "npc-med-quarantine",
           },
         ],
       },
@@ -483,6 +486,242 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
               "mat-relay",
               "eq-arc-emitter",
             ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "story-res-apartment-raider",
+    title: "복도 끝의 무장 수집가",
+    districtKind: "RESIDENTIAL",
+    imageKey: "apartment",
+    oncePerRaid: true,
+    introText:
+      "아파트 3층 엘리베이터 홀 앞, 사제 방호 조끼를 걸친 무소속 수집가가 비상 보급함을 뜯어내고 있습니다. 바닥에는 이미 분류된 전선과 식량 팩이 쌓여 있고, 그가 고개를 들어 이쪽을 발견하자마자 허리춤의 무기에 손을 얹습니다.",
+    choices: [
+      {
+        id: "confront-raider",
+        label: "물자를 뺏기지 않기 위해 정면으로 교전해 제압한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 6,
+        outcomes: [
+          {
+            text: "복도 기둥을 끼고 거리를 좁히며 무장 수집가와 정면으로 맞붙었습니다.",
+            timeCostMinutes: 10,
+            triggerDistrictEncounter: true,
+            rewardItemIds: ["mat-wire", "mat-tape", "food-energy-bar"],
+          },
+        ],
+      },
+      {
+        id: "retreat-stairwell",
+        label: "교전을 피하고 계단실로 조용히 물러난다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "상대가 먼저 달려들기 전에 비상 계단 문을 닫고 건물 밖으로 빠져나왔습니다.",
+            timeCostMinutes: 5,
+            fatigueDelta: 4,
+          },
+        ],
+      },
+      {
+        id: "intimidate-firearm",
+        label: "화기를 겨누어 경고한 뒤 바닥의 예비 보급함만 챙겨 물러난다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 4,
+        condition: {
+          requireTag: "FIREARM",
+          label: "총기 계열 장비 보유",
+        },
+        outcomes: [
+          {
+            text: "총구가 향하자 수집가가 욕설을 내뱉으며 복도 안쪽으로 물러섰습니다. 발치에 남겨진 보급 상자에서 부품과 응급 물자를 챙겨 나왔습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["mat-tape", "mat-electrolyte", "med-bandage"],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "story-com-office-ambush",
+    title: "로비 상층부의 저격수",
+    districtKind: "COMMERCIAL",
+    imageKey: "office_building",
+    oncePerRaid: true,
+    introText:
+      "유리 로비 2층 난간 너머에서 광학 조준경의 희미한 반사광이 스쳤습니다. 기업 외곽을 맴도는 무장 개체가 엘리베이터 앞 보급 케이스를 미끼로 삼아 진입자를 감시하고 있습니다.",
+    choices: [
+      {
+        id: "rush-ambush",
+        label: "엄폐물을 타고 2층으로 돌입해 매복자를 제압한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 8,
+        outcomes: [
+          {
+            text: "안내 데스크 뒤를 돌아 에스컬레이터로 뛰어오르자 상층부의 적대 개체가 즉시 응사해 왔습니다.",
+            timeCostMinutes: 10,
+            triggerDistrictEncounter: true,
+            rewardItemIds: ["mat-lens", "mat-battery"],
+          },
+        ],
+      },
+      {
+        id: "slip-side-door",
+        label: "사각지대를 따라 측면 주차장 출구로 빠져나간다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "기둥 그림자에 몸을 숨긴 채 측면 비상구로 빠져나와 불필요한 교전을 피했습니다.",
+            timeCostMinutes: 5,
+            fatigueDelta: 4,
+          },
+        ],
+      },
+      {
+        id: "jam-optics",
+        label: "전자 간섭으로 조준 센서를 교란하고 로비 케이스를 회수한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 4,
+        condition: {
+          requireTag: "TECH",
+          label: "기술 계열 장비 보유",
+        },
+        outcomes: [
+          {
+            text: "강한 전자 잡음을 흘려보내자 2층의 광학 센서가 순간적으로 먹통이 되었습니다. 그 틈에 로비의 보급 케이스를 챙겨 빠져나왔습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["mat-lens", "mat-relay", "food-espresso-shot"],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "story-ind-factory-sweep",
+    title: "작업장 야간 수색조",
+    districtKind: "INDUSTRIAL",
+    imageKey: "factory",
+    oncePerRaid: true,
+    introText:
+      "공업사 내부 컨베이어 라인 사이로 한림그룹 회수부서의 적외선 표식등이 움직이고 있습니다. 중앙 공구함 옆에는 중장비 부품 상자가 묶여 있지만, 수색조가 출입구 방향을 주시하고 있습니다.",
+    choices: [
+      {
+        id: "engage-sweep",
+        label: "선제 기습으로 수색조를 제압하고 부품 상자를 차지한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 8,
+        outcomes: [
+          {
+            text: "기계 설비 뒤에서 뛰쳐나가자 회수부서 수색조가 즉시 방호 태세를 갖추며 교전이 시작되었습니다.",
+            timeCostMinutes: 10,
+            triggerDistrictEncounter: true,
+            rewardItemIds: ["mat-titanium", "mat-fuel"],
+          },
+        ],
+      },
+      {
+        id: "wait-outside",
+        label: "수색조와 마주치지 않고 환기구 통로로 물러난다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "적외선 불빛이 지나가기를 기다려 공장 외벽 통로로 조용히 빠져나왔습니다.",
+            timeCostMinutes: 5,
+            fatigueDelta: 5,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "story-med-lab-containment",
+    title: "연구동 생체 회수팀",
+    districtKind: "MEDICAL",
+    imageKey: "lab_building",
+    oncePerRaid: true,
+    introText:
+      "바이오 연구동 냉장 보관실 앞에서 방호복을 입은 기업 방역 인원이 생체 시료 캐리어를 봉인하고 있습니다. 출입 센서가 울리자마자 인원이 소독 분무기 대신 전투 장비를 들어 올립니다.",
+    choices: [
+      {
+        id: "fight-containment",
+        label: "방역 인원을 제압하고 밀봉된 생체 시료와 약품을 확보한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 8,
+        outcomes: [
+          {
+            text: "복도 조명이 붉게 점멸하며 방역 회수 인원과의 근접 교전이 벌어졌습니다.",
+            timeCostMinutes: 10,
+            triggerDistrictEncounter: true,
+            rewardItemIds: ["mat-biogel", "mat-nanosuture"],
+          },
+        ],
+      },
+      {
+        id: "leave-lab",
+        label: "교전을 피하고 외부 응급 통로로 이탈한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "격리 셔터가 완전히 내려오기 전에 연구동 밖으로 빠르게 빠져나왔습니다.",
+            timeCostMinutes: 5,
+            fatigueDelta: 4,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "story-inf-utility-drones",
+    title: "중계실 보안 관제대",
+    districtKind: "INFRA",
+    imageKey: "utility_facility",
+    oncePerRaid: true,
+    introText:
+      "통신 관리동 제어실 안에서 보안 관제병이 정찰 드론들을 재충전하고 있습니다. 벽면 예비 부품 선반에는 고출력 솔레노이드와 차폐 부품이 보이지만, 진입 즉시 드론 방어망이 반응할 태세입니다.",
+    choices: [
+      {
+        id: "breach-control-room",
+        label: "제어실에 돌입해 보안 관제병과 드론을 돌파한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 8,
+        outcomes: [
+          {
+            text: "방화문을 밀고 들어가자 경보와 함께 보안 관제병이 드론을 전개하며 공격해 왔습니다.",
+            timeCostMinutes: 10,
+            triggerDistrictEncounter: true,
+            rewardItemIds: ["mat-solenoid", "mat-relay"],
+          },
+        ],
+      },
+      {
+        id: "withdraw-utility",
+        label: "드론 탐지 범위 밖으로 조용히 후퇴한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "감지 센서를 피해 관리동 복도 밖으로 조용히 물러났습니다.",
+            timeCostMinutes: 5,
+            fatigueDelta: 4,
           },
         ],
       },
