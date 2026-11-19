@@ -1752,6 +1752,12 @@ export async function executeRaidBuildingAction(
       }
 
       if (parsed.action === "SEARCH") {
+        if (building.category) {
+          throw new InventoryError(
+            "무기 업그레이드 설비 건물에서는 탐색을 진행할 수 없습니다.",
+            409,
+          );
+        }
         if (exp.lootedBuildingIds.includes(building.id)) {
           throw new InventoryError("이미 수색을 완료한 건물입니다.", 409);
         }
@@ -1774,13 +1780,10 @@ export async function executeRaidBuildingAction(
         }
         const currentDistrictItems = exp.districtLootCounts[district.id] ?? 0;
         const remainingAllowance = district.maxLoot - currentDistrictItems;
-        const craftStillAvailable =
-          Boolean(building.category) &&
-          !exp.usedCraftBuildingIds.includes(building.id);
         if (remainingAllowance <= 0) {
           exp.lootedBuildingIds.push(building.id);
           exp.buildingEvents[buildingKey] = {
-            stage: craftStillAvailable ? "READY" : "CLEARED",
+            stage: "CLEARED",
             text: "이 지역에서 얻을 건 다 얻은 것 같습니다.",
           };
           const payload: Omit<BuildingActionResult, "raid"> = {
@@ -1802,15 +1805,7 @@ export async function executeRaidBuildingAction(
         }
 
         const searchRoll = random();
-        const rolledCount = building.category
-          ? searchRoll < 0.55
-            ? 1
-            : 2
-          : searchRoll < 0.25
-            ? 0
-            : searchRoll < 0.7
-              ? 1
-              : 2;
+        const rolledCount = searchRoll < 0.5 ? 0 : searchRoll < 0.9 ? 1 : 2;
         const pickCount = Math.min(rolledCount, remainingAllowance);
         const pickedIds: string[] = [];
         for (let i = 0; i < pickCount; i++) {
@@ -1829,16 +1824,14 @@ export async function executeRaidBuildingAction(
 
         const resultText =
           obtainedItems.length > 0
-            ? building.category
-              ? "설비 주변 작업대에서 유용한 부품을 확보했습니다."
-              : "건물 내부 탐색을 마쳤습니다."
+            ? "건물 내부 탐색을 마쳤습니다."
             : "건물 내부를 뒤졌지만 쓸 만한 것을 찾지 못했습니다.";
 
         exp.lootedBuildingIds.push(building.id);
         exp.districtLootCounts[district.id] =
           currentDistrictItems + totalObtainedQty;
         exp.buildingEvents[buildingKey] = {
-          stage: craftStillAvailable ? "READY" : "CLEARED",
+          stage: "CLEARED",
           text: resultText,
         };
 

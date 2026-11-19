@@ -222,9 +222,8 @@ const FieldNavTargetSection = () => {
     : undefined;
   const isCurrentBuildingCompleted =
     activeBuildingId !== null &&
-    (activeBuilding?.category
-      ? isActiveCraftUsed && isActiveBuildingLooted
-      : activeEventState?.stage === "CLEARED" || isActiveBuildingLooted);
+    (activeEventState?.stage === "CLEARED" ||
+      (activeBuilding?.category ? isActiveCraftUsed : isActiveBuildingLooted));
   const isAtTargetBuilding =
     shortestPath.length === 1 &&
     targetBuildingId !== null &&
@@ -1108,17 +1107,13 @@ const FieldNavTargetSection = () => {
                   </div>
 
                   <p className={styles.buildingEventText}>
-                    {activeBuilding.category &&
-                    isActiveCraftUsed &&
-                    isActiveBuildingLooted
-                      ? "업그레이드 설비 사용과 주변 수색을 모두 마친 건물입니다."
+                    {activeBuilding.category && isActiveCraftUsed
+                      ? "이미 업그레이드 설비를 사용한 건물입니다."
                       : lastBuildingMsg?.buildingId === activeBuilding.id
                         ? lastBuildingMsg.text
-                        : activeBuilding.category && isActiveCraftUsed
-                          ? "업그레이드 설비는 이미 사용했지만, 주변 작업대를 수색할 수 있습니다."
-                          : (activeEventState?.text ??
-                              activeIntroEvent?.introText ??
-                              "")}
+                        : (activeEventState?.text ??
+                            activeIntroEvent?.introText ??
+                            "")}
                   </p>
                 </div>
 
@@ -1126,28 +1121,6 @@ const FieldNavTargetSection = () => {
                 <p className={styles.buildingErrorText}>
                   {buildingAction.error.message}
                 </p>
-              )}
-
-              {activeBuilding.category && !isActiveBuildingLooted && (
-                <button
-                  type="button"
-                  className={styles.buildingActionBtn}
-                  disabled={
-                    !canAct ||
-                    (character.fatigue ?? 0) <
-                      FATIGUE_RULES.buildingActionCosts.SEARCH
-                  }
-                  onClick={() => handleBuildingAction("SEARCH")}
-                >
-                  <span>
-                    {buildingAction.isPending
-                      ? "수색 중…"
-                      : "설비 주변 수색하기"}
-                  </span>
-                  <span className={styles.actionCode}>
-                    +00:10 · -{FATIGUE_RULES.buildingActionCosts.SEARCH} ENG
-                  </span>
-                </button>
               )}
 
               {!activeBuilding.category &&
