@@ -119,10 +119,10 @@
 
 ---
 
-### [ ] 20. 건물 이벤트 확충 및 조합 건물 수색·파밍 동선 개선
+### [x] 20. 건물 이벤트 확충 및 조합 건물 수색·파밍 동선 개선
 
-- [ ] 현재 5종뿐인 [`STORY_BUILDING_EVENTS`](./packages/types/src/buildingEvents.ts)를 구역 성격(`RESIDENTIAL`, `COMMERCIAL`, `INDUSTRIAL`, `MEDICAL`, `INFRA`)과 건물 유형별로 대폭 확충하여 탐사마다 새로운 상황과 태그/아이템 조건 분기를 경험할 수 있게 한다.
-- [ ] 조합 설비 건물(`building.category`가 지정된 랜드마크)에서 현재 무조건 차단되어 있는 수색(`SEARCH`) 또는 조사 행동의 규칙을 개선하여, 랜드마크 건물 방문의 매력을 높인다.
+- [x] [`STORY_BUILDING_EVENTS`](./packages/types/src/buildingEvents.ts)를 구역 성격(`RESIDENTIAL`, `COMMERCIAL`, `INDUSTRIAL`, `MEDICAL`, `INFRA`)과 모든 일반 건물 유형(`luxury_house` 포함)에 걸쳐 총 18종으로 확충하고, 건물 ID 기준 분산 선택과 태그/아이템 조건 분기를 정비한다.
+- [x] 조합 설비 건물(`building.category`가 지정된 랜드마크)에서도 1회 수색(`SEARCH`, 최소 1~2개 부품 보장)을 허용하고 수색·조합을 독립적으로 수행할 수 있도록 서버([`raid.ts`](./apps/server/src/services/raid.ts))와 클라이언트([`FieldNavTargetSection.tsx`](./apps/game/src/components/field/FieldNavTargetSection.tsx)) 동선을 개선한다.
 
 대상: `packages/types/src/buildingEvents.ts`, `apps/server/src/services/raid.ts`, `apps/game/src/components/field/FieldNavTargetSection.tsx`.
 
