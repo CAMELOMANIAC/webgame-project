@@ -34,11 +34,12 @@ export function registerMarketRoutes(
       if (!request.actorUserId) {
         throw new InventoryError("Missing X-Dev-User-Id header", 401);
       }
-      return await createMarketListing(
-        database,
-        request.actorUserId,
-        CreateMarketListingSchema.parse(request.body),
-      );
+      const body = CreateMarketListingSchema.parse(request.body);
+      return await createMarketListing(database, request.actorUserId, {
+        weaponMasterId: body.weaponMasterId,
+        quantity: body.quantity,
+        startingBid: body.startingBid,
+      });
     } catch (error) {
       fastify.log.error(error);
       return sendInventoryError(reply, error);
@@ -51,12 +52,10 @@ export function registerMarketRoutes(
         throw new InventoryError("Missing X-Dev-User-Id header", 401);
       }
       const { listingId } = request.params as { listingId: string };
-      return await placeMarketBid(
-        database,
-        request.actorUserId,
-        listingId,
-        PlaceMarketBidSchema.parse(request.body),
-      );
+      const body = PlaceMarketBidSchema.parse(request.body);
+      return await placeMarketBid(database, request.actorUserId, listingId, {
+        amount: body.amount,
+      });
     } catch (error) {
       fastify.log.error(error);
       return sendInventoryError(reply, error);
@@ -85,11 +84,11 @@ export function registerMarketRoutes(
       if (!request.actorUserId) {
         throw new InventoryError("Missing X-Dev-User-Id header", 401);
       }
-      return await instantSellMarketItem(
-        database,
-        request.actorUserId,
-        InstantSellSchema.parse(request.body),
-      );
+      const body = InstantSellSchema.parse(request.body);
+      return await instantSellMarketItem(database, request.actorUserId, {
+        weaponMasterId: body.weaponMasterId,
+        quantity: body.quantity,
+      });
     } catch (error) {
       fastify.log.error(error);
       return sendInventoryError(reply, error);
