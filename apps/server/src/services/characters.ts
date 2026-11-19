@@ -1,5 +1,10 @@
+import {
+  CHARACTER_VARIANT_CATALOG,
+  getCharacterVariantSpec,
+} from "@webgame/types";
 import { and, asc, eq, sql } from "drizzle-orm";
 import {
+  characterDefinitions,
   characters,
   characterVariants,
   characterWeapons,
@@ -9,6 +14,46 @@ import {
   users,
 } from "../db";
 import { InventoryError, withInventoryTransaction } from "./inventory";
+
+export async function ensureCharacterVariantCatalog(
+  db: Database | TransactionClient,
+) {
+  const uniqueDefs = new Map<string, string>();
+  for (const spec of CHARACTER_VARIANT_CATALOG) {
+    uniqueDefs.set(spec.definitionId, spec.definitionName);
+  }
+  const defRows = [...uniqueDefs.entries()].map(([id, name]) => ({ id, name }));
+  if (defRows.length > 0) {
+    await db
+      .insert(characterDefinitions)
+      .values(defRows)
+      .onConflictDoNothing({ target: characterDefinitions.id });
+  }
+  const variantRows = CHARACTER_VARIANT_CATALOG.map((spec) => ({
+    id: spec.id,
+    definitionId: spec.definitionId,
+    maxHp: spec.stats.maxHp,
+    maxStamina: spec.stats.maxStamina,
+    staminaRegen: spec.stats.staminaRegen,
+    maxFatigue: spec.stats.maxFatigue,
+    maxWeight: spec.stats.maxWeight,
+  }));
+  if (variantRows.length > 0) {
+    await db
+      .insert(characterVariants)
+      .values(variantRows)
+      .onConflictDoUpdate({
+        target: characterVariants.id,
+        set: {
+          maxHp: sql`excluded."maxHp"`,
+          maxStamina: sql`excluded."maxStamina"`,
+          staminaRegen: sql`excluded."staminaRegen"`,
+          maxFatigue: sql`excluded."maxFatigue"`,
+          maxWeight: sql`excluded."maxWeight"`,
+        },
+      });
+  }
+}
 
 export const characterDetails = {
   activeRaid: { columns: { ghostRoster: false, pendingRetreat: false } },
@@ -87,17 +132,23 @@ export async function recruitDevelopmentCharacter(
 ) {
   return withInventoryTransaction(db, async (tx) => {
     await requireUserAtBase(tx, userId);
+    await ensureCharacterVariantCatalog(tx);
     const variant = await tx.query.characterVariants.findFirst({
       where: eq(characterVariants.id, variantId),
       with: { definition: true },
     });
     if (!variant) throw new InventoryError("Character variant not found", 404);
+    const spec = getCharacterVariantSpec(variantId);
+    const displayName =
+      spec && spec.id !== "legacy-origin"
+        ? `${variant.definition.name} · ${spec.worldlineLabel}`
+        : variant.definition.name;
     const [created] = await tx
       .insert(characters)
       .values({
         userId,
         variantId,
-        displayName: variant.definition.name,
+        displayName,
         hp: variant.maxHp,
         maxHp: variant.maxHp,
         stamina: variant.maxStamina,

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { characters, characterVariants, type Database } from "../db";
 import {
   characterDetails,
+  ensureCharacterVariantCatalog,
   recruitDevelopmentCharacter,
   selectCharacter,
   selectedCharacterId,
@@ -131,12 +132,13 @@ export function registerCharacterRoutes(
       return formatCharacterResponse(character);
     },
   );
-  app.get("/dev/character-variants", async () =>
-    db.query.characterVariants.findMany({
+  app.get("/dev/character-variants", async () => {
+    await ensureCharacterVariantCatalog(db);
+    return db.query.characterVariants.findMany({
       with: { definition: true },
       orderBy: [asc(characterVariants.id)],
-    }),
-  );
+    });
+  });
   app.post<{ Params: { userId: string; characterId: string } }>(
     "/user/:userId/characters/:characterId/select",
     async (request, reply) => {

@@ -375,6 +375,7 @@ export async function loadBattlePlayer(
     weight: character.weight,
     maxWeight: character.maxWeight,
     time: character.time,
+    variantId: character.variantId,
     activeFoodBuff: character.activeFoodBuff ?? null,
     currentWeaponIndex: 0,
     weapons: [null, null, null, null, null, null],
@@ -408,6 +409,7 @@ export async function executeGhostBattleInTransaction(
   const opponent: BattleCombatant = {
     ...ghost.combatant,
     id: `ghost:${ghost.id}`,
+    variantId: ghost.source.variantId ?? ghost.combatant.variantId ?? null,
     teamId: "TeamB",
     currentWeaponIndex: 0,
     weapons: [

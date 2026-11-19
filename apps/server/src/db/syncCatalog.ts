@@ -1,11 +1,12 @@
-import { ALL_CATALOG_ITEMS } from "@webgame/types";
+import { ALL_CATALOG_ITEMS, CHARACTER_VARIANT_CATALOG } from "@webgame/types";
 import { sql } from "drizzle-orm";
+import { ensureCharacterVariantCatalog } from "../services/characters";
 import { createDatabase, weaponMasters } from "./index";
 
 const db = createDatabase();
 
 /**
- * ALL_CATALOG_ITEMS를 WeaponMaster 테이블에 비파괴적으로(upsert) 동기화합니다.
+ * ALL_CATALOG_ITEMS와 CHARACTER_VARIANT_CATALOG를 비파괴적으로(upsert) 동기화합니다.
  * 기존 유저/캐릭터/인벤토리 데이터는 유지됩니다.
  */
 async function main() {
@@ -48,7 +49,11 @@ async function main() {
       });
   }
 
-  console.log(`Synced ${rows.length} catalog items to WeaponMaster.`);
+  await ensureCharacterVariantCatalog(db);
+
+  console.log(
+    `Synced ${rows.length} catalog items and ${CHARACTER_VARIANT_CATALOG.length} character variants.`,
+  );
 }
 
 main()
