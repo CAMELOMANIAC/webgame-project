@@ -5,19 +5,24 @@ import {
   type RaidCombatRecord,
   type RaidSettlementSummary,
 } from "@webgame/types";
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { motion, useReducedMotion } from "motion/react";
+import { useState } from "react";
 
 import { resolveItemImageSrc } from "@/assets/items";
 import { selectedUserIdAtom } from "@/atoms/authAtom";
 import {
   type RaidEndStatus,
+  raidOutroAtom,
   unacknowledgedRaidResultsAtom,
 } from "@/atoms/raidAtom";
+import { RaidOutroBackdrop } from "@/components/field/RaidOutro";
 import { page } from "@/styles/theme.css";
 import { API_BASE_URL, apiFetch } from "@/utils/api";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { lastRaidSummaryKey } from "@/utils/hooks/useRaidSession";
 import { readApiResponse } from "@/utils/request";
+import { useRaidOutroSequence } from "@/utils/useRaidOutroSequence";
 
 import * as styles from "./result.css";
 
@@ -63,6 +68,15 @@ function RaidResultRoute() {
 
   const result = userId ? raidResults[userId] : undefined;
 
+  // 종료 연출은 탐사 종료 직후(위치 기록이 있을 때)에만 재생한다. 새로고침 복구 시에는 생략
+  const outro = useAtomValue(raidOutroAtom);
+  const setOutro = useSetAtom(raidOutroAtom);
+  const reduceMotion = useReducedMotion();
+  const [hadOutro] = useState(outro !== null);
+  const playOutro = hadOutro && !reduceMotion;
+  const { stage, skip } = useRaidOutroSequence(playOutro);
+  const showPanel = stage === "panel";
+
   const { data: summary } = useQuery<RaidSettlementSummary | null>({
     queryKey: lastRaidSummaryKey(userId, characterId),
     enabled: Boolean(userId && characterId && result),
@@ -101,12 +115,38 @@ function RaidResultRoute() {
       delete remaining[userId];
       return remaining;
     });
+    setOutro(null);
     void navigate({ to: "/base", replace: true });
   };
 
   return (
-    <div className={page} style={{ paddingBottom: 0, overflowY: "auto" }}>
-      <div className={styles.wrapper}>
+    <div className={styles.outroRoot}>
+      {playOutro && (
+        <RaidOutroBackdrop result={result} stage={stage} onSkip={skip} />
+      )}
+    <div
+      className={page}
+      style={{
+        paddingBottom: 0,
+        overflowY: "auto",
+        position: "relative",
+        zIndex: 1,
+        ...(playOutro
+          ? {
+              backgroundColor: "transparent",
+              pointerEvents: showPanel ? "auto" : "none",
+            }
+          : {}),
+      }}
+    >
+      <motion.div
+        className={styles.wrapper}
+        initial={false}
+        animate={
+          showPanel ? { y: 0, opacity: 1 } : { y: 160, opacity: 0 }
+        }
+        transition={{ duration: 0.55, ease: [0.2, 0.9, 0.3, 1] }}
+      >
         <section className={styles.panel}>
           <div className={styles.headerBlock}>
             <p className={styles.eyebrow}>EXPEDITION REPORT</p>
@@ -250,7 +290,8 @@ function RaidResultRoute() {
             거점으로 돌아가기
           </button>
         </section>
-      </div>
+      </motion.div>
+    </div>
     </div>
   );
 }

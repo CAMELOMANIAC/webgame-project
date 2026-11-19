@@ -10,6 +10,7 @@ import { selectedUserIdAtom } from "@/atoms/authAtom";
 import { enemyNoiseSignalsAtom, raidNoiseState, unacknowledgedRaidResultsAtom } from "@/atoms/raidAtom";
 
 import { API_BASE_URL, apiFetch } from "../api";
+import { beginRaidOutro } from "../raidOutro";
 import { readApiResponse } from "../request";
 import { characterKey } from "./useCharacterCollection";
 import type { CharacterData } from "./useGetCharacter";
@@ -126,6 +127,7 @@ export const useRaidSession = () => {
           lastRaidSummaryKey(userId, characterId),
           result.summary,
         );
+        beginRaidOutro();
         setRaidResults((results) => ({ ...results, [userId]: "EXTRACTED" }));
       }
       queryClient.setQueryData(

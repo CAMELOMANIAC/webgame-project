@@ -6,12 +6,14 @@ import {
   useLocation,
 } from "@tanstack/react-router";
 import { getDefaultStore, useAtomValue } from "jotai";
+import { motion } from "motion/react";
 
 import { selectedUserIdAtom } from "@/atoms/authAtom";
 import { pendingNavigationAtom } from "@/atoms/pendingNavigationAtom";
 import {
   isCombatAtom,
   isNavigatingAtom,
+  raidOutroAtom,
   unacknowledgedRaidResultsAtom,
 } from "@/atoms/raidAtom";
 import DevelopmentAccountGate from "@/components/common/DevelopmentAccountGate";
@@ -19,6 +21,7 @@ import GlobalNav from "@/components/common/GlobalNav";
 import { BaseScreen } from "@/components/lobby/BaseScreen";
 import * as baseStyles from "@/components/lobby/BaseScreen.css";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
+import { OUTRO_HUD_FADE_SECONDS } from "@/utils/raidOutro";
 
 import * as styles from "./__root.css";
 
@@ -47,6 +50,7 @@ function GameLayout() {
   const pending = useAtomValue(pendingNavigationAtom);
   const isCombat = useAtomValue(isCombatAtom);
   const isNavigating = useAtomValue(isNavigatingAtom);
+  const outro = useAtomValue(raidOutroAtom);
   const raidResults = useAtomValue(unacknowledgedRaidResultsAtom);
   const result = userId ? raidResults[userId] : undefined;
   const character = useGetCharacter();
@@ -105,7 +109,9 @@ function GameLayout() {
     );
   }
 
-  if (result && path !== "/field/result") {
+  const isFadingOutroHud = outro?.phase === "fadeHud";
+
+  if (result && !isFadingOutroHud && path !== "/field/result") {
     return <Navigate to="/field/result" replace />;
   }
   if (
@@ -131,11 +137,17 @@ function GameLayout() {
       <div className={`${styles.outletWrapper} content-container`}>
         <Outlet />
       </div>
-      {!result && (
-        <GlobalNav
-          mode={inRaid ? "raid" : "base"}
-          fieldBusy={isCombat || isNavigating}
-        />
+      {(!result || isFadingOutroHud) && (
+        <motion.div
+          animate={{ opacity: isFadingOutroHud ? 0 : 1 }}
+          transition={{ duration: OUTRO_HUD_FADE_SECONDS, ease: "easeOut" }}
+          style={isFadingOutroHud ? { pointerEvents: "none" } : undefined}
+        >
+          <GlobalNav
+            mode={inRaid ? "raid" : "base"}
+            fieldBusy={isCombat || isNavigating}
+          />
+        </motion.div>
       )}
     </>
   );

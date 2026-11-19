@@ -20,6 +20,13 @@ export const unacknowledgedRaidResultsAtom =
     { getOnInit: true },
   );
 
+// 탐사 종료 연출: 종료 시점의 플레이어 위치와 지도 카메라 단계
+export interface RaidOutro {
+  focus: { x: number; y: number };
+  phase: "fadeHud" | "hold" | "zoomOut" | "settled";
+}
+export const raidOutroAtom = atom<RaidOutro | null>(null);
+
 // 플레이어의 현재 노드 ID
 export const currentNodeIdAtom = atom<number>(0);
 

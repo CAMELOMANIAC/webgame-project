@@ -33,6 +33,7 @@ import {
   playerCoordsAtom,
   playerRotationAtom,
   raidNoiseState,
+  raidOutroAtom,
   requestedBuildingIdAtom,
   requestedNodeIdAtom,
   shortestPathAtom,
@@ -49,6 +50,7 @@ import { findShortestPath } from "@/utils/pathfinding";
 import { createNoiseRipple } from "@/utils/pixiNoiseRipple";
 import { getFogOfWarTexture, loadCompassTexture } from "@/utils/pixiTextures";
 import { Easings, runTween, type TweenHandle } from "@/utils/pixiTween";
+import { OUTRO_ZOOM_SECONDS } from "@/utils/raidOutro";
 import { createRTreeIndex, searchRTreeIndex } from "@/utils/rtreeCulling";
 
 import mapData from "../../../../../packages/types/src/assets/map_graph.json";
@@ -96,6 +98,10 @@ const edges = mapData.edges as unknown as Edge[];
 const MIN_ZOOM_SCALE = 0.2;
 const MAX_ZOOM_SCALE = 10;
 const FOG_VISIBLE_MIN_SCALE = 1.0;
+
+// 탐사 종료 연출 카메라: 평소 3.0배율에서 높은 시점으로 줌아웃
+const OUTRO_START_SCALE = 3.0;
+const OUTRO_END_SCALE = 1.35;
 const NOISE_PULSE_SECONDS = 1.1;
 const NOISE_ECHO_DELAY_SECONDS = 0.25;
 const NOISE_ECHO_STRENGTH = 0.55;
@@ -318,6 +324,10 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const focusTweenRef = useRef<TweenHandle | null>(null);
   const focusPlayerTrigger = useAtomValue(focusPlayerTriggerAtom);
   const battleCenter = useAtomValue(battleCenterAtom);
+  const outro = useAtomValue(raidOutroAtom);
+  const outroActive = outro !== null;
+  const outroFocus = outro?.focus;
+  const outroPhase = outro?.phase;
   const focusRouteTarget = useAtomValue(focusRouteTargetAtom);
   const highlightedDistrictIds = useAtomValue(highlightedDistrictIdsAtom);
   const startNavigationTrigger = useAtomValue(startNavigationTriggerAtom);
@@ -1508,17 +1518,22 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     };
   }, [isPixiReady]);
 
-  // 2. 처음 마운트 및 창 크기 변경 시 카메라를 플레이어 위치에 고정하고 배율을 3으로 설정
+  // 2. 처음 마운트 시(캐릭터 좌표 초기화 이후) 카메라를 플레이어 위치에 고정하고 배율을 3으로 설정
+  const hasInitialCameraAlignRef = useRef(false);
   useEffect(() => {
+    if (hasInitialCameraAlignRef.current) return;
     const world = worldContainerRef.current;
     if (!isPixiReady || !world || dimensions.width === 0 || dimensions.height === 0) return;
-    if (isNavigating || isCombat) return;
+    if (!isInitializedRef.current) return;
+    if (isNavigating || isCombat || outroActive) return;
 
     const scale = 3.0;
     const playerPos =
       playerCoordsRef.current ||
       (nodes[currentNodeId] ? { x: nodes[currentNodeId].x, y: nodes[currentNodeId].y } : null);
     if (!playerPos) return;
+
+    hasInitialCameraAlignRef.current = true;
 
     const newX = dimensions.width / 2 - playerPos.x * scale;
     const newY = dimensions.height / 2 - playerPos.y * scale;
@@ -1549,7 +1564,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       y: newY,
       scale,
     });
-  }, [isPixiReady, dimensions.width, dimensions.height, currentNodeId, playerCoords, isNavigating, isCombat]);
+  }, [isPixiReady, dimensions.width, dimensions.height, currentNodeId, playerCoords, isNavigating, isCombat, outroActive]);
 
   // 2.1. 전투 시작 시 플레이어 중심 3.0배율 카메라 줌인 트랜지션
   useEffect(() => {
@@ -1609,6 +1624,70 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       tween.destroy();
     };
   }, [isPixiReady, isCombat, dimensions.width, dimensions.height, currentNodeId, playerCoords, battleCenter]);
+
+  // 2.1.5. 탐사 종료 연출: 종료 지점을 3.0배율로 고정했다가 높은 시점으로 천천히 줌아웃
+  useEffect(() => {
+    const world = worldContainerRef.current;
+    if (
+      !isPixiReady ||
+      !world ||
+      !outroFocus ||
+      !outroPhase ||
+      dimensions.width === 0 ||
+      dimensions.height === 0
+    ) {
+      return;
+    }
+
+    const place = (scale: number) => {
+      const pos = clampWorldPosition(
+        dimensions.width / 2 - outroFocus.x * scale,
+        dimensions.height / 2 - outroFocus.y * scale,
+        scale,
+        dimensions.width,
+        dimensions.height,
+      );
+      world.scale.set(scale);
+      world.position.set(pos.x, pos.y);
+      syncFogVisibility(sightMaskSpriteRef.current, scale, Boolean(playerCoordsRef.current));
+      if (playerMarkerSpriteRef.current && !playerMarkerSpriteRef.current.destroyed) {
+        playerMarkerSpriteRef.current.width = 50 / scale;
+        playerMarkerSpriteRef.current.height = 50 / scale;
+      }
+      return { x: pos.x, y: pos.y, scale };
+    };
+
+    if (outroPhase === "fadeHud" || outroPhase === "hold") {
+      const placed = place(OUTRO_START_SCALE);
+      if (placed) setStageTransform(placed);
+      return;
+    }
+    if (outroPhase === "settled") {
+      const placed = place(OUTRO_END_SCALE);
+      if (placed) setStageTransform(placed);
+      return;
+    }
+
+    place(OUTRO_START_SCALE);
+    const tween = runTween({
+      duration: OUTRO_ZOOM_SECONDS,
+      easing: Easings.EaseInOut,
+      onUpdate: (p) => {
+        if (world.destroyed) return;
+        place(OUTRO_START_SCALE + (OUTRO_END_SCALE - OUTRO_START_SCALE) * p);
+      },
+      onFinish: () => {
+        setStageTransform({
+          x: world.x,
+          y: world.y,
+          scale: OUTRO_END_SCALE,
+        });
+      },
+    });
+    return () => {
+      tween.destroy();
+    };
+  }, [isPixiReady, outroFocus, outroPhase, dimensions.width, dimensions.height]);
 
   const animateCameraTo = (targetPos: { x: number; y: number }, targetScale: number) => {
     const world = worldContainerRef.current;
@@ -1956,7 +2035,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
   // 5.3.5. 최초 로드 및 서버 DB의 currentNodeId 값이 변경될 때 클라이언트 상태 동기화
   useEffect(() => {
-    if (characterData && !isNavigating && !isCombat) {
+    if (characterData && !isNavigating && !isCombat && !outroActive) {
       const serverNodeId = characterData.raw.currentNodeId;
       if (typeof serverNodeId === "number" && nodes[serverNodeId]) {
         if (serverNodeId !== currentNodeId || !isInitializedRef.current) {
@@ -1980,7 +2059,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         }
       }
     }
-  }, [characterData, isNavigating, isCombat, currentNodeId, setCurrentNodeId, setPlayerCoords]);
+  }, [characterData, isNavigating, isCombat, outroActive, currentNodeId, setCurrentNodeId, setPlayerCoords]);
 
   useEffect(() => {
     const ripple = noiseRippleRef.current;
@@ -2186,7 +2265,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
             cameraCatchUpStart = performance.now();
           }
           const waitedMs = performance.now() - cameraCatchUpStart;
-          const forceArrived = waitedMs > 1500;
+          const forceArrived = waitedMs > 2500;
 
           if (!hasCameraArrived(finalPos.x, finalPos.y) && !forceArrived) {
             playerCoordsRef.current = finalPos;

@@ -22,6 +22,7 @@ import {
   animatingSlotIdsAtom,
   isNavigatingAtom,
   isRecommendDestinationsOpenAtom,
+  raidOutroAtom,
   shortestPathAtom,
   targetBuildingIdAtom,
   targetNodeIdAtom,
@@ -53,6 +54,7 @@ import {
   resolveInspectedSlotDetails,
   type SlotInspectTarget,
 } from "@/utils/hooks/useSlotInteraction";
+import { OUTRO_HUD_FADE_SECONDS } from "@/utils/raidOutro";
 
 import * as styles from "./index.css";
 
@@ -72,6 +74,7 @@ export const Route = createFileRoute("/field/")({
 function RouteComponent() {
   const { tab } = useSearch({ from: "/field/" });
   const showBackpack = tab === "backpack";
+  const outro = useAtomValue(raidOutroAtom);
   const reduceMotion = useReducedMotion();
   const exitOffset = reduceMotion ? 0 : 12;
   // 같은 데이터로 두 슬롯 목록을 함께 갱신해야 layoutId 이동 전환이 이어진다.
@@ -324,7 +327,16 @@ function RouteComponent() {
           isClickSuppressed={() => suppressClickRef.current}
         >
         <LayoutGroup id="inventory-group">
-          <div className={styles.fieldPanels} data-backpack={showBackpack}>
+          <motion.div
+            className={styles.fieldPanels}
+            data-backpack={showBackpack}
+            animate={{ opacity: outro ? 0 : 1 }}
+            transition={{
+              duration: reduceMotion ? 0 : OUTRO_HUD_FADE_SECONDS,
+              ease: "easeOut",
+            }}
+            style={outro ? { pointerEvents: "none" } : undefined}
+          >
             <AnimatePresence initial={false}>
               {!showBackpack && (
                 <motion.div
@@ -388,7 +400,7 @@ function RouteComponent() {
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+          </motion.div>
           <DragOverlay dropAnimation={null}>
             {activeId && (
               <div className={styles.slotOverlay}>{activeItem?.name}</div>
