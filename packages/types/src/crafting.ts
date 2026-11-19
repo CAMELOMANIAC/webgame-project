@@ -1,4 +1,5 @@
 import { MAP_DISTRICTS } from "./districts";
+import { findEnemyArchetypesByDropId } from "./enemyCatalog";
 import type { BuildingCategory, MapDistrict } from "./world";
 
 export * from "./itemCatalog";
@@ -236,4 +237,14 @@ export function findMaterialDistricts(materialId: string): MapDistrict[] {
   return MAP_DISTRICTS.filter((district) =>
     district.materialIds.includes(materialId),
   );
+}
+
+/**
+ * 구역별 특색 NPC 처치로 획득할 수 있는 장비의 출현 구역 목록을 반환합니다.
+ */
+export function findWeaponDropDistricts(itemId: string): MapDistrict[] {
+  const archetypes = findEnemyArchetypesByDropId(itemId);
+  if (archetypes.length === 0) return [];
+  const kinds = new Set(archetypes.flatMap((archetype) => archetype.districtKinds));
+  return MAP_DISTRICTS.filter((district) => kinds.has(district.kind));
 }

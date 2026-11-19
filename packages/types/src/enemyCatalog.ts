@@ -19,6 +19,8 @@ export interface EnemyArchetype {
   staminaRegen: number;
   /** 장착 슬롯(0~5) 순서대로 배치되는 카탈로그 아이템 ID 목록 */
   weaponIds: readonly string[];
+  /** 처치 시 확정(우선) 드랍되는 대표 장비/아이템 ID */
+  guaranteedRewardId?: string;
   /** 처치 시 드랍 후보 카탈로그 아이템 ID 목록 */
   rewardIds: readonly string[];
 }
@@ -83,7 +85,25 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
     stamina: 95,
     staminaRegen: 7,
     weaponIds: ["wpn_dagger", "mat-tape", "mat-lighter"],
+    guaranteedRewardId: "wpn_dagger",
     rewardIds: ["wpn_dagger", "mat-tape", "mat-wire", "food-energy-bar"],
+  },
+  {
+    id: "npc-res-blade",
+    name: "주거단지 자경 검객",
+    faction: "무소속 생존자",
+    role: "구역 자경",
+    reason: "표준 도검을 들고 주거·문화 구역의 출입자를 경계하고 있습니다.",
+    tier: 1,
+    districtKinds: ["RESIDENTIAL"],
+    buildingCategories: ["CULTURAL"],
+    isPatrolEligible: true,
+    hp: 62,
+    stamina: 95,
+    staminaRegen: 7,
+    weaponIds: ["wpn_primary", "mat-tape", "mat-ceramic"],
+    guaranteedRewardId: "wpn_primary",
+    rewardIds: ["wpn_primary", "mat-tape", "mat-ceramic", "food-energy-bar"],
   },
   {
     id: "npc-com-scout",
@@ -98,8 +118,9 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
     hp: 64,
     stamina: 100,
     staminaRegen: 8,
-    weaponIds: ["mat-wire", "hanlim-control-baton", "mat-lens"],
-    rewardIds: ["hanlim-control-baton", "mat-lens", "mat-battery", "med-bandage"],
+    weaponIds: ["mat-lens", "hanlim-relief-carbine", "mat-wire"],
+    guaranteedRewardId: "hanlim-relief-carbine",
+    rewardIds: ["hanlim-relief-carbine", "mat-lens", "mat-battery", "med-bandage"],
   },
   {
     id: "npc-patrol-early",
@@ -114,6 +135,7 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
     stamina: 100,
     staminaRegen: 7,
     weaponIds: ["mat-wire", "hanlim-control-baton", "mat-tape"],
+    guaranteedRewardId: "hanlim-control-baton",
     rewardIds: ["hanlim-control-baton", "mat-wire", "mat-tape", "food-ion-drink"],
   },
   {
@@ -129,6 +151,7 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
     stamina: 100,
     staminaRegen: 8,
     weaponIds: ["mat-wire", "hanlim-control-baton", "mat-ceramic"],
+    guaranteedRewardId: "hanlim-control-baton",
     rewardIds: ["hanlim-control-baton", "mat-ceramic", "mat-relay", "med-bandage"],
   },
 
@@ -164,6 +187,7 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
     stamina: 115,
     staminaRegen: 9,
     weaponIds: ["mat-lens", "eq-com-t1", "mat-battery", "wpn_sniper"],
+    guaranteedRewardId: "wpn_sniper",
     rewardIds: ["eq-com-t1", "mat-lens", "mat-battery", "wpn_sniper"],
   },
   {
@@ -180,7 +204,25 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
     stamina: 115,
     staminaRegen: 9,
     weaponIds: ["eq-pub-t1", "mat-titanium", "wpn_giant_slayer", "mat-ceramic"],
+    guaranteedRewardId: "wpn_giant_slayer",
     rewardIds: ["eq-pub-t1", "mat-titanium", "mat-fuel", "wpn_giant_slayer"],
+  },
+  {
+    id: "npc-med-medic",
+    name: "방역 현장 응급요원",
+    faction: "한림그룹 방역팀",
+    role: "응급 생체 지원",
+    reason: "의료 구역의 응급 생체 팩을 회수·운반하던 중 접근자를 경계합니다.",
+    tier: 2,
+    districtKinds: ["MEDICAL"],
+    buildingCategories: ["MEDICAL"],
+    isPatrolEligible: true,
+    hp: 84,
+    stamina: 105,
+    staminaRegen: 8,
+    weaponIds: ["mat-biogel", "wpn_lifesaver", "mat-electrolyte", "wpn_dagger"],
+    guaranteedRewardId: "wpn_lifesaver",
+    rewardIds: ["wpn_lifesaver", "mat-biogel", "mat-electrolyte", "med-tourniquet"],
   },
   {
     id: "npc-med-quarantine",
@@ -417,3 +459,28 @@ export function selectEnemyArchetype(
 
   return filtered[index] ?? ENEMY_ARCHETYPES[0]!;
 }
+
+/**
+ * 아키타입 처치 시 지급할 보상 후보 목록을 반환합니다.
+ * 확정 드랍(`guaranteedRewardId`)이 지정된 구역 특색 NPC는 해당 대표 장비를 우선(확정) 드랍합니다.
+ */
+export function resolveEnemyRewardIds(archetype: EnemyArchetype): string[] {
+  if (archetype.guaranteedRewardId) {
+    return [archetype.guaranteedRewardId];
+  }
+  return [...archetype.rewardIds];
+}
+
+/**
+ * 특정 아이템을 확정 드랍(또는 후보 드랍)하는 적 아키타입 목록을 반환합니다.
+ */
+export function findEnemyArchetypesByDropId(itemId: string): EnemyArchetype[] {
+  const guaranteed = ENEMY_ARCHETYPES.filter(
+    (archetype) => archetype.guaranteedRewardId === itemId,
+  );
+  if (guaranteed.length > 0) return guaranteed;
+  return ENEMY_ARCHETYPES.filter((archetype) =>
+    archetype.rewardIds.includes(itemId),
+  );
+}
+

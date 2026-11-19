@@ -17,8 +17,7 @@ export const MAP_DISTRICTS: readonly MapDistrict[] = [
       "mat-electrolyte",
       "food-energy-bar",
       "food-combat-ration",
-      "med-bandage",
-      "wpn_dagger"
+      "med-bandage"
     ],
     "labelX": 213.3,
     "labelY": 474.6,
@@ -76,8 +75,7 @@ export const MAP_DISTRICTS: readonly MapDistrict[] = [
       "mat-electrolyte",
       "food-energy-bar",
       "food-combat-ration",
-      "med-bandage",
-      "wpn_primary"
+      "med-bandage"
     ],
     "labelX": 356.9,
     "labelY": 405.2,
@@ -124,8 +122,7 @@ export const MAP_DISTRICTS: readonly MapDistrict[] = [
       "mat-tape",
       "mat-wire",
       "food-energy-bar",
-      "med-tourniquet",
-      "wpn_dagger"
+      "med-tourniquet"
     ],
     "labelX": 86.3,
     "labelY": 590.5,
@@ -188,8 +185,7 @@ export const MAP_DISTRICTS: readonly MapDistrict[] = [
       "mat-ceramic",
       "food-ion-drink",
       "food-espresso-shot",
-      "food-blade-gel",
-      "hanlim-relief-carbine"
+      "food-blade-gel"
     ],
     "labelX": 359,
     "labelY": 566.4,
@@ -243,8 +239,7 @@ export const MAP_DISTRICTS: readonly MapDistrict[] = [
       "mat-electrolyte",
       "food-energy-bar",
       "food-combat-ration",
-      "med-bandage",
-      "wpn_primary"
+      "med-bandage"
     ],
     "labelX": 573.9,
     "labelY": 517,
@@ -308,8 +303,7 @@ export const MAP_DISTRICTS: readonly MapDistrict[] = [
       "mat-core",
       "mat-relay",
       "food-ion-drink",
-      "med-tourniquet",
-      "hanlim-control-baton"
+      "med-tourniquet"
     ],
     "labelX": 764.5,
     "labelY": 348.3,
@@ -384,8 +378,7 @@ export const MAP_DISTRICTS: readonly MapDistrict[] = [
       "mat-electrolyte",
       "med-bandage",
       "med-tourniquet",
-      "med-trauma-kit",
-      "wpn_lifesaver"
+      "med-trauma-kit"
     ],
     "labelX": 774.3,
     "labelY": 580.2,
@@ -441,8 +434,7 @@ export const MAP_DISTRICTS: readonly MapDistrict[] = [
       "mat-battery",
       "food-ion-drink",
       "food-espresso-shot",
-      "food-blade-gel",
-      "hanlim-relief-carbine"
+      "food-blade-gel"
     ],
     "labelX": 1029.6,
     "labelY": 296.4,
@@ -482,8 +474,7 @@ export const MAP_DISTRICTS: readonly MapDistrict[] = [
       "mat-tape",
       "mat-wire",
       "mat-lighter",
-      "mat-ceramic",
-      "hanlim-control-baton"
+      "mat-ceramic"
     ],
     "labelX": 940.6,
     "labelY": 509.4,
@@ -544,9 +535,7 @@ export const MAP_DISTRICTS: readonly MapDistrict[] = [
       "mat-titanium",
       "mat-solenoid",
       "mat-fuel",
-      "mat-carbon",
-      "wpn_dagger",
-      "hanlim-control-baton"
+      "mat-carbon"
     ],
     "labelX": 1216.5,
     "labelY": 97.6,
@@ -588,8 +577,7 @@ export const MAP_DISTRICTS: readonly MapDistrict[] = [
       "mat-solenoid",
       "food-ion-drink",
       "food-espresso-shot",
-      "food-blade-gel",
-      "hanlim-relief-carbine"
+      "food-blade-gel"
     ],
     "labelX": 1309.8,
     "labelY": 252.2,
@@ -646,8 +634,7 @@ export const MAP_DISTRICTS: readonly MapDistrict[] = [
       "mat-stimulant",
       "med-tourniquet",
       "med-trauma-kit",
-      "med-hemostatic-injector",
-      "wpn_lifesaver"
+      "med-hemostatic-injector"
     ],
     "labelX": 1164.9,
     "labelY": 560.2,
@@ -701,8 +688,7 @@ export const MAP_DISTRICTS: readonly MapDistrict[] = [
       "mat-electrolyte",
       "food-energy-bar",
       "food-combat-ration",
-      "med-bandage",
-      "wpn_dagger"
+      "med-bandage"
     ],
     "labelX": 1453,
     "labelY": 519.8,
@@ -768,8 +754,7 @@ export const MAP_DISTRICTS: readonly MapDistrict[] = [
       "mat-titanium",
       "mat-solenoid",
       "mat-fuel",
-      "mat-core",
-      "wpn_primary"
+      "mat-core"
     ],
     "labelX": 1517.6,
     "labelY": 124.8,
