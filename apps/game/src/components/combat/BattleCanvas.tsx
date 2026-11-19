@@ -1,10 +1,14 @@
 import type { BattleEvent, BattleLog } from "@webgame/types";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Application, Container, Sprite, Text, TextStyle } from "pixi.js";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import compass from "@/assets/compass.svg";
-import { battleCenterAtom, battleOccludersAtom } from "@/atoms/battleLayoutAtom";
+import {
+  battleCenterAtom,
+  battleOccludersAtom,
+  selectedCombatantIdAtom,
+} from "@/atoms/battleLayoutAtom";
 import { displayEventsAtom, processedEventsAtom } from "@/atoms/globalAtom";
 import { playerRotationAtom } from "@/atoms/raidAtom";
 import CanvasEnemyUnit from "@/components/combat/CanvasEnemyUnit";
@@ -45,12 +49,12 @@ const SHAKE_BY_EFFECT: Readonly<Record<AttackEffectKind, number>> = {
   SNIPE: 8,
 };
 
-interface DamagePopup {
+interface FloatingPopup {
   id: string;
   x: number;
   y: number;
-  amount: number;
-  isCritical: boolean;
+  label: string;
+  tone: "damage" | "critical" | "shield" | "heal";
   createdAt: number;
 }
 
@@ -141,6 +145,23 @@ export function BattleCanvas({
     [width, height, safeArea],
   );
   const { center } = layout;
+  const [selectedCombatantId, setSelectedCombatantId] = useAtom(
+    selectedCombatantIdAtom,
+  );
+  const lastUnitTapRef = useRef(0);
+
+  const handleSelectCombatant = useCallback(
+    (id: string) => {
+      lastUnitTapRef.current = performance.now();
+      setSelectedCombatantId((prev) => (prev === id ? null : id));
+    },
+    [setSelectedCombatantId],
+  );
+
+  useEffect(() => {
+    setSelectedCombatantId(null);
+  }, [battleLog, isCombat, setSelectedCombatantId]);
+
   const setBattleCenter = useSetAtom(battleCenterAtom);
 
   useEffect(() => {
@@ -253,7 +274,7 @@ export function BattleCanvas({
 
   // --- Visual Enhancement States ---
   const [showRedFlash, setShowRedFlash] = useState(false);
-  const [popups, setPopups] = useState<DamagePopup[]>([]);
+  const [popups, setPopups] = useState<FloatingPopup[]>([]);
   const redFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -348,11 +369,24 @@ export function BattleCanvas({
       triggerShake(isPlayerActor ? base : Math.max(2, base * 0.5));
     }
 
+    const resolveUnitPosition = (unitId: string) => {
+      if (unitId === characterId) return center;
+      return (
+        enemyPixelPositions.get(unitId) ??
+        summonPixelPositions.get(unitId) ??
+        center
+      );
+    };
+
+    const newPopups: FloatingPopup[] = [];
+
     const damageEvents = displayEvents.filter(
       (e): e is BattleEvent & { type: "DAMAGE" } => e.type === "DAMAGE",
     );
     if (damageEvents.length > 0) {
-      const hasPlayerDamage = damageEvents.some((e) => e.targetId === characterId);
+      const hasPlayerDamage = damageEvents.some(
+        (e) => e.targetId === characterId && e.amount > 0,
+      );
       if (hasPlayerDamage) {
         triggerShake(12);
         setShowRedFlash(true);
@@ -371,37 +405,71 @@ export function BattleCanvas({
         triggerShake(10);
       }
 
-      const newPopups: DamagePopup[] = [];
       damageEvents.forEach((e) => {
-        let posX = center.x;
-        let posY = center.y;
-
-        if (e.targetId !== characterId) {
-          const pos =
-            enemyPixelPositions.get(e.targetId) ??
-            summonPixelPositions.get(e.targetId);
-          if (pos) {
-            posX = pos.x;
-            posY = pos.y;
-          }
-        }
-
+        const pos = resolveUnitPosition(e.targetId);
         const offsetRandX = (Math.random() - 0.5) * 20;
         const offsetRandY = (Math.random() - 0.5) * 10;
+        const absorbed = e.absorbedShield ?? 0;
+
+        let label: string;
+        let tone: FloatingPopup["tone"] = e.isCritical ? "critical" : "damage";
+
+        if (absorbed > 0 && e.amount === 0) {
+          label = `SHD -${absorbed}`;
+          tone = "shield";
+        } else if (absorbed > 0) {
+          label = e.isCritical
+            ? `CRIT! -${e.amount} (SHD -${absorbed})`
+            : `-${e.amount} (SHD -${absorbed})`;
+        } else {
+          label = e.isCritical ? `CRIT! -${e.amount}` : `-${e.amount}`;
+        }
 
         newPopups.push({
           id: `${e.id}-${Date.now()}-${Math.random()}`,
-          x: posX + offsetRandX,
-          y: posY - 25 + offsetRandY,
-          amount: e.amount,
-          isCritical: e.isCritical,
+          x: pos.x + offsetRandX,
+          y: pos.y - 25 + offsetRandY,
+          label,
+          tone,
           createdAt: Date.now(),
         });
       });
+    }
 
-      if (newPopups.length > 0) {
-        setPopups((prev) => [...prev, ...newPopups]);
-      }
+    const shieldEvents = displayEvents.filter(
+      (e): e is BattleEvent & { type: "SHIELD" } => e.type === "SHIELD",
+    );
+    shieldEvents.forEach((e) => {
+      const pos = resolveUnitPosition(e.targetId);
+      const offsetRandX = (Math.random() - 0.5) * 18;
+      newPopups.push({
+        id: `${e.id}-${Date.now()}-${Math.random()}`,
+        x: pos.x + offsetRandX,
+        y: pos.y - 30,
+        label: `+${e.amount} SHD`,
+        tone: "shield",
+        createdAt: Date.now(),
+      });
+    });
+
+    const healEvents = displayEvents.filter(
+      (e): e is BattleEvent & { type: "HEAL" } => e.type === "HEAL",
+    );
+    healEvents.forEach((e) => {
+      const pos = resolveUnitPosition(e.targetId);
+      const offsetRandX = (Math.random() - 0.5) * 18;
+      newPopups.push({
+        id: `${e.id}-${Date.now()}-${Math.random()}`,
+        x: pos.x + offsetRandX,
+        y: pos.y - 30,
+        label: `+${e.amount} HP`,
+        tone: "heal",
+        createdAt: Date.now(),
+      });
+    });
+
+    if (newPopups.length > 0) {
+      setPopups((prev) => [...prev, ...newPopups]);
     }
   }, [
     displayEvents,
@@ -463,8 +531,55 @@ export function BattleCanvas({
     }
   }, [activeAttacks, characterId, enemyPixelPositions, center, width, height, isCombat, battleLog]);
 
+  const focusedCombatantId = useMemo(() => {
+    if (!isCombat || !battleLog) return null;
+    const allUnits = [...battleLog.initialState.players, ...summonedUnits].filter(
+      (p) => p.id !== characterId && !deadEnemyIds.has(p.id),
+    );
+    if (allUnits.length === 0) return null;
+    const aliveIds = new Set(allUnits.map((u) => u.id));
+    if (selectedCombatantId && aliveIds.has(selectedCombatantId)) {
+      return selectedCombatantId;
+    }
+    const recentEvents = [...displayEvents, ...processedEvents].reverse();
+    for (const event of recentEvents) {
+      if ("actorId" in event && aliveIds.has(event.actorId)) {
+        return event.actorId;
+      }
+      if ("targetId" in event && aliveIds.has(event.targetId)) {
+        return event.targetId;
+      }
+    }
+    const selfTeamId = battleLog.initialState.players.find(
+      (p) => p.id === characterId,
+    )?.teamId;
+    return (
+      allUnits.find((u) => u.teamId !== selfTeamId)?.id ??
+      allUnits[0]?.id ??
+      null
+    );
+  }, [
+    isCombat,
+    battleLog,
+    summonedUnits,
+    characterId,
+    deadEnemyIds,
+    selectedCombatantId,
+    displayEvents,
+    processedEvents,
+  ]);
+
   return (
-    <div className={styles.container} ref={containerRef}>
+    <div
+      className={styles.container({ interactive: isCombat })}
+      ref={containerRef}
+      onClick={() => {
+        if (performance.now() - lastUnitTapRef.current < 120) return;
+        if (selectedCombatantId !== null) {
+          setSelectedCombatantId(null);
+        }
+      }}
+    >
       <div className={styles.redFlashOverlay({ visible: showRedFlash })} />
       <div ref={canvasHostRef} style={{ width: "100%", height: "100%" }} />
 
@@ -530,6 +645,8 @@ export function BattleCanvas({
                       targetX={center.x}
                       targetY={center.y}
                       activeAttackId={activeAttackId}
+                      isSelected={focusedCombatantId === enemy.id}
+                      onSelect={() => handleSelectCombatant(enemy.id)}
                     />
                   );
                 })}
@@ -577,6 +694,8 @@ export function BattleCanvas({
                       targetY={targetPos.y}
                       activeAttackId={activeAttackId}
                       tone="ally"
+                      isSelected={focusedCombatantId === summon.id}
+                      onSelect={() => handleSelectCombatant(summon.id)}
                     />
                   );
                 })}
@@ -655,8 +774,8 @@ export function BattleCanvas({
                 id={p.id}
                 x={p.x}
                 y={p.y}
-                amount={p.amount}
-                isCritical={p.isCritical}
+                label={p.label}
+                tone={p.tone}
                 onComplete={(id) => {
                   setPopups((prev) => prev.filter((item) => item.id !== id));
                 }}
@@ -673,8 +792,8 @@ interface CanvasDamagePopupProps {
   id: string;
   x: number;
   y: number;
-  amount: number;
-  isCritical: boolean;
+  label: string;
+  tone: FloatingPopup["tone"];
   onComplete: (id: string) => void;
 }
 
@@ -682,8 +801,8 @@ function CanvasDamagePopup({
   id,
   x,
   y,
-  amount,
-  isCritical,
+  label,
+  tone,
   onComplete,
 }: CanvasDamagePopupProps) {
   const parent = usePixiParent();
@@ -700,11 +819,15 @@ function CanvasDamagePopup({
     group.position.set(x, y);
     parent.addChild(group);
 
+    const isCritical = tone === "critical";
+    const fillColor =
+      tone === "shield" || tone === "heal" ? "#85adff" : "#ffffff";
+
     const style = new TextStyle({
       fontFamily: "Inter, sans-serif",
       fontSize: isCritical ? 14 : 11,
       fontWeight: isCritical ? "800" : "600",
-      fill: "#ffffff",
+      fill: fillColor,
       stroke: isCritical ? { color: "#ff7162", width: 1 } : undefined,
       dropShadow: {
         color: "#000000",
@@ -717,7 +840,7 @@ function CanvasDamagePopup({
     });
 
     const textNode = new Text({
-      text: isCritical ? `CRIT! -${amount}` : `-${amount}`,
+      text: label,
       style,
       resolution: 2,
     });

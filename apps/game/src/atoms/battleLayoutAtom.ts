@@ -15,3 +15,6 @@ export const battleOccludersAtom = atom<BattleOccluder[]>([]);
 // 전투 중 플레이어 마커 좌표 (필드 배경 기준 px)
 // BattleCanvas가 측정한 안전 영역 중앙이며, 지도 카메라도 이 지점에 플레이어를 맞춘다.
 export const battleCenterAtom = atom<{ x: number; y: number } | null>(null);
+
+// 전투 캔버스에서 직접 클릭해 고정 선택한 유닛(적/소환물) ID (null이면 현재 턴 행동 유닛 자동 포커스)
+export const selectedCombatantIdAtom = atom<string | null>(null);

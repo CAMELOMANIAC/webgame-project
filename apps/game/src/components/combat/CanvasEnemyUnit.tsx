@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, Text, TextStyle, Ticker } from "pixi.js";
+import { Circle, Container, Graphics, Sprite, Text, TextStyle, Ticker } from "pixi.js";
 import { useEffect, useRef, useState } from "react";
 
 import { runMeleeLunge } from "@/utils/meleeLunge";
@@ -18,6 +18,8 @@ interface CanvasEnemyUnitProps {
   targetY?: number;
   activeAttackId?: string;
   tone?: "enemy" | "ally";
+  isSelected?: boolean;
+  onSelect?: () => void;
 }
 
 const CanvasEnemyUnit = ({
@@ -32,15 +34,20 @@ const CanvasEnemyUnit = ({
   targetY,
   activeAttackId,
   tone = "enemy",
+  isSelected = false,
+  onSelect,
 }: CanvasEnemyUnitProps) => {
   const parent = usePixiParent();
   const rootGroupRef = useRef<Container | null>(null);
   const hitGroupRef = useRef<Container | null>(null);
   const innerGroupRef = useRef<Container | null>(null);
   const flashRef = useRef<Graphics | null>(null);
+  const selectionRingRef = useRef<Graphics | null>(null);
   const labelGroupRef = useRef<Container | null>(null);
   const tagBgRef = useRef<Graphics | null>(null);
   const nameTextRef = useRef<Text | null>(null);
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
 
   const [isIntroFinished, setIsIntroFinished] = useState(false);
   const lastAttackIdRef = useRef<string | null>(null);
@@ -59,9 +66,32 @@ const CanvasEnemyUnit = ({
     rootGroup.addChild(hitGroup);
 
     const innerGroup = new Container();
+    innerGroup.eventMode = "static";
+    innerGroup.cursor = "pointer";
+    innerGroup.hitArea = new Circle(0, 0, 22);
+    innerGroup.on("pointertap", (event) => {
+      event.stopPropagation();
+      onSelectRef.current?.();
+    });
     hitGroup.addChild(innerGroup);
 
     const unitColor = tone === "ally" ? "#fafafa" : "#ff716c";
+
+    const selectionBrackets = new Graphics();
+    const half = 16;
+    const arm = 7;
+    selectionBrackets
+      .rect(-half, -half, half * 2, half * 2)
+      .stroke({ color: 0xffffff, width: 1, alpha: 0.18 })
+      .moveTo(-half, -half + arm)
+      .lineTo(-half, -half)
+      .lineTo(-half + arm, -half)
+      .moveTo(half - arm, half)
+      .lineTo(half, half)
+      .lineTo(half, half - arm)
+      .stroke({ color: 0xfafafa, width: 1.5, alpha: 0.95 });
+    selectionBrackets.visible = isSelected;
+    innerGroup.addChild(selectionBrackets);
 
     const { texture, logicalSize } = getGlowingDotTexture({
       radius: 5,
@@ -82,7 +112,7 @@ const CanvasEnemyUnit = ({
     innerGroup.addChild(flash);
 
     const labelGroup = new Container();
-    labelGroup.y = 15;
+    labelGroup.y = 21;
 
     const tagBg = new Graphics();
     const textStyle = new TextStyle({
@@ -114,6 +144,7 @@ const CanvasEnemyUnit = ({
     hitGroupRef.current = hitGroup;
     innerGroupRef.current = innerGroup;
     flashRef.current = flash;
+    selectionRingRef.current = selectionBrackets;
     labelGroupRef.current = labelGroup;
     tagBgRef.current = tagBg;
     nameTextRef.current = nameText;
@@ -123,6 +154,7 @@ const CanvasEnemyUnit = ({
       hitGroupRef.current = null;
       innerGroupRef.current = null;
       flashRef.current = null;
+      selectionRingRef.current = null;
       labelGroupRef.current = null;
       tagBgRef.current = null;
       nameTextRef.current = null;
@@ -132,6 +164,33 @@ const CanvasEnemyUnit = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parent]);
+
+  useEffect(() => {
+    const brackets = selectionRingRef.current;
+    if (!brackets || brackets.destroyed) return;
+    brackets.visible = isSelected;
+    if (!isSelected) {
+      brackets.scale.set(1);
+      return;
+    }
+
+    const startTime = performance.now();
+    const pulse = () => {
+      const target = selectionRingRef.current;
+      if (!target || target.destroyed) return;
+      const elapsedSec = (performance.now() - startTime) / 1000;
+      const s = 1.04 + Math.sin(elapsedSec * 3.4) * 0.08;
+      target.scale.set(s);
+    };
+
+    Ticker.shared.add(pulse);
+    return () => {
+      Ticker.shared.remove(pulse);
+      if (selectionRingRef.current && !selectionRingRef.current.destroyed) {
+        selectionRingRef.current.scale.set(1);
+      }
+    };
+  }, [isSelected]);
 
   // 2. 이름 변경 시 라벨 텍스트 및 배경 박스 갱신
   useEffect(() => {

@@ -1,16 +1,25 @@
-import { style } from "@vanilla-extract/css";
 import { recipe } from "@vanilla-extract/recipes";
 
-export const container = style({
-  position: "absolute",
-  top: 0,
-  left: 0,
-  width: "100%",
-  height: "100%",
-  zIndex: 0,
-  overflow: "hidden",
-  background: "transparent",
-  pointerEvents: "none",
+export const container = recipe({
+  base: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    zIndex: 0,
+    overflow: "hidden",
+    background: "transparent",
+  },
+  variants: {
+    interactive: {
+      true: { pointerEvents: "auto" },
+      false: { pointerEvents: "none" },
+    },
+  },
+  defaultVariants: {
+    interactive: false,
+  },
 });
 
 export const redFlashOverlay = recipe({
