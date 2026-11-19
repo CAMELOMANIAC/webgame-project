@@ -7,7 +7,9 @@ import { registerGameRoutes } from "./routes/game";
 import { registerGhostRoutes } from "./routes/ghosts";
 import { registerCharacterRoutes } from "./routes/characters";
 import { registerInventoryRoutes } from "./routes/inventory";
+import { registerMarketRoutes } from "./routes/market";
 import { registerRaidRoutes } from "./routes/raid";
+import { settleExpiredAuctions } from "./services/market";
 import { expireRaidBattles } from "./services/raid";
 import { registerQuestRoutes } from "./routes/quests";
 import { registerSimulationRoutes } from "./routes/simulation";
@@ -39,15 +41,23 @@ export function buildApp({
   registerGhostRoutes(fastify, database);
   registerCharacterRoutes(fastify, database);
   registerInventoryRoutes(fastify, database);
+  registerMarketRoutes(fastify, database);
   registerRaidRoutes(fastify, database);
   registerQuestRoutes(fastify, database);
   fastify.get("/health", async () => ({ status: "ok" }));
   let expiryTimer: ReturnType<typeof setInterval> | undefined;
   let expiryCheck: Promise<void> | undefined;
+  let marketTick = 0;
   fastify.addHook("onListen", async () => {
     expiryTimer = setInterval(() => {
       if (expiryCheck) return;
-      expiryCheck = expireRaidBattles(database)
+      marketTick = (marketTick + 1) % 5;
+      const runAuctionSettlement = marketTick === 0;
+      expiryCheck = Promise.all([
+        expireRaidBattles(database),
+        runAuctionSettlement ? settleExpiredAuctions(database) : Promise.resolve(0),
+      ])
+        .then(() => undefined)
         .catch((error: unknown) => fastify.log.error(error))
         .finally(() => { expiryCheck = undefined; });
     }, 1_000);

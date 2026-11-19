@@ -34,10 +34,18 @@ export const questStatusEnum = pgEnum("QuestStatus", [
   "READY",
   "COMPLETE",
 ]);
+export const marketListingStatusEnum = pgEnum("MarketListingStatus", [
+  "ACTIVE",
+  "SOLD",
+  "EXPIRED",
+  "CANCELLED",
+]);
 
 export type AttackType = (typeof attackTypeEnum.enumValues)[number];
 export type RaidStatus = (typeof raidStatusEnum.enumValues)[number];
 export type QuestStatus = (typeof questStatusEnum.enumValues)[number];
+export type MarketListingStatusDb =
+  (typeof marketListingStatusEnum.enumValues)[number];
 
 export const users = pgTable(
   "User",
@@ -59,6 +67,7 @@ export const users = pgTable(
       { onDelete: "set null", onUpdate: "cascade" },
     ),
     storyTier: integer("storyTier").notNull().default(0),
+    credits: integer("credits").notNull().default(0),
   },
   (table) => [uniqueIndex("User_email_key").on(table.email)],
 );
@@ -685,6 +694,76 @@ export const questProgressesRelations = relations(
   }),
 );
 
+export const marketListings = pgTable(
+  "MarketListing",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    sellerUserId: text("sellerUserId").references(() => users.id, {
+      onDelete: "set null",
+      onUpdate: "cascade",
+    }),
+    isNpcSeller: boolean("isNpcSeller").notNull().default(false),
+    weaponMasterId: text("weaponMasterId")
+      .notNull()
+      .references(() => weaponMasters.id, {
+        onDelete: "restrict",
+        onUpdate: "cascade",
+      }),
+    quantity: integer("quantity").notNull().default(1),
+    startingBid: integer("startingBid").notNull(),
+    currentBid: integer("currentBid"),
+    highestBidderUserId: text("highestBidderUserId").references(() => users.id, {
+      onDelete: "set null",
+      onUpdate: "cascade",
+    }),
+    bidCount: integer("bidCount").notNull().default(0),
+    status: marketListingStatusEnum("status").notNull().default("ACTIVE"),
+    settledByNpc: boolean("settledByNpc").notNull().default(false),
+    endsAt: timestamp("endsAt", { precision: 3, mode: "date" }).notNull(),
+    createdAt: timestamp("createdAt", { precision: 3, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updatedAt", { precision: 3, mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("MarketListing_status_endsAt_idx").on(table.status, table.endsAt),
+    index("MarketListing_weaponMasterId_status_idx").on(
+      table.weaponMasterId,
+      table.status,
+    ),
+    index("MarketListing_sellerUserId_status_idx").on(
+      table.sellerUserId,
+      table.status,
+    ),
+    index("MarketListing_highestBidderUserId_status_idx").on(
+      table.highestBidderUserId,
+      table.status,
+    ),
+  ],
+);
+
+export const marketListingsRelations = relations(marketListings, ({ one }) => ({
+  seller: one(users, {
+    fields: [marketListings.sellerUserId],
+    references: [users.id],
+    relationName: "marketListingSeller",
+  }),
+  highestBidder: one(users, {
+    fields: [marketListings.highestBidderUserId],
+    references: [users.id],
+    relationName: "marketListingBidder",
+  }),
+  weaponMaster: one(weaponMasters, {
+    fields: [marketListings.weaponMasterId],
+    references: [weaponMasters.id],
+  }),
+}));
+
 // Row Types
 export type User = typeof users.$inferSelect;
 export type CharacterDefinition = typeof characterDefinitions.$inferSelect;
@@ -702,3 +781,4 @@ export type RaidSession = typeof raidSessions.$inferSelect;
 export type RaidCommand = typeof raidCommands.$inferSelect;
 export type RaidGhostEncounter = typeof raidGhostEncounters.$inferSelect;
 export type QuestProgress = typeof questProgresses.$inferSelect;
+export type MarketListing = typeof marketListings.$inferSelect;

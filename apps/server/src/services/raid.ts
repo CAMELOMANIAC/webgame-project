@@ -1624,10 +1624,15 @@ export async function executeRaidBuildingAction(
 
       const district = getBuildingDistrict(building);
       const exp = readExplorationState(raid);
+      const equippedForEvent = await tx.query.characterWeapons.findMany({
+        where: eq(characterWeapons.characterId, characterId),
+        columns: { id: true },
+      });
       const introEvent = resolveBuildingIntroEvent(
         building,
         district,
         exp.completedEventIds,
+        { isUnarmed: equippedForEvent.length === 0 },
       );
       const encounterRate = introEvent.encounterRate ?? 0.3;
       const nextTime = raid.time + 10;
