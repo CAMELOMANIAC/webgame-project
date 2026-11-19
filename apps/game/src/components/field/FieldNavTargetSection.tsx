@@ -12,9 +12,11 @@ import {
   getCatalogItemById,
   getCraftingRecipesForCategory,
   hasBuildingChoiceCondition,
+  isBuildingLockedDown,
   type MapDistrict,
   matchesRecipeBase,
   resolveBuildingIntroEvent,
+  resolveBuildingMaxCraftTier,
 } from "@webgame/types";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -185,6 +187,8 @@ const FieldNavTargetSection = () => {
   }, [character?.equipment, character?.inventory]);
 
   const exploration = character?.activeRaid?.exploration;
+  const raidId = character?.activeRaid?.id ?? "";
+  const raidTime = character?.activeRaid?.time ?? 0;
   const activeBuildingId = character?.activeRaid?.currentBuildingId ?? null;
   const activeBuilding =
     activeBuildingId !== null
@@ -203,8 +207,16 @@ const FieldNavTargetSection = () => {
   const isActiveCraftUsed = activeBuilding
     ? (exploration?.usedCraftBuildingIds.includes(activeBuilding.id) ?? false)
     : false;
+  const isActiveBuildingLockedDown = activeBuilding
+    ? isBuildingLockedDown(activeBuilding, raidTime, raidId)
+    : false;
+  const activeBuildingMaxCraftTier = activeBuilding
+    ? resolveBuildingMaxCraftTier(activeBuilding)
+    : 1;
   const activeCategoryRecipes = activeBuilding?.category
-    ? getCraftingRecipesForCategory(activeBuilding.category)
+    ? getCraftingRecipesForCategory(activeBuilding.category).filter(
+        (recipe) => recipe.tier <= activeBuildingMaxCraftTier,
+      )
     : [];
   const completedEventIds =
     character?.activeRaid?.exploration?.completedEventIds ?? [];
@@ -222,7 +234,8 @@ const FieldNavTargetSection = () => {
     : undefined;
   const isCurrentBuildingCompleted =
     activeBuildingId !== null &&
-    (activeEventState?.stage === "CLEARED" ||
+    (isActiveBuildingLockedDown ||
+      activeEventState?.stage === "CLEARED" ||
       (activeBuilding?.category ? isActiveCraftUsed : isActiveBuildingLooted));
   const isAtTargetBuilding =
     shortestPath.length === 1 &&
@@ -311,6 +324,10 @@ const FieldNavTargetSection = () => {
       });
     }
     for (const staticDest of STATIC_RECOMMENDED_DESTINATIONS) {
+      if (staticDest.buildingId !== undefined) {
+        const b = ALL_BUILDINGS_BY_ID.get(staticDest.buildingId);
+        if (b && isBuildingLockedDown(b, raidTime, raidId)) continue;
+      }
       candidates.push(staticDest);
     }
     return candidates
@@ -346,6 +363,8 @@ const FieldNavTargetSection = () => {
     nodeId,
     currentLandmark?.id,
     character?.fatigue,
+    raidTime,
+    raidId,
   ]);
 
   const handleBuildingAction = (
@@ -401,15 +420,22 @@ const FieldNavTargetSection = () => {
 
   const routeToCraftingCategory = (
     buildingCategory: CraftingRecipe["buildingCategory"],
+    requiredTier: CraftingRecipe["tier"] = 1,
   ) => {
     setHighlightedDistrictIds([]);
     if (!canAct) return;
     const usedCraftSet = new Set(exploration?.usedCraftBuildingIds ?? []);
-    const matchingLandmarks = STATIC_RECOMMENDED_DESTINATIONS.filter(
-      (dest) =>
-        dest.buildingCategory === buildingCategory &&
-        (dest.buildingId === undefined || !usedCraftSet.has(dest.buildingId)),
-    );
+    const matchingLandmarks = STATIC_RECOMMENDED_DESTINATIONS.filter((dest) => {
+      if (dest.buildingCategory !== buildingCategory) return false;
+      if (dest.buildingId !== undefined) {
+        if (usedCraftSet.has(dest.buildingId)) return false;
+        const b = ALL_BUILDINGS_BY_ID.get(dest.buildingId);
+        if (!b) return false;
+        if (isBuildingLockedDown(b, raidTime, raidId)) return false;
+        if (resolveBuildingMaxCraftTier(b) < requiredTier) return false;
+      }
+      return true;
+    });
     if (matchingLandmarks.length === 0) return;
 
     let nearest = matchingLandmarks[0];
@@ -459,7 +485,7 @@ const FieldNavTargetSection = () => {
       return;
     }
 
-    routeToCraftingCategory(recipe.buildingCategory);
+    routeToCraftingCategory(recipe.buildingCategory, recipe.tier);
   };
 
   const handleSelectBaseEquipment = (
@@ -485,7 +511,7 @@ const FieldNavTargetSection = () => {
     if (baseRecipe) {
       setPinnedRecipeId(baseRecipe.id);
       setSelectedMaterialId(null);
-      routeToCraftingCategory(baseRecipe.buildingCategory);
+      routeToCraftingCategory(baseRecipe.buildingCategory, baseRecipe.tier);
       return;
     }
 
@@ -1096,7 +1122,7 @@ const FieldNavTargetSection = () => {
                     <span className={styles.buildingEventTitle}>
                       {activeBuilding.name ?? `건물 #${activeBuilding.id}`}
                       {activeBuilding.category
-                        ? ` · ${BUILDING_CATEGORY_LABELS[activeBuilding.category]}`
+                        ? ` · ${BUILDING_CATEGORY_LABELS[activeBuilding.category]} (${activeBuildingMaxCraftTier >= 2 ? "T1·T2" : "T1"})`
                         : ""}
                     </span>
                     <div className={styles.headerActions}>
@@ -1107,13 +1133,15 @@ const FieldNavTargetSection = () => {
                   </div>
 
                   <p className={styles.buildingEventText}>
-                    {activeBuilding.category && isActiveCraftUsed
-                      ? "이미 업그레이드 설비를 사용한 건물입니다."
-                      : lastBuildingMsg?.buildingId === activeBuilding.id
-                        ? lastBuildingMsg.text
-                        : (activeEventState?.text ??
-                            activeIntroEvent?.introText ??
-                            "")}
+                    {isActiveBuildingLockedDown
+                      ? "봉쇄 구역에 포함되어 더 이상 진입·이용할 수 없는 건물입니다."
+                      : activeBuilding.category && isActiveCraftUsed
+                        ? "이미 업그레이드 설비를 사용한 건물입니다."
+                        : lastBuildingMsg?.buildingId === activeBuilding.id
+                          ? lastBuildingMsg.text
+                          : (activeEventState?.text ??
+                              activeIntroEvent?.introText ??
+                              "")}
                   </p>
                 </div>
 
@@ -1123,7 +1151,8 @@ const FieldNavTargetSection = () => {
                 </p>
               )}
 
-              {!activeBuilding.category &&
+              {!isActiveBuildingLockedDown &&
+                !activeBuilding.category &&
                 !isActiveBuildingLooted &&
                 (activeIntroEvent?.choices &&
                 activeIntroEvent.choices.length > 0 ? (
@@ -1196,7 +1225,9 @@ const FieldNavTargetSection = () => {
                   </button>
                 ))}
 
-              {activeBuilding.category && !isActiveCraftUsed && (() => {
+              {!isActiveBuildingLockedDown &&
+                activeBuilding.category &&
+                !isActiveCraftUsed && (() => {
                 const craftEntries = activeCategoryRecipes.map((recipe) => {
                   const resultItem = getCatalogItemById(
                     recipe.resultEquipmentId,
@@ -1371,7 +1402,8 @@ const FieldNavTargetSection = () => {
                 disabled={!canAct}
                 onClick={() => setIsBuildingDismissed(true)}
               >
-                {(!activeBuilding.category && isActiveBuildingLooted) ||
+                {isActiveBuildingLockedDown ||
+                (!activeBuilding.category && isActiveBuildingLooted) ||
                 (Boolean(activeBuilding.category) && isActiveCraftUsed)
                   ? "빠져나간다"
                   : "그냥 넘어간다"}

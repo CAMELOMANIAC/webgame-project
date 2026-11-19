@@ -3,9 +3,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   type BattleLog,
   getBuildingDistrict,
+  isBuildingLockedDown,
   MAP_DISTRICTS,
   type MapBuilding,
   type MapPoint,
+  resolveBuildingMaxCraftTier,
 } from "@webgame/types";
 import { getDefaultStore, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Application, Container, Graphics, Sprite, Text, TextStyle } from "pixi.js";
@@ -325,6 +327,11 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   }, [exploration]);
   const [noiseSignals, setNoiseSignals] = useAtom(enemyNoiseSignalsAtom);
   const activeRaidId = characterData?.raw.activeRaid?.id;
+  const activeRaidTime = characterData?.raw.activeRaid?.time ?? 0;
+  const activeRaidIdRef = useRef(activeRaidId);
+  const activeRaidTimeRef = useRef(activeRaidTime);
+  activeRaidIdRef.current = activeRaidId;
+  activeRaidTimeRef.current = activeRaidTime;
   const queryClient = useQueryClient();
   const [isInventoryDirty, setIsInventoryDirty] = useAtom(isInventoryDirtyAtom);
 
@@ -550,6 +557,16 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   // 대상 노드 선택 시 목적지 및 예상 경로 표시 (이동 버튼 클릭 시 실제 이동)
   const handleTargetSelect = (targetId: number, targetB?: Building) => {
     if (isNavigating || isCombat || !hasActiveRaid) {
+      return;
+    }
+    if (
+      targetB &&
+      isBuildingLockedDown(
+        targetB,
+        activeRaidTimeRef.current,
+        activeRaidIdRef.current ?? "",
+      )
+    ) {
       return;
     }
     const startPos = playerCoordsRef.current ?? nodes[currentNodeId];
@@ -1253,13 +1270,26 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         const nextKey = `building-${b.id}`;
         if (hoveredKey !== nextKey) {
           hoveredKey = nextKey;
+          const isLocked = isBuildingLockedDown(
+            b,
+            activeRaidTimeRef.current,
+            activeRaidIdRef.current ?? "",
+          );
           if (hg && !hg.destroyed) {
             hg.clear();
             hg.poly(b.flatPoints, true)
-              .fill({ color: 0x2bcbba, alpha: 0.45 })
-              .stroke({ width: 2, color: 0xffffff, alpha: 1, join: "round" });
+              .fill({
+                color: isLocked ? 0xff7162 : 0x2bcbba,
+                alpha: isLocked ? 0.28 : 0.45,
+              })
+              .stroke({
+                width: 2,
+                color: isLocked ? 0xff7162 : 0xffffff,
+                alpha: 1,
+                join: "round",
+              });
           }
-          host.style.cursor = "pointer";
+          host.style.cursor = isLocked ? "not-allowed" : "pointer";
 
           const el = document.getElementById("hud-hover-detail");
           if (el) {
@@ -1270,23 +1300,30 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
             const categoryKo = b.category
               ? (BUILDING_CATEGORY_KO[b.category] ?? b.category)
               : null;
+            const craftTierLabel = b.category
+              ? resolveBuildingMaxCraftTier(b) >= 2
+                ? "T1·T2 조합가능"
+                : "T1 전용 조합"
+              : null;
             const title = b.name
               ? `${b.name}${categoryKo ? ` · ${categoryKo}` : ""}`
               : `BUILDING #${b.id}`;
-            const statusFlags = [
-              isLooted ? "수색완료" : null,
-              b.category ? (isCrafted ? "조합소진" : "조합가능") : null,
-            ]
-              .filter(Boolean)
-              .join(" / ");
+            const statusFlags = isLocked
+              ? "봉쇄됨 (진입 불가)"
+              : [
+                  isLooted ? "수색완료" : null,
+                  b.category ? (isCrafted ? "조합소진" : craftTierLabel) : null,
+                ]
+                  .filter(Boolean)
+                  .join(" / ");
             el.style.display = "block";
             el.innerHTML = `
-              <div style="color: #85adff; font-size: 11px; font-weight: 700; margin-bottom: 2px; letter-spacing: 0.4px;">
+              <div style="color: ${isLocked ? "#ff7162" : "#fafafa"}; font-size: 11px; font-weight: 700; margin-bottom: 2px; letter-spacing: 0.4px;">
                 ${title}
               </div>
               <div style="font-size: 10px; color: #b0b3be; font-family: monospace; line-height: 1.4;">
                 ${district.name}<br />
-                Height: ${b.height.toFixed(1)}m · Road #${b.roadNodeId}${statusFlags ? `<br /><span style="color: #e2e4ea;">${statusFlags}</span>` : ""}
+                Height: ${b.height.toFixed(1)}m · Road #${b.roadNodeId}${statusFlags ? `<br /><span style="color: ${isLocked ? "#ff7162" : "#e2e4ea"};">${statusFlags}</span>` : ""}
               </div>
             `;
           }
@@ -1740,14 +1777,19 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     g.visible = !isCombat;
 
     const lootedSet = new Set(exploration?.lootedBuildingIds ?? []);
+    const seed = activeRaidId ?? "";
 
     for (const b of buildings) {
       if (b.flatPoints.length < 6) continue;
-      if (lootedSet.has(b.id)) {
+      if (isBuildingLockedDown(b, activeRaidTime, seed)) {
+        g.poly(b.flatPoints, true)
+          .fill({ color: 0x180a0a, alpha: 0.74 })
+          .stroke({ width: 1, color: 0xff7162, alpha: 0.45 });
+      } else if (lootedSet.has(b.id)) {
         g.poly(b.flatPoints, true).fill({ color: 0x0a0a0c, alpha: 0.48 });
       }
     }
-  }, [isPixiReady, isCombat, exploration]);
+  }, [isPixiReady, isCombat, exploration, activeRaidTime, activeRaidId]);
 
   useEffect(() => {
     const g = districtHighlightGraphicsRef.current;
