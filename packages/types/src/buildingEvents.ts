@@ -802,6 +802,89 @@ export const DISTRICT_BUILDING_EVENT_POOL: Record<
   ],
 };
 
+export interface BuildingEventResolveOptions {
+  /** 현재 장착된 장비가 전혀 없는 비무장 상태인지 여부 */
+  isUnarmed?: boolean;
+}
+
+export const UNARMED_RECOVERY_EVENT_CHAIN: readonly BuildingEventDefinition[] =
+  [
+    {
+      id: "story-unarmed-cache-1",
+      title: "비무장 탐색: 버려진 구호함",
+      oncePerRaid: true,
+      introText:
+        "빈손으로 건물 내부를 살피던 중, 계단 아래 구석에 봉인이 반쯤 뜯긴 비상 구호함이 눈에 띕니다. 안쪽에는 기본 호신용 단검과 응급 붕대가 남아 있고, 덮개 안쪽에는 인근 건물의 예비 보급 락커 주파수가 적힌 인식표가 붙어 있습니다.",
+      choices: [
+        {
+          id: "pry-relief-locker",
+          label: "구호함에서 호신용 단검과 응급 붕대를 회수한다",
+          action: "EVENT_CHOICE",
+          timeCostMinutes: 5,
+          fatigueCost: 4,
+          outcomes: [
+            {
+              text: "구호함 잠금장치를 풀어 비상용 단검과 붕대를 챙겼습니다. 덮개에 적힌 예비 보급 락커 주파수도 단말기에 기록해 두었습니다.",
+              timeCostMinutes: 5,
+              rewardItemIds: ["wpn_dagger", "med-bandage"],
+            },
+          ],
+        },
+        {
+          id: "trace-supply-tag",
+          label: "단검만 빠르게 챙기고 예비 락커 주파수를 추적한다",
+          action: "EVENT_CHOICE",
+          timeCostMinutes: 5,
+          fatigueCost: 0,
+          outcomes: [
+            {
+              text: "가벼운 호신용 단검만 손에 쥔 채 인식표의 주파수를 단말기에 동기화했습니다. 다음 건물에서 예비 보급 락커를 찾을 수 있을 것 같습니다.",
+              timeCostMinutes: 5,
+              rewardItemIds: ["wpn_dagger"],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "story-unarmed-cache-2",
+      title: "비무장 탐색: 예비 보급 락커",
+      oncePerRaid: true,
+      introText:
+        "앞서 기록해 둔 구호함 인식표 주파수가 건물 복도 끝 철제 락커 앞에서 짧게 공명합니다. 비상 전원만으로 유지되고 있는 예비 보급 락커에는 대피 당시 남겨진 기본 무장과 보급품이 정리되어 있습니다.",
+      choices: [
+        {
+          id: "open-backup-locker",
+          label: "예비 보급 락커를 열어 구호 카빈과 비상 식량을 확보한다",
+          action: "EVENT_CHOICE",
+          timeCostMinutes: 5,
+          fatigueCost: 4,
+          outcomes: [
+            {
+              text: "주파수 인증이 통과되며 락커가 열렸습니다. 상태가 양호한 한림 구호 카빈과 비상 식량을 회수했습니다.",
+              timeCostMinutes: 5,
+              rewardItemIds: ["hanlim-relief-carbine", "food-combat-ration"],
+            },
+          ],
+        },
+        {
+          id: "take-compact-kit",
+          label: "가벼운 진압봉과 응급 붕대만 챙겨 빠르게 이동한다",
+          action: "EVENT_CHOICE",
+          timeCostMinutes: 5,
+          fatigueCost: 0,
+          outcomes: [
+            {
+              text: "무게 부담을 줄이기 위해 한림 진압봉과 응급 붕대만 챙겨 락커를 닫았습니다.",
+              timeCostMinutes: 5,
+              rewardItemIds: ["hanlim-control-baton", "med-bandage"],
+            },
+          ],
+        },
+      ],
+    },
+  ];
+
 const DEFAULT_BUILDING_EVENT: BuildingEventDefinition = {
   id: "default-building",
   introText:
@@ -809,16 +892,33 @@ const DEFAULT_BUILDING_EVENT: BuildingEventDefinition = {
 };
 
 /**
- * 건물 ID → 건물 카테고리(이미지 유형) → 구역 성격 및 건물 높이 순으로 초기 건물 이벤트를 결정합니다.
+ * 건물 ID → 비무장 복구 특수 이벤트 → 건물 카테고리(이미지 유형) → 구역 성격 및 건물 높이 순으로 초기 건물 이벤트를 결정합니다.
  */
 export function resolveBuildingIntroEvent(
   building: Pick<MapBuilding, "id" | "category"> & { height?: number },
   district?: Pick<MapDistrict, "kind">,
   completedEventIds: readonly string[] = [],
+  options?: BuildingEventResolveOptions,
 ): BuildingEventDefinition {
   const byId = BUILDING_EVENTS_BY_ID[building.id];
   if (byId && (!byId.oncePerRaid || !completedEventIds.includes(byId.id))) {
     return byId;
+  }
+
+  if (options?.isUnarmed) {
+    const firstStage = UNARMED_RECOVERY_EVENT_CHAIN[0];
+    const secondStage = UNARMED_RECOVERY_EVENT_CHAIN[1];
+    if (firstStage && !completedEventIds.includes(firstStage.id)) {
+      return firstStage;
+    }
+    if (
+      firstStage &&
+      secondStage &&
+      completedEventIds.includes(firstStage.id) &&
+      !completedEventIds.includes(secondStage.id)
+    ) {
+      return secondStage;
+    }
   }
 
   if (building.category) {

@@ -6,6 +6,7 @@ export * from "./crafting";
 export * from "./buildingEvents";
 export * from "./enemyCatalog";
 export * from "./fatigue";
+export * from "./market";
 export type TargetingStrategy = "WEAKEST" | "STRONGEST" | "RANDOM";
 export type ItemKind = "EQUIPMENT" | "MATERIAL" | "CONSUMABLE";
 export type ConsumableCategory = "FOOD" | "MEDICAL";
