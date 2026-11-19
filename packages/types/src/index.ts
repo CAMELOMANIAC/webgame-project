@@ -4,6 +4,7 @@ export * from "./world";
 export * from "./districts";
 export * from "./crafting";
 export * from "./buildingEvents";
+export * from "./enemyCatalog";
 export * from "./fatigue";
 export type TargetingStrategy = "WEAKEST" | "STRONGEST" | "RANDOM";
 export type ItemKind = "EQUIPMENT" | "MATERIAL" | "CONSUMABLE";
