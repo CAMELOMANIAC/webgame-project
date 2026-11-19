@@ -193,7 +193,7 @@ export const BASE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
 ];
 
 /** 한림그룹 제식 장비 2종 */
-export const HANLIM_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
+export const CORPORATE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
   makeEquipment({
     id: "hanlim-relief-carbine",
     name: "기업 구호용 카빈",
@@ -1255,7 +1255,7 @@ export const GENE_AMPOULES: readonly CatalogWeaponMaster[] = [
 
 export const ALL_CATALOG_ITEMS: readonly CatalogWeaponMaster[] = [
   ...BASE_EQUIPMENTS,
-  ...HANLIM_EQUIPMENTS,
+  ...CORPORATE_EQUIPMENTS,
   ...CRAFTING_MATERIALS,
   ...GENE_AMPOULES,
   ...CRAFTED_EQUIPMENTS,
