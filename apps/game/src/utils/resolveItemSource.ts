@@ -2,12 +2,22 @@ import {
   BASE_EQUIPMENTS,
   CRAFTING_MATERIALS,
   CRAFTING_RECIPES,
+  type DistrictKind,
+  findEnemyArchetypesByDropId,
   findMaterialDistricts,
   getCatalogItemById,
   STORY_BUILDING_EVENTS,
 } from "@webgame/types";
 
 import { BUILDING_CATEGORY_LABELS } from "./recommendedDestinations";
+
+const DISTRICT_KIND_LABELS: Record<DistrictKind, string> = {
+  RESIDENTIAL: "주거 구역",
+  COMMERCIAL: "상업 구역",
+  INDUSTRIAL: "산업·물류 구역",
+  MEDICAL: "의료 구역",
+  INFRA: "기반 시설 구역",
+};
 
 export function resolveItemSource(itemId: string | undefined): string | null {
   if (!itemId) return null;
@@ -28,6 +38,21 @@ export function resolveItemSource(itemId: string | undefined): string | null {
     return `탐사 수색 · ${districts.map((d) => d.name).join(", ")}`;
   }
 
+  const guaranteedDroppers = findEnemyArchetypesByDropId(itemId).filter(
+    (archetype) => archetype.guaranteedRewardId === itemId,
+  );
+  if (guaranteedDroppers.length > 0) {
+    const npcNames = guaranteedDroppers.map((npc) => npc.name).join(", ");
+    const districtLabels = Array.from(
+      new Set(
+        guaranteedDroppers.flatMap((npc) =>
+          npc.districtKinds.map((kind) => DISTRICT_KIND_LABELS[kind]),
+        ),
+      ),
+    ).join(", ");
+    return `적 처치 확정 드롭 · ${npcNames} (${districtLabels})`;
+  }
+
   const storyEvents = STORY_BUILDING_EVENTS.filter((event) =>
     event.choices?.some((choice) =>
       choice.outcomes?.some((outcome) =>
@@ -44,7 +69,7 @@ export function resolveItemSource(itemId: string | undefined): string | null {
   }
 
   if (itemId === "hanlim-relief-carbine") {
-    return "기업 보급 · 초기 지급 / 임무 보상";
+    return "기업 보급 · 초기 지급 / 적 드롭";
   }
 
   if (itemId === "hanlim-control-baton") {

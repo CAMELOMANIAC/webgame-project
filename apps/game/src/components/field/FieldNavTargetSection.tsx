@@ -5,6 +5,7 @@ import {
   type CraftingRecipe,
   FATIGUE_RULES,
   findMaterialDistricts,
+  findWeaponDropDistricts,
   firstMissionNodeId,
   formatRaidTime,
   getBuildingDistrict,
@@ -460,7 +461,11 @@ const FieldNavTargetSection = () => {
     recipe: CraftingRecipe,
   ) => {
     e.stopPropagation();
-    const districts = findMaterialDistricts(recipe.baseEquipmentId);
+    const materialDistricts = findMaterialDistricts(recipe.baseEquipmentId);
+    const districts =
+      materialDistricts.length > 0
+        ? materialDistricts
+        : findWeaponDropDistricts(recipe.baseEquipmentId);
     if (districts.length > 0) {
       setPinnedRecipeId(recipe.id);
       setSelectedMaterialId(recipe.baseEquipmentId);
