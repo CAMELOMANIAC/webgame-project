@@ -122,7 +122,7 @@
 ### [x] 20. 건물 이벤트 확충 및 조합 건물 수색·파밍 동선 개선
 
 - [x] [`STORY_BUILDING_EVENTS`](./packages/types/src/buildingEvents.ts)를 구역 성격(`RESIDENTIAL`, `COMMERCIAL`, `INDUSTRIAL`, `MEDICAL`, `INFRA`)과 모든 일반 건물 유형(`luxury_house` 포함)에 걸쳐 총 18종으로 확충하고, 건물 ID 기준 분산 선택과 태그/아이템 조건 분기를 정비한다.
-- [x] 조합 설비 건물(`building.category`가 지정된 랜드마크)에서도 1회 수색(`SEARCH`, 최소 1~2개 부품 보장)을 허용하고 수색·조합을 독립적으로 수행할 수 있도록 서버([`raid.ts`](./apps/server/src/services/raid.ts))와 클라이언트([`FieldNavTargetSection.tsx`](./apps/game/src/components/field/FieldNavTargetSection.tsx)) 동선을 개선한다.
+- [x] 조합 설비 건물(`building.category` 랜드마크)은 조합 전용으로 유지하고, 일반 건물 수색(`SEARCH`)의 재료 드랍률을 하향(0개 50% / 1개 40% / 2개 10%)해 파밍 희소성과 이벤트·거래소 가치를 높인다.
 
 대상: `packages/types/src/buildingEvents.ts`, `apps/server/src/services/raid.ts`, `apps/game/src/components/field/FieldNavTargetSection.tsx`.
 
