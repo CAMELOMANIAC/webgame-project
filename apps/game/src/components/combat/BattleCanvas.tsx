@@ -17,6 +17,13 @@ import MeleeSlashEffect from "@/components/combat/MeleeSlashEffect";
 import RadarAttackLine from "@/components/combat/RadarAttackLine";
 import { type AttackEffectKind, resolveAttackEffect } from "@/utils/attackEffect";
 import {
+  type CameraFocus,
+  emphasizeFocus,
+  type Point,
+  resolveCameraFocus,
+  type WorldTransform,
+} from "@/utils/battleCamera";
+import {
   type BattleRect,
   computeBattleLayout,
   type EnemyPlacement,
@@ -26,6 +33,7 @@ import { MELEE_IMPACT_DELAY_SECONDS, runMeleeLunge } from "@/utils/meleeLunge";
 import { PixiParentContext, usePixiParent } from "@/utils/pixiContext";
 import { loadCompassTexture } from "@/utils/pixiTextures";
 import { Easings, runTween, type TweenHandle } from "@/utils/pixiTween";
+import { useBattleCamera } from "@/utils/useBattleCamera";
 
 import * as styles from "./BattleCanvas.css";
 
@@ -34,6 +42,8 @@ interface BattleCanvasProps {
   battleLog: BattleLog | null | undefined;
   enemyPositions: Map<string, EnemyPlacement>;
   characterId: string | undefined;
+  /** 카메라 변환이 바뀔 때 호출. 배경 등 다른 레이어를 함께 움직이는 데 사용 */
+  onCameraChange?: (transform: WorldTransform) => void;
 }
 
 function isSameRect(a: BattleRect | null, b: BattleRect) {
@@ -63,6 +73,7 @@ export function BattleCanvas({
   battleLog,
   enemyPositions,
   characterId,
+  onCameraChange,
 }: BattleCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
@@ -72,6 +83,7 @@ export function BattleCanvas({
   const playerCompassSpriteRef = useRef<Sprite | null>(null);
 
   const [pixiLayers, setPixiLayers] = useState<{
+    world: Container;
     units: Container;
     popups: Container;
   } | null>(null);
@@ -213,22 +225,26 @@ export function BattleCanvas({
         host.appendChild(app.canvas);
         appRef.current = app;
 
+        // 카메라 줌/이동 대상: 모든 전투 레이어의 공통 부모
+        const world = new Container();
+        app.stage.addChild(world);
+
         // Layer 1: Player Marker
         const playerRootGroup = new Container();
         const playerDashGroup = new Container();
         playerRootGroup.addChild(playerDashGroup);
-        app.stage.addChild(playerRootGroup);
+        world.addChild(playerRootGroup);
 
         playerRootGroupRef.current = playerRootGroup;
         playerDashGroupRef.current = playerDashGroup;
 
         // Layer 2: Dynamic Units & Effects
         const unitsLayer = new Container();
-        app.stage.addChild(unitsLayer);
+        world.addChild(unitsLayer);
 
         // Layer 3: Floating Damage Popups
         const popupsLayer = new Container();
-        app.stage.addChild(popupsLayer);
+        world.addChild(popupsLayer);
 
         // Load Compass Texture
         const compassTex = await loadCompassTexture(compass);
@@ -241,7 +257,7 @@ export function BattleCanvas({
         playerDashGroup.addChild(compassSprite);
         playerCompassSpriteRef.current = compassSprite;
 
-        setPixiLayers({ units: unitsLayer, popups: popupsLayer });
+        setPixiLayers({ world, units: unitsLayer, popups: popupsLayer });
       } catch (err) {
         console.error("[BattleCanvas] Failed to initialize Pixi Application:", err);
       }
@@ -260,6 +276,16 @@ export function BattleCanvas({
       }
     };
   }, []);
+
+  const cameraViewport = useMemo(
+    () => ({ width, height, center }),
+    [width, height, center],
+  );
+  const { focusOn, reset: resetCamera } = useBattleCamera(
+    pixiLayers?.world ?? null,
+    cameraViewport,
+    onCameraChange,
+  );
 
   // --- 뷰포트 크기 및 플레이어 중앙 좌표 갱신 ---
   useEffect(() => {
@@ -480,6 +506,62 @@ export function BattleCanvas({
     triggerShake,
     battleLog,
     summonedUnits,
+  ]);
+
+  // --- 아이템 사용(발동) 순간 행위자/대상 중간점으로 카메라 줌인 ---
+  const lastCameraEventRef = useRef<BattleEvent | null>(null);
+  const lastFocusRef = useRef<CameraFocus | null>(null);
+
+  useEffect(() => {
+    if (!isCombat) {
+      lastFocusRef.current = null;
+      resetCamera();
+      return;
+    }
+
+    const event = displayEvents[0];
+    if (!event || event === lastCameraEventRef.current) return;
+    lastCameraEventRef.current = event;
+
+    if (event.type === "DAMAGE" && event.isCritical && lastFocusRef.current) {
+      const emphasized = emphasizeFocus(lastFocusRef.current);
+      lastFocusRef.current = emphasized;
+      focusOn(emphasized);
+      return;
+    }
+
+    const resolvePoint = (id: string): Point | null =>
+      id === characterId
+        ? center
+        : (enemyPixelPositions.get(id) ?? summonPixelPositions.get(id) ?? null);
+
+    const focus = resolveCameraFocus(event, {
+      resolvePoint,
+      viewport: { width, height },
+      getAttackKind: (attack) => {
+        const attacker =
+          battleLog?.initialState.players.find((p) => p.id === attack.actorId) ??
+          summonedUnits.find((u) => u.id === attack.actorId);
+        return resolveAttackEffect(attacker?.weapons[attack.weaponIndex]);
+      },
+    });
+    if (!focus) return;
+
+    lastFocusRef.current = focus;
+    focusOn(focus);
+  }, [
+    isCombat,
+    displayEvents,
+    characterId,
+    center,
+    enemyPixelPositions,
+    summonPixelPositions,
+    width,
+    height,
+    battleLog,
+    summonedUnits,
+    focusOn,
+    resetCamera,
   ]);
 
   // 컴포넌트 언마운트 시 진행 중인 플레이어 공격 모션 취소

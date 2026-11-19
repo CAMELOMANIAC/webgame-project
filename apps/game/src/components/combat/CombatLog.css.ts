@@ -209,7 +209,7 @@ export const actionLogItem = recipe({
     display: "flex",
     flexDirection: "column",
     position: "relative",
-    width: "148px",
+    width: "120px",
     height: "44px",
     flex: "none",
     backgroundColor: vars.surface.low,
@@ -273,8 +273,6 @@ export const actionLogHeader = style({
   display: "flex",
   flexDirection: "row",
   alignItems: "center",
-  justifyContent: "space-between",
-  gap: "6px",
   width: "100%",
   minWidth: 0,
 });
@@ -288,6 +286,16 @@ export const actionLogTitle = style({
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+});
+
+export const actionLogFooter = style({
+  display: "flex",
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "6px",
+  width: "100%",
+  minWidth: 0,
 });
 
 export const actionLogAmount = recipe({
@@ -316,7 +324,8 @@ export const actionLogActor = style({
   fontWeight: 500,
   color: vars.text.secondary,
   textAlign: "right",
-  width: "100%",
+  flex: 1,
+  minWidth: 0,
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",

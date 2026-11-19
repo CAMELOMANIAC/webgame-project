@@ -359,6 +359,8 @@ const CombatLog = () => {
                 <div className={styles.actionLogText}>
                   <div className={styles.actionLogHeader}>
                     <span className={styles.actionLogTitle}>{title}</span>
+                  </div>
+                  <div className={styles.actionLogFooter}>
                     {amountText && (
                       <span
                         className={styles.actionLogAmount({ tone: amountTone })}
@@ -366,8 +368,8 @@ const CombatLog = () => {
                         {amountText}
                       </span>
                     )}
+                    <p className={styles.actionLogActor}>{actorName}</p>
                   </div>
-                  <p className={styles.actionLogActor}>{actorName}</p>
                 </div>
               </motion.li>
             );
