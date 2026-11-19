@@ -4,6 +4,7 @@ import { type BattleEvent, type Item, resolveCatalogWeaponData } from "@webgame/
 import { useAtomValue } from "jotai";
 import {
   animate,
+  AnimatePresence,
   motion,
   useMotionTemplate,
   useMotionValue,
@@ -12,6 +13,7 @@ import { useEffect } from "react";
 
 import {
   currentTimeAtom,
+  displayEventsAtom,
   flattenedTimelineAtom,
   processedEventsAtom,
 } from "@/atoms/globalAtom";
@@ -101,6 +103,7 @@ const EquipmentSlot = ({
   const currentTime = useAtomValue(currentTimeAtom);
   const timeline = useAtomValue(flattenedTimelineAtom);
   const processedEvents = useAtomValue(processedEventsAtom);
+  const displayEvents = useAtomValue(displayEventsAtom);
   const { onInspectSlot, isClickSuppressed } = useSlotInteraction();
 
   const isEmpty = item.id.toString().includes("empty");
@@ -143,15 +146,54 @@ const EquipmentSlot = ({
 
   let isCasting = false;
   let castProgress = 0;
+  let castRemainingTicks = 0;
   let isOnCooldown = false;
   let cooldownKey: string | undefined;
   let cooldownProgress = 0;
   let cooldownTransitionDuration = 0.95;
   let remainingCooldown = 0;
   let isAttacking = false;
+  let synergyRole: "source" | "target" | null = null;
+  let synergyKey: string | null = null;
+  let synergySummary: string | null = null;
 
   if (isCombat && resolvedWeapon && characterData?.raw.id) {
     const actorId = characterData.raw.id;
+
+    // 현재 틱의 SYNERGY 이벤트(발동 슬롯 / 대상 슬롯) 감지
+    const activeSynergies = [
+      ...displayEvents,
+      ...processedEvents.filter((e) => e.timestamp === currentTime),
+    ].filter(
+      (e): e is BattleEvent & { type: "SYNERGY" } =>
+        e.type === "SYNERGY" && e.actorId === actorId,
+    );
+
+    const targetSynergy = [...activeSynergies]
+      .reverse()
+      .find((e) => e.targetSlotIndices.includes(index));
+    const sourceSynergy = [...activeSynergies]
+      .reverse()
+      .find((e) => e.sourceSlotIndex === index);
+
+    if (targetSynergy) {
+      synergyRole = "target";
+      synergyKey = `${targetSynergy.id}-${targetSynergy.timestamp}`;
+      const parts: string[] = [];
+      if (targetSynergy.hasteTicks) parts.push(`-${targetSynergy.hasteTicks}t`);
+      if (targetSynergy.damageBonus) parts.push(`+${targetSynergy.damageBonus}DMG`);
+      if (targetSynergy.critChanceBonus) {
+        parts.push(`+${Math.round(targetSynergy.critChanceBonus * 100)}%CRIT`);
+      }
+      if (targetSynergy.shieldBonus) parts.push(`+${targetSynergy.shieldBonus}SHD`);
+      synergySummary = parts.length > 0 ? parts.join(" ") : "BUFF";
+    } else if (sourceSynergy) {
+      synergyRole = "source";
+      synergyKey = `${sourceSynergy.id}-${sourceSynergy.timestamp}`;
+      if (sourceSynergy.staminaRestore && sourceSynergy.targetSlotIndices.length === 0) {
+        synergySummary = `+${sourceSynergy.staminaRestore}STM`;
+      }
+    }
 
     const lastCastStart = [...processedEvents]
       .reverse()
@@ -177,6 +219,7 @@ const EquipmentSlot = ({
         if (elapsed < castDuration) {
           isCasting = true;
           castProgress = elapsed / castDuration;
+          castRemainingTicks = Math.max(1, castDuration - elapsed);
         }
       }
     }
@@ -270,7 +313,11 @@ const EquipmentSlot = ({
                 "rgba(255, 255, 255, 0.16)",
               ],
             }
-          : {}
+          : synergyRole === "target"
+            ? {
+                y: [0, -5, 0],
+              }
+            : {}
       }
       transition={{ duration: 0.25, ease: "easeOut" }}
       onClick={() => {
@@ -299,15 +346,46 @@ const EquipmentSlot = ({
           )}
 
           {isCasting && (
-            <div className={styles.castBar}>
-              <motion.div
-                className={styles.castProgress}
-                animate={{ width: `${castProgress * 100}%` }}
-                transition={{ duration: 0.95, ease: "linear" }}
-                style={{ width: `${castProgress * 100}%` }}
-              />
-            </div>
+            <>
+              <span className={styles.castBadge}>{castRemainingTicks}t</span>
+              <div className={styles.castBar}>
+                <motion.div
+                  className={styles.castProgress}
+                  animate={{ width: `${castProgress * 100}%` }}
+                  transition={{ duration: 0.95, ease: "linear" }}
+                  style={{ width: `${castProgress * 100}%` }}
+                />
+              </div>
+            </>
           )}
+
+          <AnimatePresence>
+            {synergyRole && synergyKey && (
+              <motion.div
+                key={`ring-${synergyKey}`}
+                className={styles.synergyRing({ role: synergyRole })}
+                initial={{ opacity: 0.95 }}
+                animate={{ opacity: [0.95, 0.45, 0] }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.7, ease: "easeOut" }}
+              />
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {synergySummary && synergyKey && (
+              <motion.div
+                key={`float-${synergyKey}`}
+                className={styles.synergyFloat}
+                initial={{ opacity: 0, y: 2 }}
+                animate={{ opacity: 1, y: -14 }}
+                exit={{ opacity: 0, y: -22 }}
+                transition={{ duration: 0.65, ease: "easeOut" }}
+              >
+                <span className={styles.synergyPill}>{synergySummary}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </>
       )}
     </motion.div>
