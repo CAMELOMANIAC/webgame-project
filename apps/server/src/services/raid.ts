@@ -7,7 +7,6 @@ import {
   calculateEntryDelayMinutes,
   type EnemyNoiseSignal,
   FATIGUE_RULES,
-  firstMissionNodeId,
   type FoodBuffEffect,
   getBuildingDistrict,
   getCatalogItemById,
@@ -70,7 +69,7 @@ import {
   type DeferBattle,
   executeArchetypeBattleInTransaction,
   executeGhostBattleInTransaction,
-  executeHanlimBattleInTransaction,
+  executeMissionBattleInTransaction,
   executePatrolGhostBattleInTransaction,
   executeMonsterBattleInTransaction,
 } from "./battle";
@@ -94,7 +93,7 @@ import {
 } from "./inventory";
 import {
   finishMissionRaid,
-  missionNeedsRecovery,
+  getActiveMissionForRecovery,
   recoverMissionRecord,
 } from "./quests";
 
@@ -611,10 +610,12 @@ export async function navigateRaid(
         : parsed.path;
       const plannedVisits = pathTravelVisits(path, raid.time, character.fatigue);
       const lastTravelTime = plannedVisits.at(-1)?.time ?? raid.time;
+      const activeMission = !isBuildingMove
+        ? await getActiveMissionForRecovery(tx, userId)
+        : null;
       const missionActive =
-        !isBuildingMove &&
-        path.indexOf(firstMissionNodeId, 1) !== -1 &&
-        (await missionNeedsRecovery(tx, userId));
+        activeMission !== null &&
+        path.indexOf(activeMission.targetNodeId, 1) !== -1;
       const ghostRoster = await loadGhostRoster(tx, raid);
       const tracker = createGhostTracker(
         tx,
@@ -631,7 +632,7 @@ export async function navigateRaid(
         const stopNodeId = visit.nodeId;
         const stopTime = visit.time;
         const isMissionEncounter =
-          missionActive && stopNodeId === firstMissionNodeId;
+          missionActive && stopNodeId === activeMission.targetNodeId;
         const encounter = await tracker.match(
           path[stopIndex - 1]!,
           stopNodeId,
@@ -678,9 +679,10 @@ export async function navigateRaid(
                     retreat.defer,
                     { deferLootToPending: true },
                   )
-                : await executeHanlimBattleInTransaction(
+                : await executeMissionBattleInTransaction(
                     tx,
                     characterId,
+                    activeMission?.enemyArchetypeId ?? "npc-hanlim-control",
                     retreat.defer,
                     { deferLootToPending: true },
                   );
@@ -693,8 +695,8 @@ export async function navigateRaid(
               tracker.defeat(encounter.ghost.source.characterId);
             if (encounter?.kind === "NPC_GHOST")
               tracker.defeatPatrol(encounter.patrolId);
-            if (isMissionEncounter) {
-              await recoverMissionRecord(tx, userId, raid.id);
+            if (isMissionEncounter && activeMission) {
+              await recoverMissionRecord(tx, userId, raid.id, activeMission.id);
               moveExp.missionRecovered = true;
             }
           }

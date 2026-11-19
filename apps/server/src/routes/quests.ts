@@ -1,11 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import type { Database } from "../db";
 import {
-  acceptFirstMission,
+  acceptMission,
   journalView,
-  reportFirstMission,
+  reportMission,
 } from "../services/quests";
 import { sendInventoryError } from "./inventory";
+
+interface MissionActionBody {
+  questId?: string;
+}
 
 export function registerQuestRoutes(app: FastifyInstance, db: Database) {
   app.get<{ Params: { userId: string } }>(
@@ -13,14 +17,18 @@ export function registerQuestRoutes(app: FastifyInstance, db: Database) {
     async (request) => journalView(db, request.params.userId),
   );
   for (const [action, handler] of [
-    ["accept", acceptFirstMission],
-    ["report", reportFirstMission],
+    ["accept", acceptMission],
+    ["report", reportMission],
   ] as const) {
-    app.post<{ Params: { userId: string } }>(
+    app.post<{ Params: { userId: string }; Body?: MissionActionBody }>(
       `/user/:userId/mission/${action}`,
       async (request, reply) => {
         try {
-          return await handler(db, request.params.userId);
+          const questId =
+            typeof request.body?.questId === "string"
+              ? request.body.questId
+              : undefined;
+          return await handler(db, request.params.userId, questId);
         } catch (error) {
           app.log.error(error);
           return sendInventoryError(reply, error);

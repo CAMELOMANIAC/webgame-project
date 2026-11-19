@@ -6,6 +6,7 @@ import {
   GENE_AMPOULE_BY_DEFINITION_ID,
   getCatalogItemById,
   getCharacterVariantSpec,
+  getEnemyArchetypeById,
   GHOST_AMPOULE_DROP_CHANCE,
   type GhostMatch,
   type PlayerState,
@@ -258,7 +259,23 @@ export async function executeHanlimBattleInTransaction(
   defer?: DeferBattle,
   options?: BattleSettlementOptions,
 ): Promise<RaidBattleResult> {
-  const npc = hanlimNpcs.control;
+  return executeMissionBattleInTransaction(
+    tx,
+    characterId,
+    hanlimNpcs.control.id,
+    defer,
+    options,
+  );
+}
+
+export async function executeMissionBattleInTransaction(
+  tx: TransactionClient,
+  characterId: string,
+  archetypeId: string,
+  defer?: DeferBattle,
+  options?: BattleSettlementOptions,
+): Promise<RaidBattleResult> {
+  const npc = getEnemyArchetypeById(archetypeId) ?? hanlimNpcs.control;
   return executeArchetypeBattleInTransaction(
     tx,
     characterId,
