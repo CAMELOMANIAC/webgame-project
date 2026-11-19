@@ -3,9 +3,13 @@ import test from "node:test";
 import {
   type BattleCombatant,
   ENEMY_ARCHETYPES,
+  findEnemyArchetypesByDropId,
+  findWeaponDropDistricts,
   getCatalogItemById,
   getEnemyArchetypeById,
+  MAP_DISTRICTS,
   resolveEnemyArchetypeWeapons,
+  resolveEnemyRewardIds,
   resolveEnemyTier,
   selectEnemyArchetype,
   STORY_BUILDING_EVENTS,
@@ -60,10 +64,13 @@ test("시간 경과와 구역 위험도에 따라 1~3티어 적 스케일링이 
   assert.equal(resolveEnemyTier(150, "INFRA"), 3);
 });
 
-test("순찰 NPC는 6기까지 추적되며 경과 시간에 따라 1->2->3티어로 강해진다", () => {
+test("순찰 NPC는 전 구역 8기가 추적되며 경과 시간에 따라 1->2->3티어로 강해진다", () => {
   const patrols = patrolsForRaid("raid-test-01", 0);
   assert.equal(patrols.length, gameRules.ghost.patrolTrackedCount);
+  assert.equal(patrols.length, 8);
   assert.equal(patrols[0]?.id, "patrol-01");
+  assert.ok(patrols.some((patrol) => patrol.id === "patrol-07"));
+  assert.ok(patrols.some((patrol) => patrol.id === "patrol-08"));
 
   const early = resolvePatrolArchetype("patrol-01", 20);
   const mid = resolvePatrolArchetype("patrol-01", 90);
@@ -190,3 +197,44 @@ test("후반 3티어 적은 복수 슬롯 시너지·소환을 실제로 발동�
   );
   assert.equal(enemyUsedSynergy, true);
 });
+
+test("기초 무기 5종은 건물 수색 풀에서 제외되고 구역별 특색 NPC가 장착 및 확정 드랍한다", () => {
+  const baseWeaponIds = [
+    "wpn_dagger",
+    "wpn_primary",
+    "hanlim-relief-carbine",
+    "hanlim-control-baton",
+    "wpn_lifesaver",
+  ] as const;
+
+  for (const weaponId of baseWeaponIds) {
+    for (const district of MAP_DISTRICTS) {
+      assert.equal(
+        district.materialIds.includes(weaponId),
+        false,
+        `${district.id} should not contain base weapon ${weaponId} in building search pool`,
+      );
+    }
+
+    const droppers = findEnemyArchetypesByDropId(weaponId);
+    assert.ok(
+      droppers.length >= 1,
+      `Expected at least one NPC archetype dropping ${weaponId}`,
+    );
+    for (const npc of droppers) {
+      assert.equal(npc.guaranteedRewardId, weaponId);
+      assert.ok(
+        npc.weaponIds.includes(weaponId),
+        `${npc.id} should equip its guaranteed reward ${weaponId}`,
+      );
+      assert.deepEqual(resolveEnemyRewardIds(npc), [weaponId]);
+    }
+
+    const dropDistricts = findWeaponDropDistricts(weaponId);
+    assert.ok(
+      dropDistricts.length >= 1,
+      `Expected at least one drop district for ${weaponId}`,
+    );
+  }
+});
+

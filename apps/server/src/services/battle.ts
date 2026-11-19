@@ -9,6 +9,7 @@ import {
   type RaidBattleResult,
   resolveCatalogWeaponData,
   resolveEnemyArchetypeWeapons,
+  resolveEnemyRewardIds,
   type WeaponData,
   type WeaponEffect,
 } from "@webgame/types";
@@ -240,7 +241,7 @@ export async function executeArchetypeBattleInTransaction(
     encounterOverrides?.patrolId ?? archetype.id,
     archetype,
     weapons,
-    [...archetype.rewardIds],
+    resolveEnemyRewardIds(archetype),
     encounter,
     defer,
     options,

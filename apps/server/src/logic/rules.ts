@@ -15,7 +15,7 @@ export const gameRules = {
     rulesVersion: 2,
     maxAgeDays: 7,
     trackedCount: 6,
-    patrolTrackedCount: 6,
+    patrolTrackedCount: 8,
     minimumEntryDistance: 150,
     minimumRefillDistance: 100,
     matchWindowMinutes: 30,
