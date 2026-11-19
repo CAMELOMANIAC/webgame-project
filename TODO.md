@@ -83,15 +83,16 @@
 
 ---
 
-### [ ] 17. 탐사 시간(`time`) 기반 위험도·보상 스케일링 및 조우 밀도 개선
+### [x] 17. 구역별 특색 NPC 기초 무기 드랍 전환 및 순찰 밀도 개선 (시간 스케일링은 보류)
 
-- [ ] 탐사 경과 시간(`time`, 분)이 누적될수록 도시의 중첩 불안정도(또는 기업 통제 단계)가 상승하여 **조우 확률, 적 전투력 등급, 건물 수색 시 상위 재료/장비 획득 확률**이 함께 변화하는 위험-보상(Risk vs Reward) 규칙을 정의한다.
-- [ ] 현재 위치와 경과 시간에 따른 현재 위험 단계(예: 안정 / 주의 / 통제 강화 등)를 필드 상·하단 전술 HUD에 간결한 텔레메트리 지표로 표시한다.
-- [ ] 고스트 매칭 및 순찰 잔상([`ghostRoster.ts`](./apps/server/src/services/ghostRoster.ts), [`ghostPatrols.ts`](./apps/server/src/logic/ghostPatrols.ts))의 경로와 밀도를 점검하여, 넓은 맵에서도 의미 있는 조우와 우회 판단이 일어나도록 개선한다.
+- [x] 건물 수색 풀([`districts.ts`](./packages/types/src/districts.ts))에서 기초 무기 5종(`wpn_dagger`, `wpn_primary`, `hanlim-relief-carbine`, `hanlim-control-baton`, `wpn_lifesaver`)을 제거하고, 각 구역별 특색 NPC([`enemyCatalog.ts`](./packages/types/src/enemyCatalog.ts))가 해당 기초 무기를 장착·처치 시 확정 드랍(`guaranteedRewardId`)하도록 개편한다.
+- [x] 조합 레시피의 기초 무기 클릭 시 해당 NPC 출현 구역으로 안내([`FieldNavTargetSection.tsx`](./apps/game/src/components/field/FieldNavTargetSection.tsx))하고, 아이템 상세 출처([`resolveItemSource.ts`](./apps/game/src/utils/resolveItemSource.ts))에 적 처치 확정 드랍 정보를 표기한다.
+- [x] 순찰 잔상 추적 수(`patrolTrackedCount`)를 `6 → 8`로 조정하여 기반(`INFRA`)·의료(`MEDICAL`) 구역을 포함한 전 구역 순찰 경로가 모두 활성화되도록 개선한다.
+- [ ] *(보류 · 추후 필요 시 검토)* 탐사 경과 시간(`time`) 기반 위험도·보상 스케일링 및 필드 HUD 위험 단계 배지 — 현재는 시간 경과에 따라 파밍 고스트·순찰 잔상이 자연스럽게 강해지는 구조로 충분하므로 추후 필요 시 재검토한다.
 
-대상: `packages/types/src/`, `apps/server/src/logic/rules.ts`, `apps/server/src/services/raid.ts`, `apps/server/src/services/ghostRoster.ts`, `apps/game/src/components/field/`.
+대상: `packages/types/src/districts.ts`, `packages/types/src/enemyCatalog.ts`, `packages/types/src/crafting.ts`, `apps/server/src/services/battle.ts`, `apps/server/src/logic/rules.ts`, `apps/game/src/utils/resolveItemSource.ts`, `apps/game/src/components/field/FieldNavTargetSection.tsx`.
 
-완료 기준: 시간 소모가 단순 숫자가 아니라 실질적인 위험도 및 파밍 기대값 변화로 이어져, 플레이어가 탈출 시점을 전략적으로 결정하게 된다.
+완료 기준: 기초 무기 5종이 건물 랜덤 드랍 대신 구역별 특색 NPC 처치 확정 드랍으로 획득되며, 전 구역 순찰 경로가 활성화되고 조합 안내/출처 표시가 일치한다.
 
 ---
 
