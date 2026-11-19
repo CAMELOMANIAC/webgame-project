@@ -1,4 +1,8 @@
-import { calculateLiveBaseRecovery } from "@webgame/types";
+import {
+  calculateLiveBaseRecovery,
+  getCharacterVariantSpec,
+  WEAPON_TAG_LABELS,
+} from "@webgame/types";
 import { useAtomValue } from "jotai";
 import { useEffect, useState } from "react";
 
@@ -98,6 +102,7 @@ export default function CharacterCollection({
               ? "selected"
               : "idle";
           const isExpanded = cardState === "selected";
+          const variantSpec = getCharacterVariantSpec(character.variant?.id);
           const live = calculateLiveBaseRecovery({
             hp: character.hp,
             maxHp: character.maxHp,
@@ -150,11 +155,18 @@ export default function CharacterCollection({
                     aria-hidden="true"
                   />
                 )}
-                <strong className={styles.cardName}>
-                  {character.displayName ??
-                    character.variant?.definition?.name ??
-                    "생존자"}
-                </strong>
+                <div className={styles.cardNameRow}>
+                  <strong className={styles.cardName}>
+                    {character.displayName ??
+                      character.variant?.definition?.name ??
+                      "생존자"}
+                  </strong>
+                  {variantSpec && (
+                    <span className={styles.roleBadge}>
+                      {variantSpec.roleLabel}
+                    </span>
+                  )}
+                </div>
                 <div className={styles.statBlock({ expanded: isExpanded })}>
                   <span>
                     HP {live.hp}/{character.maxHp}
@@ -175,8 +187,29 @@ export default function CharacterCollection({
                     ·
                   </span>
                   <span className={styles.statWeight}>
-                    무게 {character.weight}kg
+                    적재 {character.weight}/{character.maxWeight}kg
                   </span>
+                  {isExpanded && (
+                    <span>
+                      STA {character.maxStamina} (+{character.staminaRegen})
+                    </span>
+                  )}
+                  {isExpanded && variantSpec && (
+                    <>
+                      {variantSpec.specialtyTags.length > 0 && (
+                        <div className={styles.variantMeta}>
+                          {variantSpec.specialtyTags.map((tag) => (
+                            <span key={tag} className={styles.specialtyTag}>
+                              {WEAPON_TAG_LABELS[tag]} +{variantSpec.specialtyBonusPct}%
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <p className={styles.variantSummary}>
+                        {variantSpec.summary}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             </Card>

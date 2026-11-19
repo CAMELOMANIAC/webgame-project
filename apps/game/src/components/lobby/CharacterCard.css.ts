@@ -107,6 +107,15 @@ export const characterName = style({
   color: vars.color.ctaFg,
 });
 
+export const variantMeta = style({
+  margin: 0,
+  fontFamily: vars.font.mono,
+  fontSize: "11px",
+  fontWeight: 600,
+  fontVariantNumeric: "tabular-nums",
+  color: "rgba(9, 9, 11, 0.58)",
+});
+
 // 체력만 숫자로 크게 표현
 export const hpNumber = style({
   margin: 0,

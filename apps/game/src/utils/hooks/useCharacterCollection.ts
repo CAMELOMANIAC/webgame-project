@@ -35,9 +35,11 @@ export interface OwnedCharacter {
   maxHp: number;
   stamina: number;
   maxStamina: number;
+  staminaRegen: number;
   fatigue: number;
   maxFatigue: number;
   weight: number;
+  maxWeight: number;
   isRaiding: boolean;
   returnedAt?: string | null;
   serverTime?: string;
