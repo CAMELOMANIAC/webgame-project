@@ -51,6 +51,16 @@ function BaseHome() {
             <span className={styles.linkCode} aria-hidden="true">→</span>
           </Link>
         </section>
+        <section className={styles.sectionPanel}>
+          <h2 className={styles.sectionHeader}>유전자 연구실</h2>
+          <p className={styles.leadText}>
+            윤 책임연구원의 설비로 유전자 슬롯을 분석하고 재조합합니다.
+          </p>
+          <Link to="/base/lab" className={styles.missionLink}>
+            <span>유전자 연구실 입장</span>
+            <span className={styles.linkCode} aria-hidden="true">→</span>
+          </Link>
+        </section>
       </div>
     </BaseScreen>
   );

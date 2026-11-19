@@ -18,6 +18,7 @@ import { Route as BaseStagingRouteImport } from './routes/base/staging'
 import { Route as BaseQuestRouteImport } from './routes/base/quest'
 import { Route as BaseQuartersRouteImport } from './routes/base/quarters'
 import { Route as BaseMarketRouteImport } from './routes/base/market'
+import { Route as BaseLabRouteImport } from './routes/base/lab'
 import { Route as FieldUserIndexRouteImport } from './routes/field/user/index'
 import { Route as FieldQuestIndexRouteImport } from './routes/field/quest/index'
 
@@ -66,6 +67,11 @@ const BaseMarketRoute = BaseMarketRouteImport.update({
   path: '/base/market',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BaseLabRoute = BaseLabRouteImport.update({
+  id: '/base/lab',
+  path: '/base/lab',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FieldUserIndexRoute = FieldUserIndexRouteImport.update({
   id: '/field/user/',
   path: '/field/user/',
@@ -79,6 +85,7 @@ const FieldQuestIndexRoute = FieldQuestIndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/base/lab': typeof BaseLabRoute
   '/base/market': typeof BaseMarketRoute
   '/base/quarters': typeof BaseQuartersRoute
   '/base/quest': typeof BaseQuestRoute
@@ -92,6 +99,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/base/lab': typeof BaseLabRoute
   '/base/market': typeof BaseMarketRoute
   '/base/quarters': typeof BaseQuartersRoute
   '/base/quest': typeof BaseQuestRoute
@@ -106,6 +114,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/base/lab': typeof BaseLabRoute
   '/base/market': typeof BaseMarketRoute
   '/base/quarters': typeof BaseQuartersRoute
   '/base/quest': typeof BaseQuestRoute
@@ -121,6 +130,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/base/lab'
     | '/base/market'
     | '/base/quarters'
     | '/base/quest'
@@ -134,6 +144,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/base/lab'
     | '/base/market'
     | '/base/quarters'
     | '/base/quest'
@@ -147,6 +158,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/base/lab'
     | '/base/market'
     | '/base/quarters'
     | '/base/quest'
@@ -161,6 +173,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BaseLabRoute: typeof BaseLabRoute
   BaseMarketRoute: typeof BaseMarketRoute
   BaseQuartersRoute: typeof BaseQuartersRoute
   BaseQuestRoute: typeof BaseQuestRoute
@@ -238,6 +251,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BaseMarketRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/base/lab': {
+      id: '/base/lab'
+      path: '/base/lab'
+      fullPath: '/base/lab'
+      preLoaderRoute: typeof BaseLabRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/field/user/': {
       id: '/field/user/'
       path: '/field/user'
@@ -257,6 +277,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BaseLabRoute: BaseLabRoute,
   BaseMarketRoute: BaseMarketRoute,
   BaseQuartersRoute: BaseQuartersRoute,
   BaseQuestRoute: BaseQuestRoute,

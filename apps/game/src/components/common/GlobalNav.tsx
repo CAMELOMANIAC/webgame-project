@@ -78,7 +78,11 @@ export default function GlobalNav({
   const tabs = mode === "raid" ? raidTabs : baseTabs;
   const activeIndex = tabs.findIndex(({ link }, index) => {
     if (mode === "base" && pathname === "/base/staging") return index === 0;
-    if (mode === "base" && pathname === "/base/quarters") return index === 1;
+    if (
+      mode === "base" &&
+      (pathname === "/base/quarters" || pathname === "/base/lab")
+    )
+      return index === 1;
     if (pathname !== link.to) return false;
     return (
       link.to !== "/field" || (tab === "backpack" ? index === 1 : index === 0)
