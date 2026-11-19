@@ -306,7 +306,7 @@ export function BattleCanvas({
     const aliveSummons = summonedUnits.filter((s) => !deadEnemyIds.has(s.id));
     const total = aliveSummons.length;
     if (total === 0) return map;
-    const radius = 68;
+    const radius = 50;
     aliveSummons.forEach((summon, idx) => {
       const angle = -Math.PI / 2 + (idx * Math.PI * 2) / total;
       map.set(summon.id, {
@@ -632,6 +632,14 @@ export function BattleCanvas({
                     spawnY = center.y + (dy / dist) * maxDim;
                   }
 
+                  const enemyTargetPos =
+                    (activeAttack?.type === "ATTACK"
+                      ? activeAttack.targetId === characterId
+                        ? center
+                        : (summonPixelPositions.get(activeAttack.targetId) ??
+                          enemyPixelPositions.get(activeAttack.targetId))
+                      : undefined) ?? center;
+
                   return (
                     <CanvasEnemyUnit
                       key={`enemy-${enemy.id}`}
@@ -642,8 +650,8 @@ export function BattleCanvas({
                       spawnY={spawnY}
                       isAttacking={isAttacking}
                       isDamaged={isEnemyDamaged}
-                      targetX={center.x}
-                      targetY={center.y}
+                      targetX={enemyTargetPos.x}
+                      targetY={enemyTargetPos.y}
                       activeAttackId={activeAttackId}
                       isSelected={focusedCombatantId === enemy.id}
                       onSelect={() => handleSelectCombatant(enemy.id)}
@@ -677,7 +685,8 @@ export function BattleCanvas({
                   );
                   const targetPos =
                     (activeAttack?.type === "ATTACK"
-                      ? enemyPixelPositions.get(activeAttack.targetId)
+                      ? (enemyPixelPositions.get(activeAttack.targetId) ??
+                        summonPixelPositions.get(activeAttack.targetId))
                       : undefined) ?? center;
 
                   return (
