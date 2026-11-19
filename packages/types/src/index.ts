@@ -524,16 +524,39 @@ export interface GhostMatch {
   combatant: BattleCombatant;
 }
 
-export interface JournalView {
-  mission: {
-    id: string;
-    title: string;
-    briefing: string;
-    targetNodeId: number;
-    rewardDescription: string;
-    status: "OFFERED" | "ACTIVE" | "RECOVERED" | "READY" | "COMPLETE";
-    completedAt: string | null;
-  };
-  records: { id: string; title: string; content: string }[];
-  contacts: { id: string; name: string; role: string; entityId?: string }[];
+export type MissionStatus =
+  | "OFFERED"
+  | "ACTIVE"
+  | "RECOVERED"
+  | "READY"
+  | "COMPLETE";
+
+export interface JournalMissionItem {
+  id: string;
+  tier: number;
+  issuerName: string;
+  issuerRole: string;
+  title: string;
+  briefing: string;
+  targetNodeId: number;
+  targetLabel: string;
+  supplyDescription: string;
+  rewardDescription: string;
+  status: MissionStatus;
+  completedAt: string | null;
 }
+
+export interface JournalView {
+  storyTier: number;
+  mission: JournalMissionItem;
+  missions: JournalMissionItem[];
+  records: { id: string; title: string; content: string; tier?: number }[];
+  contacts: {
+    id: string;
+    name: string;
+    role: string;
+    affiliation?: string;
+    entityId?: string;
+  }[];
+}
+
