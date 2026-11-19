@@ -193,6 +193,10 @@ function RouteComponent() {
       resolveInspectedSlotDetails(inspectedTarget, characterData);
     const actions: ItemDetailAction[] = [];
 
+    if (inspectedTarget.source === "combatant") {
+      return { ...baseItem, actions: [] };
+    }
+
     if (!isCombat && !isNavigating && characterData) {
       if (inspectedTarget.source === "equipment") {
         actions.push({

@@ -8,8 +8,8 @@ import survivorPortrait from "../../assets/survivor-portrait-tranparent.png";
 export const combatWidget = style([
   fieldWidget({ tone: "default" }),
   {
-    gap: "10px",
-    padding: "14px",
+    gap: "8px",
+    padding: "12px 14px",
   },
 ]);
 
@@ -18,8 +18,23 @@ export const headerRow = style({
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "space-between",
+  gap: "8px",
   paddingBottom: "8px",
   borderBottom: `1px solid ${vars.border.subtle}`,
+});
+
+export const headerLeft = style({
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  minWidth: 0,
+});
+
+export const headerRight = style({
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  flexShrink: 0,
 });
 
 export const subTitle = style({
@@ -27,6 +42,155 @@ export const subTitle = style({
   fontWeight: 700,
   color: vars.text.primary,
   margin: 0,
+  whiteSpace: "nowrap",
+});
+
+export const tickBadge = recipe({
+  base: {
+    fontFamily: vars.font.mono,
+    fontVariantNumeric: "tabular-nums",
+    fontSize: "10px",
+    fontWeight: 700,
+    padding: "2px 6px",
+    borderRadius: vars.radius.badge,
+    border: `1px solid ${vars.border.subtle}`,
+    backgroundColor: vars.surface.low,
+    color: vars.text.secondary,
+    letterSpacing: "0.04em",
+    whiteSpace: "nowrap",
+  },
+  variants: {
+    overload: {
+      true: {
+        borderColor: vars.color.negative,
+        color: vars.color.negative,
+      },
+      false: {},
+    },
+  },
+  defaultVariants: {
+    overload: false,
+  },
+});
+
+export const enemyTelemetry = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "6px",
+  paddingBottom: "8px",
+  borderBottom: `1px solid ${vars.border.subtle}`,
+});
+
+export const enemyMetaRow = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "8px",
+  minWidth: 0,
+});
+
+export const enemyIdentity = style({
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  minWidth: 0,
+});
+
+export const enemyName = style({
+  fontSize: "12px",
+  fontWeight: 600,
+  color: vars.text.primary,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+});
+
+export const enemyVitals = style({
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  flexShrink: 0,
+  fontFamily: vars.font.mono,
+  fontVariantNumeric: "tabular-nums",
+  fontSize: "11px",
+  fontWeight: 700,
+});
+
+export const enemyShieldText = style({
+  color: vars.color.positive,
+});
+
+export const enemyHpText = recipe({
+  base: {},
+  variants: {
+    tone: {
+      enemy: { color: vars.color.negative },
+      ally: { color: vars.text.primary },
+    },
+  },
+  defaultVariants: {
+    tone: "enemy",
+  },
+});
+
+export const enemyLoadoutRow = style({
+  display: "flex",
+  flexDirection: "row",
+  alignItems: "center",
+  gap: "4px",
+  overflowX: "auto",
+});
+
+export const enemyWeaponChip = recipe({
+  base: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "4px",
+    padding: "2px 6px",
+    borderRadius: vars.radius.badge,
+    backgroundColor: vars.surface.low,
+    border: `1px solid ${vars.border.subtle}`,
+    fontSize: "10px",
+    color: vars.text.secondary,
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+    cursor: "pointer",
+    transition: "border-color 0.15s ease, color 0.15s ease",
+    selectors: {
+      "&:hover": {
+        borderColor: vars.text.primary,
+        color: vars.text.primary,
+      },
+      "&:focus-visible": {
+        outline: "none",
+        borderColor: vars.text.primary,
+        color: vars.text.primary,
+      },
+    },
+  },
+  variants: {
+    state: {
+      idle: {},
+      attacking: {
+        borderColor: vars.text.primary,
+        color: vars.text.primary,
+      },
+      casting: {
+        borderColor: vars.color.positive,
+        color: vars.color.positive,
+      },
+    },
+  },
+  defaultVariants: {
+    state: "idle",
+  },
+});
+
+export const enemyWeaponSlotIndex = style({
+  fontFamily: vars.font.mono,
+  fontVariantNumeric: "tabular-nums",
+  fontSize: "9px",
+  color: vars.text.disabled,
 });
 
 export const actionLogList = style({
@@ -45,7 +209,7 @@ export const actionLogItem = recipe({
     display: "flex",
     flexDirection: "column",
     position: "relative",
-    width: "140px",
+    width: "148px",
     height: "44px",
     flex: "none",
     backgroundColor: vars.surface.low,

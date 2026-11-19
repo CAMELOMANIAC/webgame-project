@@ -5,9 +5,11 @@ import type { InspectedItem } from "@/components/itemSlot/ItemDetailModal";
 import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 
 export interface SlotInspectTarget {
-  source: "equipment" | "backpack";
+  source: "equipment" | "backpack" | "combatant";
   item: Item;
   index?: number;
+  weaponData?: InspectedItem["weaponData"];
+  ownerName?: string;
 }
 
 export interface SlotInteractionContextValue {
@@ -51,20 +53,27 @@ export function resolveInspectedSlotDetails(
   const rawSlotIndex = rawEq?.slotIndex ?? rawInv?.slotIndex ?? target.index;
   const slotNum = String((rawSlotIndex ?? 0) + 1).padStart(2, "0");
 
+  const slotLabel =
+    target.source === "equipment"
+      ? `장착 슬롯 ${slotNum}`
+      : target.source === "backpack"
+        ? `가방 슬롯 ${slotNum}`
+        : target.ownerName
+          ? `${target.ownerName} · 슬롯 ${slotNum}`
+          : `장비 슬롯 ${slotNum}`;
+
   return {
     baseItem: {
       id: target.item.id,
-      masterId: rawMaster?.id ?? target.item.masterId,
-      name: rawMaster?.name ?? target.item.name,
+      masterId: rawMaster?.id ?? target.weaponData?.id ?? target.item.masterId,
+      name: rawMaster?.name ?? target.weaponData?.name ?? target.item.name,
       iconKey: rawMaster?.iconKey ?? target.item.iconKey,
       quantity: rawInv?.quantity ?? target.item.quantity,
-      weight: rawMaster?.weight ?? target.item.weight,
-      value: rawMaster?.value ?? target.item.value,
-      weaponData: rawMaster ?? undefined,
-      slotLabel:
-        target.source === "equipment"
-          ? `장착 슬롯 ${slotNum}`
-          : `가방 슬롯 ${slotNum}`,
+      weight:
+        rawMaster?.weight ?? target.weaponData?.weight ?? target.item.weight,
+      value: rawMaster?.value ?? target.weaponData?.value ?? target.item.value,
+      weaponData: rawMaster ?? target.weaponData ?? undefined,
+      slotLabel,
     },
     rawSlotIndex,
     firstEmptyEquipId,

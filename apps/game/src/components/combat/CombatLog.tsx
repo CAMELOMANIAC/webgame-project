@@ -1,26 +1,172 @@
+import {
+  type BattleEvent,
+  getCatalogItemById,
+  getCatalogItemByName,
+} from "@webgame/types";
 import { useAtomValue } from "jotai";
 import { AnimatePresence, motion } from "motion/react";
+import { useMemo } from "react";
 
-import { battleLogAtom, processedEventsAtom } from "@/atoms/globalAtom";
+import { selectedCombatantIdAtom } from "@/atoms/battleLayoutAtom";
+import {
+  battleLogAtom,
+  currentTimeAtom,
+  displayEventsAtom,
+  processedEventsAtom,
+} from "@/atoms/globalAtom";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
+import { useSlotInteraction } from "@/utils/hooks/useSlotInteraction";
 
 import * as styles from "./CombatLog.css";
 
+const OVERLOAD_START_TICK = 40;
+
 const CombatLog = () => {
   const processedEvents = useAtomValue(processedEventsAtom);
+  const displayEvents = useAtomValue(displayEventsAtom);
+  const currentTime = useAtomValue(currentTimeAtom);
   const battle = useAtomValue(battleLogAtom);
+  const selectedCombatantId = useAtomValue(selectedCombatantIdAtom);
+  const { onInspectSlot } = useSlotInteraction();
   const { data: characterData } = useGetCharacter();
   const characterId = characterData?.raw.id;
   const selfPlayer = battle?.initialState.players.find(
     (player) => player.id === characterId,
   );
 
-  const summonedPlayers = processedEvents
-    .filter(
-      (e): e is (typeof processedEvents)[number] & { type: "SUMMON" } =>
-        e.type === "SUMMON",
-    )
-    .map((e) => e.combatant);
+  const summonedPlayers = useMemo(
+    () =>
+      processedEvents
+        .filter(
+          (e): e is (typeof processedEvents)[number] & { type: "SUMMON" } =>
+            e.type === "SUMMON",
+        )
+        .map((e) => e.combatant),
+    [processedEvents],
+  );
+
+  const unitTelemetryList = useMemo(() => {
+    if (!battle) return [];
+    const allUnits = [...battle.initialState.players, ...summonedPlayers].filter(
+      (player) => player.id !== characterId,
+    );
+    const seen = new Set<string>();
+    const uniqueUnits = allUnits.filter((combatant) => {
+      if (seen.has(combatant.id)) return false;
+      seen.add(combatant.id);
+      return true;
+    });
+
+    return uniqueUnits.map((combatant) => {
+      let hp = combatant.hp;
+      let shield = combatant.shield ?? 0;
+      let isDead = combatant.hp <= 0;
+      const castingSlots = new Set<number>();
+
+      for (const event of processedEvents) {
+        if (event.type === "SHIELD" && event.targetId === combatant.id) {
+          shield = event.currentShield;
+        }
+        if (event.type === "DAMAGE" && event.targetId === combatant.id) {
+          hp = event.remainingHp;
+          shield = event.remainingShield ?? 0;
+        }
+        if (event.type === "HEAL" && event.targetId === combatant.id) {
+          hp = event.remainingHp;
+        }
+        if (event.type === "DEATH" && event.playerId === combatant.id) {
+          hp = 0;
+          isDead = true;
+        }
+        if (event.type === "CAST_START" && event.actorId === combatant.id) {
+          castingSlots.add(event.weaponIndex);
+        }
+        if (
+          (event.type === "CAST_COMPLETE" || event.type === "CAST_CANCEL") &&
+          event.actorId === combatant.id
+        ) {
+          castingSlots.delete(event.weaponIndex);
+        }
+      }
+
+      const activeAttackSlot = displayEvents.find(
+        (e): e is BattleEvent & { type: "ATTACK" } =>
+          e.type === "ATTACK" && e.actorId === combatant.id,
+      )?.weaponIndex;
+
+      const equippedWeapons = combatant.weapons
+        .map((weapon, slotIndex) => (weapon ? { slotIndex, weapon } : null))
+        .filter(
+          (
+            entry,
+          ): entry is {
+            slotIndex: number;
+            weapon: NonNullable<(typeof combatant.weapons)[number]>;
+          } => entry !== null,
+        );
+
+      const isAlly = Boolean(selfPlayer && combatant.teamId === selfPlayer.teamId);
+
+      return {
+        id: combatant.id,
+        name: combatant.name,
+        hp,
+        maxHp: combatant.maxHp,
+        shield,
+        isDead,
+        isAlly,
+        equippedWeapons,
+        activeAttackSlot,
+        castingSlots,
+      };
+    });
+  }, [
+    battle,
+    characterId,
+    selfPlayer,
+    summonedPlayers,
+    processedEvents,
+    displayEvents,
+  ]);
+
+  const autoFocusedUnitId = useMemo(() => {
+    if (unitTelemetryList.length === 0) return null;
+    const aliveIds = new Set(
+      unitTelemetryList.filter((u) => !u.isDead).map((u) => u.id),
+    );
+    const recentEvents = [...displayEvents, ...processedEvents].reverse();
+    for (const event of recentEvents) {
+      if ("actorId" in event && aliveIds.has(event.actorId)) {
+        return event.actorId;
+      }
+      if ("targetId" in event && aliveIds.has(event.targetId)) {
+        return event.targetId;
+      }
+    }
+    return (
+      unitTelemetryList.find((u) => !u.isDead && !u.isAlly)?.id ??
+      unitTelemetryList.find((u) => !u.isDead)?.id ??
+      unitTelemetryList[0]?.id ??
+      null
+    );
+  }, [unitTelemetryList, displayEvents, processedEvents]);
+
+  const activeUnit = useMemo(() => {
+    if (unitTelemetryList.length === 0) return null;
+    if (selectedCombatantId) {
+      const pinned = unitTelemetryList.find(
+        (u) => u.id === selectedCombatantId && !u.isDead,
+      );
+      if (pinned) return pinned;
+    }
+    return (
+      unitTelemetryList.find((u) => u.id === autoFocusedUnitId) ??
+      unitTelemetryList[0] ??
+      null
+    );
+  }, [unitTelemetryList, selectedCombatantId, autoFocusedUnitId]);
+
+  const isOverload = currentTime >= OVERLOAD_START_TICK;
 
   const logEntries = processedEvents
     .flatMap((event, index) => {
@@ -28,7 +174,8 @@ const CombatLog = () => {
         event.type !== "ATTACK" &&
         event.type !== "SHIELD" &&
         event.type !== "HEAL" &&
-        event.type !== "SUMMON"
+        event.type !== "SUMMON" &&
+        event.type !== "SYNERGY"
       ) {
         return [];
       }
@@ -53,8 +200,85 @@ const CombatLog = () => {
   return (
     <div className={styles.combatWidget}>
       <div className={styles.headerRow}>
-        <h3 className={styles.subTitle}>전투 로그</h3>
+        <div className={styles.headerLeft}>
+          <h3 className={styles.subTitle}>전투 로그</h3>
+        </div>
+        <div className={styles.headerRight}>
+          <span className={styles.tickBadge({ overload: isOverload })}>
+            {isOverload
+              ? `OVERLOAD · T${String(currentTime).padStart(2, "0")}`
+              : `T${String(currentTime).padStart(2, "0")}`}
+          </span>
+        </div>
       </div>
+
+      {activeUnit && (
+        <div className={styles.enemyTelemetry}>
+          <div className={styles.enemyMetaRow}>
+            <div className={styles.enemyIdentity}>
+              <span className={styles.enemyName}>{activeUnit.name}</span>
+            </div>
+            <div className={styles.enemyVitals}>
+              {activeUnit.shield > 0 && (
+                <span className={styles.enemyShieldText}>
+                  SHD +{activeUnit.shield}
+                </span>
+              )}
+              <span
+                className={styles.enemyHpText({
+                  tone: activeUnit.isAlly ? "ally" : "enemy",
+                })}
+              >
+                HP {activeUnit.hp}/{activeUnit.maxHp}
+              </span>
+            </div>
+          </div>
+
+          {activeUnit.equippedWeapons.length > 0 && (
+            <div className={styles.enemyLoadoutRow}>
+              {activeUnit.equippedWeapons.map(({ slotIndex, weapon }) => {
+                const state =
+                  activeUnit.activeAttackSlot === slotIndex
+                    ? "attacking"
+                    : activeUnit.castingSlots.has(slotIndex)
+                      ? "casting"
+                      : "idle";
+                const catalogItem =
+                  getCatalogItemById(weapon.id) ??
+                  getCatalogItemByName(weapon.name);
+                return (
+                  <button
+                    key={`${activeUnit.id}-slot-${slotIndex}`}
+                    type="button"
+                    className={styles.enemyWeaponChip({ state })}
+                    onClick={() =>
+                      onInspectSlot?.({
+                        source: "combatant",
+                        index: slotIndex,
+                        ownerName: activeUnit.name,
+                        weaponData: weapon,
+                        item: {
+                          id: `${activeUnit.id}-slot-${slotIndex}`,
+                          masterId: catalogItem?.id ?? weapon.id,
+                          name: weapon.name,
+                          iconKey: catalogItem?.iconKey,
+                          weight: weapon.weight ?? catalogItem?.weight ?? 0,
+                          value: catalogItem?.value ?? 0,
+                        },
+                      })
+                    }
+                  >
+                    <span className={styles.enemyWeaponSlotIndex}>
+                      0{slotIndex + 1}
+                    </span>
+                    <span>{weapon.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <ul className={styles.actionLogList}>
         <AnimatePresence initial={false} mode="popLayout">
@@ -86,22 +310,29 @@ const CombatLog = () => {
             const title =
               event.type === "ATTACK"
                 ? (actorPlayer?.weapons?.[event.weaponIndex]?.name ?? "공격")
-                : event.type === "SHIELD"
-                  ? "보호막"
-                  : event.type === "HEAL"
-                    ? "회복"
-                    : `소환 · ${event.combatant.name}`;
+                : event.type === "SYNERGY"
+                  ? (actorPlayer?.weapons?.[event.sourceSlotIndex]?.name ??
+                    "장비 발동")
+                  : event.type === "SHIELD"
+                    ? "보호막"
+                    : event.type === "HEAL"
+                      ? "회복"
+                      : `소환 · ${event.combatant.name}`;
 
             const amountText =
               event.type === "ATTACK"
                 ? damageAmount !== null
                   ? `-${damageAmount}`
                   : ""
-                : event.type === "SUMMON"
+                : event.type === "SYNERGY" || event.type === "SUMMON"
                   ? ""
                   : `+${event.amount}`;
 
-            const amountTone: "damage" | "heal" | "shield" | "neutral" =
+            const amountTone:
+              | "damage"
+              | "heal"
+              | "shield"
+              | "neutral" =
               event.type === "ATTACK"
                 ? damageAmount !== null && damageAmount > 0
                   ? "damage"
