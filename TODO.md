@@ -71,11 +71,11 @@
 
 ---
 
-### [ ] 16. 전투 6슬롯 시너지 연쇄 시각화 및 전투 정보 피드백 강화
+### [x] 16. 전투 6슬롯 시너지 연쇄 시각화 및 전투 정보 피드백 강화
 
-- [ ] 전투 재생 중 `SYNERGY` 이벤트(`sourceSlotIndex`, `targetSlotIndices`, `hasteTicks`, `damageBonus`, `critChanceBonus`, `shieldBonus`, `staminaRestore`)가 발생할 때, 하단 [`Equipment`](./apps/game/src/components/itemSlot/Equipment.tsx) / [`EquipmentSlot`](./apps/game/src/components/itemSlot/EquipmentSlot.tsx)에서 **발동 슬롯 → 대상 슬롯으로의 시너지 전달과 버프 수치(`-1t`, `+DMG`, `+CRIT`, `+SHD`)** 가 직관적으로 보이도록 시각 피드백을 추가한다 (`DESIGN.md`의 시맨틱 컬러 `#85adff` / `#fafafa` 규격 준수).
-- [ ] [`BattleCanvas.tsx`](./apps/game/src/components/combat/BattleCanvas.tsx) 및 전투 HUD에서 보호막(`SHIELD`) 획득/차감, 치유(`HEAL`), 시전 중(`CAST_START` ~ `CAST_COMPLETE`), 장기전 과부하 피해(40틱 이후) 상태를 플레이어가 명확히 인지할 수 있도록 시각 연출을 보완한다.
-- [ ] 조우 직후 또는 전투 중 상대(고스트·NPC)의 주요 장착 장비/위협도를 파악할 수 있는 전술 텔레메트리 표시 방법을 설계·반영한다.
+- [x] 전투 재생 중 `SYNERGY` 이벤트(`sourceSlotIndex`, `targetSlotIndices`, `hasteTicks`, `damageBonus`, `critChanceBonus`, `shieldBonus`, `staminaRestore`)가 발생할 때, 하단 [`Equipment`](./apps/game/src/components/itemSlot/Equipment.tsx) / [`EquipmentSlot`](./apps/game/src/components/itemSlot/EquipmentSlot.tsx)에서 **발동 슬롯 → 대상 슬롯으로의 시너지 전달과 버프 수치(`-1t`, `+DMG`, `+CRIT`, `+SHD`)** 가 직관적으로 보이도록 시각 피드백을 추가한다 (`DESIGN.md`의 시맨틱 컬러 `#85adff` / `#fafafa` 규격 준수).
+- [x] [`BattleCanvas.tsx`](./apps/game/src/components/combat/BattleCanvas.tsx) 및 전투 HUD에서 보호막(`SHIELD`) 획득/차감, 치유(`HEAL`), 시전 중(`CAST_START` ~ `CAST_COMPLETE`), 장기전 과부하 피해(40틱 이후) 상태를 플레이어가 명확히 인지할 수 있도록 시각 연출을 보완한다.
+- [x] 조우 직후 또는 전투 중 상대(고스트·NPC)의 주요 장착 장비/위협도를 파악할 수 있는 전술 텔레메트리 표시 방법을 설계·반영한다.
 
 대상: `apps/game/src/components/itemSlot/Equipment.tsx`, `apps/game/src/components/itemSlot/EquipmentSlot.tsx`, `apps/game/src/components/combat/BattleCanvas.tsx`, `apps/game/src/components/combat/CombatLog.tsx`, `apps/game/src/utils/hooks/useFieldCombat.ts`.
 
@@ -401,3 +401,4 @@
 | 2026-10-31 | 14 첫 임무·문서         | 완료 | 브라우저에서 구호 장비 수령·장착 → 고스트 전투 → 기록 회수 → 탈출 → 보고·보상·연구 기록 공개 및 새로고침 확인. README·PLAN·세계관·개발·QA 갱신. 빈 DB 마이그레이션 7개·검증 서버 준비/정리·빌드된 서버 실행 확인. 단위/API 36건·DB 통합 34건·타입·린트·빌드 통과. 외부 DB 미변경. |
 | 2026-11-18 | 15–22 게임성 개선 계획  | 완료 | 게임 전반의 밋밋함 원인(코어 루프·경제 단절, 시간 경과 긴장감 부재, 적 밸런스 및 6슬롯 시너지 피드백 부족, 서사 볼륨) 분석 및 5단계 개선 과제(15–22) 문서화. |
 | 2026-11-18 | 15 SF 적 개편·시너지 적 | 완료 | 13종 SF 2~6슬롯 적 아키타입(`enemyCatalog.ts`), 시간대(0~60/61~140/141+분)·구역 위험도 3티어 스케일링, 8개 순찰 경로 및 추적 수(6기) 확장, 건물 이벤트 전투 분기 연결, `seed.ts` 판타지 몬스터 제거. 단위/API 테스트 65건·타입·빌드·린트 통과. |
+| 2026-11-18 | 16 전투 시너지·피드백   | 완료 | `EquipmentSlot` 시너지 발동(`#fafafa`)/대상(`#85adff`) 연쇄 링·부유 버프 칩·시전 남은 틱 배지, `BattleCanvas` 보호막/흡수/회복 팝업, `CombatLog` 적 전술 텔레메트리(HP/SHD/장착 슬롯 활성)·40틱 과부하 표시·`SYNERGY` 로그 추가. `game` 타입·린트·빌드 통과. |
