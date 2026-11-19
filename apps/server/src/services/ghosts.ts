@@ -55,6 +55,8 @@ export async function recordGhosts(
     weight: character.weight,
     maxWeight: character.maxWeight,
     time: 0,
+    variantId: character.variantId,
+    geneIds: character.geneProfile?.slots ?? [],
     currentWeaponIndex: 0,
     weapons: [null, null, null, null, null, null],
   };

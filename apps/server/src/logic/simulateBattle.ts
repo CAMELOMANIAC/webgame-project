@@ -1,4 +1,5 @@
 import {
+  aggregateGenePassives,
   type BattleCombatant,
   type BattleEvent,
   type BattleLog,
@@ -6,6 +7,7 @@ import {
   FATIGUE_RULES,
   getWeaponTags,
   type PlayerState,
+  resolveGeneActiveWeapons,
   type SynergyTargetRule,
   type WeaponData,
   type WeaponTag,
@@ -36,6 +38,7 @@ interface SimCombatant extends Omit<BattleCombatant, "weapons"> {
   weapons: Array<SimWeapon | null>;
   castingWeaponIndex: number | null;
   castingTicksRemaining: number;
+  geneCritChanceBonus?: number;
   isSummon?: boolean;
   summonerId?: string;
   summonMasterId?: string;
@@ -60,7 +63,7 @@ function capturePlayers(players: SimCombatant[]): PlayerState[] {
     time: player.time,
     ...(player.isSummon ? { isSummon: true } : {}),
     ...(player.summonerId ? { summonerId: player.summonerId } : {}),
-    weapons: player.weapons.map((weapon) =>
+    weapons: player.weapons.slice(0, 6).map((weapon) =>
       weapon
         ? {
             id: weapon.id,
@@ -250,51 +253,94 @@ export function simulateBattle(
 
   const simPlayers: SimCombatant[] = players.map((player) => {
     const buff = (player.fatigue ?? 1) > 0 ? player.activeFoodBuff : null;
+    const genePassives = aggregateGenePassives(player.geneIds);
     const maxHpBonus = buff?.maxHpBonus ?? 0;
     const maxHp = player.maxHp + maxHpBonus;
     const hp = Math.min(maxHp, player.hp + maxHpBonus);
+    const buildSimWeapon = (weapon: WeaponData): SimWeapon => {
+      const tags = getWeaponTags(weapon);
+      let damage = weapon.damage;
+      let cooldownTicks = weapon.cooldownTicks;
+      if (buff) {
+        if (
+          weapon.damage > 0 &&
+          weapon.attackType === "MELEE" &&
+          buff.meleeDamageBonus
+        ) {
+          damage += buff.meleeDamageBonus;
+        }
+        if (
+          weapon.attackType === "RANGED" &&
+          buff.rangedCooldownReductionTicks
+        ) {
+          cooldownTicks = Math.max(
+            1,
+            cooldownTicks - buff.rangedCooldownReductionTicks,
+          );
+        }
+        if (
+          weapon.damage > 0 &&
+          buff.tagDamageBonus &&
+          tags.includes(buff.tagDamageBonus.tag)
+        ) {
+          damage += buff.tagDamageBonus.amount;
+        }
+      }
+      if (damage > 0) {
+        if (weapon.attackType === "MELEE" && genePassives.meleeDamageBonus) {
+          damage += genePassives.meleeDamageBonus;
+        }
+        if (weapon.attackType === "RANGED" && genePassives.rangedDamageBonus) {
+          damage += genePassives.rangedDamageBonus;
+        }
+      }
+      let tagPct = 0;
+      for (const tag of tags) {
+        tagPct += genePassives.tagBonusPct[tag] ?? 0;
+      }
+      const tagMult = tagPct > 0 ? 1 + tagPct / 100 : 1;
+      if (tagMult > 1 && damage > 0) {
+        damage = Math.max(1, Math.round(damage * tagMult));
+      }
+      const effect = weapon.effect ? { ...weapon.effect } : undefined;
+      if (effect && tagMult > 1) {
+        if (effect.amount && effect.amount > 0) {
+          effect.amount = Math.max(1, Math.round(effect.amount * tagMult));
+        }
+        if (effect.shieldGain && effect.shieldGain > 0) {
+          effect.shieldGain = Math.max(
+            1,
+            Math.round(effect.shieldGain * tagMult),
+          );
+        }
+      }
+      return {
+        ...weapon,
+        damage,
+        cooldownTicks,
+        tags,
+        effect,
+        currentCooldown: 0,
+        isTriggered: false,
+        activationCount: 0,
+        pendingDamageBonus: 0,
+        pendingCritBonus: 0,
+        pendingShieldBonus: 0,
+      };
+    };
+    const equippedWeapons = player.weapons.map((weapon) =>
+      weapon ? buildSimWeapon(weapon) : null,
+    );
+    const geneActiveWeapons = resolveGeneActiveWeapons(player.geneIds).map(
+      (geneWeapon) => buildSimWeapon(geneWeapon),
+    );
     return {
       ...player,
       hp,
       maxHp,
-      shield: 0,
-      weapons: player.weapons.map((weapon) => {
-        if (!weapon) return null;
-        const tags = getWeaponTags(weapon);
-        let damage = weapon.damage;
-        let cooldownTicks = weapon.cooldownTicks;
-        if (buff) {
-          if (weapon.damage > 0 && weapon.attackType === "MELEE" && buff.meleeDamageBonus) {
-            damage += buff.meleeDamageBonus;
-          }
-          if (
-            weapon.attackType === "RANGED" &&
-            buff.rangedCooldownReductionTicks
-          ) {
-            cooldownTicks = Math.max(1, cooldownTicks - buff.rangedCooldownReductionTicks);
-          }
-          if (
-            weapon.damage > 0 &&
-            buff.tagDamageBonus &&
-            tags.includes(buff.tagDamageBonus.tag)
-          ) {
-            damage += buff.tagDamageBonus.amount;
-          }
-        }
-        return {
-          ...weapon,
-          damage,
-          cooldownTicks,
-          tags,
-          effect: weapon.effect ? { ...weapon.effect } : undefined,
-          currentCooldown: 0,
-          isTriggered: false,
-          activationCount: 0,
-          pendingDamageBonus: 0,
-          pendingCritBonus: 0,
-          pendingShieldBonus: 0,
-        };
-      }),
+      shield: genePassives.startingShield,
+      geneCritChanceBonus: genePassives.critChanceBonus,
+      weapons: [...equippedWeapons, ...geneActiveWeapons],
       currentWeaponIndex: player.currentWeaponIndex ?? 0,
       castingWeaponIndex: null,
       castingTicksRemaining: 0,
@@ -407,7 +453,13 @@ export function simulateBattle(
             (actor.fatigue ?? 1) > 0
               ? (actor.activeFoodBuff?.critChanceBonus ?? 0)
               : 0;
-          const critChance = Math.min(1, 0.1 + foodCritBonus + weapon.pendingCritBonus);
+          const critChance = Math.min(
+            1,
+            0.1 +
+              foodCritBonus +
+              (actor.geneCritChanceBonus ?? 0) +
+              weapon.pendingCritBonus,
+          );
           weapon.pendingDamageBonus = 0;
           weapon.pendingCritBonus = 0;
 

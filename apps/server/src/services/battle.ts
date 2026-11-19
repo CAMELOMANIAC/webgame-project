@@ -3,7 +3,10 @@ import {
   type BattleLog,
   type EnemyArchetype,
   findNextAvailableBackpackSlotIndex,
+  GENE_AMPOULE_BY_DEFINITION_ID,
   getCatalogItemById,
+  getCharacterVariantSpec,
+  GHOST_AMPOULE_DROP_CHANCE,
   type GhostMatch,
   type PlayerState,
   type RaidBattleResult,
@@ -272,6 +275,22 @@ export async function executeHanlimBattleInTransaction(
   );
 }
 
+const ALL_GENE_AMPOULE_IDS = Object.values(GENE_AMPOULE_BY_DEFINITION_ID);
+
+function rollGhostAmpouleDrop(variantId?: string | null): string | null {
+  if (Math.random() >= GHOST_AMPOULE_DROP_CHANCE) return null;
+  const spec = getCharacterVariantSpec(variantId);
+  if (spec) {
+    const specific = GENE_AMPOULE_BY_DEFINITION_ID[spec.definitionId];
+    if (specific) return specific;
+  }
+  return (
+    ALL_GENE_AMPOULE_IDS[
+      Math.floor(Math.random() * ALL_GENE_AMPOULE_IDS.length)
+    ] ?? null
+  );
+}
+
 export async function executePatrolGhostBattleInTransaction(
   tx: TransactionClient,
   characterId: string,
@@ -281,10 +300,19 @@ export async function executePatrolGhostBattleInTransaction(
   options?: BattleSettlementOptions,
 ): Promise<RaidBattleResult> {
   const archetype = resolvePatrolArchetype(patrolId, recordedTime);
-  return executeArchetypeBattleInTransaction(
+  const weapons = resolveEnemyArchetypeWeapons(archetype);
+  const ampouleDrop = rollGhostAmpouleDrop(null);
+  const rewardIds = [
+    ...resolveEnemyRewardIds(archetype),
+    ...(ampouleDrop ? [ampouleDrop] : []),
+  ];
+  return executeNpcCombat(
     tx,
     characterId,
+    patrolId,
     archetype,
+    weapons,
+    rewardIds,
     {
       kind: "NPC_GHOST",
       name: archetype.name,
@@ -376,6 +404,7 @@ export async function loadBattlePlayer(
     maxWeight: character.maxWeight,
     time: character.time,
     variantId: character.variantId,
+    geneIds: character.geneProfile?.slots ?? [],
     activeFoodBuff: character.activeFoodBuff ?? null,
     currentWeaponIndex: 0,
     weapons: [null, null, null, null, null, null],
@@ -410,6 +439,7 @@ export async function executeGhostBattleInTransaction(
     ...ghost.combatant,
     id: `ghost:${ghost.id}`,
     variantId: ghost.source.variantId ?? ghost.combatant.variantId ?? null,
+    geneIds: ghost.combatant.geneIds ?? [],
     teamId: "TeamB",
     currentWeaponIndex: 0,
     weapons: [
@@ -421,12 +451,17 @@ export async function executeGhostBattleInTransaction(
       resolveSlot(ghost.combatant.weapons[5]),
     ],
   };
+  const ampouleDrop = rollGhostAmpouleDrop(opponent.variantId);
+  const ghostRewardIds = [
+    ...opponent.weapons.flatMap((weapon) => (weapon ? [weapon.id] : [])),
+    ...(ampouleDrop ? [ampouleDrop] : []),
+  ];
   const result = await settleBattle(
     tx,
     character,
     player,
     [opponent],
-    opponent.weapons.flatMap((weapon) => (weapon ? [weapon.id] : [])),
+    ghostRewardIds,
     defer,
     options,
   );

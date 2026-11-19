@@ -1,4 +1,9 @@
-import { CHARACTER_VARIANT_CATALOG } from "@webgame/types";
+import {
+  BASE_CHARACTER_STATS,
+  CHARACTER_VARIANT_CATALOG,
+  computeCharacterStatsFromGenes,
+  rollInitialCharacterGenes,
+} from "@webgame/types";
 import { and, asc, eq, sql } from "drizzle-orm";
 import {
   characterDefinitions,
@@ -135,20 +140,26 @@ export async function recruitDevelopmentCharacter(
       with: { definition: true },
     });
     if (!variant) throw new InventoryError("Character variant not found", 404);
+    const geneProfile = rollInitialCharacterGenes(variant.definitionId);
+    const stats = computeCharacterStatsFromGenes(
+      BASE_CHARACTER_STATS,
+      geneProfile.slots,
+    );
     const [created] = await tx
       .insert(characters)
       .values({
         userId,
         variantId,
         displayName: variant.definition.name,
-        hp: variant.maxHp,
-        maxHp: variant.maxHp,
-        stamina: variant.maxStamina,
-        maxStamina: variant.maxStamina,
-        staminaRegen: variant.staminaRegen,
-        fatigue: variant.maxFatigue,
-        maxFatigue: variant.maxFatigue,
-        maxWeight: variant.maxWeight,
+        hp: stats.maxHp,
+        maxHp: stats.maxHp,
+        stamina: stats.maxStamina,
+        maxStamina: stats.maxStamina,
+        staminaRegen: stats.staminaRegen,
+        fatigue: stats.maxFatigue,
+        maxFatigue: stats.maxFatigue,
+        maxWeight: stats.maxWeight,
+        geneProfile,
       })
       .returning();
     if (!created) throw new InventoryError("Failed to create character", 500);

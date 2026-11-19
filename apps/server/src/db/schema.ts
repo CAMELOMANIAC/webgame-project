@@ -16,6 +16,7 @@ import {
 
 import type {
   BuildingEventState,
+  CharacterGeneProfile,
   FoodBuffEffect,
   PendingLootItem,
   WeaponEffect,
@@ -132,6 +133,7 @@ export const characters = pgTable(
     currentNodeId: integer("currentNodeId").notNull().default(0),
     returnedAt: timestamp("returnedAt", { precision: 3, mode: "date" }),
     activeFoodBuff: jsonb("activeFoodBuff").$type<FoodBuffEffect | null>(),
+    geneProfile: jsonb("geneProfile").$type<CharacterGeneProfile | null>(),
     activeRaidId: text("activeRaidId").references(
       (): AnyPgColumn => raidSessions.id,
       { onDelete: "set null", onUpdate: "cascade" },

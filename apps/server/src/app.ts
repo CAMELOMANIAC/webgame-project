@@ -6,6 +6,7 @@ import { registerDevelopmentIdentity } from "./auth";
 import { registerGameRoutes } from "./routes/game";
 import { registerGhostRoutes } from "./routes/ghosts";
 import { registerCharacterRoutes } from "./routes/characters";
+import { registerGeneRoutes } from "./routes/genes";
 import { registerInventoryRoutes } from "./routes/inventory";
 import { registerMarketRoutes } from "./routes/market";
 import { registerRaidRoutes } from "./routes/raid";
@@ -40,6 +41,7 @@ export function buildApp({
   registerGameRoutes(fastify, database);
   registerGhostRoutes(fastify, database);
   registerCharacterRoutes(fastify, database);
+  registerGeneRoutes(fastify, database);
   registerInventoryRoutes(fastify, database);
   registerMarketRoutes(fastify, database);
   registerRaidRoutes(fastify, database);
