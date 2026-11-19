@@ -11,6 +11,7 @@ import {
   type FoodBuffEffect,
   getBuildingDistrict,
   getCatalogItemById,
+  getEnemyArchetypeById,
   getRecipeById,
   hasBuildingChoiceCondition,
   type LootSourceKind,
@@ -28,6 +29,7 @@ import {
   resolveBuildingIntroEvent,
   type RetreatDecisionResult,
   type RetreatResolution,
+  selectEnemyArchetype,
   seopoMapVersion,
   type StartRaidResult,
   type WeaponEffect,
@@ -49,7 +51,6 @@ import {
   users,
   weaponMasters,
 } from "../db";
-import { hanlimNpcs } from "../logic/npcs";
 import {
   hasRoad,
   pathFatigueCost,
@@ -60,6 +61,7 @@ import { gameRules } from "../logic/rules";
 import {
   applyBattleSettlement,
   type DeferBattle,
+  executeArchetypeBattleInTransaction,
   executeGhostBattleInTransaction,
   executeHanlimBattleInTransaction,
   executePatrolGhostBattleInTransaction,
@@ -1482,50 +1484,19 @@ export async function executeRaidBuildingAction(
           raid.currentBuildingId,
           false,
         );
-        const prefersHanlim =
-          building.category === "PUBLIC" ||
-          building.category === "INFRA" ||
-          building.category === "MEDICAL";
-        const [hasHanlimWeapon, hasMonster] = await Promise.all([
-          tx.query.weaponMasters.findFirst({
-            where: eq(weaponMasters.id, hanlimNpcs.control.weaponId),
-          }),
-          tx.query.monsterMasters.findFirst(),
-        ]);
-
-        const enemyLevel =
-          district.kind === "INDUSTRIAL" || district.kind === "MEDICAL" ? 3 : 1;
-        const battleLog =
-          prefersHanlim && hasHanlimWeapon
-            ? await executeHanlimBattleInTransaction(
-                tx,
-                characterId,
-                retreat.defer,
-                { deferLootToPending: true },
-              )
-            : hasMonster
-              ? await executeMonsterBattleInTransaction(
-                  tx,
-                  characterId,
-                  enemyLevel,
-                  retreat.defer,
-                  { deferLootToPending: true },
-                )
-              : hasHanlimWeapon
-                ? await executeHanlimBattleInTransaction(
-                    tx,
-                    characterId,
-                    retreat.defer,
-                    { deferLootToPending: true },
-                  )
-                : await executePatrolGhostBattleInTransaction(
-                    tx,
-                    characterId,
-                    `npc-building-${building.id}`,
-                    nextTime,
-                    retreat.defer,
-                    { deferLootToPending: true },
-                  );
+        const archetype = selectEnemyArchetype({
+          timeMinutes: nextTime,
+          districtKind: district.kind,
+          buildingCategory: building.category,
+        });
+        const battleLog = await executeArchetypeBattleInTransaction(
+          tx,
+          characterId,
+          archetype,
+          undefined,
+          retreat.defer,
+          { deferLootToPending: true },
+        );
 
         if (!battleLog.playerDied && battleLog.rewardItem) {
           exp.pendingLoot.push({
@@ -1536,7 +1507,7 @@ export async function executeRaidBuildingAction(
         }
         exp.buildingEvents[buildingKey] = {
           stage: "READY",
-          text: "건물 내부 수색 중 적대 개체와 교전했습니다.",
+          text: `건물 내부 수색 중 ${archetype.name}와(과) 교전했습니다.`,
         };
         return { retreat, battleLog };
       };
@@ -1762,13 +1733,7 @@ export async function executeRaidBuildingAction(
           }
         }
 
-        const { obtainedItems } = await stageCatalogItemsAsPendingLoot(
-          tx,
-          exp,
-          outcome.rewardItemIds ?? [],
-          "EVENT",
-        );
-
+        const timeCost = outcome.timeCostMinutes ?? choice.timeCostMinutes ?? 10;
         const hpDelta = outcome.hpDelta ?? 0;
         const fatigueDelta = outcome.fatigueDelta ?? 0;
         // 비전투 함정 피해로 즉사하지 않도록 최소 체력 1을 보장합니다.
@@ -1790,7 +1755,74 @@ export async function executeRaidBuildingAction(
             .where(eq(characters.id, characterId));
         }
 
-        const timeCost = outcome.timeCostMinutes ?? choice.timeCostMinutes ?? 10;
+        const eventEndTime = raid.time + timeCost;
+        const shouldTriggerCombat = Boolean(
+          outcome.encounterEnemyId || outcome.triggerDistrictEncounter,
+        );
+
+        let battleLog: BuildingActionResult["battleLog"];
+        let pendingRetreat: PendingRetreat | undefined;
+        let obtainedItems: {
+          weaponMasterId: string;
+          name: string;
+          quantity: number;
+        }[] = [];
+
+        if (shouldTriggerCombat) {
+          const archetype =
+            (outcome.encounterEnemyId
+              ? getEnemyArchetypeById(outcome.encounterEnemyId)
+              : undefined) ??
+            selectEnemyArchetype({
+              timeMinutes: eventEndTime,
+              districtKind: district.kind,
+              buildingCategory: building.category,
+            });
+          const retreat = prepareRetreat(
+            raid,
+            raid.currentNodeId,
+            raid.currentBuildingId,
+            false,
+          );
+          battleLog = await executeArchetypeBattleInTransaction(
+            tx,
+            characterId,
+            archetype,
+            undefined,
+            retreat.defer,
+            { deferLootToPending: true },
+          );
+          pendingRetreat = retreat.finish(battleLog);
+          if (!pendingRetreat && !battleLog.playerDied && battleLog.rewardItem) {
+            exp.pendingLoot.push({
+              id: randomUUID(),
+              ...battleLog.rewardItem,
+              source: "COMBAT",
+            });
+          }
+          if (
+            !battleLog.playerDied &&
+            battleLog.result.winnerTeamId === "TeamA" &&
+            outcome.rewardItemIds?.length
+          ) {
+            const staged = await stageCatalogItemsAsPendingLoot(
+              tx,
+              exp,
+              outcome.rewardItemIds,
+              "EVENT",
+            );
+            obtainedItems = staged.obtainedItems;
+          }
+        } else {
+          const staged = await stageCatalogItemsAsPendingLoot(
+            tx,
+            exp,
+            outcome.rewardItemIds ?? [],
+            "EVENT",
+          );
+          obtainedItems = staged.obtainedItems;
+        }
+
         exp.lootedBuildingIds.push(building.id);
         if (
           introEvent.oncePerRaid &&
@@ -1806,7 +1838,8 @@ export async function executeRaidBuildingAction(
         const netFatigueDelta = nextFatigue - character.fatigue;
         const payload: Omit<BuildingActionResult, "raid"> = {
           action: "EVENT_CHOICE",
-          encounterTriggered: false,
+          encounterTriggered: shouldTriggerCombat,
+          ...(battleLog ? { battleLog } : {}),
           ...(obtainedItems.length > 0 ? { obtainedItems } : {}),
           ...(hpDelta !== 0 ? { hpDelta: nextHp - character.hp } : {}),
           ...(netFatigueDelta !== 0 ? { fatigueDelta: netFatigueDelta } : {}),
@@ -1814,8 +1847,10 @@ export async function executeRaidBuildingAction(
         };
         return {
           payload,
-          time: raid.time + timeCost,
+          ...(pendingRetreat ? { pendingRetreat } : {}),
+          time: eventEndTime,
           encounterTravel: writeExplorationState(raid, exp),
+          ...(battleLog?.playerDied ? { status: "DEAD" as const } : {}),
         };
       }
 

@@ -1,4 +1,4 @@
-import { ALL_CATALOG_ITEMS } from "@webgame/types";
+import { ALL_CATALOG_ITEMS, ENEMY_ARCHETYPES } from "@webgame/types";
 import { eq } from "drizzle-orm";
 import {
   characters,
@@ -52,80 +52,46 @@ async function main() {
     const [created] = await db.insert(weaponMasters).values(w).returning();
     if (created) weaponData.push(created);
   }
+  const weaponById = new Map(weaponData.map((w) => [w.id, w]));
 
-  console.log("Seeding monsters...");
-  const monsters = [
-    {
-      name: "Slime",
-      hp: 30,
-      maxHp: 30,
-      stamina: 50,
-      maxStamina: 50,
-      staminaRegen: 5,
-      level: 1,
-    },
-    {
-      name: "Goblin",
-      hp: 60,
-      maxHp: 60,
-      stamina: 80,
-      maxStamina: 80,
-      staminaRegen: 8,
-      level: 3,
-    },
-    {
-      name: "Orc Warrior",
-      hp: 150,
-      maxHp: 150,
-      stamina: 120,
-      maxStamina: 120,
-      staminaRegen: 10,
-      level: 7,
-    },
-  ];
+  console.log("Seeding SF enemy archetypes...");
+  const tierToLevel = (tier: 1 | 2 | 3) => (tier === 1 ? 1 : tier === 2 ? 3 : 7);
+
+  for (const archetype of ENEMY_ARCHETYPES) {
+    const [createdEnemy] = await db
+      .insert(monsterMasters)
+      .values({
+        name: archetype.name,
+        hp: archetype.hp,
+        maxHp: archetype.hp,
+        stamina: archetype.stamina,
+        maxStamina: archetype.stamina,
+        staminaRegen: archetype.staminaRegen,
+        level: tierToLevel(archetype.tier),
+      })
+      .returning();
+    if (!createdEnemy) continue;
+
+    for (
+      let slotIndex = 0;
+      slotIndex < Math.min(6, archetype.weaponIds.length);
+      slotIndex++
+    ) {
+      const weaponId = archetype.weaponIds[slotIndex];
+      const weaponMaster = weaponId ? weaponById.get(weaponId) : undefined;
+      if (!weaponMaster) continue;
+      await db.insert(monsterWeapons).values({
+        monsterId: createdEnemy.id,
+        weaponMasterId: weaponMaster.id,
+        slotIndex,
+      });
+    }
+  }
 
   const primarySword = weaponData.find((w) => w.id === "wpn_primary" || w.name === "표준 도검");
   const secondaryDagger = weaponData.find((w) => w.id === "wpn_dagger" || w.name === "전술 단검");
-  const giantSlayer = weaponData.find((w) => w.id === "wpn_giant_slayer" || w.name === "중량 파쇄 해머");
   const sniperRifle = weaponData.find((w) => w.id === "wpn_sniper" || w.name === "정밀 저격 소총");
   const lifeSaver = weaponData.find((w) => w.id === "wpn_lifesaver" || w.name === "응급 생체 팩");
-
-  for (const m of monsters) {
-    const [createdMonster] = await db
-      .insert(monsterMasters)
-      .values(m)
-      .returning();
-    if (!createdMonster) continue;
-
-    if (m.name === "Slime" && secondaryDagger) {
-      await db.insert(monsterWeapons).values({
-        monsterId: createdMonster.id,
-        weaponMasterId: secondaryDagger.id,
-        slotIndex: 0,
-      });
-    } else if (m.name === "Goblin" && primarySword) {
-      await db.insert(monsterWeapons).values({
-        monsterId: createdMonster.id,
-        weaponMasterId: primarySword.id,
-        slotIndex: 0,
-      });
-    } else if (m.name === "Orc Warrior") {
-      if (primarySword) {
-        await db.insert(monsterWeapons).values({
-          monsterId: createdMonster.id,
-          weaponMasterId: primarySword.id,
-          slotIndex: 0,
-        });
-      }
-      if (giantSlayer) {
-        await db.insert(monsterWeapons).values({
-          monsterId: createdMonster.id,
-          weaponMasterId: giantSlayer.id,
-          slotIndex: 1,
-        });
-      }
-    }
-  }
 
   console.log("Creating test user and character...");
   let user = await db.query.users.findFirst({

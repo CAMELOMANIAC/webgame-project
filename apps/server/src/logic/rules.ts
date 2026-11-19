@@ -14,8 +14,8 @@ export const gameRules = {
   ghost: {
     rulesVersion: 2,
     maxAgeDays: 7,
-    trackedCount: 3,
-    patrolTrackedCount: 2,
+    trackedCount: 6,
+    patrolTrackedCount: 6,
     minimumEntryDistance: 150,
     minimumRefillDistance: 100,
     matchWindowMinutes: 30,

@@ -1,12 +1,14 @@
 import {
   type BattleCombatant,
   type BattleLog,
+  type EnemyArchetype,
   findNextAvailableBackpackSlotIndex,
   getCatalogItemById,
   type GhostMatch,
   type PlayerState,
   type RaidBattleResult,
   resolveCatalogWeaponData,
+  resolveEnemyArchetypeWeapons,
   type WeaponData,
   type WeaponEffect,
 } from "@webgame/types";
@@ -23,7 +25,7 @@ import {
   type WeaponMaster,
   weaponMasters,
 } from "../db";
-import { patrolCombat } from "../logic/ghostPatrols";
+import { resolvePatrolArchetype } from "../logic/ghostPatrols";
 import { hanlimNpcs } from "../logic/npcs";
 import { retreatDamageMultiplier } from "../logic/retreat";
 import { recoveryVitals } from "../logic/rules";
@@ -215,6 +217,36 @@ export async function executeMonsterBattleInTransaction(
   return { ...result, encounter: { kind: "NPC", name: match.name } };
 }
 
+export async function executeArchetypeBattleInTransaction(
+  tx: TransactionClient,
+  characterId: string,
+  archetype: EnemyArchetype,
+  encounterOverrides?: Partial<NonNullable<RaidBattleResult["encounter"]>>,
+  defer?: DeferBattle,
+  options?: BattleSettlementOptions,
+): Promise<RaidBattleResult> {
+  const weapons = resolveEnemyArchetypeWeapons(archetype);
+  const encounter: NonNullable<RaidBattleResult["encounter"]> = {
+    kind: "NPC",
+    name: archetype.name,
+    faction: archetype.faction,
+    role: archetype.role,
+    reason: archetype.reason,
+    ...encounterOverrides,
+  };
+  return executeNpcCombat(
+    tx,
+    characterId,
+    encounterOverrides?.patrolId ?? archetype.id,
+    archetype,
+    weapons,
+    [...archetype.rewardIds],
+    encounter,
+    defer,
+    options,
+  );
+}
+
 export async function executeHanlimBattleInTransaction(
   tx: TransactionClient,
   characterId: string,
@@ -222,16 +254,10 @@ export async function executeHanlimBattleInTransaction(
   options?: BattleSettlementOptions,
 ): Promise<RaidBattleResult> {
   const npc = hanlimNpcs.control;
-  const weapon = await tx.query.weaponMasters.findFirst({
-    where: eq(weaponMasters.id, npc.weaponId),
-  });
-  if (!weapon) throw new Error(`Weapon ${npc.weaponId} not found`);
-  return executeNpcCombat(
+  return executeArchetypeBattleInTransaction(
     tx,
     characterId,
-    npc.id,
     npc,
-    toBattleWeapon(weapon),
     {
       kind: "NPC",
       name: npc.name,
@@ -252,13 +278,20 @@ export async function executePatrolGhostBattleInTransaction(
   defer?: DeferBattle,
   options?: BattleSettlementOptions,
 ): Promise<RaidBattleResult> {
-  return executeNpcCombat(
+  const archetype = resolvePatrolArchetype(patrolId, recordedTime);
+  return executeArchetypeBattleInTransaction(
     tx,
     characterId,
-    patrolId,
-    patrolCombat,
-    resolveCatalogWeaponData(patrolCombat.weapon),
-    { kind: "NPC_GHOST", name: patrolCombat.name, patrolId, recordedTime },
+    archetype,
+    {
+      kind: "NPC_GHOST",
+      name: archetype.name,
+      faction: archetype.faction,
+      role: archetype.role,
+      reason: archetype.reason,
+      patrolId,
+      recordedTime,
+    },
     defer,
     options,
   );
@@ -269,12 +302,17 @@ async function executeNpcCombat(
   characterId: string,
   npcId: string,
   npc: { name: string; hp: number; stamina: number; staminaRegen: number },
-  weapon: WeaponData,
+  weapons: BattleCombatant["weapons"],
+  rewardIds: string[],
   encounter: NonNullable<RaidBattleResult["encounter"]>,
   defer?: DeferBattle,
   options?: BattleSettlementOptions,
 ): Promise<RaidBattleResult> {
   const { character, player } = await loadBattlePlayer(tx, characterId);
+  const totalWeight = weapons.reduce(
+    (sum, weapon) => sum + (weapon?.weight ?? 0),
+    0,
+  );
   const enemy: BattleCombatant = {
     id: `npc:${npcId}`,
     displayName: npc.name,
@@ -284,18 +322,21 @@ async function executeNpcCombat(
     stamina: npc.stamina,
     maxStamina: npc.stamina,
     staminaRegen: npc.staminaRegen,
-    weight: weapon.weight,
-    maxWeight: 50,
+    weight: totalWeight,
+    maxWeight: Math.max(50, totalWeight),
     time: character.time,
     currentWeaponIndex: 0,
-    weapons: [weapon, null, null, null, null, null],
+    weapons,
   };
+  const fallbackRewards = weapons.flatMap((weapon) =>
+    weapon ? [weapon.id] : [],
+  );
   const result = await settleBattle(
     tx,
     character,
     player,
     [enemy],
-    [weapon.id],
+    rewardIds.length > 0 ? rewardIds : fallbackRewards,
     defer,
     options,
   );
