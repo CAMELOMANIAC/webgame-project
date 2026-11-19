@@ -53,7 +53,7 @@ function getStatusLabel(listing: MarketAuctionListing): {
   }
   if (listing.status === "SOLD") {
     return listing.settledByNpc
-      ? { label: "NPC 매입 완료", tone: "positive" }
+      ? { label: "최 사장 매입", tone: "positive" }
       : { label: "낙찰 완료", tone: "positive" };
   }
   if (listing.status === "CANCELLED") {
@@ -225,7 +225,7 @@ function MarketScreen() {
           setFeedback({
             tone: "positive",
             message: res.npcUndercutSpawned
-              ? `${res.listing.name} ×${res.listing.quantity} 경매 등록 완료 (고가 감지: 한림 보급국 경쟁 매물 출품)`
+              ? `${res.listing.name} ×${res.listing.quantity} 경매 등록 완료 (고가 감지: 최 사장 경쟁 매물 출품)`
               : `${res.listing.name} ×${res.listing.quantity} 경매 등록 완료 (시작가 ${res.listing.startingBid.toLocaleString()} CR)`,
           });
         },
@@ -273,7 +273,7 @@ function MarketScreen() {
   return (
     <BaseScreen
       title="거래소"
-      description="최고가 낙찰 경매장. 한림 보급국이 기초 보급품을 공급하고, 마감 시 기준가 이하 무입찰 매물을 자동 매입합니다."
+      description="최고가 낙찰 경매장. 최 사장이 기초 보급품을 공급하고, 마감 시 기준가 이하 무입찰 매물을 자동 매입합니다."
     >
       <div className={styles.layout}>
         <div className={styles.telemetryGrid}>
@@ -552,7 +552,7 @@ function MarketScreen() {
                         </span>
                         {npcGuaranteed && (
                           <span className={styles.badge({ tone: "positive" })}>
-                            NPC 매입 보장
+                            최 사장 매입 보장
                           </span>
                         )}
                       </div>

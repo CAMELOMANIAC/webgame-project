@@ -110,7 +110,7 @@
 ### [x] 19. 거점 거래소(`/base/market`) 및 아이템 가치(`value`) 기반 경제·보급 루프 구현
 
 - [x] 현재 플레이스홀더 상태인 [`apps/game/src/routes/base/market.tsx`](./apps/game/src/routes/base/market.tsx)를 실제 작동하는 거점 경매 거래소(`/base/market`)로 구현한다 (`User.credits` + `MarketListing` 5분 최고가 경매 + NPC 유동성 공급자 + 즉시 매각).
-- [x] 창고(`StashItem`)에 쌓인 잉여 재료와 노획 장비를 가치(`value`)에 기반해 경매 출품·즉시 매각하거나, 한림 보급국(NPC) 기초 보급 매물 및 고가 유저 매물 경쟁 출품을 통해 다음 탐사에 필요한 장비·소모품·재료를 확보할 수 있는 경제 순환 구조를 만든다.
+- [x] 창고(`StashItem`)에 쌓인 잉여 재료와 노획 장비를 가치(`value`)에 기반해 경매 출품·즉시 매각하거나, 최 사장(NPC) 기초 보급 매물 및 고가 유저 매물 경쟁 출품을 통해 다음 탐사에 필요한 장비·소모품·재료를 확보할 수 있는 경제 순환 구조를 만든다.
 - [x] 사망으로 모든 장비를 잃었을 때도 필드 비무장 탐색 특수 이벤트 체인(`story-unarmed-cache-1` → `story-unarmed-cache-2`)을 통해 기초 무기와 응급 물품을 회수해 재기할 수 있는 안전장치를 정비한다.
 
 대상: `packages/types/src/`, `apps/server/src/db/schema.ts`, `apps/server/src/services/`, `apps/server/src/routes/`, `apps/game/src/routes/base/market.tsx`.

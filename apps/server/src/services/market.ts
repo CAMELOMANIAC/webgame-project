@@ -204,7 +204,7 @@ function toAuctionListingView(
     bidCount: row.bidCount,
     isNpcSeller: row.isNpcSeller,
     sellerLabel: row.isNpcSeller
-      ? "한림 보급국"
+      ? "최 사장"
       : (row.seller?.nickname ?? "익명 생존자"),
     isMine: !row.isNpcSeller && row.sellerUserId === viewerUserId,
     isHighestBidder: row.highestBidderUserId === viewerUserId,
