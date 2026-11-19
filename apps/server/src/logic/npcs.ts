@@ -10,6 +10,6 @@ export const hanlimNpcs = {
   control: {
     ...controlArchetype,
     id: "hanlim-control-a",
-    weaponId: "hanlim-control-baton",
+    weaponId: "hanlim-relief-carbine",
   },
 } as const;

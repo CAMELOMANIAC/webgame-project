@@ -609,22 +609,22 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
   },
   {
     id: "story-ind-factory-sweep",
-    title: "작업장 야간 약탈조",
+    title: "작업장 야간 사설 경비조",
     districtKind: "INDUSTRIAL",
     imageKey: "factory",
     oncePerRaid: true,
     introText:
-      "공업사 내부 컨베이어 라인 사이로 산업지구 약탈단의 적외선 표식등이 움직이고 있습니다. 중앙 공구함 옆에는 중장비 부품 상자가 묶여 있지만, 약탈조가 출입구 방향을 주시하고 있습니다.",
+      "공업사 내부 컨베이어 라인 사이로 과격 사설 경비조의 적외선 표식등이 움직이고 있습니다. 중앙 공구함 옆에는 중장비 부품 상자가 묶여 있지만, 경비조가 출입구 방향을 주시하고 있습니다.",
     choices: [
       {
         id: "engage-sweep",
-        label: "선제 기습으로 약탈조를 제압하고 부품 상자를 차지한다",
+        label: "선제 기습으로 경비조를 제압하고 부품 상자를 차지한다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 10,
         fatigueCost: 8,
         outcomes: [
           {
-            text: "기계 설비 뒤에서 뛰쳐나가자 약탈조가 즉시 방호 태세를 갖추며 교전이 시작되었습니다.",
+            text: "기계 설비 뒤에서 뛰쳐나가자 사설 경비조가 즉시 방호 태세를 갖추며 교전이 시작되었습니다.",
             timeCostMinutes: 10,
             triggerDistrictEncounter: true,
             rewardItemIds: ["mat-titanium", "mat-fuel"],
@@ -633,7 +633,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
       },
       {
         id: "wait-outside",
-        label: "약탈조와 마주치지 않고 환기구 통로로 물러난다",
+        label: "경비조와 마주치지 않고 환기구 통로로 물러난다",
         action: "EVENT_CHOICE",
         timeCostMinutes: 5,
         fatigueCost: 0,
