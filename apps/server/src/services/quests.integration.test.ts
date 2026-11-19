@@ -103,11 +103,20 @@ test("실제 DB: 임무 수락·회수·탈출·보고는 재시도해도 지원
     reportFirstMission(db, user.id),
     reportFirstMission(db, user.id),
   ]);
-  assert.equal(reports[0]?.mission.status, "COMPLETE");
-  assert.equal((await supply()).quantity, 2);
+  assert.equal(reports[0]?.missions[0]?.status, "COMPLETE");
+  assert.equal(reports[0]?.mission.tier, 2);
+  assert.equal(reports[0]?.mission.status, "OFFERED");
+  assert.equal((await supply()).quantity, 1);
+  const reward = await db.query.stashItems.findFirst({
+    where: and(
+      eq(stashItems.userId, user.id),
+      eq(stashItems.weaponMasterId, firstMission.rewardWeaponId),
+    ),
+  });
+  assert.equal(reward?.quantity, 1);
   assert.equal((await journalView(db, user.id)).records.length, 1);
   await acceptFirstMission(db, user.id);
-  assert.equal((await supply()).quantity, 2);
+  assert.equal((await supply()).quantity, 1);
   assert.equal(
     (
       await db.query.questProgresses.findMany({

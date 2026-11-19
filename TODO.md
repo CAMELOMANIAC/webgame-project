@@ -141,10 +141,10 @@
 
 ---
 
-### [ ] 22. 후속 임무 체인(`storyTier 2~3`) 및 거점 담당자 3인 서사 연결
+### [x] 22. 후속 임무 체인(`storyTier 2~3`) 및 거점 담당자 3인 서사 연결
 
-- [ ] 첫 임무([`firstMission`](./apps/server/src/logic/story.ts))의 수락 지급품(`기업 구호용 카빈`)과 최종 보고 보상이 동일한 문제를 해결하여, 첫 임무 완료 시 실질적인 성취감을 주는 고유 보상(상위 장비, 소모품 패키지 등)을 지급한다.
-- [ ] [`docs/SF-생존-게임-세계관.md`](./docs/SF-생존-게임-세계관.md)의 거점 담당자 3인 구도(구호·운영 담당, 연구·분석 담당, 비공식 물자 거래 담당)와 연계된 **후속 임무 체인(2차·3차 임무)** 을 추가하고, 진행에 따라 `storyTier 2`(단일 경영 책임자 인식) → `storyTier 3`(복수 개체 확인) 기록과 연락처가 자연스럽게 해금되도록 연결한다.
+- [x] 첫 임무([`firstMission`](./apps/server/src/logic/story.ts))의 수락 지급품(`기업 구호용 카빈`)과 최종 보고 보상이 동일한 문제를 해결하여, 첫 임무 완료 시 실질적인 성취감을 주는 고유 보상(상위 장비, 소모품 패키지 등)을 지급한다.
+- [x] [`docs/SF-생존-게임-세계관.md`](./docs/SF-생존-게임-세계관.md)의 거점 담당자 3인 구도(구호·운영 담당, 연구·분석 담당, 비공식 물자 거래 담당)와 연계된 **후속 임무 체인(2차·3차 임무)** 을 추가하고, 진행에 따라 `storyTier 2`(단일 경영 책임자 인식) → `storyTier 3`(복수 개체 확인) 기록과 연락처가 자연스럽게 해금되도록 연결한다.
 
 대상: `packages/types/src/`, `apps/server/src/logic/story.ts`, `apps/server/src/services/quests.ts`, `apps/game/src/components/lobby/MissionJournal.tsx`, `apps/game/src/routes/base/`.
 
