@@ -313,6 +313,43 @@ export interface BattleLog {
   result: BattleSummary;
 }
 
+export interface RaidSummaryItem {
+  weaponMasterId: string;
+  name: string;
+  quantity: number;
+  unitValue: number;
+  totalValue: number;
+  iconKey: string;
+}
+
+export interface RaidCombatRecord {
+  enemyName: string;
+  enemyKind: "GHOST" | "NPC";
+  faction?: string;
+  outcome: "WIN" | "LOSS" | "RETREAT";
+  timeMinutes: number;
+}
+
+export interface RaidSettlementSummary {
+  raidId: string;
+  status: "EXTRACTED" | "DEAD";
+  elapsedMinutes: number;
+  recoveredItems: RaidSummaryItem[];
+  lostItems: RaidSummaryItem[];
+  totalRecoveredValue: number;
+  totalLostValue: number;
+  combatRecords: RaidCombatRecord[];
+  encountersCount: number;
+  defeatedCount: number;
+  missionRecovered: boolean;
+}
+
+export interface ExtractRaidResult {
+  status: "success";
+  raid: RaidView;
+  summary: RaidSettlementSummary;
+}
+
 export interface RaidBattleResult extends BattleLog {
   playerDied: boolean;
   rewardItemName: string | null;
@@ -324,6 +361,7 @@ export interface RaidBattleResult extends BattleLog {
     iconKey: string;
     quantity: number;
   } | null;
+  lostItems?: RaidSummaryItem[];
 }
 
 export type RetreatResolution =
