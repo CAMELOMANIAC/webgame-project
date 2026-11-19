@@ -1,9 +1,9 @@
-import { BASE_RECOVERY_RULES } from "@webgame/types";
+import { BASE_RECOVERY_RULES, CENTRAL_EXTRACTION_NODE_ID } from "@webgame/types";
 
 export const gameRules = {
   startNodeId: 0,
-  entryNodeIds: [0, 37, 93, 316, 443] as number[],
-  extractionNodeIds: [0, 290, 975] as number[],
+  entryNodeIds: [0, 37, 93, 316, 443, 1130] as number[],
+  extractionNodeIds: [CENTRAL_EXTRACTION_NODE_ID] as number[],
   travel: {
     stepUnitMinutes: 10,
     maxEdgeMinutes: 60,

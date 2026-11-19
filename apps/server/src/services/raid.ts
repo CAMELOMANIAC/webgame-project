@@ -14,6 +14,7 @@ import {
   getEnemyArchetypeById,
   getRecipeById,
   hasBuildingChoiceCondition,
+  isBuildingLockedDown,
   type LootSourceKind,
   type MapBuilding,
   matchesRecipeBase,
@@ -31,6 +32,7 @@ import {
   type RaidSummaryItem,
   type RaidView,
   resolveBuildingIntroEvent,
+  resolveBuildingMaxCraftTier,
   type RetreatDecisionResult,
   type RetreatResolution,
   selectEnemyArchetype,
@@ -571,15 +573,22 @@ export async function navigateRaid(
       if (parsed.path[0] !== raid.currentNodeId)
         throw new InventoryError("Path must start at the current node");
       const isBuildingMove = parsed.path.length === 1;
-      if (
-        parsed.destinationBuildingId !== undefined &&
-        !mapData.buildings.some(
+      if (parsed.destinationBuildingId !== undefined) {
+        const destBuilding = (
+          mapData.buildings as unknown as MapBuilding[]
+        ).find(
           (building) =>
             building.id === parsed.destinationBuildingId &&
             building.roadNodeId === parsed.path.at(-1),
-        )
-      ) {
-        throw new InventoryError("Destination building is not on the current node");
+        );
+        if (!destBuilding) {
+          throw new InventoryError(
+            "Destination building is not on the current node",
+          );
+        }
+        if (isBuildingLockedDown(destBuilding, raid.time, raid.id)) {
+          throw new InventoryError("봉쇄된 건물에는 진입할 수 없습니다.", 409);
+        }
       }
       for (let index = 1; index < parsed.path.length; index++) {
         if (
@@ -1621,6 +1630,12 @@ export async function executeRaidBuildingAction(
       if (!building) {
         throw new InventoryError("건물 정보를 찾을 수 없습니다.", 404);
       }
+      if (isBuildingLockedDown(building, raid.time, raid.id)) {
+        throw new InventoryError(
+          "봉쇄된 건물에서는 더 이상 행동할 수 없습니다.",
+          409,
+        );
+      }
 
       const district = getBuildingDistrict(building);
       const exp = readExplorationState(raid);
@@ -2053,6 +2068,13 @@ export async function executeRaidBuildingAction(
       if (building.category !== recipe.buildingCategory) {
         throw new InventoryError(
           "현재 건물 카테고리에서는 이 조합을 실행할 수 없습니다.",
+          409,
+        );
+      }
+      const maxCraftTier = resolveBuildingMaxCraftTier(building);
+      if (recipe.tier > maxCraftTier) {
+        throw new InventoryError(
+          "외곽 조합 설비에서는 T1 업그레이드만 가능합니다. T2 업그레이드는 중앙 구역 설비를 이용하세요.",
           409,
         );
       }
