@@ -96,10 +96,10 @@
 
 ---
 
-### [ ] 18. 탈출·사망 정산 리포트 고도화 (`apps/game/src/routes/field/result.tsx`)
+### [x] 18. 탈출·사망 정산 리포트 고도화 (`apps/game/src/routes/field/result.tsx`)
 
-- [ ] 서버의 탈출(`extractRaid`) 및 사망 정산 결과(또는 마지막 탐사 세션 요약)에서 **이번 탐사 중 회수한 아이템 목록과 수량, 총 획득 가치(`value` 합산), 총 경과 시간(`time`), 교전 횟수 및 처치한 고스트/NPC 기록, 임무 진행 변화**를 클라이언트로 전달하거나 조회할 수 있게 구성한다.
-- [ ] [`apps/game/src/routes/field/result.tsx`](./apps/game/src/routes/field/result.tsx)의 결과 화면을 [`DESIGN.md`](./DESIGN.md)의 **1px 밀착 데이터 그리드(`Exposed 1px Hairline Data Grid`)** 와 전술 정산 리포트 형태로 개편하여, 탈출 시 획득한 전리품과 가치를 한눈에 보여주고 사망 시 소실된 장비/물품을 명확히 피드백한다.
+- [x] 서버의 탈출(`extractRaid`) 및 사망 정산 결과(또는 마지막 탐사 세션 요약)에서 **이번 탐사 중 회수한 아이템 목록과 수량, 총 획득 가치(`value` 합산), 총 경과 시간(`time`), 교전 횟수 및 처치한 고스트/NPC 기록, 임무 진행 변화**를 클라이언트로 전달하거나 조회할 수 있게 구성한다.
+- [x] [`apps/game/src/routes/field/result.tsx`](./apps/game/src/routes/field/result.tsx)의 결과 화면을 [`DESIGN.md`](./DESIGN.md)의 **1px 밀착 데이터 그리드(`Exposed 1px Hairline Data Grid`)** 와 전술 정산 리포트 형태로 개편하여, 탈출 시 획득한 전리품과 가치를 한눈에 보여주고 사망 시 소실된 장비/물품을 명확히 피드백한다.
 
 대상: `packages/types/src/index.ts`, `apps/server/src/services/raid.ts`, `apps/game/src/routes/field/result.tsx`, `apps/game/src/routes/field/result.css.ts`, `apps/game/src/atoms/raidAtom.ts`.
 
