@@ -24,6 +24,9 @@ export const LOCKDOWN_SAFE_CORE_NORM = 0.12;
 /** 조합 설비 건물에 부여되는 추가 봉쇄 유예 시간(분) */
 export const CRAFT_BUILDING_LOCKDOWN_GRACE_MINUTES = 120;
 
+/** 곧 봉쇄될 건물을 캔버스에서 점멸 경고로 표시하는 잔여 시간(분) */
+export const LOCKDOWN_WARNING_MINUTES = 60;
+
 /**
  * FNV-1a 32비트 해시로 건물 ID + 선택적 레이드 시드에 대해 [0, 1) 범위의 결정적 난수를 생성합니다.
  */
@@ -79,7 +82,8 @@ export function resolveBuildingLockdownMinute(
     return Number.POSITIVE_INFINITY;
   }
   const jitter = buildingLockdownHash(building.id, seed);
-  const baseMinute = 30 + (1 - dNorm) * 260 + jitter * 150;
+  const baseMinute =
+    30 + (1 - dNorm) * 460 + Math.pow(jitter, 0.75) * 280;
   const grace = building.category ? CRAFT_BUILDING_LOCKDOWN_GRACE_MINUTES : 0;
   return Math.round(baseMinute + grace);
 }

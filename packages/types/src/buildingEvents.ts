@@ -145,7 +145,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
     imageKey: "villa",
     oncePerRaid: true,
     introText:
-      "비상등이 깜빡이는 빌라 계단실 끝에, 기업 구호 방호복을 입은 인물이 벽에 기대어 쓰러져 있습니다. 가슴 주머니의 무전기에서는 '중복 생체 신호 감지'라는 기계음이 3초마다 반복되고, 바닥의 배낭 인식표에는 오늘 발급받은 것과 동일한 식별 번호가 각인되어 있습니다. 위층 복도에서는 무언가 바닥에 끌리는 둔탁한 소리가 멎지 않습니다.",
+      "깜빡이는 비상등 아래, 기업 구호 방호복을 입은 시신과 오늘 발급받은 것과 같은 번호의 배낭이 놓여 있습니다. 무전기의 '중복 생체 신호 감지' 경고음 너머로 위층에서 무언가 끌리는 소리가 멎지 않습니다.",
     choices: [
       {
         id: "search-pack",
@@ -156,7 +156,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         outcomes: [
           {
             chance: 0.65,
-            text: "굳어버린 배낭 지퍼를 힘으로 뜯어내자 밀봉 상태의 구호 부품과 중장갑 포탑 코어가 나왔습니다. 시신의 손목 단말기는 전원이 꺼지기 직전까지 복귀 거점 좌표를 계속 갱신하고 있었습니다.",
+            text: "굳어버린 지퍼를 뜯어내자 밀봉된 구호 부품과 중장갑 포탑 코어가 쏟아집니다. 시신의 손목 단말기는 전원이 꺼지기 직전까지 복귀 좌표를 갱신하고 있었습니다.",
             timeCostMinutes: 10,
             rewardItemIds: [
               "mat-wire",
@@ -166,7 +166,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
             ],
           },
           {
-            text: "버클을 당기는 순간 방호복 어깨의 무단 회수 차단 장치가 경보를 울렸습니다. 위층 방화문이 열리며 물자를 노리던 무장 수집가가 계단으로 뛰어들어와 교전이 벌어졌습니다.",
+            text: "버클을 당기자 방호복의 보안 경보가 울립니다. 위층 방화문이 열리며 물자를 노리던 무장 수집가가 계단을 뛰어내려옵니다.",
             timeCostMinutes: 15,
             encounterEnemyId: "npc-res-scavenger",
           },
@@ -180,7 +180,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         fatigueCost: 0,
         outcomes: [
           {
-            text: "무전기 경고음을 등진 채 비상구 외벽을 따라 빠르게 빠져나왔습니다. 위층의 끌리는 소리는 곧 멎었고, 안전한 구석에서 잠시 호흡을 가다듬었습니다. 손목 단말기에는 '미확인 개체 접촉 회피' 기록이 남았습니다.",
+            text: "경고음을 등진 채 비상구 외벽을 타고 빠르게 빠져나왔습니다. 단말기에는 '미확인 개체 접촉 회피' 기록 한 줄만 남습니다.",
             timeCostMinutes: 5,
             fatigueDelta: 8,
           },
@@ -198,7 +198,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         },
         outcomes: [
           {
-            text: "의료 포트를 연결하자 방호복 단말기가 '생체 서명 일치'를 띄우며 보안 잠금을 해제했습니다. 인물의 맥박은 이미 멎어 있었지만 무전기 경보가 꺼지며 특수 수납함이 조용히 열렸고, 안에는 온전한 부품들과 자동 지혈 장비가 들어 있었습니다.",
+            text: "단말기가 '생체 서명 일치'를 띄우며 경보 없이 특수 수납함을 열었습니다. 안에는 온전한 부품들과 자동 지혈 장비가 들어 있었습니다.",
             timeCostMinutes: 5,
             rewardItemIds: [
               "mat-tape",
@@ -218,7 +218,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
     imageKey: "warehouse",
     oncePerRaid: true,
     introText:
-      "물류단지 진입로를 가로막은 컨테이너 바리케이드 너머에서 손전등 불빛 두 줄기가 도로를 훑고 있습니다. 회수 부서 완장을 찬 인원 둘이 방호복 위에 기동 조끼를 걸친 채 통행 서류를 점검할 태세로 서 있습니다. 간이 테이블 위 무전기에서는 인근 블록의 수색 보고가 끊이지 않고, 천막 안쪽 철제 선반에는 봉인이 뜯기지 않은 보급 상자 몇 개가 쌓여 있습니다.",
+      "물류단지 진입로 바리케이드 너머로 손전등 불빛 두 줄기가 도로를 훑고 있습니다. 회수 부서 완장을 찬 인원 둘이 수색 무전을 받으며 천막 앞 보급 상자를 지키고 있습니다.",
     choices: [
       {
         id: "distract-checkpoint",
@@ -230,12 +230,12 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         outcomes: [
           {
             chance: 0.55,
-            text: "컨테이너 뒤편에서 쇠파이프 구르는 소리가 나자 두 인원이 일제히 손전등을 돌렸습니다. 그 틈에 천막 선반에서 가장 가벼운 상자 하나를 끌어안고 화물차 아래로 빠져나왔습니다. 뒤늦게 고함이 들렸지만 추격은 이어지지 않았습니다.",
+            text: "반대편 쇳소리에 두 인원이 손전등을 돌린 사이, 천막 선반에서 가장 가벼운 상자를 끌어안고 화물차 아래로 빠져나왔습니다.",
             timeCostMinutes: 10,
             rewardItemIds: ["mat-titanium", "mat-fuel", "wpn_giant_slayer"],
           },
           {
-            text: "철제 상자를 들어 올리는 순간 바닥의 공구함이 넘어지며 쇳소리가 울렸습니다. 돌아선 회수부서 진압조가 경고 없이 진압 장비를 전개하며 앞을 막아섰습니다.",
+            text: "상자를 들다 바닥의 공구함을 엎어 쇳소리가 울렸습니다. 돌아선 회수부서 진압조가 경고 없이 무기를 전개합니다.",
             timeCostMinutes: 15,
             encounterEnemyId: "npc-ind-enforcer",
           },
@@ -249,9 +249,23 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         fatigueCost: 0,
         outcomes: [
           {
-            text: "어두운 배수로를 따라 조용히 기어가 검문선을 벗어났습니다. 무전 소리도 불빛도 더는 따라오지 않아, 잠시 숨을 고른 뒤 다음 경로로 이동했습니다.",
+            text: "어두운 배수로를 따라 기어가 검문선을 벗어났습니다. 무전 소리도 불빛도 더는 따라오지 않습니다.",
             timeCostMinutes: 5,
             fatigueDelta: 4,
+          },
+        ],
+      },
+      {
+        id: "betray-survivors",
+        label: "인근 건물에 숨은 생존자 위치를 무전으로 흘려 검문소를 비우게 한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "미등록 인원 신고가 접수되자 두 인원이 즉시 골목으로 달려갑니다. 비워진 천막에서 고급 자재와 전투 식량을 챙겨 나왔습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["mat-titanium", "mat-fuel", "food-combat-ration"],
           },
         ],
       },
@@ -267,7 +281,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         },
         outcomes: [
           {
-            text: "빛 아래로 걸어 나가 표식을 내밀자 인원이 서류철과 단말기를 번갈아 대조한 뒤 바리케이드 틈을 열어 주었습니다. 지나가는 길목에서 검문소가 떼어 놓은 예비 물자와 특수 도검까지 건네받았습니다.",
+            text: "표식을 대조한 인원이 투덜거리며 바리케이드 틈을 열었습니다. 길목에 떼어 놓은 예비 물자와 특수 도검까지 건네받았습니다.",
             timeCostMinutes: 0,
             rewardItemIds: ["mat-fuel", "mat-tape", "eq-mono-katana"],
           },
@@ -282,7 +296,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
     imageKey: "commercial_street",
     oncePerRaid: true,
     introText:
-      "반쯤 내려간 상가 셔터 아래로, 기업 무인 배급 단말기의 파란 안내등이 일정한 주기로 점멸하고 있습니다. 화면에는 '금일 긴급 배급 가능'이라는 문구가 떠 있지만, 금속 투입구 틈새에는 골절된 채 말라붙은 사람의 손목이 셔터 날에 끼어 있습니다. 안쪽 수납 칸에서는 냉각팬 돌아가는 소리와 함께 밀봉된 보급 상자 여러 개가 보입니다.",
+      "반쯤 내려간 셔터 아래, '금일 긴급 배급 가능' 화면이 뜬 기업 단말기 투입구에 말라붙은 사람의 손목이 끼어 있습니다. 붉은 생체 인식 패드가 다음 사용자의 손바닥을 기다립니다.",
     choices: [
       {
         id: "pry-dispenser",
@@ -294,7 +308,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         outcomes: [
           {
             chance: 0.6,
-            text: "녹슨 나사를 꺾고 후면 패널을 젖히자 비상 수동 개방 레버가 그대로 드러났습니다. 레버를 당기자 하단 덮개가 열리며 미지급 상태이던 전자 부품과 특수 연무 탄창이 쏟아져 나왔습니다.",
+            text: "후면 패널을 젖히고 수동 레버를 당기자 미지급 전자 부품과 특수 연무 탄창이 쏟아져 나왔습니다.",
             timeCostMinutes: 10,
             rewardItemIds: [
               "mat-battery",
@@ -304,9 +318,9 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
             ],
           },
           {
-            text: "덮개를 젖히는 순간 무단 파손 방지 회로가 작동해 고압 방전과 함께 강철 셔터를 끝까지 내려버렸습니다. 손등을 찢기며 팔을 빼낸 직후, 상가 천장 확성기에서 10초간 시설 파손 경보음이 울려 퍼졌습니다.",
+            text: "파손 방지 회로가 작동하며 상가 천장 확성기에서 경보가 울립니다. 소음을 듣고 골목 끝에서 기업 정찰 인력이 뛰어옵니다.",
             timeCostMinutes: 15,
-            hpDelta: -14,
+            encounterEnemyId: "npc-com-scout",
           },
         ],
       },
@@ -318,9 +332,23 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         fatigueCost: 0,
         outcomes: [
           {
-            text: "냉각팬 소리와 붉은 센서 불빛을 등진 채 셔터 앞을 조용히 지나쳤습니다. 불필요한 경보도 부상도 피한 채 잠시 호흡을 가다듬고 다음 골목으로 이동했습니다.",
+            text: "냉각팬 소리와 붉은 센서 불빛을 등진 채 셔터 앞을 조용히 지나쳤습니다. 불필요한 경보 없이 다음 골목으로 이동했습니다.",
             timeCostMinutes: 5,
             fatigueDelta: 6,
+          },
+        ],
+      },
+      {
+        id: "use-severed-hand",
+        label: "투입구에 낀 손목 잔해의 지문을 생체 패드에 억지로 대어 배급을 뽑는다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 2,
+        outcomes: [
+          {
+            text: "단말기가 '정상 수령 완료 — 시민 협조에 감사드립니다'를 띄우며 구급 키트와 전투 식량을 밀어 냈습니다. 화면은 곧바로 재고 소진으로 전환됩니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["med-trauma-kit", "food-combat-ration", "mat-battery"],
           },
         ],
       },
@@ -337,7 +365,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         },
         outcomes: [
           {
-            text: "하단 점검 덮개를 열고 센서 신호선을 단락시키자 단말기가 정상 인증으로 오인해 내부 잠금을 순차적으로 해제했습니다. 아래쪽 예비 배출구로 밀봉된 상자 두 개가 밀려 나오며 화면에 '정상 수령 완료 — 시민 협조에 감사드립니다'라는 문구가 출력됩니다.",
+            text: "센서 신호선을 단락시키자 단말기가 잠금을 순차 해제하며 밀봉된 상자를 배출했습니다. 화면에는 '정상 수령 완료' 문구가 출력됩니다.",
             timeCostMinutes: 5,
             rewardItemIds: ["mat-battery", "mat-lens", "mat-relay", "wpn_sniper"],
           },
@@ -352,7 +380,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
     imageKey: "lab_building",
     oncePerRaid: true,
     introText:
-      "남부 응급의료단지 폐쇄 병동 끝, 두꺼운 강화 유리 격리실 안에서 병원복 차림의 여성이 유리창을 두드리고 있습니다. 벽면 인터폰에서는 문을 열어 달라는 목소리가 흘러나오지만, 유리 너머 여성의 입술은 소리보다 반 박자 늦게 움직입니다. 문 옆의 기업 의료 단말기에는 '비표준 생체 파형 — 회수 대기'라는 붉은 문구와 함께 수동 잠금이 걸려 있고, 격리실 안쪽 약품 카트 위에는 밀봉된 주사기와 응급 약품 상자가 놓여 있습니다.",
+      "폐쇄 병동 강화 유리 안에서 병원복 차림의 여성이 창을 두드리지만, 인터폰 음성은 입술보다 반 박자 늦게 들립니다. 기업 단말기에는 '비표준 생체 파형 — 회수 대기' 문구와 함께 수동 잠금이 걸려 있습니다.",
     choices: [
       {
         id: "unlock-quarantine",
@@ -363,12 +391,12 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         outcomes: [
           {
             chance: 0.5,
-            text: "잠금 볼트가 풀리자 여성이 문틈으로 뛰쳐나와 뒤도 돌아보지 않고 복도 반대편 비상 계단으로 사라졌습니다. 열린 격리실 안쪽 약품 카트에는 의료 물자와 밀봉된 개미떼 통조림이 남아 있었습니다.",
+            text: "잠금이 풀리자 여성이 문틈으로 뛰쳐나와 비상 계단으로 사라졌습니다. 빈 격리실 약품 카트에서 의료 물자를 챙겼습니다.",
             timeCostMinutes: 10,
             rewardItemIds: ["mat-biogel", "mat-stimulant", "eq-summon-swarm"],
           },
           {
-            text: "문이 열리자마자 천장에서 고농도 방역 경보가 울려 퍼졌습니다. 경보를 듣고 복도 끝에서 달려온 방역 격리 요원이 즉시 생체 무장을 전개하며 앞을 가로막았습니다.",
+            text: "문이 열리자 천장에서 방역 경보가 쏟아집니다. 복도 끝에서 달려온 방역 격리 요원이 즉시 생체 무장을 전개합니다.",
             timeCostMinutes: 15,
             encounterEnemyId: "npc-med-quarantine",
           },
@@ -382,9 +410,23 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         fatigueCost: 0,
         outcomes: [
           {
-            text: "인터폰 스위치를 내리자 유리창을 두드리는 둔탁한 진동만 복도에 남았습니다. 외곽 병동으로 조용히 돌아 나온 뒤 호흡을 가다듬었고, 손목 단말기에는 '격리 구역 이상 없음' 기록이 남았습니다.",
+            text: "인터폰을 끄자 유리창을 두드리는 둔탁한 진동만 남았습니다. 단말기에는 '격리 구역 이상 없음' 기록이 갱신됩니다.",
             timeCostMinutes: 5,
             fatigueDelta: 5,
+          },
+        ],
+      },
+      {
+        id: "execute-protocol",
+        label: "기업 통제 프로토콜대로 회수 처리를 승인하고 보급품을 수령한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "회수 승인을 누르자 격리실 천장에서 진정 가스가 분출되며 유리 너머 움직임이 멎습니다. 곧이어 하단 포상으로 고액의 기업 의료 보급품이 떨어졌습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["med-trauma-kit", "mat-nanosuture", "mat-core"],
           },
         ],
       },
@@ -402,7 +444,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         },
         outcomes: [
           {
-            text: "문이 열리며 독한 소독 연무가 쏟아졌지만 시야와 호흡을 잃지 않고 여성을 복도 밖으로 이끌어 냈습니다. 그녀는 거친 숨을 고른 뒤 약품 카트에서 쥐고 나온 의료 상자와 장갑판을 건네고 비상구로 사라졌습니다.",
+            text: "소독 연무를 버텨내며 여성을 끌어내자, 그녀가 약품 카트에서 쥐고 나온 의료 상자와 장갑판을 건네고 비상구로 사라졌습니다.",
             timeCostMinutes: 5,
             rewardItemIds: [
               "mat-biogel",
@@ -422,7 +464,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
     imageKey: "utility_facility",
     oncePerRaid: true,
     introText:
-      "중앙 변전·통신단지 지하 중계실, 주전원 차단기가 내려가 있는데도 구석의 기업 통신 랙에서 낮은 웅웅거림이 새어 나옵니다. 스피커에서는 사흘 뒤 날짜가 찍힌 도시 대피 안내 방송과 함께 방금 전 당신이 지나온 골목의 소음이 뒤섞여 흘러나옵니다. 반쯤 뜯긴 랙 안쪽 배전반 위에는 열기가 식지 않은 예비 부품이 놓여 있고, 천장 덕트 사이로 간헐적인 청백색 스파크가 튑니다.",
+      "주전원이 꺼진 지하 중계실의 기업 통신 랙에서 사흘 뒤 날짜의 대피 방송이 흘러나옵니다. 스파크가 튀는 배전반 위에는 아직 식지 않은 예비 부품들이 놓여 있습니다.",
     choices: [
       {
         id: "strip-rack",
@@ -434,7 +476,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         outcomes: [
           {
             chance: 0.55,
-            text: "절연 장갑 위로 미세한 정전기가 스쳤지만 합선을 일으키지 않고 동력 부품과 정찰 드론 포트를 분리해 냈습니다. 부품을 뽑아내자 사흘 뒤 날짜의 안내 방송은 즉시 끊겼습니다.",
+            text: "합선 없이 동력 부품과 정찰 드론 포트를 분리해 냈습니다. 부품을 뽑자 사흘 뒤 날짜의 안내 방송도 즉시 끊겼습니다.",
             timeCostMinutes: 10,
             rewardItemIds: [
               "mat-relay",
@@ -444,10 +486,9 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
             ],
           },
           {
-            text: "릴레이 모듈을 당기는 순간 배전반 상단에서 굵은 아크 방전이 터지며 손끝과 팔을 때렸습니다. 동시에 천장 모서리의 기업 감시 카메라가 경보음을 울리기 시작해 부품을 포기하고 계단 위로 뛰어올랐습니다.",
+            text: "배전반 상단에서 아크 방전이 터지며 천장 감시 카메라가 경보를 울립니다. 계단 너머에서 중계실 드론 관제병이 드론을 전개하며 진입합니다.",
             timeCostMinutes: 15,
-            hpDelta: -15,
-            fatigueDelta: -10,
+            encounterEnemyId: "npc-inf-drone-op",
           },
         ],
       },
@@ -459,7 +500,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         fatigueCost: 0,
         outcomes: [
           {
-            text: "잡음 섞인 안내 방송을 등진 채 젖은 콘크리트 복도를 따라 밖으로 빠져나왔습니다. 감전 위험과 감시망 추적을 모두 피한 채 잠시 호흡을 고르고 이동했습니다.",
+            text: "잡음 섞인 안내 방송을 등진 채 젖은 콘크리트 복도를 따라 밖으로 빠져나왔습니다.",
             timeCostMinutes: 5,
             fatigueDelta: 5,
           },
@@ -478,7 +519,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         },
         outcomes: [
           {
-            text: "우회 단자에 부품을 물리자 스파크가 멎고 랙 상단 패널이 정상 점검 모드로 전환됩니다. 경보나 감전 없이 배전반의 고출력 부품과 고압 전기파리채까지 분리해 냈습니다.",
+            text: "우회 단자에 부품을 물리자 스파크가 멎으며 랙이 점검 모드로 전환됩니다. 경보 없이 고출력 부품과 고압 전기파리채를 분리해 냈습니다.",
             timeCostMinutes: 5,
             rewardItemIds: [
               "mat-solenoid",
@@ -734,7 +775,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
     imageKey: "commercial_street",
     oncePerRaid: true,
     introText:
-      "지하 보도 상가 끝, 반쯤 내려진 철제 셔터 아래로 주황색 건전지 랜턴 불빛과 희미한 탄내가 새어 나옵니다. 안쪽 간이 의자에 앉은 남자가 상표가 깎여 나간 기업 보급품을 천 위에 늘어놓고는, 발치의 휴대 버너가 칙칙거리며 꺼져 가는 것을 노려보고 있습니다. 셔터 모서리에는 개폐 레버와 이어진 굵은 낚싯줄이 발목 높이에 팽팽하게 묶여 있습니다.",
+      "지하 상가 반쯤 내린 셔터 아래로 랜턴 불빛과 탄내가 새어 나옵니다. 상표를 도려낸 기업 보급품을 늘어놓은 남자가 꺼져 가는 버너를 노려보고 있고, 셔터 옆에는 발목 높이의 낚싯줄이 묶여 있습니다.",
     choices: [
       {
         id: "raid-curtain-crate",
@@ -745,15 +786,14 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         outcomes: [
           {
             chance: 0.5,
-            text: "남자가 반대편 소리에 고개를 돌린 사이 랜턴을 걷어차 어둠을 만든 뒤, 커튼 너머 상자에서 쓸 만한 물건만 낚아채 빠져나왔습니다.",
+            text: "남자가 반대편 소리에 고개를 돌린 사이 랜턴을 걷어차고 커튼 뒤 부품 상자만 낚아채 빠져나왔습니다.",
             timeCostMinutes: 10,
             rewardItemIds: ["mat-wire", "mat-titanium", "mat-electrolyte"],
           },
           {
-            text: "발목에 걸린 낚싯줄이 당겨지며 철제 셔터가 굉음과 함께 내려앉았습니다. 셔터 날에 등을 찍힌 채 겨우 기어 나왔습니다.",
+            text: "발목의 낚싯줄이 당겨지며 셔터 경보가 울립니다. 커튼 뒤에서 대기하던 무장 경계 인원이 즉시 총구를 겨누며 뛰쳐나옵니다.",
             timeCostMinutes: 15,
-            hpDelta: -18,
-            fatigueDelta: -6,
+            encounterEnemyId: "npc-com-scout",
           },
         ],
       },
@@ -765,7 +805,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         fatigueCost: 0,
         outcomes: [
           {
-            text: "투박한 목소리를 뒤로한 채 상가 외곽으로 돌아 나왔습니다. 시간은 지체되었지만 불필요한 마찰은 피했습니다.",
+            text: "투박한 목소리를 등진 채 상가 외곽으로 돌아 나왔습니다. 시간은 지체되었지만 불필요한 마찰은 피했습니다.",
             timeCostMinutes: 10,
           },
         ],
@@ -782,7 +822,7 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         },
         outcomes: [
           {
-            text: "버너에 푸른 불꽃이 오르자 남자는 커튼 뒤에서 천에 감싼 꾸러미를 밀어 주었습니다. 데운 물 한 잔까지 건네받아 기력을 조금 추슬렀습니다.",
+            text: "버너에 푸른 불꽃이 오르자 남자가 커튼 뒤 꾸러미와 데운 물 한 잔을 셔터 아래로 밀어 주었습니다.",
             timeCostMinutes: 5,
             hpDelta: 8,
             rewardItemIds: ["mat-biogel", "mat-tape"],
@@ -891,9 +931,9 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
             rewardItemIds: ["med-trauma-kit", "mat-biogel"],
           },
           {
-            text: "강화 유리가 깨지며 팔목에 깊은 상처를 입었습니다. 약품 대부분도 파편에 손상되었습니다.",
-            timeCostMinutes: 10,
-            hpDelta: -10,
+            text: "강화 유리가 요란하게 깨지는 소리를 듣고 복도 밖을 배회하던 무장 수집가가 주방 안으로 들이닥쳤습니다.",
+            timeCostMinutes: 15,
+            encounterEnemyId: "npc-res-scavenger",
           },
         ],
       },
@@ -940,9 +980,9 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
             rewardItemIds: ["mat-relay", "mat-battery", "mat-wire"],
           },
           {
-            text: "전원 버스 바에 손등이 스치며 강한 전류가 흘렀습니다. 부품을 포기하고 물러났습니다.",
-            timeCostMinutes: 10,
-            hpDelta: -12,
+            text: "단말기 랙에서 보안 경보가 울리며 로비 상층을 감시하던 기업 저격 인원이 계단으로 진입합니다.",
+            timeCostMinutes: 15,
+            encounterEnemyId: "npc-com-marksman",
           },
         ],
       },
@@ -1066,9 +1106,9 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
             rewardItemIds: ["mat-ceramic", "mat-fuel", "mat-core"],
           },
           {
-            text: "달궈진 철제 손잡이가 미끄러지며 팔과 손바닥에 심한 화상을 입었습니다.",
-            timeCostMinutes: 10,
-            hpDelta: -14,
+            text: "철제 상자가 바닥에 떨어지는 굉음과 함께 작업장을 순찰하던 중장갑 경비원이 진입로를 막아섭니다.",
+            timeCostMinutes: 15,
+            encounterEnemyId: "npc-ind-juggernaut",
           },
         ],
       },
@@ -1133,10 +1173,9 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
             ],
           },
           {
-            text: "배관이 터지며 냉매가 뿜어져 나와 동상과 호흡 곤란을 겪었습니다.",
-            timeCostMinutes: 10,
-            hpDelta: -10,
-            fatigueDelta: -6,
+            text: "냉각 배관이 파열되며 성에가 무너지고, 보관고 어둠 속에 웅크려 있던 변이 생체 군집이 한꺼번에 쏟아져 나옵니다.",
+            timeCostMinutes: 15,
+            encounterEnemyId: "npc-med-swarm",
           },
         ],
       },
@@ -1201,9 +1240,9 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
             rewardItemIds: ["mat-solenoid", "mat-core", "mat-battery"],
           },
           {
-            text: "갑작스러운 아크 방전이 캐비닛을 덮쳐 강한 충격을 받았습니다.",
-            timeCostMinutes: 10,
-            hpDelta: -16,
+            text: "갑작스러운 아크 방전 경보가 울리자 변전실 구석의 자동 보안 제어 개체가 즉시 가동하며 공격해 옵니다.",
+            timeCostMinutes: 15,
+            encounterEnemyId: "npc-inf-architect",
           },
         ],
       },

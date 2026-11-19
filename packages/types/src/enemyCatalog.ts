@@ -125,7 +125,7 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
   {
     id: "npc-patrol-early",
     name: "초기 순찰 잔상",
-    faction: "중첩 잔상",
+    faction: "충돌 잔상",
     role: "도로 순찰",
     reason: "동일 시간대 도로를 순찰하던 무장 개체와 경로가 겹쳤습니다.",
     tier: 1,
@@ -161,7 +161,7 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
   {
     id: "npc-patrol-mid",
     name: "무장 생존자 잔상",
-    faction: "중첩 잔상",
+    faction: "충돌 잔상",
     role: "중반 파밍 개체",
     reason: "1차 장비 조합을 마친 타 세계선 생존자와 동선이 충돌했습니다.",
     tier: 2,
@@ -261,7 +261,7 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
   {
     id: "npc-patrol-late",
     name: "완전 무장 생존자 잔상",
-    faction: "중첩 잔상",
+    faction: "충돌 잔상",
     role: "후반 완전 무장 개체",
     reason: "2차 조합을 끝낸 타 세계선 생존자가 탈출로를 두고 대치합니다.",
     tier: 3,
