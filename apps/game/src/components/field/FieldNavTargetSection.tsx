@@ -6,7 +6,6 @@ import {
   FATIGUE_RULES,
   findMaterialDistricts,
   findWeaponDropDistricts,
-  firstMissionNodeId,
   formatRaidTime,
   getBuildingDistrict,
   getCatalogItemById,
@@ -15,6 +14,7 @@ import {
   isBuildingLockedDown,
   type MapDistrict,
   matchesRecipeBase,
+  MISSION_NODE_LABELS,
   resolveBuildingIntroEvent,
   resolveBuildingMaxCraftTier,
 } from "@webgame/types";
@@ -132,9 +132,7 @@ const FieldNavTargetSection = () => {
   const locationName =
     nodeId === (rules?.startNodeId ?? 0)
       ? "임시 대피 구역"
-      : nodeId === firstMissionNodeId
-        ? "기록 중계 시설"
-        : "현재 위치";
+      : (MISSION_NODE_LABELS[nodeId] ?? "현재 위치");
   const hasPending =
     !!pending[pendingNavigationKey(character?.userId, character?.id)];
   const canAct =

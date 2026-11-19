@@ -198,8 +198,59 @@ export const contactRow = style({
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
+  gap: "8px",
   fontSize: "13px",
   color: "#d4d4d8",
+});
+
+export const contactMeta = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "2px",
+});
+
+export const contactSub = style({
+  fontSize: "11px",
+  color: vars.text.muted,
+});
+
+export const issuerRow = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "8px",
+  fontSize: "12px",
+  color: vars.text.secondary,
+});
+
+export const chainList = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "8px",
+});
+
+export const chainRow = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  padding: "10px 12px",
+  borderRadius: "6px",
+  background: vars.surface.low,
+  border: "1px solid rgba(255, 255, 255, 0.06)",
+});
+
+export const chainTitle = style({
+  fontSize: "13px",
+  fontWeight: 600,
+  color: vars.text.primary,
+});
+
+export const chainSub = style({
+  fontFamily: vars.font.mono,
+  fontSize: "11px",
+  color: vars.text.muted,
+  fontVariantNumeric: "tabular-nums",
 });
 
 export const article = style({
@@ -208,3 +259,12 @@ export const article = style({
   background: vars.surface.low,
   border: "1px solid rgba(255, 255, 255, 0.06)",
 });
+
+export const articleHeader = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "8px",
+  marginBottom: "6px",
+});
+

@@ -42,22 +42,32 @@ function BaseHome() {
           disabled={startRaid.isPending || (character ? recovery.hp <= 0 : false)}
         />
         <section className={styles.sectionPanel}>
-          <h2 className={styles.sectionHeader}>임무 통신</h2>
+          <h2 className={styles.sectionHeader}>임무 통신 · 조 시설과장</h2>
           <p className={styles.leadText}>
-            임무를 수락하거나 복귀한 탐사의 기록을 보고합니다.
+            거점 담당자들의 의뢰를 수락하고 복귀한 탐사의 기록을 보고합니다.
           </p>
           <Link to="/base/quest" className={styles.missionLink}>
-            <span>기업 임무 통신 확인</span>
+            <span>임무 통신 확인</span>
             <span className={styles.linkCode} aria-hidden="true">→</span>
           </Link>
         </section>
         <section className={styles.sectionPanel}>
-          <h2 className={styles.sectionHeader}>유전자 연구실</h2>
+          <h2 className={styles.sectionHeader}>유전자 연구실 · 윤 책임연구원</h2>
           <p className={styles.leadText}>
-            윤 책임연구원의 설비로 유전자 슬롯을 분석하고 재조합합니다.
+            유전자 슬롯을 분석하고 재조합하거나 회수한 앰플을 이식합니다.
           </p>
           <Link to="/base/lab" className={styles.missionLink}>
             <span>유전자 연구실 입장</span>
+            <span className={styles.linkCode} aria-hidden="true">→</span>
+          </Link>
+        </section>
+        <section className={styles.sectionPanel}>
+          <h2 className={styles.sectionHeader}>거점 거래소 · 최 사장</h2>
+          <p className={styles.leadText}>
+            회수한 전리품을 매각하거나 비공식 보급 물자와 경매에 참여합니다.
+          </p>
+          <Link to="/base/market" className={styles.missionLink}>
+            <span>거점 거래소 입장</span>
             <span className={styles.linkCode} aria-hidden="true">→</span>
           </Link>
         </section>

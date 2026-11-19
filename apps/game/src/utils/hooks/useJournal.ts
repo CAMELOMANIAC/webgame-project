@@ -21,15 +21,20 @@ export function useMissionAction(action: "accept" | "report") {
   const userId = useAtomValue(selectedUserIdAtom);
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async () =>
+    mutationFn: async (questId?: string) =>
       readApiResponse<JournalView>(
         await apiFetch(`${API_BASE_URL}/user/${userId}/mission/${action}`, {
           method: "POST",
+          headers: questId ? { "Content-Type": "application/json" } : undefined,
+          body: questId ? JSON.stringify({ questId }) : undefined,
         }),
       ),
     onSuccess: async (result) => {
       client.setQueryData(["journal", userId], result);
-      await client.invalidateQueries({ queryKey: ["stash", userId] });
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["stash", userId] }),
+        client.invalidateQueries({ queryKey: ["market"] }),
+      ]);
     },
   });
 }

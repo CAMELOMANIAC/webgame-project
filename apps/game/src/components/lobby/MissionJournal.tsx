@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { CENTRAL_EXTRACTION_NODE_ID } from "@webgame/types";
 import { useAtomValue } from "jotai";
 import { useEffect, useState } from "react";
 
@@ -27,6 +28,8 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
   const accept = useMissionAction("accept");
   const report = useMissionAction("report");
   const mission = journal.data?.mission;
+  const missions = journal.data?.missions ?? (mission ? [mission] : []);
+  const storyTier = journal.data?.storyTier ?? 0;
   const resultPending = Object.values(pending).some(
     (entry) => entry.actorUserId === userId,
   );
@@ -60,10 +63,10 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
         <header className={styles.pageHeader}>
           <div className={styles.telemetryTop}>
             <span>SHELTER // COMM-ARCHIVE</span>
-            <span>임시 대피 구역 · 임무 통신</span>
+            <span>CLEARANCE TIER {storyTier} / 3</span>
           </div>
           <h1>도시 운영 기록</h1>
-          <p>임무명·구역명·대사는 검증용 초안입니다.</p>
+          <p>거점 담당자 3인의 의뢰와 회수된 관측 기록을 확인합니다.</p>
         </header>
 
         {journal.isPending && <p>임무 통신을 불러오는 중입니다.</p>}
@@ -92,8 +95,13 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
                 {resultPending ? "탐사 결과 확인 필요" : labels[mission.status]}
               </small>
               <span className={styles.codeTag}>
-                MISSION // #{mission.targetNodeId}
+                TIER {mission.tier} // NODE #{mission.targetNodeId}
               </span>
+            </div>
+
+            <div className={styles.issuerRow}>
+              <strong>{mission.issuerName}</strong>
+              <span className={styles.codeTag}>{mission.issuerRole}</span>
             </div>
 
             <h2>{mission.title}</h2>
@@ -103,12 +111,16 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
               <div className={styles.metaCell}>
                 <span>TARGET // 목표 경로</span>
                 <strong>
-                  기록 중계 시설 #{mission.targetNodeId} → 탈출 지점 #0 → 거점
-                  보고
+                  {mission.targetLabel} #{mission.targetNodeId} → 중앙 탈출 지점 #
+                  {CENTRAL_EXTRACTION_NODE_ID} → 거점 보고
                 </strong>
               </div>
               <div className={styles.metaCell}>
-                <span>REWARD // 보상</span>
+                <span>SUPPLY // 수락 지급품</span>
+                <strong>{mission.supplyDescription}</strong>
+              </div>
+              <div className={styles.metaCell}>
+                <span>REWARD // 보고 보상</span>
                 <strong>{mission.rewardDescription}</strong>
               </div>
             </div>
@@ -118,9 +130,9 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
                 type="button"
                 className={styles.actionButton}
                 disabled={locked}
-                onClick={() => accept.mutate()}
+                onClick={() => accept.mutate(mission.id)}
               >
-                구호 물자 받고 임무 수락
+                지급품 수령 및 임무 수락
               </button>
             )}
             {mode === "base" && mission.status === "READY" && (
@@ -128,7 +140,7 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
                 type="button"
                 className={styles.actionButton}
                 disabled={locked}
-                onClick={() => report.mutate()}
+                onClick={() => report.mutate(mission.id)}
               >
                 회수 기록 보고 · 보상 받기
               </button>
@@ -150,6 +162,43 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
           </section>
         )}
 
+        {missions.length > 1 && (
+          <section className={styles.panel}>
+            <div className={styles.sectionTopRow}>
+              <h2>임무 수행 이력</h2>
+              <span className={styles.codeTag}>
+                CHAIN {missions.filter((m) => m.status === "COMPLETE").length} / 3
+              </span>
+            </div>
+            <div className={styles.chainList}>
+              {missions.map((item) => (
+                <div className={styles.chainRow} key={item.id}>
+                  <div className={styles.contactMeta}>
+                    <span className={styles.chainTitle}>
+                      {item.tier}차 · {item.title}
+                    </span>
+                    <span className={styles.chainSub}>
+                      {item.issuerName} · {item.targetLabel} #{item.targetNodeId}
+                    </span>
+                  </div>
+                  <small
+                    className={styles.statusBadge({
+                      tone:
+                        item.status === "COMPLETE"
+                          ? "neutral"
+                          : item.status === "RECOVERED"
+                            ? "negative"
+                            : "positive",
+                    })}
+                  >
+                    {labels[item.status]}
+                  </small>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className={styles.panel}>
           <div className={styles.sectionTopRow}>
             <h2>확인한 담당자</h2>
@@ -157,9 +206,16 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
           </div>
           {journal.data?.contacts.map((contact) => (
             <div className={styles.contactRow} key={contact.id}>
-              <span>
-                {contact.name} · {contact.role}
-              </span>
+              <div className={styles.contactMeta}>
+                <span>
+                  {contact.name} · {contact.role}
+                </span>
+                {contact.affiliation && (
+                  <span className={styles.contactSub}>
+                    {contact.affiliation}
+                  </span>
+                )}
+              </div>
               {contact.entityId && (
                 <span className={styles.codeTag}>개체 {contact.entityId}</span>
               )}
@@ -175,7 +231,12 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
           {journal.data?.records.length === 0 && <p>공개된 기록이 없습니다.</p>}
           {journal.data?.records.map((record) => (
             <article className={styles.article} key={record.id}>
-              <h3>{record.title}</h3>
+              <div className={styles.articleHeader}>
+                <h3>{record.title}</h3>
+                {record.tier !== undefined && (
+                  <span className={styles.codeTag}>TIER {record.tier}</span>
+                )}
+              </div>
               <p>{record.content}</p>
             </article>
           ))}
