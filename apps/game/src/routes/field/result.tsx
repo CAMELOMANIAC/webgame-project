@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   formatRaidTime,
   type RaidCombatRecord,
@@ -80,7 +80,7 @@ function RaidResultRoute() {
   });
 
   if (!result || !userId) {
-    return <Navigate to="/field" replace />;
+    return null;
   }
 
   const isDead = result === "DEAD";

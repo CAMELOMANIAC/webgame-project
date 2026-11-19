@@ -4,13 +4,15 @@ import {
   type BattleLog,
   getBuildingDistrict,
   isBuildingLockedDown,
+  LOCKDOWN_WARNING_MINUTES,
   MAP_DISTRICTS,
   type MapBuilding,
   type MapPoint,
+  resolveBuildingLockdownMinute,
   resolveBuildingMaxCraftTier,
 } from "@webgame/types";
 import { getDefaultStore, useAtom, useAtomValue, useSetAtom } from "jotai";
-import { Application, Container, Graphics, Sprite, Text, TextStyle } from "pixi.js";
+import { Application, Container, Graphics, Sprite, Text, TextStyle, Ticker } from "pixi.js";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import compass from "@/assets/compass.svg";
@@ -302,6 +304,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const nodesGraphicsRef = useRef<Graphics | null>(null);
   const hoverHighlightGraphicsRef = useRef<Graphics | null>(null);
   const explorationGraphicsRef = useRef<Graphics | null>(null);
+  const lockdownWarningGraphicsRef = useRef<Graphics | null>(null);
   const districtHighlightGraphicsRef = useRef<Graphics | null>(null);
   const districtLabelsRef = useRef<Map<string, Text>>(new Map());
   const exitContainerRef = useRef<Container | null>(null);
@@ -833,6 +836,10 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         mapLayer.addChild(explorationGraphics);
         explorationGraphicsRef.current = explorationGraphics;
 
+        const lockdownWarningGraphics = new Graphics();
+        mapLayer.addChild(lockdownWarningGraphics);
+        lockdownWarningGraphicsRef.current = lockdownWarningGraphics;
+
         // --- 1.5 Hover Highlight Graphics (단일 동적 하이라이트 레이어) ---
         const hoverHighlightGraphics = new Graphics();
         mapLayer.addChild(hoverHighlightGraphics);
@@ -900,6 +907,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       nodesGraphicsRef.current = null;
       hoverHighlightGraphicsRef.current = null;
       explorationGraphicsRef.current = null;
+      lockdownWarningGraphicsRef.current = null;
       districtHighlightGraphicsRef.current = null;
       districtLabelsRef.current.clear();
       exitContainerRef.current = null;
@@ -1044,6 +1052,15 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         for (let i = candidates.length - 1; i >= 0; i--) {
           const b = candidates[i]!;
           if (isPointInPolygon(worldX, worldY, b.coordinates)) {
+            if (
+              isBuildingLockedDown(
+                b,
+                activeRaidTimeRef.current,
+                activeRaidIdRef.current ?? "",
+              )
+            ) {
+              continue;
+            }
             return { type: "building" as const, building: b };
           }
         }
@@ -1772,19 +1789,50 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
   useEffect(() => {
     const g = explorationGraphicsRef.current;
+    const wg = lockdownWarningGraphicsRef.current;
     if (!isPixiReady || !g || g.destroyed) return;
     g.clear();
     g.visible = !isCombat;
+    if (wg && !wg.destroyed) {
+      wg.clear();
+      wg.visible = !isCombat;
+      wg.alpha = 0;
+    }
 
     const lootedSet = new Set(exploration?.lootedBuildingIds ?? []);
     const seed = activeRaidId ?? "";
+    let hasWarningBuildings = false;
 
     for (const b of buildings) {
       if (b.flatPoints.length < 6) continue;
       if (isBuildingLockedDown(b, activeRaidTime, seed) || lootedSet.has(b.id)) {
         g.poly(b.flatPoints, true).fill({ color: 0x0a0a0c, alpha: 0.48 });
+      } else if (
+        wg &&
+        !wg.destroyed &&
+        resolveBuildingLockdownMinute(b, seed) - activeRaidTime <=
+          LOCKDOWN_WARNING_MINUTES
+      ) {
+        wg.poly(b.flatPoints, true).fill({ color: 0x0a0a0c, alpha: 0.48 });
+        hasWarningBuildings = true;
       }
     }
+
+    if (!hasWarningBuildings || isCombat || !wg || wg.destroyed) {
+      return;
+    }
+
+    const startTime = performance.now();
+    const tick = () => {
+      if (wg.destroyed) return;
+      const elapsedSec = (performance.now() - startTime) / 1000;
+      wg.alpha = 0.5 * (1 - Math.cos((elapsedSec * Math.PI * 2) / 2.2));
+    };
+
+    Ticker.shared.add(tick);
+    return () => {
+      Ticker.shared.remove(tick);
+    };
   }, [isPixiReady, isCombat, exploration, activeRaidTime, activeRaidId]);
 
   useEffect(() => {

@@ -968,8 +968,25 @@ const FieldNavTargetSection = () => {
               ) : (() => {
                 const isReenter =
                   isReenteringCurrentBuilding || (canReenterBuilding && !canMove);
+                const selectedDestBuilding =
+                  targetBuildingId !== null
+                    ? ALL_BUILDINGS_BY_ID.get(targetBuildingId)
+                    : undefined;
+                const willTargetLockBeforeArrival =
+                  !isMoving &&
+                  canMove &&
+                  !isReenter &&
+                  !!selectedDestBuilding &&
+                  isBuildingLockedDown(
+                    selectedDestBuilding,
+                    estimatedTime,
+                    raidId,
+                  );
                 const showFatigueCost =
-                  !isMoving && !isReenter && estimatedFatigueCost > 0;
+                  !isMoving &&
+                  !isReenter &&
+                  !willTargetLockBeforeArrival &&
+                  estimatedFatigueCost > 0;
                 return (
                   <button
                     type="button"
@@ -978,7 +995,11 @@ const FieldNavTargetSection = () => {
                         ? styles.primaryActionWithCost
                         : styles.primaryAction
                     }
-                    disabled={!canAct || (!canMove && !canReenterBuilding)}
+                    disabled={
+                      !canAct ||
+                      (!canMove && !canReenterBuilding) ||
+                      willTargetLockBeforeArrival
+                    }
                     onClick={() => {
                       if (
                         canReenterBuilding &&
@@ -997,7 +1018,9 @@ const FieldNavTargetSection = () => {
                         ? "이동 중…"
                         : isReenter
                           ? "건물 진입"
-                          : "이동"}
+                          : willTargetLockBeforeArrival
+                            ? "도착 전 봉쇄됨"
+                            : "이동"}
                     </span>
                     {showFatigueCost && (
                       <span className={styles.actionCode}>

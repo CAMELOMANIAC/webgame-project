@@ -1,9 +1,10 @@
 import type { UseMutationResult } from "@tanstack/react-query";
 import type { BattleLog } from "@webgame/types";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { BattleCanvas } from "@/components/combat/BattleCanvas";
 import MapGraphCanvas from "@/components/field/MapGraphCanvas";
+import type { WorldTransform } from "@/utils/battleCamera";
 import type { EnemyPlacement } from "@/utils/battleLayout";
 import type { NavigateRaidResponse } from "@/utils/hooks/useNavigateRaid";
 
@@ -31,6 +32,17 @@ export function FieldBackground({
   triggerCombat,
 }: FieldBackgroundProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapLayerRef = useRef<HTMLDivElement | null>(null);
+
+  // 전투 카메라 변환을 지도 배경에도 적용해 유닛만 움직이는 것처럼 보이지 않게 한다
+  const handleCameraChange = useCallback(({ scale, x, y }: WorldTransform) => {
+    const layer = mapLayerRef.current;
+    if (!layer) return;
+    layer.style.transform =
+      scale === 1 && x === 0 && y === 0
+        ? ""
+        : `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -72,11 +84,13 @@ export function FieldBackground({
 
   return (
     <div className={styles.container} ref={containerRef}>
-      <MapGraphCanvas
-        isCombat={isCombat}
-        navigateRaid={navigateRaid}
-        triggerCombat={triggerCombat}
-      />
+      <div className={styles.mapLayer} ref={mapLayerRef}>
+        <MapGraphCanvas
+          isCombat={isCombat}
+          navigateRaid={navigateRaid}
+          triggerCombat={triggerCombat}
+        />
+      </div>
 
       {isCombat && (
         <BattleCanvas
@@ -84,6 +98,7 @@ export function FieldBackground({
           battleLog={battleLog}
           enemyPositions={enemyPositions}
           characterId={characterId}
+          onCameraChange={handleCameraChange}
         />
       )}
     </div>

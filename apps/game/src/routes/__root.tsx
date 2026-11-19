@@ -111,7 +111,9 @@ function GameLayout() {
   if (
     inRaid &&
     !result &&
-    (!fieldRoute || (!activeRaid && path !== "/field"))
+    (!fieldRoute ||
+      path === "/field/result" ||
+      (!activeRaid && path !== "/field"))
   ) {
     return <Navigate to="/field" replace />;
   }
