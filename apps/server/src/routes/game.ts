@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { type Database, stashItems } from "../db";
+import { settleExpiredAuctions } from "../services/market";
 
 export function registerGameRoutes(
   fastify: FastifyInstance,
@@ -82,10 +83,11 @@ export function registerGameRoutes(
     }
   });
 
-  // 유저 창고 조회 API
+  // 유저 창고 조회 API (서버리스 환경에서도 낙찰·유찰 정산 결과가 즉시 반영되도록 지연 정산)
   fastify.get("/user/:userId/stash", async (request, reply) => {
     try {
       const { userId } = request.params as { userId: string };
+      await settleExpiredAuctions(database);
       const stash = await database.query.stashItems.findMany({
         where: eq(stashItems.userId, userId),
         with: { weaponMaster: true },
