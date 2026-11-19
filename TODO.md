@@ -130,10 +130,10 @@
 
 ---
 
-### [ ] 21. 다중우주 생존자 개체(`CharacterVariant`) 차별화 및 수집·운용 재미 강화
+### [x] 21. 다중우주 생존자 개체(`CharacterVariant`) 차별화 및 수집·운용 재미 강화
 
-- [ ] [`CharacterVariant`](./apps/server/src/db/schema.ts)별로 최대 체력(`maxHp`), 스태미나(`maxStamina`), 스태미나 회복(`staminaRegen`), 피로도(`maxFatigue`), 최대 중량(`maxWeight`)의 개성을 뚜렷하게 부여하고, 세계선 배경 설명이나 특화 태그(예: 기계·원거리 특화, 생체·근접 특화, 고중량 파밍 특화 등)를 정의한다.
-- [ ] 거점 숙소([`/base/quarters`](./apps/game/src/routes/base/quarters.tsx))와 출격 준비([`/base/staging`](./apps/game/src/routes/base/staging.tsx))에서 각 개체의 변주 특성과 스탯 차이를 비교해 탐사 목적(파밍 위주 vs 교전 위주)에 맞는 개체를 골라 투입하는 전략성을 만든다.
+- [x] [`CharacterVariant`](./apps/server/src/db/schema.ts)별로 최대 체력(`maxHp`), 스태미나(`maxStamina`), 스태미나 회복(`staminaRegen`), 피로도(`maxFatigue`), 최대 중량(`maxWeight`)의 개성을 뚜렷하게 부여하고, 세계선 배경 설명이나 특화 태그(예: 기계·원거리 특화, 생체·근접 특화, 고중량 파밍 특화 등)를 정의한다.
+- [x] 거점 숙소([`/base/quarters`](./apps/game/src/routes/base/quarters.tsx))와 출격 준비([`/base/staging`](./apps/game/src/routes/base/staging.tsx))에서 각 개체의 변주 특성과 스탯 차이를 비교해 탐사 목적(파밍 위주 vs 교전 위주)에 맞는 개체를 골라 투입하는 전략성을 만든다.
 
 대상: `packages/types/src/`, `apps/server/src/db/schema.ts`, `apps/server/src/services/characters.ts`, `apps/game/src/components/lobby/CharacterCard.tsx`, `apps/game/src/components/lobby/CharacterCollection.tsx`.
 
