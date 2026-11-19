@@ -288,6 +288,9 @@ export const raidSessions = pgTable(
       buildingEvents?: Record<string, BuildingEventState>;
       completedEventIds?: string[];
       pendingLoot?: PendingLootItem[];
+      combatRecords?: import("@webgame/types").RaidCombatRecord[];
+      missionRecovered?: boolean;
+      settlementSummary?: import("@webgame/types").RaidSettlementSummary;
     }>(),
     ghostRoster: jsonb("ghostRoster").$type<{
       tracks: {

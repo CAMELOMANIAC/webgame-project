@@ -7,6 +7,7 @@ import {
   type GhostMatch,
   type PlayerState,
   type RaidBattleResult,
+  type RaidSummaryItem,
   resolveCatalogWeaponData,
   resolveEnemyArchetypeWeapons,
   resolveEnemyRewardIds,
@@ -469,6 +470,44 @@ async function settleBattle(
   return applyBattleSettlement(tx, character, log, rewardIds, options);
 }
 
+export function aggregateSummaryItems(
+  entries: readonly {
+    weaponMasterId: string;
+    quantity: number;
+    weaponMaster: Pick<
+      WeaponMaster,
+      "id" | "name" | "value" | "iconKey" | "damage" | "staminaCost" | "cooldownTicks" | "castTicks" | "weight" | "attackType"
+    > & { effect?: unknown };
+  }[],
+): RaidSummaryItem[] {
+  const byId = new Map<string, RaidSummaryItem>();
+  for (const entry of entries) {
+    if (entry.quantity <= 0) continue;
+    const resolved = resolveCatalogWeaponData({
+      ...entry.weaponMaster,
+      effect: undefined,
+    });
+    const unitValue = Math.max(0, resolved.value ?? entry.weaponMaster.value ?? 0);
+    const existing = byId.get(entry.weaponMasterId);
+    if (existing) {
+      existing.quantity += entry.quantity;
+      existing.totalValue = existing.unitValue * existing.quantity;
+    } else {
+      byId.set(entry.weaponMasterId, {
+        weaponMasterId: entry.weaponMasterId,
+        name: resolved.name || entry.weaponMaster.name,
+        quantity: entry.quantity,
+        unitValue,
+        totalValue: unitValue * entry.quantity,
+        iconKey: resolved.iconKey || entry.weaponMaster.iconKey,
+      });
+    }
+  }
+  return Array.from(byId.values()).sort(
+    (a, b) => b.totalValue - a.totalValue || a.name.localeCompare(b.name),
+  );
+}
+
 export async function applyBattleSettlement(
   tx: TransactionClient,
   character: Character,
@@ -489,8 +528,31 @@ export async function applyBattleSettlement(
   const rewardResolution: {
     rewardItemName: string | null;
     rewardItem: RaidBattleResult["rewardItem"];
+    lostItems?: RaidSummaryItem[];
   } = await (async () => {
     if (playerDied) {
+      const [backpackRows, equippedRows] = await Promise.all([
+        tx.query.raidInventoryItems.findMany({
+          where: eq(raidInventoryItems.characterId, characterId),
+          with: { weaponMaster: true },
+        }),
+        tx.query.characterWeapons.findMany({
+          where: eq(characterWeapons.characterId, characterId),
+          with: { weaponMaster: true },
+        }),
+      ]);
+      const lostItems = aggregateSummaryItems([
+        ...equippedRows.map((row) => ({
+          weaponMasterId: row.weaponMasterId,
+          quantity: 1,
+          weaponMaster: row.weaponMaster,
+        })),
+        ...backpackRows.map((row) => ({
+          weaponMasterId: row.weaponMasterId,
+          quantity: row.quantity,
+          weaponMaster: row.weaponMaster,
+        })),
+      ]);
       await tx
         .delete(raidInventoryItems)
         .where(eq(raidInventoryItems.characterId, characterId));
@@ -509,7 +571,7 @@ export async function applyBattleSettlement(
           activeFoodBuff: null,
         })
         .where(eq(characters.id, characterId));
-      return { rewardItemName: null, rewardItem: null };
+      return { rewardItemName: null, rewardItem: null, lostItems };
     }
 
     const weight = await calculateInventoryWeight(tx, characterId);
@@ -600,6 +662,9 @@ export async function applyBattleSettlement(
     rewardItemName: rewardResolution.rewardItemName,
     ...(rewardResolution.rewardItem
       ? { rewardItem: rewardResolution.rewardItem }
+      : {}),
+    ...(rewardResolution.lostItems
+      ? { lostItems: rewardResolution.lostItems }
       : {}),
   };
 }

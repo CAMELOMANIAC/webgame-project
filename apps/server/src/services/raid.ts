@@ -19,12 +19,16 @@ import {
   matchesRecipeBase,
   type PendingLootItem,
   type RaidActionInput,
+  type RaidBattleResult,
+  type RaidCombatRecord,
   type RaidExplorationState,
   type RaidLootActionInput,
   type RaidLootActionResult,
   type RaidNavigationInput,
   type RaidNavigationResult,
   type RaidNoiseResult,
+  type RaidSettlementSummary,
+  type RaidSummaryItem,
   type RaidView,
   resolveBuildingIntroEvent,
   type RetreatDecisionResult,
@@ -34,7 +38,7 @@ import {
   type StartRaidResult,
   type WeaponEffect,
 } from "@webgame/types";
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import mapData from "../../../../packages/types/src/assets/map_graph.json";
 import {
@@ -59,6 +63,7 @@ import {
 import { type PendingRetreat, retreatChoiceMs, retreatPlaybackLimitMs, sealBattleTimeline } from "../logic/retreat";
 import { gameRules } from "../logic/rules";
 import {
+  aggregateSummaryItems,
   applyBattleSettlement,
   type DeferBattle,
   executeArchetypeBattleInTransaction,
@@ -679,18 +684,32 @@ export async function navigateRaid(
               tracker.defeat(encounter.ghost.source.characterId);
             if (encounter?.kind === "NPC_GHOST")
               tracker.defeatPatrol(encounter.patrolId);
-            if (isMissionEncounter)
+            if (isMissionEncounter) {
               await recoverMissionRecord(tx, userId, raid.id);
+              moveExp.missionRecovered = true;
+            }
           }
-          if (!pendingRetreat && !battleLog.playerDied && battleLog.rewardItem) {
-            moveExp.pendingLoot.push({
-              id: randomUUID(),
-              ...battleLog.rewardItem,
-              source: "COMBAT",
-            });
+          if (!pendingRetreat) {
+            recordBattleOutcome(moveExp, battleLog, stopTime);
+            if (!battleLog.playerDied && battleLog.rewardItem) {
+              moveExp.pendingLoot.push({
+                id: randomUUID(),
+                ...battleLog.rewardItem,
+                source: "COMBAT",
+              });
+            }
+            if (battleLog.playerDied) {
+              moveExp.settlementSummary = buildSettlementSummary({
+                raidId: raid.id,
+                status: "DEAD",
+                elapsedMinutes: stopTime,
+                lostItems: battleLog.lostItems ?? [],
+                exp: moveExp,
+              });
+            }
           }
           const encounterTravel =
-            hadPendingLoot || moveExp.pendingLoot.length > 0
+            !pendingRetreat || hadPendingLoot || moveExp.pendingLoot.length > 0
               ? writeExplorationState(raid, moveExp)
               : undefined;
           return {
@@ -761,7 +780,15 @@ export async function extractRaid(
       const character = await ownedCharacter(tx, userId, characterId);
       const inventory = await tx.query.raidInventoryItems.findMany({
         where: eq(raidInventoryItems.characterId, characterId),
+        with: { weaponMaster: true },
       });
+      const recoveredItems = aggregateSummaryItems(
+        inventory.map((item) => ({
+          weaponMasterId: item.weaponMasterId,
+          quantity: item.quantity,
+          weaponMaster: item.weaponMaster,
+        })),
+      );
       for (const item of inventory)
         await mergeIntoStash(
           tx,
@@ -780,14 +807,19 @@ export async function extractRaid(
         })
         .where(eq(characters.id, characterId));
       const exp = readExplorationState(raid);
-      const hadPendingLoot = exp.pendingLoot.length > 0;
       exp.pendingLoot = [];
-      return {
-        payload: { status: "success" },
+      const summary = buildSettlementSummary({
+        raidId: raid.id,
         status: "EXTRACTED",
-        ...(hadPendingLoot
-          ? { encounterTravel: writeExplorationState(raid, exp) }
-          : {}),
+        elapsedMinutes: raid.time,
+        recoveredItems,
+        exp,
+      });
+      exp.settlementSummary = summary;
+      return {
+        payload: { status: "success" as const, summary },
+        status: "EXTRACTED",
+        encounterTravel: writeExplorationState(raid, exp),
       };
     },
   );
@@ -954,15 +986,27 @@ export async function useRaidConsumable(
             tracker.defeatPatrol(encounter.patrolId);
           }
         }
-        if (!pendingRetreat && !battleLog.playerDied && battleLog.rewardItem) {
-          exp.pendingLoot.push({
-            id: randomUUID(),
-            ...battleLog.rewardItem,
-            source: "COMBAT",
-          });
+        if (!pendingRetreat) {
+          recordBattleOutcome(exp, battleLog, nextTime);
+          if (!battleLog.playerDied && battleLog.rewardItem) {
+            exp.pendingLoot.push({
+              id: randomUUID(),
+              ...battleLog.rewardItem,
+              source: "COMBAT",
+            });
+          }
+          if (battleLog.playerDied) {
+            exp.settlementSummary = buildSettlementSummary({
+              raidId: raid.id,
+              status: "DEAD",
+              elapsedMinutes: nextTime,
+              lostItems: battleLog.lostItems ?? [],
+              exp,
+            });
+          }
         }
         const encounterTravel =
-          hadPendingLoot || exp.pendingLoot.length > 0
+          !pendingRetreat || hadPendingLoot || exp.pendingLoot.length > 0
             ? writeExplorationState(raid, exp)
             : undefined;
         return {
@@ -1144,9 +1188,11 @@ export async function decideRaidBattle(
     let currentBuildingId = raid.currentBuildingId;
     let ghostRoster = raid.ghostRoster;
     let settled: PendingRetreat["fullLog"] | undefined;
+    const exp = readExplorationState(raid);
     if (retreated) {
       currentNodeId = pending.returnNodeId;
       currentBuildingId = pending.returnBuildingId;
+      recordBattleOutcome(exp, pending.fullLog, raid.time, "RETREAT");
       await tx.update(characters).set({
         hp: pending.hp, stamina: character.maxStamina, currentNodeId,
       }).where(eq(characters.id, characterId));
@@ -1158,9 +1204,17 @@ export async function decideRaidBattle(
         pending.rewardIds,
         { deferLootToPending: true },
       );
+      recordBattleOutcome(exp, settled, raid.time);
       if (settled.playerDied) {
         status = "DEAD";
         currentBuildingId = null;
+        exp.settlementSummary = buildSettlementSummary({
+          raidId: raid.id,
+          status: "DEAD",
+          elapsedMinutes: raid.time,
+          lostItems: settled.lostItems ?? [],
+          exp,
+        });
         await tx.update(characters).set({ activeRaidId: null }).where(eq(characters.id, characterId));
         await finishMissionRaid(tx, userId, raid.id, status);
       } else if (settled.result.winnerTeamId === "TeamA") {
@@ -1170,19 +1224,20 @@ export async function decideRaidBattle(
         if (encounter?.sourceCharacterId) tracker.defeat(encounter.sourceCharacterId);
         if (encounter?.patrolId) tracker.defeatPatrol(encounter.patrolId);
         ghostRoster = roster;
-        if (pending.missionEncounter) await recoverMissionRecord(tx, userId, raid.id);
+        if (pending.missionEncounter) {
+          await recoverMissionRecord(tx, userId, raid.id);
+          exp.missionRecovered = true;
+        }
       }
     }
-    let encounterTravel = raid.encounterTravel;
     if (settled && !settled.playerDied && settled.rewardItem) {
-      const exp = readExplorationState(raid);
       exp.pendingLoot.push({
         id: randomUUID(),
         ...settled.rewardItem,
         source: "COMBAT",
       });
-      encounterTravel = writeExplorationState(raid, exp);
     }
+    const encounterTravel = writeExplorationState(raid, exp);
     const nextRaid = {
       ...raid,
       currentNodeId,
@@ -1229,6 +1284,9 @@ interface InternalExplorationState extends RaidExplorationState {
   districtLootCounts: Record<string, number>;
   completedEventIds: string[];
   pendingLoot: PendingLootItem[];
+  combatRecords: RaidCombatRecord[];
+  missionRecovered: boolean;
+  settlementSummary?: RaidSettlementSummary;
 }
 
 function readExplorationState(raid: RaidSession): InternalExplorationState {
@@ -1240,6 +1298,9 @@ function readExplorationState(raid: RaidSession): InternalExplorationState {
     buildingEvents: { ...(raw?.buildingEvents ?? {}) },
     completedEventIds: [...(raw?.completedEventIds ?? [])],
     pendingLoot: [...(raw?.pendingLoot ?? [])],
+    combatRecords: [...(raw?.combatRecords ?? [])],
+    missionRecovered: raw?.missionRecovered ?? false,
+    ...(raw?.settlementSummary ? { settlementSummary: raw.settlementSummary } : {}),
   };
 }
 
@@ -1256,7 +1317,106 @@ function writeExplorationState(
     buildingEvents: next.buildingEvents,
     completedEventIds: next.completedEventIds,
     pendingLoot: next.pendingLoot,
+    combatRecords: next.combatRecords,
+    missionRecovered: next.missionRecovered,
+    ...(next.settlementSummary ? { settlementSummary: next.settlementSummary } : {}),
   };
+}
+
+function recordBattleOutcome(
+  exp: InternalExplorationState,
+  battleLog: Pick<RaidBattleResult, "encounter" | "playerDied" | "result">,
+  timeMinutes: number,
+  forcedOutcome?: RaidCombatRecord["outcome"],
+) {
+  const outcome: RaidCombatRecord["outcome"] =
+    forcedOutcome ??
+    (battleLog.playerDied
+      ? "LOSS"
+      : battleLog.result.winnerTeamId === "TeamA"
+        ? "WIN"
+        : "LOSS");
+  exp.combatRecords.push({
+    enemyName: battleLog.encounter?.name ?? "미확인 개체",
+    enemyKind: battleLog.encounter?.kind === "GHOST" ? "GHOST" : "NPC",
+    ...(battleLog.encounter?.faction
+      ? { faction: battleLog.encounter.faction }
+      : {}),
+    outcome,
+    timeMinutes,
+  });
+}
+
+function buildSettlementSummary(params: {
+  raidId: string;
+  status: "EXTRACTED" | "DEAD";
+  elapsedMinutes: number;
+  recoveredItems?: RaidSummaryItem[];
+  lostItems?: RaidSummaryItem[];
+  exp: InternalExplorationState;
+}): RaidSettlementSummary {
+  const recoveredItems = params.recoveredItems ?? [];
+  const lostItems = params.lostItems ?? [];
+  const totalRecoveredValue = recoveredItems.reduce(
+    (sum, item) => sum + item.totalValue,
+    0,
+  );
+  const totalLostValue = lostItems.reduce(
+    (sum, item) => sum + item.totalValue,
+    0,
+  );
+  const combatRecords = [...params.exp.combatRecords];
+  const defeatedCount = combatRecords.filter(
+    (record) => record.outcome === "WIN",
+  ).length;
+  return {
+    raidId: params.raidId,
+    status: params.status,
+    elapsedMinutes: params.elapsedMinutes,
+    recoveredItems,
+    lostItems,
+    totalRecoveredValue,
+    totalLostValue,
+    combatRecords,
+    encountersCount: combatRecords.length,
+    defeatedCount,
+    missionRecovered:
+      params.status === "EXTRACTED" ? params.exp.missionRecovered : false,
+  };
+}
+
+export async function getLastRaidSummary(
+  database: Database,
+  userId: string,
+  characterId: string,
+): Promise<RaidSettlementSummary | null> {
+  const character = await database.query.characters.findFirst({
+    where: eq(characters.id, characterId),
+    columns: { id: true, userId: true },
+  });
+  if (!character) throw new InventoryError("Character not found", 404);
+  if (character.userId !== userId) {
+    throw new InventoryError("User does not own this character", 403);
+  }
+  const latestEnded = await database.query.raidSessions.findFirst({
+    where: and(
+      eq(raidSessions.characterId, characterId),
+      inArray(raidSessions.status, ["EXTRACTED", "DEAD"]),
+    ),
+    orderBy: [desc(raidSessions.endedAt), desc(raidSessions.startedAt)],
+  });
+  if (!latestEnded) return null;
+  if (latestEnded.encounterTravel?.settlementSummary) {
+    return latestEnded.encounterTravel.settlementSummary;
+  }
+  const status = latestEnded.status === "DEAD" ? "DEAD" : "EXTRACTED";
+  const exp = readExplorationState(latestEnded);
+  return buildSettlementSummary({
+    raidId: latestEnded.id,
+    status,
+    elapsedMinutes: latestEnded.time,
+    exp,
+  });
 }
 
 async function ensureCatalogItemsInTransaction(
@@ -1497,19 +1657,31 @@ export async function executeRaidBuildingAction(
           retreat.defer,
           { deferLootToPending: true },
         );
-
-        if (!battleLog.playerDied && battleLog.rewardItem) {
-          exp.pendingLoot.push({
-            id: randomUUID(),
-            ...battleLog.rewardItem,
-            source: "COMBAT",
-          });
+        const pendingRetreat = retreat.finish(battleLog);
+        if (!pendingRetreat) {
+          recordBattleOutcome(exp, battleLog, nextTime);
+          if (!battleLog.playerDied && battleLog.rewardItem) {
+            exp.pendingLoot.push({
+              id: randomUUID(),
+              ...battleLog.rewardItem,
+              source: "COMBAT",
+            });
+          }
+          if (battleLog.playerDied) {
+            exp.settlementSummary = buildSettlementSummary({
+              raidId: raid.id,
+              status: "DEAD",
+              elapsedMinutes: nextTime,
+              lostItems: battleLog.lostItems ?? [],
+              exp,
+            });
+          }
         }
         exp.buildingEvents[buildingKey] = {
           stage: "READY",
           text: `건물 내부 수색 중 ${archetype.name}와(과) 교전했습니다.`,
         };
-        return { retreat, battleLog };
+        return { retreat, pendingRetreat, battleLog };
       };
 
       const requireAndSpendFatigue = async (cost: number, extraDelta = 0) => {
@@ -1793,12 +1965,24 @@ export async function executeRaidBuildingAction(
             { deferLootToPending: true },
           );
           pendingRetreat = retreat.finish(battleLog);
-          if (!pendingRetreat && !battleLog.playerDied && battleLog.rewardItem) {
-            exp.pendingLoot.push({
-              id: randomUUID(),
-              ...battleLog.rewardItem,
-              source: "COMBAT",
-            });
+          if (!pendingRetreat) {
+            recordBattleOutcome(exp, battleLog, eventEndTime);
+            if (!battleLog.playerDied && battleLog.rewardItem) {
+              exp.pendingLoot.push({
+                id: randomUUID(),
+                ...battleLog.rewardItem,
+                source: "COMBAT",
+              });
+            }
+            if (battleLog.playerDied) {
+              exp.settlementSummary = buildSettlementSummary({
+                raidId: raid.id,
+                status: "DEAD",
+                elapsedMinutes: eventEndTime,
+                lostItems: battleLog.lostItems ?? [],
+                exp,
+              });
+            }
           }
           if (
             !battleLog.playerDied &&

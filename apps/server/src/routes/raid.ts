@@ -19,6 +19,7 @@ import {
   extractionNodeIds,
   extractRaid,
   fightRaidMonster,
+  getLastRaidSummary,
   getRaidNavigationResult,
   getRaidNoiseSignals,
   NavigateSchema,
@@ -47,6 +48,22 @@ export function registerRaidRoutes(
   fastify: FastifyInstance,
   database: Database,
 ) {
+  fastify.get<{ Params: { characterId: string } }>(
+    "/character/:characterId/raid/last-summary",
+    async (request, reply) => {
+      try {
+        reply.header("Cache-Control", "no-store");
+        const summary = await getLastRaidSummary(
+          database,
+          actor(request),
+          request.params.characterId,
+        );
+        return { summary };
+      } catch (error) {
+        return sendInventoryError(reply, error);
+      }
+    },
+  );
   fastify.get<{ Params: { characterId: string } }>(
     "/character/:characterId/raid/battle",
     async (request, reply) => {
