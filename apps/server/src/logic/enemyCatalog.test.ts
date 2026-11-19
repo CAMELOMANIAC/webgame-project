@@ -238,3 +238,16 @@ test("기초 무기 5종은 건물 수색 풀에서 제외되고 구역별 특�
   }
 });
 
+test("필드 적대 NPC에는 기업·한림그룹 소속이 없으며 고유 무기 2종은 확정 드랍 대상이 아니다", () => {
+  for (const archetype of ENEMY_ARCHETYPES) {
+    assert.equal(
+      archetype.faction.includes("기업") || archetype.faction.includes("한림"),
+      false,
+      `Hostile field NPC ${archetype.id} should not belong to corporate faction (${archetype.faction})`,
+    );
+    assert.notEqual(archetype.guaranteedRewardId, "wpn_sniper");
+    assert.notEqual(archetype.guaranteedRewardId, "wpn_giant_slayer");
+  }
+});
+
+

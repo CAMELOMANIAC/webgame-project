@@ -75,8 +75,8 @@ test("실제 DB: 임무 수락·회수·탈출·보고는 재시도해도 지원
   );
   assert.equal(result.stopNodeId, firstMission.targetNodeId);
   assert.equal(result.battleLog?.encounter?.kind, "NPC");
-  assert.equal(result.battleLog?.encounter?.faction, "기업");
-  assert.equal(result.battleLog?.encounter?.role, "시설 통제");
+  assert.equal(result.battleLog?.encounter?.faction, "탈주 인원");
+  assert.equal(result.battleLog?.encounter?.role, "시설 무단 점거");
   assert.ok(result.battleLog?.encounter?.reason);
   assert.equal((await journalView(db, user.id)).mission.status, "RECOVERED");
   assert.deepEqual(
