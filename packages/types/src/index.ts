@@ -8,6 +8,7 @@ export * from "./enemyCatalog";
 export * from "./fatigue";
 export * from "./lockdown";
 export * from "./market";
+export * from "./characterVariants";
 export type TargetingStrategy = "WEAKEST" | "STRONGEST" | "RANDOM";
 export type ItemKind = "EQUIPMENT" | "MATERIAL" | "CONSUMABLE";
 export type ConsumableCategory = "FOOD" | "MEDICAL";
@@ -142,6 +143,7 @@ export type WeaponSlots = [
 
 export interface BattleCombatant extends Omit<User, "weapons"> {
   weapons: WeaponSlots;
+  variantId?: string | null;
   activeFoodBuff?: FoodBuffEffect | null;
 }
 
