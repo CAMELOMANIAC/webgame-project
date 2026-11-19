@@ -1,5 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { RaidActionInput, RaidView, StartRaidResult } from "@webgame/types";
+import type {
+  ExtractRaidResult,
+  RaidActionInput,
+  StartRaidResult,
+} from "@webgame/types";
 import { useAtomValue, useSetAtom } from "jotai";
 
 import { selectedUserIdAtom } from "@/atoms/authAtom";
@@ -9,6 +13,11 @@ import { API_BASE_URL, apiFetch } from "../api";
 import { readApiResponse } from "../request";
 import { characterKey } from "./useCharacterCollection";
 import type { CharacterData } from "./useGetCharacter";
+
+export const lastRaidSummaryKey = (
+  userId: string | null | undefined,
+  characterId: string | undefined,
+) => ["raid-last-summary", userId ?? "", characterId ?? ""] as const;
 
 export function raidActionInput(
   character: CharacterData | undefined,
@@ -99,7 +108,7 @@ export const useRaidSession = () => {
         characterKey(userId, characterId),
       );
       const body = raidActionInput(character);
-      return readApiResponse<{ status: string; raid: RaidView }>(
+      return readApiResponse<ExtractRaidResult>(
         await apiFetch(
           `${API_BASE_URL}/character/${characterId}/raid/extract`,
           {
@@ -110,9 +119,13 @@ export const useRaidSession = () => {
         ),
       );
     },
-    onSuccess: (_result, characterId) => {
+    onSuccess: (result, characterId) => {
       setNoiseSignals(null);
       if (userId) {
+        queryClient.setQueryData(
+          lastRaidSummaryKey(userId, characterId),
+          result.summary,
+        );
         setRaidResults((results) => ({ ...results, [userId]: "EXTRACTED" }));
       }
       queryClient.setQueryData(
