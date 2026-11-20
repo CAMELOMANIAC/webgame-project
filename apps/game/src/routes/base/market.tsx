@@ -6,6 +6,7 @@ import {
 } from "@webgame/types";
 import { useEffect, useMemo, useState } from "react";
 
+import choiPortrait from "@/assets/choi-portrait.png";
 import { resolveItemImageSrc } from "@/assets/items";
 import { BaseScreen } from "@/components/lobby/BaseScreen";
 import * as baseStyles from "@/components/lobby/BaseScreen.css";
@@ -274,6 +275,7 @@ function MarketScreen() {
     <BaseScreen
       title="거래소"
       description="최고가 낙찰 경매장. 최 사장이 기초 보급품을 공급하고, 마감 시 기준가 이하 무입찰 매물을 자동 매입합니다."
+      portraitSrc={choiPortrait}
     >
       <div className={styles.layout}>
         <div className={styles.telemetryGrid}>

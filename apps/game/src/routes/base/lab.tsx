@@ -11,6 +11,7 @@ import {
 } from "@webgame/types";
 import { useEffect, useMemo, useState } from "react";
 
+import yoonPortrait from "@/assets/yoon-portrait.png";
 import { BaseScreen } from "@/components/lobby/BaseScreen";
 import * as baseStyles from "@/components/lobby/BaseScreen.css";
 import { useGeneLab } from "@/utils/hooks/useGeneLab";
@@ -109,6 +110,7 @@ function GeneLabScreen() {
     <BaseScreen
       title="유전자 연구실"
       description="윤 책임연구원의 장비로 개체의 유전자 슬롯을 분석하고 재조합합니다."
+      portraitSrc={yoonPortrait}
     >
       {errorMessage && (
         <p className={baseStyles.banner({ tone: "negative" })} role="alert">

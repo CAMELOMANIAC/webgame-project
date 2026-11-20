@@ -2,6 +2,7 @@ import { useIsMutating } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
 
+import choPortrait from "@/assets/cho-portrait.png";
 import { selectedUserIdAtom } from "@/atoms/authAtom";
 import { BaseScreen } from "@/components/lobby/BaseScreen";
 import * as styles from "@/components/lobby/BaseScreen.css";
@@ -28,7 +29,8 @@ function StashScreen() {
   return (
     <BaseScreen
       title="거점 정비소"
-      description="배치할 개체를 선택하고 공용 창고에서 장비와 물품을 정비합니다."
+      description="조 시설과장 · 배치할 개체를 선택하고 공용 창고에서 장비와 물품을 정비합니다."
+      portraitSrc={choPortrait}
     >
       <CharacterCollection disabled={isSavingInventory || isSelecting} />
       {stashQuery.isLoading && <p>창고를 불러오는 중입니다.</p>}

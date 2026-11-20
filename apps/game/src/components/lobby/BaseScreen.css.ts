@@ -19,9 +19,40 @@ export const lobbyContainer = style({
 });
 
 export const headerArea = style({
+  position: "relative",
+  overflow: "hidden",
   marginBottom: "20px",
   paddingBottom: "16px",
   borderBottom: `1px solid ${vars.border.subtle}`,
+});
+
+export const headerContent = style({
+  position: "relative",
+  zIndex: 1,
+});
+
+export const headerPortraitWrap = style({
+  position: "absolute",
+  top: 0,
+  right: 0,
+  bottom: 0,
+  width: "180px",
+  zIndex: 0,
+  pointerEvents: "none",
+  overflow: "hidden",
+  WebkitMaskImage:
+    "linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.85) 55%, rgba(0, 0, 0, 1) 100%)",
+  maskImage:
+    "linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.85) 55%, rgba(0, 0, 0, 1) 100%)",
+});
+
+export const headerPortraitImage = style({
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  objectPosition: "top center",
+  display: "block",
+  opacity: 0.34,
 });
 
 export const headerTop = style({
@@ -128,10 +159,50 @@ export const inventoryStashArea = style({
 });
 
 export const sectionPanel = style({
+  position: "relative",
+  overflow: "hidden",
   background: vars.surface.mid,
   border: `1px solid ${vars.border.subtle}`,
   borderRadius: "10px",
   padding: "16px",
+});
+
+export const sectionPanelContent = style({
+  position: "relative",
+  zIndex: 1,
+});
+
+export const sectionPortraitWrap = style({
+  position: "absolute",
+  top: 0,
+  right: 0,
+  bottom: 0,
+  width: "160px",
+  zIndex: 0,
+  pointerEvents: "none",
+  overflow: "hidden",
+  WebkitMaskImage:
+    "linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.78) 45%, rgba(0, 0, 0, 1) 100%)",
+  maskImage:
+    "linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.78) 45%, rgba(0, 0, 0, 1) 100%)",
+  selectors: {
+    "&::after": {
+      content: '""',
+      position: "absolute",
+      inset: 0,
+      background:
+        "linear-gradient(180deg, rgba(14, 15, 18, 0.15) 0%, rgba(14, 15, 18, 0.55) 100%)",
+    },
+  },
+});
+
+export const sectionPortraitImage = style({
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  objectPosition: "top center",
+  display: "block",
+  opacity: 0.32,
 });
 
 export const sectionHeader = style({
