@@ -109,7 +109,7 @@ function GeneLabScreen() {
   return (
     <BaseScreen
       title="유전자 연구실"
-      description="윤 책임연구원의 장비로 개체의 유전자 슬롯을 분석하고 재조합합니다."
+      description={'윤 책임연구원 · "위쪽 보고용 기록은 알아서 걸러둘 테니, 지금은 개체 유전자 안정화에만 집중하세요."'}
       portraitSrc={yoonPortrait}
     >
       {errorMessage && (

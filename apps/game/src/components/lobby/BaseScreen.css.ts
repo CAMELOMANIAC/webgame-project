@@ -26,9 +26,22 @@ export const headerArea = style({
   borderBottom: `1px solid ${vars.border.subtle}`,
 });
 
-export const headerContent = style({
-  position: "relative",
-  zIndex: 1,
+export const headerContent = recipe({
+  base: {
+    position: "relative",
+    zIndex: 1,
+  },
+  variants: {
+    withPortrait: {
+      true: {
+        paddingRight: "136px",
+      },
+      false: {},
+    },
+  },
+  defaultVariants: {
+    withPortrait: false,
+  },
 });
 
 export const headerPortraitWrap = style({
@@ -36,14 +49,14 @@ export const headerPortraitWrap = style({
   top: 0,
   right: 0,
   bottom: 0,
-  width: "180px",
+  width: "148px",
   zIndex: 0,
   pointerEvents: "none",
   overflow: "hidden",
   WebkitMaskImage:
-    "linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.85) 55%, rgba(0, 0, 0, 1) 100%)",
+    "linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.85) 45%, rgba(0, 0, 0, 1) 100%)",
   maskImage:
-    "linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.85) 55%, rgba(0, 0, 0, 1) 100%)",
+    "linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.85) 45%, rgba(0, 0, 0, 1) 100%)",
 });
 
 export const headerPortraitImage = style({

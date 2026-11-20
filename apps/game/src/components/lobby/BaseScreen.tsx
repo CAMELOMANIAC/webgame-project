@@ -28,7 +28,7 @@ export function BaseScreen({
               />
             </div>
           )}
-          <div className={styles.headerContent}>
+          <div className={styles.headerContent({ withPortrait: Boolean(portraitSrc) })}>
             <span className={styles.subTitle}>SHELTER // SEC-00</span>
             <h1 className={styles.mainTitle}>{title}</h1>
             <p className={styles.leadText}>{description}</p>

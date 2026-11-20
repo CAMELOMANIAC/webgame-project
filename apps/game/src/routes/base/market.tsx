@@ -274,7 +274,7 @@ function MarketScreen() {
   return (
     <BaseScreen
       title="거래소"
-      description="최고가 낙찰 경매장. 최 사장이 기초 보급품을 공급하고, 마감 시 기준가 이하 무입찰 매물을 자동 매입합니다."
+      description={'최 사장 · "쓸 만한 물건이면 내가 시세 맞춰 바로 쳐줄게. 급하면 여기 매대부터 뒤져봐."'}
       portraitSrc={choiPortrait}
     >
       <div className={styles.layout}>
