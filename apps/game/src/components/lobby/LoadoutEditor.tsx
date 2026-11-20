@@ -593,11 +593,11 @@ export function LoadoutEditor({
       resolveInspectedSlotDetails(inspectedTarget, characterData);
     const actions: ItemDetailAction[] = [];
 
-    if (!isBusy && characterData) {
+    if (characterData) {
       if (inspectedTarget.source === "equipment") {
         actions.push({
           label: "가방으로 해제",
-          disabled: !firstEmptyBackpackId,
+          disabled: isBusy || !firstEmptyBackpackId,
           onClick: () => {
             if (firstEmptyBackpackId) {
               moveSlots(inspectedTarget.item.id, firstEmptyBackpackId);
@@ -608,6 +608,7 @@ export function LoadoutEditor({
         if (commitMode === "deferred") {
           actions.push({
             label: "창고로 보관",
+            disabled: isBusy,
             onClick: () => {
               handleMoveToStash(inspectedTarget.item.id);
               setInspectedTarget(null);
@@ -623,7 +624,7 @@ export function LoadoutEditor({
           actions.push({
             label: "사용",
             tone: "primary",
-            disabled: baseConsumableMutation.isPending,
+            disabled: isBusy || baseConsumableMutation.isPending,
             onClick: () => {
               baseConsumableMutation.mutate({
                 characterId: characterData.raw.id,
@@ -637,7 +638,7 @@ export function LoadoutEditor({
           actions.push({
             label: "장착",
             tone: "primary",
-            disabled: !firstEmptyEquipId,
+            disabled: isBusy || !firstEmptyEquipId,
             onClick: () => {
               if (firstEmptyEquipId) {
                 moveSlots(inspectedTarget.item.id, firstEmptyEquipId);
@@ -648,6 +649,7 @@ export function LoadoutEditor({
         }
         actions.push({
           label: "창고로 보관",
+          disabled: isBusy,
           onClick: () => {
             handleMoveToStash(
               inspectedTarget.item.id,
