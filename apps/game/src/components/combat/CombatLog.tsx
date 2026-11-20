@@ -348,7 +348,10 @@ const CombatLog = () => {
                   ? (actorPlayer?.weapons?.[event.sourceSlotIndex]?.name ??
                     "장비 발동")
                   : event.type === "SHIELD"
-                    ? "보호막"
+                    ? (event.weaponIndex !== undefined
+                        ? (actorPlayer?.weapons?.[event.weaponIndex]?.name ??
+                          "보호막")
+                        : "보호막")
                     : event.type === "HEAL"
                       ? "회복"
                       : `소환 · ${event.combatant.name}`;
