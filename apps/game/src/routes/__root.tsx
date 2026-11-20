@@ -6,7 +6,7 @@ import {
   useLocation,
 } from "@tanstack/react-router";
 import { getDefaultStore, useAtomValue } from "jotai";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 
 import { selectedUserIdAtom } from "@/atoms/authAtom";
 import { pendingNavigationAtom } from "@/atoms/pendingNavigationAtom";
@@ -45,6 +45,7 @@ function RouteComponent() {
 
 function GameLayout() {
   const { pathname } = useLocation();
+  const reduceMotion = useReducedMotion();
   const path = pathname.replace(/\/$/, "");
   const userId = useAtomValue(selectedUserIdAtom);
   const pending = useAtomValue(pendingNavigationAtom);
@@ -135,7 +136,15 @@ function GameLayout() {
   return (
     <>
       <div className={`${styles.outletWrapper} content-container`}>
-        <Outlet />
+        <motion.div
+          key={path}
+          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
+          style={{ width: "100%", height: "100%" }}
+        >
+          <Outlet />
+        </motion.div>
       </div>
       {(!result || isFadingOutroHud) && (
         <motion.div

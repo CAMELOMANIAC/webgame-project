@@ -134,23 +134,14 @@ export const facilityPortraitWrap = style({
   top: 0,
   right: 0,
   bottom: 0,
-  width: "104px",
+  width: "108px",
   zIndex: 0,
   pointerEvents: "none",
   overflow: "hidden",
   WebkitMaskImage:
-    "linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.78) 45%, rgba(0, 0, 0, 1) 100%)",
+    "linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.85) 40%, #000 42%)",
   maskImage:
-    "linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.78) 45%, rgba(0, 0, 0, 1) 100%)",
-  selectors: {
-    "&::after": {
-      content: '""',
-      position: "absolute",
-      inset: 0,
-      background:
-        "linear-gradient(180deg, rgba(14, 15, 18, 0.15) 0%, rgba(14, 15, 18, 0.55) 100%)",
-    },
-  },
+    "linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.85) 40%, #000 42%)",
 });
 
 export const facilityPortraitImage = style({
@@ -159,7 +150,7 @@ export const facilityPortraitImage = style({
   objectFit: "cover",
   objectPosition: "top center",
   display: "block",
-  opacity: 0.34,
+  opacity: 1,
 });
 
 export const facilityCardContent = style({
@@ -168,7 +159,7 @@ export const facilityCardContent = style({
   display: "flex",
   flexDirection: "column",
   gap: "3px",
-  paddingRight: "40px",
+  paddingRight: "64px",
 });
 
 export const facilityTitle = style({
