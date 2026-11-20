@@ -99,6 +99,100 @@ export const leadText = style({
   margin: "0 0 12px",
 });
 
+export const facilityGrid = style({
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: "10px",
+});
+
+export const facilityCard = style({
+  position: "relative",
+  overflow: "hidden",
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "space-between",
+  minHeight: "96px",
+  padding: "14px",
+  borderRadius: "10px",
+  background: vars.surface.mid,
+  border: `1px solid ${vars.border.subtle}`,
+  color: vars.text.primary,
+  textDecoration: "none",
+  transition: "background-color 0.15s ease, border-color 0.15s ease",
+  ":hover": {
+    background: vars.surface.high,
+    borderColor: vars.text.primary,
+  },
+  ":focus-visible": {
+    outline: `2px solid ${vars.text.primary}`,
+    outlineOffset: "2px",
+  },
+});
+
+export const facilityPortraitWrap = style({
+  position: "absolute",
+  top: 0,
+  right: 0,
+  bottom: 0,
+  width: "104px",
+  zIndex: 0,
+  pointerEvents: "none",
+  overflow: "hidden",
+  WebkitMaskImage:
+    "linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.78) 45%, rgba(0, 0, 0, 1) 100%)",
+  maskImage:
+    "linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.78) 45%, rgba(0, 0, 0, 1) 100%)",
+  selectors: {
+    "&::after": {
+      content: '""',
+      position: "absolute",
+      inset: 0,
+      background:
+        "linear-gradient(180deg, rgba(14, 15, 18, 0.15) 0%, rgba(14, 15, 18, 0.55) 100%)",
+    },
+  },
+});
+
+export const facilityPortraitImage = style({
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  objectPosition: "top center",
+  display: "block",
+  opacity: 0.34,
+});
+
+export const facilityCardContent = style({
+  position: "relative",
+  zIndex: 1,
+  display: "flex",
+  flexDirection: "column",
+  gap: "3px",
+  paddingRight: "40px",
+});
+
+export const facilityTitle = style({
+  margin: 0,
+  fontSize: "14px",
+  fontWeight: 700,
+  color: vars.text.primary,
+});
+
+export const facilityRole = style({
+  fontFamily: vars.font.mono,
+  fontSize: "11px",
+  fontWeight: 500,
+  color: vars.text.secondary,
+});
+
+export const facilityFooter = style({
+  position: "relative",
+  zIndex: 1,
+  display: "flex",
+  justifyContent: "flex-end",
+  marginTop: "12px",
+});
+
 export const missionLink = style({
   display: "flex",
   alignItems: "center",
