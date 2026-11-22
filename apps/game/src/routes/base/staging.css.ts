@@ -136,7 +136,7 @@ export const floatingCtaContainer = style({
 export const floatingCtaButton = style({
   minHeight: "48px",
   minWidth: "220px",
-  maxWidth: "360px",
+  maxWidth: "356px",
   width: "100%",
   padding: "0 24px",
   border: 0,
