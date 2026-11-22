@@ -168,11 +168,16 @@ export const BASE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     castTicks: 4,
     weight: 15,
     value: 180,
-    description: "긴 조준을 거쳐 원거리에서 높은 피해를 입히는 개조 저격총.",
+    description:
+      "긴 조준을 거쳐 원거리에서 방어막을 100% 관통하는 치명적인 일격(치명타 +35%)을 가합니다.",
     attackType: "RANGED",
     iconKey: "RIFLE",
     strategy: "WEAKEST",
     tags: ["FIREARM"],
+    effect: {
+      shieldPierce: 1,
+      critChanceBonus: 0.35,
+    },
   }),
   makeEquipment({
     id: "wpn_giant_slayer",
@@ -184,11 +189,16 @@ export const BASE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     castTicks: 2,
     weight: 10,
     value: 150,
-    description: "체력이 높은 대상을 우선 노려 내려찍는 육중한 파쇄 해머.",
+    description:
+      "체력이 높은 대상을 우선 노려 방어막을 50% 관통하며 치명타(+20%)로 내려찍는 육중한 파쇄 해머입니다.",
     attackType: "MELEE",
     iconKey: "AXE",
     strategy: "STRONGEST",
     tags: ["BLUNT"],
+    effect: {
+      shieldPierce: 0.5,
+      critChanceBonus: 0.2,
+    },
   }),
 ];
 

@@ -147,10 +147,10 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
     tier: 1,
     districtKinds: ["RESIDENTIAL", "COMMERCIAL", "INFRA"],
     buildingCategories: ["PUBLIC", "INFRA"],
-    hp: 58,
+    hp: 45,
     stamina: 100,
     staminaRegen: 7,
-    weaponIds: ["mat-wire", "hanlim-relief-carbine", "mat-ceramic"],
+    weaponIds: ["hanlim-relief-carbine", "mat-wire"],
     guaranteedRewardId: "hanlim-relief-carbine",
     rewardIds: ["hanlim-relief-carbine", "mat-ceramic", "mat-relay", "med-bandage"],
   },
@@ -256,7 +256,7 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
   },
 
   // =========================================================================
-  // Tier 3: 후반 (141분+, 5~6슬롯 완성형 시너지 빌드)
+  // Tier 3: 후반 (241분+, 4~5슬롯 완성형 시너지 빌드)
   // =========================================================================
   {
     id: "npc-patrol-late",
@@ -267,16 +267,15 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
     tier: 3,
     districtKinds: ["RESIDENTIAL", "COMMERCIAL", "INDUSTRIAL", "MEDICAL", "INFRA"],
     isPatrolEligible: true,
-    hp: 145,
-    stamina: 130,
-    staminaRegen: 11,
+    hp: 112,
+    stamina: 120,
+    staminaRegen: 10,
     weaponIds: [
       "eq-log-t2a",
       "eq-cul-t2a",
-      "eq-med-t2b",
       "eq-cul-t2b",
       "eq-reactive-plate",
-      "eq-trauma-autoinjector",
+      "mat-titanium",
     ],
     rewardIds: [
       "eq-cul-t2a",
@@ -295,9 +294,9 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
     districtKinds: ["INDUSTRIAL", "COMMERCIAL"],
     buildingCategories: ["LOGISTICS", "PUBLIC"],
     isPatrolEligible: true,
-    hp: 158,
-    stamina: 135,
-    staminaRegen: 11,
+    hp: 132,
+    stamina: 130,
+    staminaRegen: 10,
     weaponIds: [
       "eq-pub-t2a",
       "eq-pub-t2b",
@@ -317,14 +316,13 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
     districtKinds: ["INFRA", "COMMERCIAL"],
     buildingCategories: ["INFRA", "COMMERCIAL"],
     isPatrolEligible: true,
-    hp: 138,
-    stamina: 135,
-    staminaRegen: 12,
+    hp: 102,
+    stamina: 125,
+    staminaRegen: 11,
     weaponIds: [
       "eq-com-t2a",
       "eq-inf-t2a",
       "eq-arc-emitter",
-      "eq-inf-t2b",
       "eq-summon-drone",
       "eq-com-t2b",
     ],
@@ -340,15 +338,15 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
     districtKinds: ["MEDICAL", "RESIDENTIAL"],
     buildingCategories: ["MEDICAL"],
     isPatrolEligible: true,
-    hp: 140,
-    stamina: 130,
-    staminaRegen: 11,
+    hp: 130,
+    stamina: 145,
+    staminaRegen: 13,
     weaponIds: [
       "eq-chem-canister",
       "eq-mono-katana",
       "eq-summon-swarm",
       "eq-med-t2a",
-      "mat-nanosuture",
+      "eq-med-t2b",
     ],
     rewardIds: [
       "eq-mono-katana",
