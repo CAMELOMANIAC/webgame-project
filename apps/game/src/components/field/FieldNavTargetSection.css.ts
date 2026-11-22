@@ -719,14 +719,16 @@ export const recipeName = style({
 
 export const recipeDetailBtn = style({
   flexShrink: 0,
-  fontFamily: vars.font.mono,
-  fontSize: "10px",
-  fontWeight: 600,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "26px",
+  height: "26px",
+  padding: 0,
   color: vars.text.secondary,
   backgroundColor: vars.surface.mid,
   border: `1px solid ${vars.border.subtle}`,
   borderRadius: vars.radius.badge,
-  padding: "2px 7px",
   cursor: "pointer",
   transition: "border-color 0.15s ease, color 0.15s ease",
   selectors: {

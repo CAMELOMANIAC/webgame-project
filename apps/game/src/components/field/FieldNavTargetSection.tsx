@@ -28,6 +28,7 @@ import {
   RiCloseLine,
   RiCompass3Line,
   RiHammerLine,
+  RiSearchLine,
 } from "react-icons/ri";
 
 import { resolveItemImageSrc } from "@/assets/items";
@@ -137,7 +138,8 @@ const FieldNavTargetSection = () => {
   >(null);
   const [inspectedRecipeItem, setInspectedRecipeItem] =
     useState<InspectedItem | null>(null);
-  const [showFarLandmarks, setShowFarLandmarks] = useState(false);
+  const [showAllDestinations, setShowAllDestinations] = useState(false);
+  const [showAllRecipes, setShowAllRecipes] = useState(false);
   const reduceMotion = useReducedMotion();
   const character = data?.raw;
   const locationName =
@@ -627,10 +629,14 @@ const FieldNavTargetSection = () => {
               <div className={styles.destinationRow}>
                 <strong className={styles.destinationText}>
                   {targetBuilding !== undefined
-                    ? (targetBuilding.name ?? `건물 #${targetBuilding.id}`)
+                    ? (targetBuilding.name ??
+                      getBuildingDistrict(targetBuilding)?.name ??
+                      "선택한 건물")
                     : targetNodeId !== null
-                      ? (targetLandmark?.name ?? `목적지 #${targetNodeId}`)
-                      : (currentLandmark?.name ?? `${locationName} #${nodeId}`)}
+                      ? (targetLandmark?.name ??
+                        MISSION_NODE_LABELS[targetNodeId] ??
+                        "선택한 목적지")
+                      : (currentLandmark?.name ?? locationName)}
                 </strong>
                 <p
                   className={styles.statusHint({
@@ -750,21 +756,40 @@ const FieldNavTargetSection = () => {
                     표시할 추천 목적지가 없습니다.
                   </p>
                 ) : (() => {
-                  const NEAR_LANDMARK_MAX_MINUTES = 120;
-                  const farCount = recommendedDestinations.filter(
-                    (d) =>
-                      d.category === "LANDMARK" &&
-                      !d.isCurrent &&
-                      d.travelMinutes > NEAR_LANDMARK_MAX_MINUTES,
-                  ).length;
-                  const visibleDestinations = showFarLandmarks
+                  const usedCraftSet = new Set(
+                    exploration?.usedCraftBuildingIds ?? [],
+                  );
+                  const seenFacilityCategories = new Set<string>();
+                  const coreDestinations = recommendedDestinations.filter(
+                    (d) => {
+                      if (
+                        d.category === "MISSION" ||
+                        d.category === "EXTRACTION" ||
+                        d.isCurrent
+                      ) {
+                        return true;
+                      }
+                      if (d.buildingCategory) {
+                        if (
+                          d.buildingId !== undefined &&
+                          usedCraftSet.has(d.buildingId)
+                        ) {
+                          return false;
+                        }
+                        if (seenFacilityCategories.has(d.buildingCategory)) {
+                          return false;
+                        }
+                        seenFacilityCategories.add(d.buildingCategory);
+                        return true;
+                      }
+                      return false;
+                    },
+                  );
+                  const hiddenCount =
+                    recommendedDestinations.length - coreDestinations.length;
+                  const visibleDestinations = showAllDestinations
                     ? recommendedDestinations
-                    : recommendedDestinations.filter(
-                        (d) =>
-                          d.category !== "LANDMARK" ||
-                          d.isCurrent ||
-                          d.travelMinutes <= NEAR_LANDMARK_MAX_MINUTES,
-                      );
+                    : coreDestinations;
                   return (
                     <>
                       {visibleDestinations.map((dest) => {
@@ -847,9 +872,6 @@ const FieldNavTargetSection = () => {
                                 봉쇄 {Math.max(1, remainingLockdown)}분 전
                               </span>
                             )}
-                            <span className={styles.recommendCode}>
-                              NODE #{dest.nodeId}
-                            </span>
                           </div>
                           <span className={styles.recommendName}>
                             {dest.name}
@@ -865,40 +887,57 @@ const FieldNavTargetSection = () => {
                       </button>
                     );
                       })}
-                      {farCount > 0 && (
+                      {hiddenCount > 0 && (
                         <button
                           type="button"
                           className={styles.showMoreBtn}
-                          onClick={() => setShowFarLandmarks((prev) => !prev)}
+                          onClick={() =>
+                            setShowAllDestinations((prev) => !prev)
+                          }
                         >
-                          {showFarLandmarks
-                            ? "가까운 랜드마크만 보기"
-                            : `먼 랜드마크 더보기 (+${farCount})`}
+                          {showAllDestinations
+                            ? "핵심 목적지만 보기"
+                            : `전체 목적지 보기 (+${hiddenCount})`}
                         </button>
                       )}
                     </>
                   );
                 })()
-              ) : (
-                [...CRAFTING_RECIPES]
-                  .sort((a, b) => {
-                    const aBase = ownedWeapons.some((w) =>
-                      matchesRecipeBase(a, w),
-                    );
-                    const bBase = ownedWeapons.some((w) =>
-                      matchesRecipeBase(b, w),
-                    );
-                    const aMats = a.materialIds.every(
-                      (mId) => (ownedItemCounts.get(mId) ?? 0) >= 1,
-                    );
-                    const bMats = b.materialIds.every(
-                      (mId) => (ownedItemCounts.get(mId) ?? 0) >= 1,
-                    );
-                    const aScore = (aBase ? 2 : 0) + (aBase && aMats ? 1 : 0);
-                    const bScore = (bBase ? 2 : 0) + (bBase && bMats ? 1 : 0);
-                    return bScore - aScore;
-                  })
-                  .map((recipe) => {
+              ) : (() => {
+                const sortedRecipes = [...CRAFTING_RECIPES].sort((a, b) => {
+                  const aBase = ownedWeapons.some((w) =>
+                    matchesRecipeBase(a, w),
+                  );
+                  const bBase = ownedWeapons.some((w) =>
+                    matchesRecipeBase(b, w),
+                  );
+                  const aMats = a.materialIds.every(
+                    (mId) => (ownedItemCounts.get(mId) ?? 0) >= 1,
+                  );
+                  const bMats = b.materialIds.every(
+                    (mId) => (ownedItemCounts.get(mId) ?? 0) >= 1,
+                  );
+                  const aScore = (aBase ? 2 : 0) + (aBase && aMats ? 1 : 0);
+                  const bScore = (bBase ? 2 : 0) + (bBase && bMats ? 1 : 0);
+                  return bScore - aScore;
+                });
+                const upgradeableRecipes = sortedRecipes.filter((recipe) =>
+                  ownedWeapons.some((w) => matchesRecipeBase(recipe, w)),
+                );
+                const visibleRecipes = showAllRecipes
+                  ? sortedRecipes
+                  : upgradeableRecipes;
+                const hasHiddenRecipes =
+                  sortedRecipes.length > upgradeableRecipes.length;
+
+                return (
+                  <>
+                    {visibleRecipes.length === 0 ? (
+                      <p className={styles.recommendEmpty}>
+                        현재 보유 장비로 업그레이드 가능한 레시피가 없습니다.
+                      </p>
+                    ) : (
+                      visibleRecipes.map((recipe) => {
                   const resultCatalog = getCatalogItemById(
                     recipe.resultEquipmentId,
                   );
@@ -956,6 +995,7 @@ const FieldNavTargetSection = () => {
                             <button
                               type="button"
                               className={styles.recipeDetailBtn}
+                              aria-label={`${resultName} 상세 보기`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setInspectedRecipeItem({
@@ -969,7 +1009,7 @@ const FieldNavTargetSection = () => {
                                 });
                               }}
                             >
-                              상세
+                              <RiSearchLine size={14} aria-hidden="true" />
                             </button>
                           )}
                         </div>
@@ -1013,8 +1053,22 @@ const FieldNavTargetSection = () => {
                       </div>
                     </div>
                   );
-                })
-              )}
+                      })
+                    )}
+                    {hasHiddenRecipes && (
+                      <button
+                        type="button"
+                        className={styles.showMoreBtn}
+                        onClick={() => setShowAllRecipes((prev) => !prev)}
+                      >
+                        {showAllRecipes
+                          ? "보유 장비 업그레이드만 보기"
+                          : `전체 레시피 보기 (${sortedRecipes.length})`}
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
                 </motion.div>
               </AnimatePresence>
             </div>
@@ -1282,7 +1336,7 @@ const FieldNavTargetSection = () => {
 
                   <div className={styles.buildingEventHeader}>
                     <span className={styles.buildingEventTitle}>
-                      {activeBuilding.name ?? `건물 #${activeBuilding.id}`}
+                      {activeBuilding.name ?? activeDistrict.name}
                       {activeBuilding.category
                         ? ` · ${BUILDING_CATEGORY_LABELS[activeBuilding.category]} (${activeBuildingMaxCraftTier >= 2 ? "T1·T2" : "T1"})`
                         : ""}
@@ -1435,6 +1489,7 @@ const FieldNavTargetSection = () => {
                   );
                   return {
                     recipe,
+                    resultItem,
                     resultName,
                     baseName,
                     itemBackdrop,
@@ -1510,6 +1565,29 @@ const FieldNavTargetSection = () => {
                                     {entry.resultName}
                                   </span>
                                 </div>
+                                {entry.resultItem && (
+                                  <button
+                                    type="button"
+                                    className={styles.recipeDetailBtn}
+                                    aria-label={`${entry.resultName} 상세 보기`}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      if (!entry.resultItem) return;
+                                      setInspectedRecipeItem({
+                                        id: entry.resultItem.id,
+                                        masterId: entry.resultItem.id,
+                                        name: entry.resultItem.name,
+                                        iconKey: entry.resultItem.iconKey,
+                                        weight: entry.resultItem.weight,
+                                        value: entry.resultItem.value,
+                                        weaponData: entry.resultItem,
+                                      });
+                                    }}
+                                  >
+                                    <RiSearchLine size={14} aria-hidden="true" />
+                                  </button>
+                                )}
                               </div>
                               <div className={styles.recipeIngredientsRow}>
                                 <span
