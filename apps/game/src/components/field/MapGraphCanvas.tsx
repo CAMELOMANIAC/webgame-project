@@ -363,7 +363,7 @@ function drawPathLineGraphics(
       g.stroke({
         width: 4.5,
         color: 0xfafafa,
-        alpha: 0.6,
+        alpha: 1,
         cap: "round",
         join: "round",
       });

@@ -182,7 +182,7 @@ export const pathRiskSwatch = recipe({
       safe: {
         height: "3px",
         backgroundColor: vars.text.primary,
-        opacity: 0.6,
+        opacity: 1,
       },
       medium: {
         height: "3px",
