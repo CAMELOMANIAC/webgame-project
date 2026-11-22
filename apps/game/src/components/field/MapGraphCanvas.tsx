@@ -1,7 +1,8 @@
 import type { UseMutationResult } from "@tanstack/react-query";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type BattleLog,
+  classifyPathSegmentRisk,
   type EnemyNoiseSignal,
   getBuildingDistrict,
   isBuildingLockedDown,
@@ -9,6 +10,8 @@ import {
   MAP_DISTRICTS,
   type MapBuilding,
   type MapPoint,
+  type PathSegmentRisk,
+  type RaidPathRiskResult,
   resolveBuildingLockdownMinute,
   resolveBuildingMaxCraftTier,
 } from "@webgame/types";
@@ -43,6 +46,7 @@ import {
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
 import { vars } from "@/styles/theme.css";
+import { API_BASE_URL, apiFetch } from "@/utils/api";
 import { getBuildingCenter } from "@/utils/getBuildingCenter";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import type { NavigateRaidParams, NavigateRaidResponse } from "@/utils/hooks/useNavigateRaid";
@@ -52,6 +56,7 @@ import { createNoiseRipple } from "@/utils/pixiNoiseRipple";
 import { getFogOfWarTexture, loadCompassTexture } from "@/utils/pixiTextures";
 import { Easings, runTween, type TweenHandle } from "@/utils/pixiTween";
 import { OUTRO_ZOOM_SECONDS } from "@/utils/raidOutro";
+import { readApiResponse } from "@/utils/request";
 import { createRTreeIndex, searchRTreeIndex } from "@/utils/rtreeCulling";
 
 import mapData from "../../../../../packages/types/src/assets/map_graph.json";
@@ -271,54 +276,6 @@ const buildCoordPath = (
   return coordPath;
 };
 
-type PathSegmentRisk = "safe" | "medium" | "high";
-
-function distPointToSegment(
-  px: number,
-  py: number,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-) {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const lenSq = dx * dx + dy * dy;
-  if (lenSq === 0) return Math.hypot(px - x1, py - y1);
-  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
-  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
-}
-
-function classifySegmentRisk(
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  noiseAreas: EnemyNoiseSignal[],
-): PathSegmentRisk {
-  if (noiseAreas.length === 0) return "safe";
-  let nearCount = 0;
-  let broadCount = 0;
-  for (const area of noiseAreas) {
-    const dist = distPointToSegment(area.x, area.y, x1, y1, x2, y2);
-    if (area.tier === "broad") {
-      if (dist <= area.radius) {
-        broadCount += 1;
-      }
-      continue;
-    }
-    if (dist <= area.radius) {
-      return "high";
-    }
-    if (dist <= area.radius * 2.2) {
-      nearCount += 1;
-    }
-  }
-  if (nearCount >= 2 || broadCount >= 2) return "high";
-  if (nearCount >= 1 || broadCount >= 1) return "medium";
-  return "safe";
-}
-
 const PATH_STYLE_BY_RISK: Record<
   PathSegmentRisk,
   { width: number; color: number; alpha: number }
@@ -332,6 +289,7 @@ function drawPathLineGraphics(
   g: Graphics,
   points: number[],
   noiseAreas: EnemyNoiseSignal[] = [],
+  segmentRisks?: readonly PathSegmentRisk[],
 ) {
   if (g.destroyed) return;
   g.clear();
@@ -341,11 +299,14 @@ function drawPathLineGraphics(
 
   const runs: { risk: PathSegmentRisk; coords: number[] }[] = [];
   for (let i = 0; i < points.length - 2; i += 2) {
+    const segIdx = i / 2;
     const x1 = points[i]!;
     const y1 = points[i + 1]!;
     const x2 = points[i + 2]!;
     const y2 = points[i + 3]!;
-    const risk = classifySegmentRisk(x1, y1, x2, y2, noiseAreas);
+    const risk =
+      segmentRisks?.[segIdx] ??
+      classifyPathSegmentRisk(x1, y1, x2, y2, noiseAreas);
     const last = runs[runs.length - 1];
     if (last && last.risk === risk) {
       last.coords.push(x2, y2);
@@ -2059,11 +2020,82 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   ]);
 
   // 5.2. 드로잉을 위한 최단 경로 플랫 좌표 배열
-  const shortestPathPoints = useMemo(() => {
+  const shortestCoordPath = useMemo(() => {
     const startPos = playerCoords ?? nodes[currentNodeId];
     if (!startPos) return [];
-    return buildCoordPath(shortestPath, startPos, targetBuilding).flatMap(({ x, y }) => [x, y]);
+    return buildCoordPath(shortestPath, startPos, targetBuilding);
   }, [currentNodeId, playerCoords, shortestPath, targetBuilding]);
+
+  const shortestPathPoints = useMemo(
+    () => shortestCoordPath.flatMap(({ x, y }) => [x, y]),
+    [shortestCoordPath],
+  );
+
+  const characterId = characterData?.raw.id;
+  const activeRaidVersion = characterData?.raw.activeRaid?.version;
+  const pathKey = shortestPath.join(",");
+  const pathRiskQuery = useQuery({
+    queryKey: [
+      "raid-path-risk",
+      characterId,
+      activeRaidId,
+      activeRaidVersion,
+      pathKey,
+    ],
+    queryFn: async ({ signal }) => {
+      if (!characterId || shortestPath.length < 2) return null;
+      return readApiResponse<RaidPathRiskResult>(
+        await apiFetch(`${API_BASE_URL}/character/${characterId}/raid/path-risk`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: shortestPath }),
+          signal,
+        }),
+      );
+    },
+    enabled: Boolean(
+      characterId &&
+        activeRaidId &&
+        !isNavigating &&
+        !isCombat &&
+        shortestPath.length >= 2,
+    ),
+    staleTime: 10000,
+  });
+
+  const coordSegmentRisks = useMemo<PathSegmentRisk[] | undefined>(() => {
+    const riskData = pathRiskQuery.data;
+    const serverRisks =
+      riskData && riskData.raidId === activeRaidId
+        ? riskData.segmentRisks
+        : undefined;
+    if (!serverRisks || shortestCoordPath.length < 2) return undefined;
+
+    const totalSegs = shortestCoordPath.length - 1;
+    const hasStartOffset =
+      shortestPath.length > 0 &&
+      (Math.abs(shortestCoordPath[0]!.x - (nodes[shortestPath[0]!]?.x ?? 0)) >
+        0.1 ||
+        Math.abs(shortestCoordPath[0]!.y - (nodes[shortestPath[0]!]?.y ?? 0)) >
+          0.1);
+    const risks: PathSegmentRisk[] = [];
+    for (let segIdx = 0; segIdx < totalSegs; segIdx += 1) {
+      if (hasStartOffset && segIdx === 0) {
+        risks.push(serverRisks[0] ?? "safe");
+      } else {
+        const hopIdx = hasStartOffset ? segIdx - 1 : segIdx;
+        risks.push(
+          serverRisks[hopIdx] ?? serverRisks[serverRisks.length - 1] ?? "safe",
+        );
+      }
+    }
+    return risks;
+  }, [activeRaidId, pathRiskQuery.data, shortestCoordPath, shortestPath]);
+
+  const coordSegmentRisksRef = useRef<PathSegmentRisk[] | undefined>(
+    coordSegmentRisks,
+  );
+  coordSegmentRisksRef.current = coordSegmentRisks;
 
   // 5.2.5. 최단 경로 라인 및 타겟 비콘 Pixi Graphics 동기화
   useEffect(() => {
@@ -2074,7 +2106,12 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       if (targetNodeId === null || isCombat) {
         pathLine.clear();
       } else {
-        drawPathLineGraphics(pathLine, shortestPathPoints, activeNoiseAreas);
+        drawPathLineGraphics(
+          pathLine,
+          shortestPathPoints,
+          activeNoiseAreas,
+          coordSegmentRisks,
+        );
       }
     }
     if (targetMarkerGroupRef.current && !targetMarkerGroupRef.current.destroyed) {
@@ -2093,6 +2130,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     }
   }, [
     activeNoiseAreas,
+    coordSegmentRisks,
     isPixiReady,
     isNavigating,
     isCombat,
@@ -2476,6 +2514,12 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       return Math.sqrt(dx * dx + dy * dy) < 0.5 && Math.abs(scale - 3.0) < 0.01;
     };
 
+    let navSegmentRisks: PathSegmentRisk[] | undefined =
+      coordSegmentRisksRef.current
+        ? [...coordSegmentRisksRef.current]
+        : undefined;
+    let navRisksSyncedFromServer = false;
+
     const tick = (time: number) => {
       const deltaTime = (time - lastTime) / 1000;
       lastTime = time;
@@ -2487,6 +2531,26 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         path.length > 0 &&
         (Math.abs(coords[0]!.x - (nodes[path[0]!]?.x ?? 0)) > 0.1 ||
           Math.abs(coords[0]!.y - (nodes[path[0]!]?.y ?? 0)) > 0.1);
+
+      if (!navRisksSyncedFromServer) {
+        const hopSignals = navigateRaidResponseRef.current?.hopNoiseSignals;
+        if (hopSignals && hopSignals.length > 0 && coords.length >= 2) {
+          navRisksSyncedFromServer = true;
+          const totalSegs = coords.length - 1;
+          const computed: PathSegmentRisk[] = [];
+          for (let segIdx = 0; segIdx < totalSegs; segIdx += 1) {
+            const p1 = coords[segIdx]!;
+            const p2 = coords[segIdx + 1]!;
+            const hopIdx = hasStartPos ? Math.max(0, segIdx - 1) : segIdx;
+            const areas =
+              hopSignals[hopIdx] ?? hopSignals[hopSignals.length - 1] ?? [];
+            computed.push(
+              classifyPathSegmentRisk(p1.x, p1.y, p2.x, p2.y, areas),
+            );
+          }
+          navSegmentRisks = computed;
+        }
+      }
 
       if (stepIdx >= coords.length) {
         const finalPos = coords[coords.length - 1];
@@ -2682,6 +2746,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
             pathLineGraphicsRef.current,
             remainingPoints,
             noiseAreasRef.current,
+            navSegmentRisks?.slice(stepIdx),
           );
         }
 
@@ -2710,6 +2775,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
             pathLineGraphicsRef.current,
             remainingPoints,
             noiseAreasRef.current,
+            navSegmentRisks?.slice(Math.max(0, stepIdx - 1)),
           );
         }
 

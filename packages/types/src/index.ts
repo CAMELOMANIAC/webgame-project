@@ -499,6 +499,59 @@ export interface RaidNoiseResult extends RaidNoiseSignals {
   raidId: string | null;
 }
 
+export type PathSegmentRisk = "safe" | "medium" | "high";
+
+export interface RaidPathRiskResult {
+  raidId: string | null;
+  segmentRisks: PathSegmentRisk[];
+}
+
+function distPointToSegment(
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.hypot(px - x1, py - y1);
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+export function classifyPathSegmentRisk(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  noiseAreas: readonly EnemyNoiseSignal[],
+): PathSegmentRisk {
+  if (noiseAreas.length === 0) return "safe";
+  let nearCount = 0;
+  let broadCount = 0;
+  for (const area of noiseAreas) {
+    const dist = distPointToSegment(area.x, area.y, x1, y1, x2, y2);
+    if (area.tier === "broad") {
+      if (dist <= area.radius) {
+        broadCount += 1;
+      }
+      continue;
+    }
+    if (dist <= area.radius) {
+      return "high";
+    }
+    if (dist <= area.radius * 2.2) {
+      nearCount += 1;
+    }
+  }
+  if (nearCount >= 2 || broadCount >= 2) return "high";
+  if (nearCount >= 1 || broadCount >= 1) return "medium";
+  return "safe";
+}
+
 export interface StartRaidResult extends RaidNoiseSignals {
   status: string;
   isRaiding: boolean;

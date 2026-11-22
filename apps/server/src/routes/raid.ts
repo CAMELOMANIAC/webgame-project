@@ -22,6 +22,7 @@ import {
   getLastRaidSummary,
   getRaidNavigationResult,
   getRaidNoiseSignals,
+  getRaidPathRisks,
   NavigateSchema,
   navigateRaid,
   RaidActionSchema,
@@ -116,6 +117,31 @@ export function registerRaidRoutes(
       try {
         const { characterId } = request.params;
         return await getRaidNoiseSignals(database, actor(request), characterId);
+      } catch (error) {
+        fastify.log.error(error);
+        return sendInventoryError(reply, error);
+      }
+    },
+  );
+  fastify.post<{ Params: { characterId: string }; Body: { path?: number[] } }>(
+    "/character/:characterId/raid/path-risk",
+    async (request, reply) => {
+      try {
+        const { characterId } = request.params;
+        const parsed = z
+          .object({
+            path: z.array(z.number().int().nonnegative()).max(200),
+          })
+          .safeParse(request.body ?? {});
+        if (!parsed.success) {
+          throw new InventoryError("Invalid path payload", 400);
+        }
+        return await getRaidPathRisks(
+          database,
+          actor(request),
+          characterId,
+          parsed.data.path,
+        );
       } catch (error) {
         fastify.log.error(error);
         return sendInventoryError(reply, error);

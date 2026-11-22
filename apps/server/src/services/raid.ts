@@ -6,6 +6,7 @@ import {
   type BuildingEventState,
   calculateBaseRecovery,
   calculateEntryDelayMinutes,
+  classifyPathSegmentRisk,
   type EnemyNoiseSignal,
   FATIGUE_RULES,
   type FoodBuffEffect,
@@ -18,6 +19,7 @@ import {
   type LootSourceKind,
   type MapBuilding,
   matchesRecipeBase,
+  type PathSegmentRisk,
   type PendingLootItem,
   type RaidActionInput,
   type RaidBattleResult,
@@ -28,6 +30,7 @@ import {
   type RaidNavigationInput,
   type RaidNavigationResult,
   type RaidNoiseResult,
+  type RaidPathRiskResult,
   type RaidSettlementSummary,
   type RaidSummaryItem,
   type RaidView,
@@ -390,6 +393,58 @@ export async function getRaidNoiseSignals(
       character.activeRaid.time,
     );
     return { noiseSignals, raidId: character.activeRaid.id };
+  });
+}
+
+export async function getRaidPathRisks(
+  database: Database,
+  userId: string,
+  characterId: string,
+  path: number[],
+): Promise<RaidPathRiskResult> {
+  return withInventoryTransaction(database, async (tx) => {
+    const character = await ownedCharacter(tx, userId, characterId);
+    if (!character.activeRaid || character.activeRaid.status !== "ACTIVE") {
+      return { raidId: null, segmentRisks: [] };
+    }
+    const raid = character.activeRaid;
+    if (path.length < 2) {
+      return { raidId: raid.id, segmentRisks: [] };
+    }
+    const plannedVisits = pathTravelVisits(path, raid.time, character.fatigue);
+    const lastTravelTime = plannedVisits.at(-1)?.time ?? raid.time;
+    const ghostRoster = await loadGhostRoster(tx, raid);
+    const tracker = createGhostTracker(
+      tx,
+      ghostRoster,
+      userId,
+      lastTravelTime,
+      raid,
+    );
+    if (!raid.ghostRoster && raid.time === 0) {
+      await tracker.initialize(raid.entryNodeId);
+    }
+    const segmentRisks: PathSegmentRisk[] = [];
+    for (let stopIndex = 1; stopIndex < path.length; stopIndex++) {
+      const fromNode = mapData.nodes[path[stopIndex - 1]!];
+      const toNode = mapData.nodes[path[stopIndex]!];
+      const visit = plannedVisits[stopIndex - 1];
+      if (!fromNode || !toNode || !visit) {
+        segmentRisks.push("safe");
+        continue;
+      }
+      const hopAreas = await tracker.noiseSignalsAt(visit.nodeId, visit.time);
+      segmentRisks.push(
+        classifyPathSegmentRisk(
+          fromNode.x,
+          fromNode.y,
+          toNode.x,
+          toNode.y,
+          hopAreas,
+        ),
+      );
+    }
+    return { raidId: raid.id, segmentRisks };
   });
 }
 
