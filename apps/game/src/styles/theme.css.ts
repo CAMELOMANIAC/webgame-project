@@ -31,7 +31,6 @@ export const vars = createGlobalTheme(":root", {
     positive: "#85adff",
     positiveBg: "rgba(133, 173, 255, 0.12)",
     negative: "#ff7162",
-    negativeMuted: "#843d37",
     negativeBg: "rgba(255, 113, 98, 0.14)",
     ctaBg: "#fafafa",
     ctaHover: "#e4e4e7",
@@ -44,6 +43,8 @@ export const vars = createGlobalTheme(":root", {
     badge: "4px",
   },
 });
+
+export const negativeMutedColor = "#843d37";
 
 export type TacticalTone = "default" | "positive" | "negative" | "none";
 

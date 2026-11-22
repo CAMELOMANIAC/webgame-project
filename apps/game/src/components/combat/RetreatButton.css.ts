@@ -12,6 +12,7 @@ export const container = style({
   position: "relative",
   display: "flex",
   width: "100%",
+  padding: "0 16px",
   justifyContent: "center",
   alignItems: "stretch",
   gap: "8px",

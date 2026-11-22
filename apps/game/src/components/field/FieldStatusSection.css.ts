@@ -75,6 +75,8 @@ export const compactWidget = recipe({
     {
       padding: "10px 12px",
       gap: "4px",
+      minWidth: 0,
+      overflow: "hidden",
     },
   ],
   variants: {
@@ -96,6 +98,7 @@ export const cellHeader = style({
   alignItems: "center",
   justifyContent: "space-between",
   gap: "6px",
+  minWidth: 0,
 });
 
 export const widgetLabel = style({
@@ -103,6 +106,7 @@ export const widgetLabel = style({
   fontSize: "11px",
   fontWeight: 500,
   color: vars.text.muted,
+  whiteSpace: "nowrap",
 });
 
 export const metricDot = recipe({
@@ -110,6 +114,7 @@ export const metricDot = recipe({
     width: "6px",
     height: "6px",
     borderRadius: "50%",
+    flexShrink: 0,
   },
   variants: {
     tone: {
@@ -129,6 +134,7 @@ export const capacityText = recipe({
     fontSize: "13px",
     fontWeight: 600,
     fontVariantNumeric: "tabular-nums",
+    whiteSpace: "nowrap",
   },
   variants: {
     tone: {

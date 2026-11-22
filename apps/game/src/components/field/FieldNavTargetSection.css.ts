@@ -1,7 +1,12 @@
 import { keyframes, style } from "@vanilla-extract/css";
 import { recipe } from "@vanilla-extract/recipes";
 
-import { cornerBrackets, fieldWidget, vars } from "@/styles/theme.css";
+import {
+  cornerBrackets,
+  fieldWidget,
+  negativeMutedColor,
+  vars,
+} from "@/styles/theme.css";
 
 export const cardDeck = style({
   position: "relative",
@@ -186,7 +191,7 @@ export const pathRiskSwatch = recipe({
       },
       medium: {
         height: "3px",
-        backgroundColor: vars.color.negativeMuted,
+        backgroundColor: negativeMutedColor,
         opacity: 1,
       },
       high: {
