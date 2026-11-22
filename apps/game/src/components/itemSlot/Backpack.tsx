@@ -1,4 +1,3 @@
-import { MIN_BACKPACK_SLOTS } from "@webgame/types";
 import { useAtomValue } from "jotai";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { memo } from "react";
@@ -25,19 +24,11 @@ const Backpack = memo(
     const statusExit = { opacity: 0, y: reduceMotion ? 0 : 12 };
     const animatingSlotIds = useAtomValue(animatingSlotIdsAtom);
     const isSlotAnimating = animatingSlotIds.length > 0;
-    const occupiedCount =
-      characterData?.inventory.filter(
-        (item) => !item.id.toString().includes("empty"),
-      ).length ?? 0;
 
     return (
       <div className={styles.container}>
         <div className={styles.header}>
           <h3 className={styles.title}>배치 가방</h3>
-          <span className={styles.subCode}>
-            {occupiedCount} /{" "}
-            {characterData?.inventory.length ?? MIN_BACKPACK_SLOTS}
-          </span>
         </div>
         <AnimatePresence>
           {isLoading && (

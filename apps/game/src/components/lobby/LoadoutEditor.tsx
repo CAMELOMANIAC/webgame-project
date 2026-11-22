@@ -750,9 +750,6 @@ export function LoadoutEditor({
           >
             <h2 className={baseStyles.sectionHeader}>
               <span>배치 가방</span>
-              <span className={baseStyles.sectionCode}>
-                {filledInventoryItems.length}개
-              </span>
             </h2>
             {filledInventoryItems.length === 0 ? (
               <div className={styles.emptyDropArea({ over: isBackpackOver })}>
