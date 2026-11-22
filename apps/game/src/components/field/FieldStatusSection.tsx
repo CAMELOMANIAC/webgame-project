@@ -4,6 +4,7 @@ import { RiDeleteBinLine } from "react-icons/ri";
 
 import { battleLogAtom } from "@/atoms/globalAtom";
 import {
+  isCombatAtom,
   isNavigatingAtom,
   navigationProgressAtom,
   shortestPathAtom,
@@ -25,6 +26,7 @@ interface FieldStatusSectionProps {
 const FieldStatusSection = ({ discardMode = false }: FieldStatusSectionProps) => {
   const { data } = useGetCharacter();
   const log = useAtomValue(battleLogAtom);
+  const isCombat = useAtomValue(isCombatAtom);
   const isNavigating = useAtomValue(isNavigatingAtom);
   const navigationProgress = useAtomValue(navigationProgressAtom);
   const shortestPath = useAtomValue(shortestPathAtom);
@@ -61,11 +63,14 @@ const FieldStatusSection = ({ discardMode = false }: FieldStatusSectionProps) =>
     : undefined;
   const displayWeight = player?.weight ?? weight;
   return (
-    <section className={styles.statusSection}>
+    <section className={styles.statusSection({ combat: isCombat })}>
       <div className={styles.primaryCol}>
         <FieldCharacterInfo />
       </div>
-      <div className={styles.sideCol}>
+      <div
+        className={styles.sideCol({ combat: isCombat })}
+        aria-hidden={isCombat}
+      >
         <div
           className={styles.compactWidget({ hidden: discardMode })}
           aria-hidden={discardMode}

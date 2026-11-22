@@ -284,7 +284,13 @@ function RouteComponent() {
   return (
     <div
       className={`${page} ${styles.pageTransition}`}
-      style={showBackpack ? { paddingBottom: 0 } : undefined}
+      style={
+        showBackpack
+          ? { paddingBottom: 0 }
+          : isCombat
+            ? { paddingBottom: 12 }
+            : undefined
+      }
     >
       <NavigationRecovery
         character={characterData}
@@ -373,10 +379,28 @@ function RouteComponent() {
                       onContinue={retreatReady ? continueCombat : undefined} />
                   )}
                   <FieldStatusSection discardMode={showDiscardDropZone} />
-                  <Equipment
-                    characterData={characterData}
-                    isLoading={isLoading}
-                  />
+                  <AnimatePresence initial={false}>
+                    {(isCombat || showBackpack) && (
+                      <motion.div
+                        key="fieldEquipment"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{
+                          duration: reduceMotion ? 0 : 0.35,
+                          ease: [0.4, 0, 0.2, 1],
+                        }}
+                        style={{
+                          overflow: isSlotAnimating ? "visible" : "hidden",
+                        }}
+                      >
+                        <Equipment
+                          characterData={characterData}
+                          isLoading={isLoading}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               )}
               {showBackpack && (

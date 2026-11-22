@@ -3,12 +3,34 @@ import { recipe } from "@vanilla-extract/recipes";
 
 import { fieldWidget, vars } from "@/styles/theme.css";
 
-export const statusSection = style({
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1.35fr) minmax(0, 1fr)",
-  width: "100%",
-  gap: "8px",
-  padding: "12px 16px 0",
+export const statusSection = recipe({
+  base: {
+    display: "grid",
+    width: "100%",
+    padding: "12px 16px 0",
+    transition:
+      "grid-template-columns 350ms cubic-bezier(0.4, 0, 0.2, 1), gap 350ms cubic-bezier(0.4, 0, 0.2, 1)",
+    "@media": {
+      "(prefers-reduced-motion: reduce)": {
+        transition: "none",
+      },
+    },
+  },
+  variants: {
+    combat: {
+      false: {
+        gridTemplateColumns: "minmax(0, 1.35fr) minmax(0, 1fr)",
+        gap: "8px",
+      },
+      true: {
+        gridTemplateColumns: "minmax(0, 1fr) minmax(0, 0fr)",
+        gap: "0px",
+      },
+    },
+  },
+  defaultVariants: {
+    combat: false,
+  },
 });
 
 export const primaryCol = style({
@@ -16,12 +38,35 @@ export const primaryCol = style({
   minWidth: 0,
 });
 
-export const sideCol = style({
-  position: "relative",
-  display: "flex",
-  flexDirection: "column",
-  gap: "8px",
-  minWidth: 0,
+export const sideCol = recipe({
+  base: {
+    position: "relative",
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+    minWidth: 0,
+    overflow: "hidden",
+    transition: "opacity 280ms cubic-bezier(0.4, 0, 0.2, 1)",
+    "@media": {
+      "(prefers-reduced-motion: reduce)": {
+        transition: "none",
+      },
+    },
+  },
+  variants: {
+    combat: {
+      false: {
+        opacity: 1,
+      },
+      true: {
+        opacity: 0,
+        pointerEvents: "none",
+      },
+    },
+  },
+  defaultVariants: {
+    combat: false,
+  },
 });
 
 export const compactWidget = recipe({

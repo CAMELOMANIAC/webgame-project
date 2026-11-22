@@ -151,18 +151,32 @@ function GameLayout() {
           <Outlet />
         </motion.div>
       </div>
-      {(!result || isFadingOutroHud) && (
-        <motion.div
-          animate={{ opacity: isFadingOutroHud ? 0 : 1 }}
-          transition={{ duration: OUTRO_HUD_FADE_SECONDS, ease: "easeOut" }}
-          style={isFadingOutroHud ? { pointerEvents: "none" } : undefined}
-        >
-          <GlobalNav
-            mode={inRaid ? "raid" : "base"}
-            fieldBusy={isCombat || isNavigating}
-          />
-        </motion.div>
-      )}
+      {(!result || isFadingOutroHud) && (() => {
+        const hideGlobalNav = isFadingOutroHud || (fieldRoute && isCombat);
+        return (
+          <motion.div
+            animate={{
+              opacity: hideGlobalNav ? 0 : 1,
+              y: hideGlobalNav && !reduceMotion ? 20 : 0,
+            }}
+            transition={{
+              duration: reduceMotion
+                ? 0
+                : isFadingOutroHud
+                  ? OUTRO_HUD_FADE_SECONDS
+                  : 0.25,
+              ease: "easeOut",
+            }}
+            style={hideGlobalNav ? { pointerEvents: "none" } : undefined}
+            aria-hidden={hideGlobalNav}
+          >
+            <GlobalNav
+              mode={inRaid ? "raid" : "base"}
+              fieldBusy={isCombat || isNavigating}
+            />
+          </motion.div>
+        );
+      })()}
     </>
   );
 }
