@@ -52,16 +52,16 @@ test("SF 적 아키타입 카탈로그는 2~6슬롯 유효 장비와 드랍 테�
 
 test("시간 경과와 구역 위험도에 따라 1~3티어 적 스케일링이 적용된다", () => {
   assert.equal(resolveEnemyTier(0, "RESIDENTIAL"), 1);
-  assert.equal(resolveEnemyTier(60, "COMMERCIAL"), 1);
-  assert.equal(resolveEnemyTier(61, "RESIDENTIAL"), 2);
-  assert.equal(resolveEnemyTier(140, "COMMERCIAL"), 2);
-  assert.equal(resolveEnemyTier(141, "RESIDENTIAL"), 3);
+  assert.equal(resolveEnemyTier(120, "COMMERCIAL"), 1);
+  assert.equal(resolveEnemyTier(121, "RESIDENTIAL"), 2);
+  assert.equal(resolveEnemyTier(240, "COMMERCIAL"), 2);
+  assert.equal(resolveEnemyTier(241, "RESIDENTIAL"), 3);
 
   // 산업·의료·기반 구역은 초반 시간대라도 최소 2티어 보정
   assert.equal(resolveEnemyTier(10, "INDUSTRIAL"), 2);
   assert.equal(resolveEnemyTier(10, "MEDICAL"), 2);
   assert.equal(resolveEnemyTier(10, "INFRA"), 2);
-  assert.equal(resolveEnemyTier(150, "INFRA"), 3);
+  assert.equal(resolveEnemyTier(250, "INFRA"), 3);
 });
 
 test("순찰 NPC는 전 구역 8기가 추적되며 경과 시간에 따라 1->2->3티어로 강해진다", () => {
@@ -72,9 +72,9 @@ test("순찰 NPC는 전 구역 8기가 추적되며 경과 시간에 따라 1->2
   assert.ok(patrols.some((patrol) => patrol.id === "patrol-07"));
   assert.ok(patrols.some((patrol) => patrol.id === "patrol-08"));
 
-  const early = resolvePatrolArchetype("patrol-01", 20);
-  const mid = resolvePatrolArchetype("patrol-01", 90);
-  const late = resolvePatrolArchetype("patrol-01", 160);
+  const early = resolvePatrolArchetype("patrol-01", 30);
+  const mid = resolvePatrolArchetype("patrol-01", 150);
+  const late = resolvePatrolArchetype("patrol-01", 260);
   assert.equal(early.tier, 1);
   assert.equal(mid.tier, 2);
   assert.equal(late.tier, 3);
@@ -149,7 +149,7 @@ test("초반 순찰 잔상은 기본 구호 카빈으로 교전 시 시너지/�
 
 test("후반 3티어 적은 복수 슬롯 시너지·소환을 실제로 발동한다", () => {
   const lateBoss = selectEnemyArchetype({
-    timeMinutes: 160,
+    timeMinutes: 260,
     districtKind: "INFRA",
     seed: 0,
   });
@@ -170,7 +170,7 @@ test("후반 3티어 적은 복수 슬롯 시너지·소환을 실제로 발동�
     staminaRegen: 10,
     weight: carbine.weight,
     maxWeight: 50,
-    time: 160,
+    time: 260,
     currentWeaponIndex: 0,
     weapons: [{ ...carbine, tags: [...carbine.tags], effect: { ...carbine.effect } }, null, null, null, null, null],
   };

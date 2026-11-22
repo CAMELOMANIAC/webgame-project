@@ -81,29 +81,29 @@ test("전투 API는 DB 없이 시뮬레이션 로그를 반환한다", async (t)
   assert.equal(response.json().timeline[0].events[0].type, "BATTLE_END");
 });
 
-test("도로 이동 시간은 실제 간선 길이에 비례해 10분~60분 단위로 누적된다", () => {
+test("도로 이동 시간은 실제 간선 길이에 비례해 10분~30분 단위로 누적된다", () => {
   assert.equal(roadTravelMinutes(0, 1), 10);
-  assert.equal(roadTravelMinutes(1, 26), 30);
-  assert.equal(roadTravelMinutes(26, 28), 20);
+  assert.equal(roadTravelMinutes(1, 26), 20);
+  assert.equal(roadTravelMinutes(26, 28), 10);
   assert.equal(roadTravelMinutes(28, 28), 10);
   assert.deepEqual(pathTravelVisits([0, 1, 26, 28], 0), [
     { nodeId: 1, time: 10 },
-    { nodeId: 26, time: 40 },
-    { nodeId: 28, time: 60 },
+    { nodeId: 26, time: 30 },
+    { nodeId: 28, time: 40 },
   ]);
-  assert.equal(pathTravelMinutes([0, 1, 26, 28]), 60);
+  assert.equal(pathTravelMinutes([0, 1, 26, 28]), 40);
 
   // 피로도 소모량 및 고갈(0) 시 이동 시간 1.5배(10분 단위 올림) 증가
   assert.equal(roadFatigueCost(0, 1), 1);
-  assert.equal(roadFatigueCost(1, 26), 3);
+  assert.equal(roadFatigueCost(1, 26), 2);
   assert.equal(roadFatigueCost(28, 28), 2);
-  assert.equal(pathFatigueCost([0, 1, 26, 28]), 6);
+  assert.equal(pathFatigueCost([0, 1, 26, 28]), 4);
 
   assert.equal(roadTravelMinutes(0, 1, 0), 20);
-  assert.equal(roadTravelMinutes(1, 26, 0), 50);
-  assert.equal(roadTravelMinutes(26, 28, 0), 30);
+  assert.equal(roadTravelMinutes(1, 26, 0), 30);
+  assert.equal(roadTravelMinutes(26, 28, 0), 20);
   assert.equal(roadTravelMinutes(28, 28, 0), 20);
-  assert.equal(pathTravelMinutes([0, 1, 26, 28], 0), 100);
+  assert.equal(pathTravelMinutes([0, 1, 26, 28], 0), 70);
 });
 
 test("적 소음은 감지 범위 안의 서로 다른 구역을 모두 반환한다", () => {

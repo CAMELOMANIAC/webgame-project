@@ -22,7 +22,7 @@ export const CENTRAL_T2_CRAFT_RADIUS_NORM = 0.5;
 export const LOCKDOWN_SAFE_CORE_NORM = 0.12;
 
 /** 조합 설비 건물에 부여되는 추가 봉쇄 유예 시간(분) */
-export const CRAFT_BUILDING_LOCKDOWN_GRACE_MINUTES = 120;
+export const CRAFT_BUILDING_LOCKDOWN_GRACE_MINUTES = 60;
 
 /** 곧 봉쇄될 건물을 캔버스에서 점멸 경고로 표시하는 잔여 시간(분) */
 export const LOCKDOWN_WARNING_MINUTES = 60;
@@ -70,8 +70,8 @@ export function getBuildingNormalizedDistance(
 
 /**
  * 건물이 봉쇄(비활성화)되는 레이드 경과 시각(분)을 계산합니다.
- * - 처음부터 외곽 건물들이 점찍듯이 순차적으로 비활성화되다가 서서히 전체 외곽이 봉쇄됩니다.
- * - 조합 설비 건물(category 존재)은 외곽에 있더라도 일반 건물보다 120분 느리게 봉쇄됩니다.
+ * - 45~60분 무렵부터 최외곽 일반 건물들이 점진적으로 봉쇄되기 시작해 240~300분 구간에 외곽 대부분이 닫힙니다.
+ * - 조합 설비 건물(category 존재)은 외곽에 있더라도 일반 건물보다 60분 느리게 봉쇄됩니다.
  */
 export function resolveBuildingLockdownMinute(
   building: Pick<MapBuilding, "id" | "coordinates" | "category">,
@@ -83,7 +83,7 @@ export function resolveBuildingLockdownMinute(
   }
   const jitter = buildingLockdownHash(building.id, seed);
   const baseMinute =
-    30 + (1 - dNorm) * 460 + Math.pow(jitter, 0.75) * 280;
+    45 + (1 - dNorm) * 210 + Math.pow(jitter, 0.8) * 90;
   const grace = building.category ? CRAFT_BUILDING_LOCKDOWN_GRACE_MINUTES : 0;
   return Math.round(baseMinute + grace);
 }

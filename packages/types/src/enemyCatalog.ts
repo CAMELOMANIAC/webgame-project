@@ -26,8 +26,8 @@ export interface EnemyArchetype {
 }
 
 export const ENEMY_TIER_TIME_THRESHOLDS = {
-  midStartMinutes: 61,
-  lateStartMinutes: 141,
+  midStartMinutes: 121,
+  lateStartMinutes: 241,
 } as const;
 
 const HIGH_RISK_DISTRICTS: readonly DistrictKind[] = [
@@ -38,9 +38,9 @@ const HIGH_RISK_DISTRICTS: readonly DistrictKind[] = [
 
 /**
  * 탐사 경과 시간(분)과 구역 위험도를 바탕으로 적 티어(1~3)를 결정합니다.
- * - 0~60분: 1티어 (초반, 2~3슬롯)
- * - 61~140분: 2티어 (중반, 3~5슬롯)
- * - 141분+: 3티어 (후반, 5~6슬롯)
+ * - 0~120분: 1티어 (초반, 2~3슬롯)
+ * - 121~240분: 2티어 (중반, 3~5슬롯)
+ * - 241분+: 3티어 (후반, 5~6슬롯)
  * - 산업/의료/기반 구역은 최소 2티어 이상으로 보정됩니다.
  */
 export function resolveEnemyTier(

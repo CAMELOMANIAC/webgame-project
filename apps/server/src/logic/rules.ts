@@ -6,8 +6,8 @@ export const gameRules = {
   extractionNodeIds: [CENTRAL_EXTRACTION_NODE_ID] as number[],
   travel: {
     stepUnitMinutes: 10,
-    maxEdgeMinutes: 60,
-    distancePerStepUnit: 20,
+    maxEdgeMinutes: 30,
+    distancePerStepUnit: 40,
     buildingMoveMinutes: 10,
     battleActionMinutes: 10,
   },
