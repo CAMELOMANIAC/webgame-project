@@ -220,12 +220,14 @@ test("건물 이벤트 선택지 조건 판정과 레이드당 1회 제한이 �
 
   const villa = { id: 999, height: 28 };
   const district = { kind: "RESIDENTIAL" as const };
+  const firstVillaEvent = resolveBuildingIntroEvent(villa, district, []);
+  assert.equal(firstVillaEvent.imageKey, "villa");
+  assert.notEqual(firstVillaEvent.id, "district-residential-villa");
   assert.equal(
-    resolveBuildingIntroEvent(villa, district, []).id,
-    "story-evacuation-echo",
-  );
-  assert.equal(
-    resolveBuildingIntroEvent(villa, district, ["story-evacuation-echo"]).id,
+    resolveBuildingIntroEvent(villa, district, [
+      "story-evacuation-echo",
+      "story-res-villa-receipt",
+    ]).id,
     "district-residential-villa",
   );
 

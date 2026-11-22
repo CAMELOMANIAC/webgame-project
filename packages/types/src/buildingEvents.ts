@@ -187,6 +187,21 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         ],
       },
       {
+        id: "report-duplicate-signal",
+        label:
+          "중복 생체 신호를 기업 회수망에 전송하고 포상 수령 코드를 받는다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "신호를 전송하자 단말기가 '비표준 개체 위치 등록 완료'를 띄웁니다. 시신의 인식표가 말소되는 대신 비상 드롭 포드로 부품과 식량이 투하되었습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["mat-battery", "mat-titanium", "food-combat-ration"],
+          },
+        ],
+      },
+      {
         id: "medical-port",
         label: "방호복 의료 포트를 연결해 생체 서명을 확인한다",
         action: "EVENT_CHOICE",
@@ -507,6 +522,21 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
         ],
       },
       {
+        id: "broadcast-false-allclear",
+        label:
+          "비상 방송을 '구역 안전 해제' 가짜 안내로 덮어씌우고 예비 보급함을 연다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "거리 확성기로 허위 안전 방송이 송출되자 중계실 단말기가 '질서 유지 기여' 포상함을 엽니다. 밖으로 흩어지는 생존자들의 발소리가 멀어집니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["mat-solenoid", "mat-core", "med-trauma-kit"],
+          },
+        ],
+      },
+      {
         id: "shunt-relay",
         label:
           "보유한 부품을 임시 우회 단자에 물려 전류를 분산시킨 뒤 과부하 없이 수거한다",
@@ -686,6 +716,21 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
           },
         ],
       },
+      {
+        id: "lock-workers-in",
+        label:
+          "외부 방화 셔터를 내려 경비조를 작업장 안에 가두고 입구 보급함만 챙긴다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 2,
+        outcomes: [
+          {
+            text: "방화 셔터를 내리자 안쪽에서 철문을 두드리는 둔탁한 소리가 울립니다. 입구 옆 비상 보급함에서 부품과 식량을 챙겨 빠져나왔습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["mat-wire", "mat-fuel", "food-energy-bar"],
+          },
+        ],
+      },
     ],
   },
   {
@@ -807,6 +852,21 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
           {
             text: "투박한 목소리를 등진 채 상가 외곽으로 돌아 나왔습니다. 시간은 지체되었지만 불필요한 마찰은 피했습니다.",
             timeCostMinutes: 10,
+          },
+        ],
+      },
+      {
+        id: "report-smuggler",
+        label:
+          "기업 순찰망에 비인가 물자 좌표를 전송하고 남자가 도주한 틈에 물자를 챙긴다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "단말기가 '불법 유통 적발' 포상을 지급하는 사이 바깥에서 순찰 드론의 사이렌이 울립니다. 암거래상이 황급히 도주하며 남긴 물자를 챙겨 나왔습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["mat-titanium", "mat-fuel", "food-combat-ration"],
           },
         ],
       },
@@ -1280,6 +1340,133 @@ export const STORY_BUILDING_EVENTS: readonly StoryBuildingEventDefinition[] = [
       },
     ],
   },
+  {
+    id: "story-res-apartment-elevator",
+    title: "멈춘 엘리베이터와 갇힌 가족",
+    districtKind: "RESIDENTIAL",
+    imageKey: "apartment",
+    oncePerRaid: true,
+    introText:
+      "비상 전력으로 멈춘 4층 엘리베이터 안에서 구조 요청이 들립니다. 하지만 복도 끝에서는 기업 방역 드론의 낮은 탐지음이 점점 가까워집니다.",
+    choices: [
+      {
+        id: "pry-elevator-door",
+        label: "소음을 감수하고 엘리베이터 비상 잠금문을 힘으로 비틀어 연다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 8,
+        outcomes: [
+          {
+            chance: 0.55,
+            text: "문이 열리자 갇혀 있던 시민들이 구급 물자와 식량을 건네고 비상 계단으로 달아났습니다.",
+            timeCostMinutes: 10,
+            rewardItemIds: ["med-bandage", "food-energy-bar", "mat-wire"],
+          },
+          {
+            text: "철문이 뜯기는 굉음에 복도 끝 탐지 센서가 점등합니다. 기업 드론 관제병이 즉시 드론을 전개하며 진입합니다.",
+            timeCostMinutes: 15,
+            encounterEnemyId: "npc-inf-drone-op",
+          },
+        ],
+      },
+      {
+        id: "strip-elevator-power",
+        label:
+          "비상 전원 패널만 열어 보조 배터리와 릴레이를 챙기고 조용히 이탈한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "배터리를 뽑자 승강기 내부 비상등이 꺼지며 비명이 잠시 멈춥니다. 경보 없이 고출력 부품을 챙겨 계단을 내려왔습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["mat-battery", "mat-relay"],
+          },
+        ],
+      },
+      {
+        id: "open-elevator-tech",
+        label: "기계 장비로 승강기 제어 회로를 우회해 소음 없이 문을 연다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 4,
+        condition: {
+          requireTag: "TECH",
+          label: "기계 계열 장비 보유",
+        },
+        outcomes: [
+          {
+            text: "비상 브레이크가 조용히 풀리며 문이 열렸습니다. 시민들이 감사를 표하며 남겨둔 응급 키트와 식량을 챙겼습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: [
+              "med-trauma-kit",
+              "food-combat-ration",
+              "mat-electrolyte",
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "story-res-villa-receipt",
+    title: "402호 우편함의 젖지 않은 영수증",
+    districtKind: "RESIDENTIAL",
+    imageKey: "villa",
+    oncePerRaid: true,
+    introText:
+      "비어 있는 빌라 우편함에서 빗물에 젖지 않은 구호품 수령증이 튀어나와 있습니다. 오늘 날짜와 방금 거점에서 받은 장비 목록이 적혀 있지만, 서명란에는 본 적 없는 필체가 남아 있습니다.",
+    choices: [
+      {
+        id: "check-room-402",
+        label: "수령증에 적힌 402호 문을 열어 내부를 확인한다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 10,
+        fatigueCost: 6,
+        outcomes: [
+          {
+            chance: 0.6,
+            text: "빈 방 식탁 위에 방금 뜯은 듯한 구호품 포장과 부품이 놓여 있습니다. 창문은 안쪽에서 잠겨 있었습니다.",
+            timeCostMinutes: 10,
+            rewardItemIds: ["mat-tape", "mat-wire", "food-ion-drink"],
+          },
+          {
+            text: "문고리를 돌리자 안에서 402호를 점거하던 무장 수집가가 경계하며 뛰쳐나옵니다.",
+            timeCostMinutes: 15,
+            encounterEnemyId: "npc-res-scavenger",
+          },
+        ],
+      },
+      {
+        id: "report-duplicate-receipt",
+        label: "단말기에 중복 발급 오류로 신고해 회수 포상을 받는다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "단말기가 '발급 이력 중복 - 자동 말소 처리'를 띄우며 소량의 예비 보급품을 지급합니다. 우편함의 종이는 회수 드론이 낚아채 갔습니다.",
+            timeCostMinutes: 5,
+            rewardItemIds: ["mat-battery", "med-bandage"],
+          },
+        ],
+      },
+      {
+        id: "ignore-mailbox",
+        label: "수령증을 다시 밀어 넣고 빌라 현관을 빠져나간다",
+        action: "EVENT_CHOICE",
+        timeCostMinutes: 5,
+        fatigueCost: 0,
+        outcomes: [
+          {
+            text: "서명란의 낯선 필체를 외면한 채 빗속으로 걸음을 옮겼습니다.",
+            timeCostMinutes: 5,
+            fatigueDelta: 4,
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 /**
@@ -1414,7 +1601,7 @@ export const UNARMED_RECOVERY_EVENT_CHAIN: readonly BuildingEventDefinition[] =
           fatigueCost: 4,
           outcomes: [
             {
-              text: "주파수 인증이 통과되며 락커가 열렸습니다. 상태가 양호한 한림 구호 카빈과 비상 식량을 회수했습니다.",
+              text: "주파수 인증이 통과되며 락커가 열렸습니다. 상태가 양호한 기업 제식 구호용 카빈과 비상 식량을 회수했습니다.",
               timeCostMinutes: 5,
               rewardItemIds: ["hanlim-relief-carbine", "food-combat-ration"],
             },
@@ -1428,7 +1615,7 @@ export const UNARMED_RECOVERY_EVENT_CHAIN: readonly BuildingEventDefinition[] =
           fatigueCost: 0,
           outcomes: [
             {
-              text: "무게 부담을 줄이기 위해 한림 진압봉과 응급 붕대만 챙겨 락커를 닫았습니다.",
+              text: "무게 부담을 줄이기 위해 기업 제식 진압봉과 응급 붕대만 챙겨 락커를 닫았습니다.",
               timeCostMinutes: 5,
               rewardItemIds: ["hanlim-control-baton", "med-bandage"],
             },
