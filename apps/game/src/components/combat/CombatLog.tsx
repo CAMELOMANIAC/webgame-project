@@ -195,6 +195,19 @@ const CombatLog = () => {
         return [];
       }
 
+      if (event.type === "SYNERGY") {
+        const hasEffect = Boolean(
+          event.hasteTicks ||
+            event.damageBonus ||
+            event.critChanceBonus ||
+            event.shieldBonus ||
+            event.staminaRestore,
+        );
+        if (!hasEffect) {
+          return [];
+        }
+      }
+
       let damageAmount: number | null = null;
       if (event.type === "ATTACK") {
         for (let i = index + 1; i < processedEvents.length; i++) {
@@ -205,6 +218,9 @@ const CombatLog = () => {
             damageAmount = next.amount;
             break;
           }
+        }
+        if (damageAmount === null) {
+          return [];
         }
       }
 
