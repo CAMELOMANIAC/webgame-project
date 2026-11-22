@@ -9,7 +9,7 @@ import {
 } from "@webgame/types";
 import { buildApp } from "./app";
 import { createDatabase } from "./db";
-import { findEnemyNoiseSignals } from "./logic/ghostNoise";
+import { findBroadNoiseSignals, findEnemyNoiseSignals } from "./logic/ghostNoise";
 import {
   pathFatigueCost,
   pathTravelMinutes,
@@ -112,6 +112,7 @@ test("적 소음은 감지 범위 안의 서로 다른 구역을 모두 반환�
   assert.deepEqual(findEnemyNoiseSignals(1, ["26"]), [near]);
   assert.deepEqual(findEnemyNoiseSignals(1, ["26", "28", "1130", "7", "8"]), [near, far]);
   assert.deepEqual(findEnemyNoiseSignals(1, ["1130"]), []);
+  assert.deepEqual(findBroadNoiseSignals(1, ["26"]), []);
 });
 
 test("건물 이벤트 API는 잘못된 액션을 거부하고 exploration 추출은 비어 있으면 undefined를 반환한다", async (t) => {

@@ -20,7 +20,10 @@ import {
   type RaidSession,
   type TransactionClient,
 } from "../db";
-import { findEnemyNoiseSignals } from "../logic/ghostNoise";
+import {
+  findBroadNoiseSignals,
+  findEnemyNoiseSignals,
+} from "../logic/ghostNoise";
 import { patrolsForRaid } from "../logic/ghostPatrols";
 import { nodesCloserThan } from "../logic/roadDistances";
 import { gameRules } from "../logic/rules";
@@ -371,7 +374,10 @@ export function createGhostTracker(
         const active = findClosestStep(patrol.stepsNear(time), time);
         if (active) positions.add(active.step.nodeId);
       }
-      return findEnemyNoiseSignals(playerNodeId, positions);
+      return [
+        ...findEnemyNoiseSignals(playerNodeId, positions),
+        ...findBroadNoiseSignals(playerNodeId, positions),
+      ];
     },
     defeatPatrol(patrolId: string) {
       (roster.defeatedPatrolIds ??= []).push(patrolId);

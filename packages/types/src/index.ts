@@ -486,6 +486,7 @@ export interface EnemyNoiseSignal {
   x: number;
   y: number;
   radius: number;
+  tier?: "near" | "broad";
 }
 
 export interface RaidNoiseSignals {
