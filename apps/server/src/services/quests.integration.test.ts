@@ -205,7 +205,7 @@ test("실제 DB: 미공개 인물은 응답에서 숨기고 단일 인물·복�
   );
   await db
     .update(users)
-    .set({ storyTier: 2 })
+    .set({ storyTier: 4 })
     .where(eq(users.id, user.id));
   const middle = await read();
   assert.equal(
@@ -219,7 +219,7 @@ test("실제 DB: 미공개 인물은 응답에서 숨기고 단일 인물·복�
   assert.doesNotMatch(middle.body, /owner-instance/);
   await db
     .update(users)
-    .set({ storyTier: 3 })
+    .set({ storyTier: 6 })
     .where(eq(users.id, user.id));
   const late = await read();
   const identities = late

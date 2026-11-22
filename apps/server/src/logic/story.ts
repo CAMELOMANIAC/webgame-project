@@ -1,6 +1,9 @@
 import {
+  borderGateNodeId,
   firstMissionNodeId,
+  medicalWardNodeId,
   MISSION_NODE_LABELS,
+  rationTerminalNodeId,
   secondMissionNodeId,
   thirdMissionNodeId,
 } from "@webgame/types";
@@ -30,7 +33,7 @@ export interface MissionDefinition {
   rewardDescription: string;
 }
 
-// 임무명·대사·보상은 거점 담당자 3인 구도 및 단계별 진실 공개를 연결하는 서사 초안이다.
+// 1막(Tier 1~2: 적응·구호) -> 2막(Tier 3~4: 통제 모순·단일 결재선) -> 3막(Tier 5~6: 중첩 관측·복수 개체)
 export const MISSION_CHAIN: readonly MissionDefinition[] = [
   {
     id: "hanlim-first-recovery",
@@ -58,11 +61,66 @@ export const MISSION_CHAIN: readonly MissionDefinition[] = [
       "고압 충격봉 1개 · 외상 응급 처치 키트 1개 · 따뜻한 전투식량 1개 · 200 CR · 연구 기록 공개",
   },
   {
-    id: "hanlim-second-contraband",
+    id: "hanlim-tier2-ration-audit",
     version: 1,
     tier: 2,
     requiredStoryTier: 1,
     grantsStoryTier: 2,
+    issuerName: "최 사장",
+    issuerRole: "비공식 물자 거래",
+    title: "상가 배급 단말기 대장 회수",
+    briefing:
+      "최 사장: 거점 배급만으로는 물자가 모자라. 상업지구 배급창구 단말기에 남은 재고 대장 좀 뽑아와 줘. 거기 어슬렁거리는 정찰 인원만 조심하면 돼.",
+    targetNodeId: rationTerminalNodeId,
+    targetLabel:
+      MISSION_NODE_LABELS[rationTerminalNodeId] ?? "상가 비상 배급창구",
+    enemyArchetypeId: "npc-com-scout",
+    supplyItems: [
+      { weaponId: "med-bandage", quantity: 2 },
+      { weaponId: "food-energy-bar", quantity: 1 },
+    ],
+    supplyDescription: "압박 붕대 2개 · 비상 에너지 바 1개",
+    rewardItems: [
+      { weaponId: "mat-battery", quantity: 2 },
+      { weaponId: "food-ion-drink", quantity: 2 },
+    ],
+    rewardCredits: 250,
+    rewardDescription:
+      "리튬 배터리 2개 · 전해질 이온 음료 2개 · 250 CR · 배급 대조 기록 공개",
+  },
+  {
+    id: "hanlim-tier3-ward-manifest",
+    version: 1,
+    tier: 3,
+    requiredStoryTier: 2,
+    grantsStoryTier: 3,
+    issuerName: "윤 책임연구원",
+    issuerRole: "연구·유전자 분석",
+    title: "응급 병동 생체 이송 내역 회수",
+    briefing:
+      "윤 책임연구원: 구호 부서가 이송한 시민 명단이 일반 병원이 아니라 연구동으로 빠지고 있습니다. 남부 응급 병동의 이송 내역을 확인해 주십시오.",
+    targetNodeId: medicalWardNodeId,
+    targetLabel: MISSION_NODE_LABELS[medicalWardNodeId] ?? "남부 응급 병동",
+    enemyArchetypeId: "npc-med-medic",
+    supplyItems: [
+      { weaponId: "med-tourniquet", quantity: 1 },
+      { weaponId: "mat-biogel", quantity: 1 },
+    ],
+    supplyDescription: "긴급 지혈대 1개 · 바이오 젤 1개",
+    rewardItems: [
+      { weaponId: "eq-med-t1", quantity: 1 },
+      { weaponId: "mat-nanosuture", quantity: 1 },
+    ],
+    rewardCredits: 300,
+    rewardDescription:
+      "임상용 메스 1개 · 나노 봉합사 1개 · 300 CR · 생체 이관 기록 공개",
+  },
+  {
+    id: "hanlim-second-contraband",
+    version: 1,
+    tier: 4,
+    requiredStoryTier: 3,
+    grantsStoryTier: 4,
     issuerName: "최 사장",
     issuerRole: "비공식 물자 거래",
     title: "물류 봉쇄선 적하목록 회수",
@@ -81,21 +139,49 @@ export const MISSION_CHAIN: readonly MissionDefinition[] = [
       { weaponId: "eq-reactive-plate", quantity: 1 },
       { weaponId: "mat-biogel", quantity: 2 },
     ],
-    rewardCredits: 350,
+    rewardCredits: 380,
     rewardDescription:
-      "떼어온 방화문짝 1개 · 바이오 젤 2개 · 350 CR · 봉쇄 지시서 기록 공개",
+      "떼어온 방화문짝 1개 · 바이오 젤 2개 · 380 CR · 봉쇄 지시서 기록 공개",
+  },
+  {
+    id: "hanlim-tier5-border-alarm",
+    version: 1,
+    tier: 5,
+    requiredStoryTier: 4,
+    grantsStoryTier: 5,
+    issuerName: "조 시설과장",
+    issuerRole: "구호·시설 운영",
+    title: "외곽 검문소 중복 경보 로그 회수",
+    briefing:
+      "조 시설과장: 물류단지 외곽 검문소에서 동일 인원의 출입 경보가 반복되고 있습니다. 매뉴얼상 오작동으로 보이나, 현장 로그를 직접 회수해 주십시오.",
+    targetNodeId: borderGateNodeId,
+    targetLabel:
+      MISSION_NODE_LABELS[borderGateNodeId] ?? "물류단지 외곽 검문소",
+    enemyArchetypeId: "npc-patrol-mid",
+    supplyItems: [
+      { weaponId: "med-trauma-kit", quantity: 1 },
+      { weaponId: "food-combat-ration", quantity: 1 },
+    ],
+    supplyDescription: "외상 응급 처치 키트 1개 · 따뜻한 전투식량 1개",
+    rewardItems: [
+      { weaponId: "mat-titanium", quantity: 2 },
+      { weaponId: "mat-core", quantity: 1 },
+    ],
+    rewardCredits: 450,
+    rewardDescription:
+      "경량 티타늄 프레임 2개 · 고밀도 코어 1개 · 450 CR · 중복 통행 경보 공개",
   },
   {
     id: "hanlim-third-anomaly",
     version: 1,
-    tier: 3,
-    requiredStoryTier: 2,
-    grantsStoryTier: 3,
+    tier: 6,
+    requiredStoryTier: 5,
+    grantsStoryTier: 6,
     issuerName: "윤 책임연구원",
     issuerRole: "연구·유전자 분석",
     title: "변전소 중첩 관측 로그 회수",
     briefing:
-      "윤 책임연구원: 최 사장이 가져온 결재선을 대조해 봤습니다. 같은 서명이 같은 시각에 서로 다른 구획에서 두 번 승인됐더군요. 중앙 전력 변전소의 중첩 관측 로그를 회수해 주시면, 이 실험의 진짜 구조를 확인해 드리겠습니다.",
+      "윤 책임연구원: 검문소 경보와 결재선을 대조해 봤습니다. 같은 서명이 같은 시각에 서로 다른 구획에서 두 번 승인됐더군요. 중앙 전력 변전소의 중첩 관측 로그를 회수해 주시면, 이 실험의 진짜 구조를 확인해 드리겠습니다.",
     targetNodeId: thirdMissionNodeId,
     targetLabel: MISSION_NODE_LABELS[thirdMissionNodeId] ?? "중앙 전력 변전소",
     enemyArchetypeId: "npc-inf-drone-op",
@@ -108,9 +194,9 @@ export const MISSION_CHAIN: readonly MissionDefinition[] = [
       { weaponId: "eq-arc-emitter", quantity: 1 },
       { weaponId: "gene-ampoule-haerin", quantity: 1 },
     ],
-    rewardCredits: 500,
+    rewardCredits: 550,
     rewardDescription:
-      "고압 전기파리채 1개 · 유전자 앰플(서해린) 1개 · 500 CR · 중첩 개체 대조 보고서 공개",
+      "고압 전기파리채 1개 · 유전자 앰플(서해린) 1개 · 550 CR · 중첩 개체 대조 보고서 공개",
   },
 ];
 
@@ -135,15 +221,36 @@ const records = [
       "구호 장비 지급과 도시 설비 유지가 계속되고 있다. 같은 문서의 부록에는 생존자의 탐사 경로와 복귀 후 신체 검사 결과가 관측 항목으로 기재되어 있다. 구호와 실험은 같은 운영 체계 안에서 진행된다.",
   },
   {
-    id: "single-executive-directive",
+    id: "ration-discrepancy-log",
     minimumTier: 2,
+    title: "배급 단말기 재고 대조표",
+    content:
+      "상가 무인 배급창구에서 회수한 출고 기록을 대조한 결과, 거점에 등록된 인원 수보다 실제 배급 수령 건수가 매일 일정 비율만큼 초과 집계되고 있다. 일부 수령 서명은 이미 귀환 보고를 마친 인원과 같은 날짜로 찍혀 있다.",
+  },
+  {
+    id: "medical-transfer-manifest",
+    minimumTier: 3,
+    title: "비표준 생체 이관 내역",
+    content:
+      "남부 응급 병동의 구호 환자 이송 명단 일부가 일반 치료 시설이 아닌 기업 연구동 격리 구역으로 분류되어 있었다. 분류 사유란에는 '비표준 생체 파형 - 대조 표본 지정'이라는 짧은 문구만 남아 있다.",
+  },
+  {
+    id: "single-executive-directive",
+    minimumTier: 4,
     title: "단일 결재선과 봉쇄 지시서",
     content:
       "물류 봉쇄선에서 회수한 적하목록과 격리 명령서는 모두 기업의 단일 경영 책임자 명의로 직접 결재되어 있었다. 구호 물자 배정과 통제 구역 봉쇄가 서로 다른 부서의 충돌이 아니라, 동일한 최상위 지휘 계통에서 동시에 내려오고 있다.",
   },
   {
+    id: "duplicate-gate-alarm",
+    minimumTier: 5,
+    title: "중복 통행 경보 이력",
+    content:
+      "물류단지 외곽 검문소의 출입 로그에 동일한 생체 인식 번호를 가진 인원이 같은 시각 다른 구획에서 동시에 통과한 기록이 남아 있다. 시스템은 매뉴얼에 따라 후순위 기록을 자동으로 '미등록 개체 오류'로 덮어쓰고 있었다.",
+  },
+  {
     id: "divergent-owner-audit",
-    minimumTier: 3,
+    minimumTier: 6,
     title: "중첩 개체 대조 보고서",
     content:
       "중앙 전력 변전소 관측 로그와 결재 생체 서명을 대조한 결과, 동일한 경영 책임자의 서명이 서로 다른 구획에서 동시각에 승인된 흔적이 확인되었다. 유전자 염기 미세 편차 분석에 따라 두 지시는 서로 다른 세계선에서 유입된 별도 개체가 발행한 것으로 판별된다.",
@@ -174,7 +281,7 @@ const contacts = [
     affiliation: "기업 연구부문",
   },
   {
-    minimumTier: 2,
+    minimumTier: 4,
     publicId: "executive-contact",
     publicName: "기업 경영 책임자",
     role: "경영 지시",
@@ -182,7 +289,7 @@ const contacts = [
     entityId: "owner-instance-a",
   },
   {
-    minimumTier: 3,
+    minimumTier: 6,
     publicId: "executive-contact-b",
     publicName: "기업 경영 책임자",
     role: "별도 개체 확인",
@@ -208,7 +315,7 @@ export function disclosedStory(tier: number) {
         name: contact.publicName,
         role: contact.role,
         affiliation: contact.affiliation,
-        ...(tier >= 3 && "entityId" in contact
+        ...(tier >= 6 && "entityId" in contact
           ? { entityId: contact.entityId }
           : {}),
       })),

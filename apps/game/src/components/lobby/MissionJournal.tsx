@@ -63,7 +63,7 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
         <header className={styles.pageHeader}>
           <div className={styles.telemetryTop}>
             <span>SHELTER // COMM-ARCHIVE</span>
-            <span>CLEARANCE TIER {storyTier} / 3</span>
+            <span>CLEARANCE TIER {storyTier} / 6</span>
           </div>
           <h1>도시 운영 기록</h1>
           <p>거점 담당자 3인의 의뢰와 회수된 관측 기록을 확인합니다.</p>
