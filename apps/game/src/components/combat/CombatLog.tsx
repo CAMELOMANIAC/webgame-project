@@ -189,7 +189,8 @@ const CombatLog = () => {
         event.type !== "SHIELD" &&
         event.type !== "HEAL" &&
         event.type !== "SUMMON" &&
-        event.type !== "SYNERGY"
+        event.type !== "SYNERGY" &&
+        !(event.type === "DAMAGE" && event.isOverload)
       ) {
         return [];
       }
@@ -322,7 +323,9 @@ const CombatLog = () => {
                 ? event.actorId
                 : event.type === "SUMMON"
                   ? event.summonerId
-                  : event.type === "SHIELD" || event.type === "HEAL"
+                  : event.type === "SHIELD" ||
+                      event.type === "HEAL" ||
+                      event.type === "DAMAGE"
                     ? event.targetId
                     : null;
             const actorPlayer = participantId
@@ -331,7 +334,10 @@ const CombatLog = () => {
                 ) ??
                 summonedPlayers.find((player) => player.id === participantId))
               : undefined;
-            const actorName = actorPlayer?.name ?? participantId ?? "SYSTEM";
+            const actorName =
+              event.type === "DAMAGE" && event.isOverload
+                ? `OVERLOAD → ${actorPlayer?.name ?? participantId ?? "대상"}`
+                : (actorPlayer?.name ?? participantId ?? "SYSTEM");
             const role: "self" | "ally" | "enemy" =
               actorPlayer && actorPlayer.id === characterId
                 ? "self"
@@ -344,26 +350,49 @@ const CombatLog = () => {
             const title =
               event.type === "ATTACK"
                 ? (actorPlayer?.weapons?.[event.weaponIndex]?.name ?? "공격")
-                : event.type === "SYNERGY"
-                  ? (actorPlayer?.weapons?.[event.sourceSlotIndex]?.name ??
-                    "장비 발동")
-                  : event.type === "SHIELD"
-                    ? (event.weaponIndex !== undefined
-                        ? (actorPlayer?.weapons?.[event.weaponIndex]?.name ??
-                          "보호막")
-                        : "보호막")
-                    : event.type === "HEAL"
-                      ? "회복"
-                      : `소환 · ${event.combatant.name}`;
+                : event.type === "DAMAGE" && event.isOverload
+                  ? "과부하 피해"
+                  : event.type === "SYNERGY"
+                    ? (actorPlayer?.weapons?.[event.sourceSlotIndex]?.name ??
+                      "장비 발동")
+                    : event.type === "SHIELD"
+                      ? (event.weaponIndex !== undefined
+                          ? (actorPlayer?.weapons?.[event.weaponIndex]?.name ??
+                            "보호막")
+                          : "보호막")
+                      : event.type === "HEAL"
+                        ? "회복"
+                        : event.type === "SUMMON"
+                          ? `소환 · ${event.combatant.name}`
+                          : "전투";
+
+            const synergyParts: string[] = [];
+            if (event.type === "SYNERGY") {
+              if (event.hasteTicks) synergyParts.push(`가속 -${event.hasteTicks}t`);
+              if (event.damageBonus) synergyParts.push(`피해 +${event.damageBonus}`);
+              if (event.critChanceBonus) {
+                synergyParts.push(
+                  `치명타 +${Math.round(event.critChanceBonus * 100)}%`,
+                );
+              }
+              if (event.shieldBonus) synergyParts.push(`보호막 +${event.shieldBonus}`);
+              if (event.staminaRestore) {
+                synergyParts.push(`기력 +${event.staminaRestore}`);
+              }
+            }
 
             const amountText =
               event.type === "ATTACK"
                 ? damageAmount !== null
                   ? `-${damageAmount}`
                   : ""
-                : event.type === "SYNERGY" || event.type === "SUMMON"
-                  ? ""
-                  : `+${event.amount}`;
+                : event.type === "DAMAGE"
+                  ? `-${event.amount}`
+                  : event.type === "SYNERGY"
+                    ? synergyParts.join(" · ")
+                    : event.type === "SUMMON"
+                      ? ""
+                      : `+${event.amount}`;
 
             const amountTone:
               | "damage"
@@ -374,11 +403,13 @@ const CombatLog = () => {
                 ? damageAmount !== null && damageAmount > 0
                   ? "damage"
                   : "neutral"
-                : event.type === "HEAL"
-                  ? "heal"
-                  : event.type === "SHIELD"
-                    ? "shield"
-                    : "neutral";
+                : event.type === "DAMAGE"
+                  ? "damage"
+                  : event.type === "HEAL"
+                    ? "heal"
+                    : event.type === "SHIELD"
+                      ? "shield"
+                      : "neutral";
 
             return (
               <motion.li

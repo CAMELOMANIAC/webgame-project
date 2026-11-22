@@ -96,6 +96,7 @@ export interface WeaponEffect {
   damageBonus?: number;
   critChanceBonus?: number;
   shieldBonus?: number;
+  shieldPierce?: number;
   staminaRestore?: number;
   triggerEveryNHits?: number;
   perTag?: {
@@ -241,6 +242,7 @@ export type BattleEvent = { id: string; timestamp: number } & (
       amount: number;
       remainingHp: number;
       isCritical: boolean;
+      isOverload?: boolean;
       absorbedShield?: number;
       remainingShield?: number;
       retreatGauge?: number;

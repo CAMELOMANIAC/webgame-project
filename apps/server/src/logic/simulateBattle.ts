@@ -399,7 +399,7 @@ export function simulateBattle(
       const perTagStamina = (perTagRule?.staminaRestore ?? 0) * perTagCount;
 
       const sustainMultiplier =
-        currentTick < 30 ? 1 : Math.max(0, 1 - (currentTick - 30) * 0.02);
+        currentTick < 30 ? 1 : Math.max(0, 1 - (currentTick - 30) * 0.04);
 
       const selfShieldGain = effectTriggered
         ? (eff?.shieldGain ?? 0) + perTagShield
@@ -451,11 +451,13 @@ export function simulateBattle(
             (actor.fatigue ?? 1) > 0
               ? (actor.activeFoodBuff?.critChanceBonus ?? 0)
               : 0;
+          const selfCritBonus = !eff?.target ? (eff?.critChanceBonus ?? 0) : 0;
           const critChance = Math.min(
             1,
             0.1 +
               foodCritBonus +
               (actor.geneCritChanceBonus ?? 0) +
+              selfCritBonus +
               weapon.pendingCritBonus,
           );
           weapon.pendingDamageBonus = 0;
@@ -465,7 +467,12 @@ export function simulateBattle(
           const amount = isCritical
             ? Math.floor(totalDamage * 1.5)
             : totalDamage;
-          const absorbedShield = Math.min(target.shield, amount);
+          const shieldPierce = Math.max(
+            0,
+            Math.min(1, eff?.shieldPierce ?? 0),
+          );
+          const shieldableAmount = Math.floor(amount * (1 - shieldPierce));
+          const absorbedShield = Math.min(target.shield, shieldableAmount);
           target.shield -= absorbedShield;
           const hpDamage = amount - absorbedShield;
           const previousHp = target.hp;
@@ -818,7 +825,7 @@ export function simulateBattle(
       aliveTeams(simPlayers).size > 1 &&
       simPlayers.some((u) => u.weapons.some((w) => w !== null))
     ) {
-      const overloadDamage = Math.floor((currentTick - 35) / 5) * 8;
+      const overloadDamage = Math.floor((currentTick - 35) / 5) * 12;
       for (const unit of simPlayers) {
         if (unit.hp <= 0) continue;
         unit.hp = Math.max(0, unit.hp - overloadDamage);
@@ -829,6 +836,7 @@ export function simulateBattle(
           amount: overloadDamage,
           remainingHp: unit.hp,
           isCritical: false,
+          isOverload: true,
           timestamp: currentTick,
         });
         if (unit.hp <= 0) {

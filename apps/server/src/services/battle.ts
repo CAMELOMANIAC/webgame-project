@@ -128,6 +128,7 @@ const WeaponEffectSchema = z
     damageBonus: z.number().int().positive().optional(),
     critChanceBonus: z.number().positive().max(1).optional(),
     shieldBonus: z.number().int().positive().optional(),
+    shieldPierce: z.number().nonnegative().max(1).optional(),
     staminaRestore: z.number().int().positive().optional(),
     triggerEveryNHits: z.number().int().positive().optional(),
     perTag: z

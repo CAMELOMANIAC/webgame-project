@@ -960,7 +960,11 @@ test("장기전 교착 상태는 30틱 이후 유지력 감쇠와 40틱 이후 �
   );
 
   assert.notEqual(log.result.reason, "MAX_TICKS");
-  assert.ok(log.result.durationTicks >= 40 && log.result.durationTicks < 100);
+  assert.ok(log.result.durationTicks >= 40 && log.result.durationTicks <= 55);
+  const overloadEvents = log.timeline
+    .flatMap((entry) => entry.events)
+    .filter((e) => e.type === "DAMAGE" && e.isOverload);
+  assert.ok(overloadEvents.length > 0);
 });
 
 test("무기 시전 중에도 다른 슬롯의 아이템을 정상적으로 사용할 수 있다", () => {
@@ -998,6 +1002,56 @@ test("무기 시전 중에도 다른 슬롯의 아이템을 정상적으로 사�
       e.timestamp < castComplete.timestamp,
   );
   assert.ok(fastAttacksDuringCast.length >= 1);
+});
+
+test("방어막 관통(shieldPierce) 무기는 보호막을 우회해 체력에 직접 피해를 입힌다", () => {
+  const log = simulateBattle(
+    [
+      player("p", "A", {
+        hp: 100,
+        maxHp: 100,
+        weapons: [
+          weapon({
+            damage: 20,
+            staminaCost: 0,
+            cooldownTicks: 10,
+            effect: { shieldPierce: 1, critChanceBonus: 0.9 },
+          }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+      player("e", "B", {
+        hp: 100,
+        maxHp: 100,
+        weapons: [
+          weapon({
+            damage: 0,
+            staminaCost: 0,
+            cooldownTicks: 10,
+            effect: { type: "SHIELD", shieldGain: 50 },
+          }),
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+    ],
+    { random: () => 0.5, maxTicks: 1 },
+  );
+
+  const dmg = log.timeline
+    .flatMap((entry) => entry.events)
+    .find((e) => e.type === "DAMAGE" && e.targetId === "e");
+  assert.ok(dmg && dmg.type === "DAMAGE");
+  assert.equal(dmg.isCritical, true);
+  assert.equal(dmg.absorbedShield ?? 0, 0);
+  assert.equal(dmg.remainingHp, 70);
 });
 
 
