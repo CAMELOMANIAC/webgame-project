@@ -35,7 +35,7 @@ const Backpack = memo(
         <div className={styles.header}>
           <h3 className={styles.title}>배치 가방</h3>
           <span className={styles.subCode}>
-            PACK // {occupiedCount} /{" "}
+            {occupiedCount} /{" "}
             {characterData?.inventory.length ?? MIN_BACKPACK_SLOTS}
           </span>
         </div>

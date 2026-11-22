@@ -707,7 +707,7 @@ export function LoadoutEditor({
             <h2 className={baseStyles.sectionHeader}>
               <span>배치 장비</span>
               <span className={baseStyles.sectionCode}>
-                LOADOUT // {equippedCount}/{equipment.length || 6} ·{" "}
+                {equippedCount}/{equipment.length || 6} ·{" "}
                 {character?.weight ?? 0}/{character?.maxWeight ?? 0}kg
               </span>
             </h2>
@@ -751,7 +751,7 @@ export function LoadoutEditor({
             <h2 className={baseStyles.sectionHeader}>
               <span>배치 가방</span>
               <span className={baseStyles.sectionCode}>
-                PACK // {filledInventoryItems.length} ITEMS
+                {filledInventoryItems.length}개
               </span>
             </h2>
             {filledInventoryItems.length === 0 ? (
@@ -784,7 +784,7 @@ export function LoadoutEditor({
             <h2 className={baseStyles.sectionHeader}>
               <span>거점 공용 창고</span>
               <span className={baseStyles.sectionCode}>
-                STASH // {stash.length} ITEMS
+                {stash.length}개
               </span>
             </h2>
             {stash.length === 0 ? (

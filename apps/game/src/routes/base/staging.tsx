@@ -478,11 +478,11 @@ function ExpeditionStagingScreen() {
                             fontFamily="monospace"
                             fontWeight="700"
                           >
-                            EXIT #{extractionNodeId}
+                            탈출구
                           </text>
                         </g>
                       )}
-                      {entryDetails.map(({ nodeId, node }) => {
+                      {entryDetails.map(({ nodeId, node }, entryIndex) => {
                         if (!node) return null;
                         const isSelected = effectiveStartNodeId === nodeId;
                         return (
@@ -516,7 +516,7 @@ function ExpeditionStagingScreen() {
                               fontFamily="monospace"
                               fontWeight="700"
                             >
-                              #{nodeId}
+                              {String(entryIndex + 1).padStart(2, "0")}
                             </text>
                           </g>
                         );
@@ -530,13 +530,16 @@ function ExpeditionStagingScreen() {
                     aria-label="진입 지점 선택"
                   >
                     {entryDetails.map(
-                      ({
-                        nodeId,
-                        districtName,
-                        travelMinutes,
-                        fatigueCost,
-                        materialNames,
-                      }) => {
+                      (
+                        {
+                          nodeId,
+                          districtName,
+                          travelMinutes,
+                          fatigueCost,
+                          materialNames,
+                        },
+                        entryIndex,
+                      ) => {
                         const isSelected = effectiveStartNodeId === nodeId;
                         return (
                           <button
@@ -552,7 +555,7 @@ function ExpeditionStagingScreen() {
                           >
                             <div className={styles.entryHeader}>
                               <span className={styles.entryCode}>
-                                NODE #{nodeId} · {districtName}
+                                {String(entryIndex + 1).padStart(2, "0")} · {districtName}
                               </span>
                               {nodeId === defaultStartNodeId && (
                                 <span className={styles.entryBadge}>
@@ -561,7 +564,7 @@ function ExpeditionStagingScreen() {
                               )}
                             </div>
                             <span className={styles.entryName}>
-                              {districtName} 진입점 (#{nodeId})
+                              {districtName} 진입점
                             </span>
                             <span className={styles.entryMeta}>
                               탈출구까지 +{formatRaidTime(travelMinutes)} · -

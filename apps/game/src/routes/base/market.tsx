@@ -280,7 +280,7 @@ function MarketScreen() {
       <div className={styles.layout}>
         <div className={styles.telemetryGrid}>
           <div className={styles.telemetryCell}>
-            <span className={styles.telemetryLabel}>CREDITS</span>
+            <span className={styles.telemetryLabel}>보유 크레딧</span>
             <span
               className={styles.telemetryValue({
                 tone: credits > 0 ? "positive" : "default",
@@ -290,13 +290,13 @@ function MarketScreen() {
             </span>
           </div>
           <div className={styles.telemetryCell}>
-            <span className={styles.telemetryLabel}>ACTIVE AUCTIONS</span>
+            <span className={styles.telemetryLabel}>진행 중 경매</span>
             <span className={styles.telemetryValue()}>
               {listings.length.toLocaleString()}
             </span>
           </div>
           <div className={styles.telemetryCell}>
-            <span className={styles.telemetryLabel}>MY ACTIVE TRADES</span>
+            <span className={styles.telemetryLabel}>내 거래</span>
             <span className={styles.telemetryValue()}>
               {activeMyCount.toLocaleString()}
             </span>

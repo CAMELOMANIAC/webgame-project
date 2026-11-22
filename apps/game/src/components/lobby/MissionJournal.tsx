@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import { CENTRAL_EXTRACTION_NODE_ID } from "@webgame/types";
 import { useAtomValue } from "jotai";
 import { useEffect, useState } from "react";
 
@@ -95,7 +94,7 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
                 {resultPending ? "탐사 결과 확인 필요" : labels[mission.status]}
               </small>
               <span className={styles.codeTag}>
-                TIER {mission.tier} // NODE #{mission.targetNodeId}
+                TIER {mission.tier}
               </span>
             </div>
 
@@ -109,18 +108,17 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
 
             <div className={styles.metaGrid}>
               <div className={styles.metaCell}>
-                <span>TARGET // 목표 경로</span>
+                <span>목표 경로</span>
                 <strong>
-                  {mission.targetLabel} #{mission.targetNodeId} → 중앙 탈출 지점 #
-                  {CENTRAL_EXTRACTION_NODE_ID} → 거점 보고
+                  {mission.targetLabel} → 중앙 탈출 지점 → 거점 보고
                 </strong>
               </div>
               <div className={styles.metaCell}>
-                <span>SUPPLY // 수락 지급품</span>
+                <span>수락 지급품</span>
                 <strong>{mission.supplyDescription}</strong>
               </div>
               <div className={styles.metaCell}>
-                <span>REWARD // 보고 보상</span>
+                <span>보고 보상</span>
                 <strong>{mission.rewardDescription}</strong>
               </div>
             </div>
@@ -202,7 +200,6 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
         <section className={styles.panel}>
           <div className={styles.sectionTopRow}>
             <h2>확인한 담당자</h2>
-            <span className={styles.codeTag}>CONTACTS</span>
           </div>
           {journal.data?.contacts.map((contact) => (
             <div className={styles.contactRow} key={contact.id}>
@@ -226,7 +223,6 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
         <section className={styles.panel}>
           <div className={styles.sectionTopRow}>
             <h2>회수·공개 기록</h2>
-            <span className={styles.codeTag}>ARCHIVE</span>
           </div>
           {journal.data?.records.length === 0 && <p>공개된 기록이 없습니다.</p>}
           {journal.data?.records.map((record) => (

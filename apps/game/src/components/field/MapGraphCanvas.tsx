@@ -373,7 +373,6 @@ function drawPathLineGraphics(
   }
 }
 
-const DEFAULT_NODE_COLOR_HEX = "#8e95a5";
 const DEFAULT_NODE_COLOR_NUM = 0x8e95a5;
 const DEFAULT_NODE_RADIUS = 4;
 
@@ -1379,16 +1378,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
 
           const el = document.getElementById("hud-hover-detail");
           if (el) {
-            el.style.display = "block";
-            el.innerHTML = `
-              <div style="color: ${DEFAULT_NODE_COLOR_HEX}; font-size: 11px; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px;">
-                NODE #${hit.nodeId}
-              </div>
-              <div style="font-size: 10px; color: #8a8d98; font-family: monospace; line-height: 1.4;">
-                X: ${hit.node.x.toFixed(2)}<br />
-                Y: ${hit.node.y.toFixed(2)}
-              </div>
-            `;
+            el.style.display = "none";
           }
         }
         return;

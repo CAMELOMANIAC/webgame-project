@@ -155,7 +155,6 @@ function RaidResultRoute() {
       >
         <section className={styles.panel}>
           <div className={styles.headerBlock}>
-            <p className={styles.eyebrow}>EXPEDITION REPORT</p>
             <h1
               className={styles.title({
                 tone: isDead ? "negative" : "positive",
