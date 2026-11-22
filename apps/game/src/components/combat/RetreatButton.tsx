@@ -19,6 +19,7 @@ export interface RetreatButtonProps {
   countdown?: { endsAt: number; durationMs: number };
   pending?: boolean;
   onRetreat?: () => void;
+  onContinue?: () => void;
 }
 
 export const RetreatButton = ({
@@ -27,6 +28,7 @@ export const RetreatButton = ({
   countdown,
   pending = false,
   onRetreat,
+  onContinue,
 }: RetreatButtonProps) => {
   const statusKey: RetreatStatusKey = expired
     ? "EXPIRED"
@@ -132,6 +134,16 @@ export const RetreatButton = ({
           <div className={styles.segmentMask({ ready: isReady })} />
         </div>
       </button>
+      {isReady && onContinue && (
+        <button
+          type="button"
+          className={styles.continueButton}
+          onClick={!pending ? onContinue : undefined}
+          disabled={pending}
+        >
+          계속 싸우기
+        </button>
+      )}
     </div>
   );
 };

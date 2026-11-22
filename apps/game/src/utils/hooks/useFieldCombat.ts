@@ -66,7 +66,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
   const [retreatWindow, setRetreatWindow] = useState<{ endsAt: number; durationMs: number }>();
   const [retreatOpened, setRetreatOpened] = useState(false);
   const [retreatPending, setRetreatPending] = useState(false);
-  const queuedRetreatRef = useRef(false);
+  const queuedDecisionRef = useRef<"RETREAT" | "CONTINUE" | null>(null);
   const [retreatOutcome, setRetreatOutcome] = useState<{
     battleId: string;
     resolution: RetreatResolution;
@@ -76,7 +76,6 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
   const [isProcessing, setIsProcessing] = useState(false);
   const pendingEventsRef = useRef<BattleEvent[]>([]);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const queryClient = useQueryClient();
   const userId = characterData?.raw.userId;
   const characterId = characterData?.raw.id;
@@ -110,9 +109,10 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
           endsAt: performance.now() + decisionResult.remainingMs,
           durationMs: decisionResult.windowMs,
         });
-        if (action === "OPEN" && queuedRetreatRef.current) {
-          queuedRetreatRef.current = false;
-          decision.mutate("RETREAT");
+        if (action === "OPEN" && queuedDecisionRef.current) {
+          const queuedAction = queuedDecisionRef.current;
+          queuedDecisionRef.current = null;
+          decision.mutate(queuedAction);
         }
         return;
       }
@@ -125,7 +125,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       }
     },
     onError: () => {
-      queuedRetreatRef.current = false;
+      queuedDecisionRef.current = null;
       setRetreatPending(false);
     },
   });
@@ -263,10 +263,9 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
         );
       }
 
-      // 전투 관련 전역 상태 초기화
+      // 전투 관련 전역 상태 초기화 (선택한 재생 배속은 유지)
       setBattleLog(null);
       setTime(0);
-      setPlaybackSpeed(1);
       setDisplayEvents([]);
       setProcessedEvents([]);
 
@@ -315,21 +314,22 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       return;
     }
 
-    const timer = setInterval(() => {
-      // 현재 시간에 해당하는 이벤트들 가져오기
-      const currentTickEvents = timeline.filter(
-        (e: BattleEvent) => e.timestamp === time,
-      );
+    const currentTickEvents = timeline.filter(
+      (e: BattleEvent) => e.timestamp === time,
+    );
+    const tickDelayMs =
+      (currentTickEvents.length > 0 ? 1000 : 280) / playbackSpeed;
 
+    const timer = setTimeout(() => {
       if (currentTickEvents.length > 0) {
         pendingEventsRef.current = [...currentTickEvents];
         setIsProcessing(true);
       } else {
         setTime((prev) => prev + 1);
       }
-    }, 1000 / playbackSpeed);
+    }, tickDelayMs);
 
-    return () => clearInterval(timer);
+    return () => clearTimeout(timer);
   }, [
     isCombat,
     battleLog,
@@ -398,12 +398,12 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       setRetreatWindow(undefined);
       setRetreatOpened(false);
       setRetreatPending(false);
-      queuedRetreatRef.current = false;
+      queuedDecisionRef.current = null;
       setRetreatOutcome(undefined);
       setRetreatExpired(false);
       setBattleLog(log);
       setTime(0);
-      setPlaybackSpeed(1);
+      setPlaybackSpeed((prev) => (prev === 0 ? 1 : prev));
       setDisplayEvents([]);
       setProcessedEvents([]);
       setIsProcessing(false);
@@ -462,10 +462,19 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       if (!atRetreatCheckpoint || retreatPending || retreatOutcome) return;
       setRetreatPending(true);
       if (!retreatOpened) {
-        queuedRetreatRef.current = true;
+        queuedDecisionRef.current = "RETREAT";
         return;
       }
       sendDecision("RETREAT");
+    },
+    continueCombat: () => {
+      if (!atRetreatCheckpoint || retreatPending || retreatOutcome) return;
+      setRetreatPending(true);
+      if (!retreatOpened) {
+        queuedDecisionRef.current = "CONTINUE";
+        return;
+      }
+      sendDecision("CONTINUE");
     },
   };
 }

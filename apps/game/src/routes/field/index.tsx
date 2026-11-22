@@ -83,7 +83,7 @@ function RouteComponent() {
   useRaidNoise();
 
   const { isCombat, setIsCombat, battleLog, navigateRaid, triggerCombat, retreatGauge,
-    retreatReady, retreatExpired, retreatWindow, retreatPending, chooseRetreat } =
+    retreatReady, retreatExpired, retreatWindow, retreatPending, chooseRetreat, continueCombat } =
     useFieldCombat(characterData);
   const { handleDragStart, handleDragEnd, moveSlots } =
     useInventoryDrag(characterData);
@@ -369,7 +369,8 @@ function RouteComponent() {
                 >
                   {isCombat && (
                     <RetreatButton gauge={retreatGauge} expired={retreatExpired} countdown={retreatWindow}
-                      pending={retreatPending} onRetreat={retreatReady ? chooseRetreat : undefined} />
+                      pending={retreatPending} onRetreat={retreatReady ? chooseRetreat : undefined}
+                      onContinue={retreatReady ? continueCombat : undefined} />
                   )}
                   <FieldStatusSection discardMode={showDiscardDropZone} />
                   <Equipment

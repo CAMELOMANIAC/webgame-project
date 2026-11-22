@@ -13,6 +13,40 @@ export const container = style({
   display: "flex",
   width: "100%",
   justifyContent: "center",
+  alignItems: "stretch",
+  gap: "8px",
+});
+
+export const continueButton = style({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "7px 14px",
+  borderRadius: vars.radius.control,
+  border: `1px solid ${vars.border.strong}`,
+  backgroundColor: vars.surface.mid,
+  color: vars.text.primary,
+  fontFamily: vars.font.sans,
+  fontSize: "12px",
+  fontWeight: 600,
+  letterSpacing: "-0.01em",
+  whiteSpace: "nowrap",
+  cursor: "pointer",
+  transition: "background-color 180ms ease, border-color 180ms ease",
+  selectors: {
+    "&:hover:not(:disabled)": {
+      backgroundColor: vars.surface.high,
+      borderColor: vars.text.primary,
+    },
+    "&:focus-visible": {
+      outline: `1px solid ${vars.text.primary}`,
+      outlineOffset: "2px",
+    },
+    "&:disabled": {
+      opacity: 0.5,
+      cursor: "not-allowed",
+    },
+  },
 });
 
 export const button = recipe({
