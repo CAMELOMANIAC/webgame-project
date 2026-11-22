@@ -160,11 +160,16 @@ export function swapEquipmentBackpack<
 
 /**
  * 소지품 총 가치(Value)에 따른 탐사 투입 지연 시간(분)을 계산합니다.
- * 규칙: 가치 100당 10분 지연
+ * 규칙:
+ * - 0 ~ 400 가치 구간: 가치 50당 10분 지연 (초반 고가치 양학 방지, 400 가치 = 80분)
+ * - 400 초과 가치 구간: 기본 80분 + 초과분 100당 10분 지연 (1,000 가치 = 140분)
  */
 export function calculateEntryDelayMinutes(totalValue: number): number {
   if (!Number.isFinite(totalValue) || totalValue <= 0) return 0;
-  return Math.floor(totalValue / 100) * 10;
+  if (totalValue <= 400) {
+    return Math.floor(totalValue / 50) * 10;
+  }
+  return 80 + Math.floor((totalValue - 400) / 100) * 10;
 }
 
 /**

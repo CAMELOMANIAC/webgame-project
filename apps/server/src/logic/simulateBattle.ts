@@ -26,6 +26,7 @@ interface SimulationOptions {
 
 interface SimWeapon extends WeaponData {
   currentCooldown: number;
+  castingTicksRemaining: number;
   isTriggered: boolean;
   activationCount: number;
   pendingDamageBonus: number;
@@ -36,8 +37,6 @@ interface SimWeapon extends WeaponData {
 interface SimCombatant extends Omit<BattleCombatant, "weapons"> {
   shield: number;
   weapons: Array<SimWeapon | null>;
-  castingWeaponIndex: number | null;
-  castingTicksRemaining: number;
   geneCritChanceBonus?: number;
   isSummon?: boolean;
   summonerId?: string;
@@ -321,6 +320,7 @@ export function simulateBattle(
         tags,
         effect,
         currentCooldown: 0,
+        castingTicksRemaining: 0,
         isTriggered: false,
         activationCount: 0,
         pendingDamageBonus: 0,
@@ -342,8 +342,6 @@ export function simulateBattle(
       geneCritChanceBonus: genePassives.critChanceBonus,
       weapons: [...equippedWeapons, ...geneActiveWeapons],
       currentWeaponIndex: player.currentWeaponIndex ?? 0,
-      castingWeaponIndex: null,
-      castingTicksRemaining: 0,
     };
   });
   const initialState = { players: capturePlayers(simPlayers) };
@@ -519,18 +517,19 @@ export function simulateBattle(
               playerId: target.id,
               timestamp: currentTick,
             });
-            if (target.castingWeaponIndex !== null) {
-              emit({
-                id: generateId(),
-                type: "CAST_CANCEL",
-                actorId: target.id,
-                weaponIndex: target.castingWeaponIndex,
-                reason: "DEATH",
-                timestamp: currentTick,
-              });
-              target.castingWeaponIndex = null;
-              target.castingTicksRemaining = 0;
-            }
+            target.weapons.forEach((w, idx) => {
+              if (w && w.castingTicksRemaining > 0) {
+                emit({
+                  id: generateId(),
+                  type: "CAST_CANCEL",
+                  actorId: target.id,
+                  weaponIndex: idx,
+                  reason: "DEATH",
+                  timestamp: currentTick,
+                });
+                w.castingTicksRemaining = 0;
+              }
+            });
             for (const dependent of [...simPlayers, ...pendingSummons]) {
               if (dependent.summonerId === target.id && dependent.hp > 0) {
                 dependent.hp = 0;
@@ -541,18 +540,19 @@ export function simulateBattle(
                   playerId: dependent.id,
                   timestamp: currentTick,
                 });
-                if (dependent.castingWeaponIndex !== null) {
-                  emit({
-                    id: generateId(),
-                    type: "CAST_CANCEL",
-                    actorId: dependent.id,
-                    weaponIndex: dependent.castingWeaponIndex,
-                    reason: "DEATH",
-                    timestamp: currentTick,
-                  });
-                  dependent.castingWeaponIndex = null;
-                  dependent.castingTicksRemaining = 0;
-                }
+                dependent.weapons.forEach((w, idx) => {
+                  if (w && w.castingTicksRemaining > 0) {
+                    emit({
+                      id: generateId(),
+                      type: "CAST_CANCEL",
+                      actorId: dependent.id,
+                      weaponIndex: idx,
+                      reason: "DEATH",
+                      timestamp: currentTick,
+                    });
+                    w.castingTicksRemaining = 0;
+                  }
+                });
               }
             }
           }
@@ -584,13 +584,10 @@ export function simulateBattle(
                 0,
                 targetWeapon.currentCooldown - eff.hasteTicks,
               );
-              if (
-                actor.castingWeaponIndex === targetIdx &&
-                actor.castingTicksRemaining > 0
-              ) {
-                actor.castingTicksRemaining = Math.max(
+              if (targetWeapon.castingTicksRemaining > 0) {
+                targetWeapon.castingTicksRemaining = Math.max(
                   1,
-                  actor.castingTicksRemaining - eff.hasteTicks,
+                  targetWeapon.castingTicksRemaining - eff.hasteTicks,
                 );
               }
             }
@@ -659,8 +656,6 @@ export function simulateBattle(
             maxWeight: 10,
             time: actor.time,
             currentWeaponIndex: 0,
-            castingWeaponIndex: null,
-            castingTicksRemaining: 0,
             isSummon: true,
             summonerId: actor.id,
             summonMasterId: summonDef.id,
@@ -678,6 +673,7 @@ export function simulateBattle(
                 strategy: summonDef.strategy,
                 tags: summonDef.tags,
                 currentCooldown: 0,
+                castingTicksRemaining: 0,
                 isTriggered: false,
                 activationCount: 0,
                 pendingDamageBonus: 0,
@@ -753,19 +749,21 @@ export function simulateBattle(
     for (const actor of simPlayers) {
       if (actor.hp <= 0 || aliveTeams(simPlayers).size <= 1) continue;
       for (const weapon of actor.weapons) {
-        if (weapon)
+        if (weapon && weapon.castingTicksRemaining === 0) {
           weapon.currentCooldown = Math.max(0, weapon.currentCooldown - 1);
+        }
       }
       changeStamina(
         actor,
         Math.min(actor.maxStamina, actor.stamina + actor.staminaRegen),
       );
 
-      if (actor.castingWeaponIndex !== null) {
-        actor.castingTicksRemaining--;
-        if (actor.castingTicksRemaining <= 0) {
-          const weaponIndex = actor.castingWeaponIndex;
-          const weapon = actor.weapons[weaponIndex];
+      for (let weaponIndex = 0; weaponIndex < actor.weapons.length; weaponIndex++) {
+        if (aliveTeams(simPlayers).size <= 1) break;
+        const weapon = actor.weapons[weaponIndex];
+        if (!weapon || weapon.castingTicksRemaining <= 0) continue;
+        weapon.castingTicksRemaining--;
+        if (weapon.castingTicksRemaining <= 0) {
           emit({
             id: generateId(),
             type: "CAST_COMPLETE",
@@ -773,12 +771,10 @@ export function simulateBattle(
             weaponIndex,
             timestamp: currentTick,
           });
-          actor.castingWeaponIndex = null;
-          actor.castingTicksRemaining = 0;
-          if (weapon) useWeapon(actor, weaponIndex, weapon);
+          useWeapon(actor, weaponIndex, weapon);
         }
-        continue;
       }
+      if (aliveTeams(simPlayers).size <= 1) continue;
 
       const startIndex = actor.currentWeaponIndex;
       for (let offset = 0; offset < actor.weapons.length; offset++) {
@@ -786,6 +782,7 @@ export function simulateBattle(
         const weapon = actor.weapons[weaponIndex];
         if (
           !weapon ||
+          weapon.castingTicksRemaining > 0 ||
           weapon.currentCooldown > 0 ||
           !canUseEffect(actor, weapon, [...simPlayers, ...pendingSummons])
         )
@@ -796,8 +793,8 @@ export function simulateBattle(
         }
         changeStamina(actor, actor.stamina - weapon.staminaCost);
         if (weapon.castTicks > 0) {
-          actor.castingWeaponIndex = weaponIndex;
-          actor.castingTicksRemaining = weapon.castTicks;
+          weapon.castingTicksRemaining = weapon.castTicks;
+          actor.currentWeaponIndex = (weaponIndex + 1) % actor.weapons.length;
           emit({
             id: generateId(),
             type: "CAST_START",
@@ -841,18 +838,19 @@ export function simulateBattle(
             playerId: unit.id,
             timestamp: currentTick,
           });
-          if (unit.castingWeaponIndex !== null) {
-            emit({
-              id: generateId(),
-              type: "CAST_CANCEL",
-              actorId: unit.id,
-              weaponIndex: unit.castingWeaponIndex,
-              reason: "DEATH",
-              timestamp: currentTick,
-            });
-            unit.castingWeaponIndex = null;
-            unit.castingTicksRemaining = 0;
-          }
+          unit.weapons.forEach((w, idx) => {
+            if (w && w.castingTicksRemaining > 0) {
+              emit({
+                id: generateId(),
+                type: "CAST_CANCEL",
+                actorId: unit.id,
+                weaponIndex: idx,
+                reason: "DEATH",
+                timestamp: currentTick,
+              });
+              w.castingTicksRemaining = 0;
+            }
+          });
         }
       }
     }

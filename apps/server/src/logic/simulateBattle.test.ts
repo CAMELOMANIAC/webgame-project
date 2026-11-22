@@ -963,4 +963,41 @@ test("장기전 교착 상태는 30틱 이후 유지력 감쇠와 40틱 이후 �
   assert.ok(log.result.durationTicks >= 40 && log.result.durationTicks < 100);
 });
 
+test("무기 시전 중에도 다른 슬롯의 아이템을 정상적으로 사용할 수 있다", () => {
+  const log = simulateBattle(
+    [
+      player("p", "A", {
+        stamina: 100,
+        maxStamina: 100,
+        staminaRegen: 10,
+        weapons: [
+          weapon({ id: "slow-cast", damage: 40, castTicks: 3, staminaCost: 10, cooldownTicks: 5 }),
+          weapon({ id: "fast-blade", damage: 10, castTicks: 0, staminaCost: 5, cooldownTicks: 1 }),
+          null,
+          null,
+          null,
+          null,
+        ],
+      }),
+      player("e", "B", { hp: 200, maxHp: 200 }),
+    ],
+    { random: () => 0.9, maxTicks: 5 },
+  );
+
+  const events = log.timeline.flatMap((entry) => entry.events);
+  const castStart = events.find((e) => e.type === "CAST_START" && e.weaponIndex === 0);
+  const castComplete = events.find((e) => e.type === "CAST_COMPLETE" && e.weaponIndex === 0);
+  assert.ok(castStart);
+  assert.ok(castComplete);
+
+  const fastAttacksDuringCast = events.filter(
+    (e) =>
+      e.type === "ATTACK" &&
+      e.weaponIndex === 1 &&
+      e.timestamp > castStart.timestamp &&
+      e.timestamp < castComplete.timestamp,
+  );
+  assert.ok(fastAttacksDuringCast.length >= 1);
+});
+
 

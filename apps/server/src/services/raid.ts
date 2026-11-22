@@ -1822,7 +1822,19 @@ export async function executeRaidBuildingAction(
         }
 
         const searchRoll = random();
-        const rolledCount = searchRoll < 0.5 ? 0 : searchRoll < 0.9 ? 1 : 2;
+        // 초반(0~60분) 맨몸 파밍 보정을 위해 꽝 확률을 낮추고(20%), 중·후반에는 35%로 유지
+        const rolledCount =
+          raid.time <= 60
+            ? searchRoll < 0.2
+              ? 0
+              : searchRoll < 0.75
+                ? 1
+                : 2
+            : searchRoll < 0.35
+              ? 0
+              : searchRoll < 0.85
+                ? 1
+                : 2;
         const pickCount = Math.min(rolledCount, remainingAllowance);
         const pickedIds: string[] = [];
         for (let i = 0; i < pickCount; i++) {

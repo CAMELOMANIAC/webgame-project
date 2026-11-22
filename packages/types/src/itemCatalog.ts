@@ -111,9 +111,9 @@ export const BASE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     id: "wpn_primary",
     name: "표준 도검",
     aliases: ["Primary Sword", "primary"],
-    damage: 10,
-    staminaCost: 28,
-    cooldownTicks: 10,
+    damage: 12,
+    staminaCost: 16,
+    cooldownTicks: 5,
     castTicks: 0,
     weight: 5,
     value: 100,
@@ -126,9 +126,9 @@ export const BASE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     id: "wpn_dagger",
     name: "전술 단검",
     aliases: ["Secondary Dagger", "Dagger", "secondary"],
-    damage: 5,
-    staminaCost: 16,
-    cooldownTicks: 8,
+    damage: 6,
+    staminaCost: 10,
+    cooldownTicks: 4,
     castTicks: 0,
     weight: 3,
     value: 50,
@@ -142,11 +142,11 @@ export const BASE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     name: "응급 생체 팩",
     aliases: ["Life-saver"],
     damage: 0,
-    staminaCost: 40,
+    staminaCost: 28,
     cooldownTicks: 0,
     castTicks: 0,
     weight: 2,
-    value: 150,
+    value: 110,
     description: "체력이 절반 이하로 떨어지면 응급 회복을 발동합니다.",
     attackType: "MELEE",
     iconKey: "HEAL",
@@ -162,12 +162,12 @@ export const BASE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     id: "wpn_sniper",
     name: "편도 티켓 발권기",
     aliases: ["정밀 저격 소총", "Sniper Rifle"],
-    damage: 25,
-    staminaCost: 60,
-    cooldownTicks: 20,
-    castTicks: 15,
+    damage: 34,
+    staminaCost: 36,
+    cooldownTicks: 8,
+    castTicks: 4,
     weight: 15,
-    value: 300,
+    value: 180,
     description: "긴 조준을 거쳐 원거리에서 높은 피해를 입히는 개조 저격총.",
     attackType: "RANGED",
     iconKey: "RIFLE",
@@ -178,12 +178,12 @@ export const BASE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     id: "wpn_giant_slayer",
     name: "뚝배기 분쇄기",
     aliases: ["중량 파쇄 해머", "Giant Slayer"],
-    damage: 15,
-    staminaCost: 38,
-    cooldownTicks: 12,
-    castTicks: 5,
+    damage: 24,
+    staminaCost: 26,
+    cooldownTicks: 6,
+    castTicks: 2,
     weight: 10,
-    value: 200,
+    value: 150,
     description: "체력이 높은 대상을 우선 노려 내려찍는 육중한 파쇄 해머.",
     attackType: "MELEE",
     iconKey: "AXE",
@@ -197,12 +197,12 @@ export const CORPORATE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
   makeEquipment({
     id: "hanlim-relief-carbine",
     name: "기업 구호용 카빈",
-    damage: 16,
-    staminaCost: 14,
-    cooldownTicks: 2,
+    damage: 14,
+    staminaCost: 16,
+    cooldownTicks: 4,
     castTicks: 0,
     weight: 3,
-    value: 40,
+    value: 95,
     description: "기업 구호 부서에서 지급하는 경량 카빈.",
     attackType: "RANGED",
     iconKey: "RIFLE",
@@ -213,11 +213,11 @@ export const CORPORATE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     name: "기업 제식 충격봉",
     aliases: ["제식 충격봉"],
     damage: 6,
-    staminaCost: 10,
-    cooldownTicks: 3,
+    staminaCost: 12,
+    cooldownTicks: 4,
     castTicks: 0,
     weight: 2,
-    value: 30,
+    value: 75,
     description: "타격과 동시에 소량의 보호막을 전개하는 기업 제식 충격봉.",
     attackType: "MELEE",
     iconKey: "STAFF",
@@ -237,7 +237,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "고강도 테이프",
     damage: 0,
     staminaCost: 10,
-    cooldownTicks: 5,
+    cooldownTicks: 8,
     weight: 1,
     value: 15,
     description: "장비 결속용 산업 테이프. 장착 시 즉석 방어로 보호막을 부여합니다.",
@@ -249,7 +249,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "구리 배선",
     damage: 2,
     staminaCost: 7,
-    cooldownTicks: 4,
+    cooldownTicks: 7,
     weight: 1,
     value: 18,
     description: "전도율이 높은 피복 배선. 전기 충격과 함께 다음 슬롯을 가속합니다.",
@@ -261,7 +261,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "휴대용 라이터",
     damage: 5,
     staminaCost: 10,
-    cooldownTicks: 4,
+    cooldownTicks: 8,
     weight: 1,
     value: 16,
     description: "점화 및 열원 공급 장치. 점화 피해와 다음 슬롯 피해 보너스를 부여합니다.",
@@ -273,7 +273,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "전해질 팩",
     damage: 0,
     staminaCost: 7,
-    cooldownTicks: 6,
+    cooldownTicks: 8,
     weight: 1,
     value: 20,
     description: "생체 안정 및 냉각용 전해질. 체력과 스태미나를 소량 회복합니다.",
@@ -293,7 +293,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "광학 렌즈",
     damage: 0,
     staminaCost: 10,
-    cooldownTicks: 5,
+    cooldownTicks: 7,
     weight: 1,
     value: 32,
     description: "정밀 조준용 다중 코팅 렌즈. 다음 슬롯의 치명타 확률을 높입니다.",
@@ -307,7 +307,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "고속 릴레이 칩",
     damage: 0,
     staminaCost: 10,
-    cooldownTicks: 4,
+    cooldownTicks: 7,
     weight: 1,
     value: 38,
     description: "신호 지연 단축용 고속 스위치. 양옆 슬롯의 쿨다운을 줄입니다.",
@@ -320,7 +320,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "리튬 배터리",
     damage: 3,
     staminaCost: 0,
-    cooldownTicks: 5,
+    cooldownTicks: 7,
     weight: 2,
     value: 35,
     description: "고밀도 휴대 전력 셀. 소모 없이 방전 타격과 함께 스태미나를 공급합니다.",
@@ -332,7 +332,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "방열 세라믹 판",
     damage: 0,
     staminaCost: 13,
-    cooldownTicks: 6,
+    cooldownTicks: 9,
     weight: 2,
     value: 34,
     description: "과열 억제용 세라믹 방열판. 임시 방패로 활용해 큰 보호막을 얻습니다.",
@@ -345,7 +345,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "멸균 생체 젤",
     damage: 0,
     staminaCost: 16,
-    cooldownTicks: 6,
+    cooldownTicks: 9,
     weight: 1,
     value: 42,
     description: "응급 조직 재생을 돕는 생체 젤. 체력이 감소했을 때 꾸준히 회복합니다.",
@@ -363,7 +363,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "신경 자극제",
     damage: 0,
     staminaCost: 13,
-    cooldownTicks: 5,
+    cooldownTicks: 7,
     weight: 1,
     value: 55,
     description: "반사 속도를 끌어올리는 약물. 스태미나를 보충하고 다음 슬롯을 가속·강화합니다.",
@@ -382,7 +382,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "항응고 용액",
     damage: 8,
     staminaCost: 13,
-    cooldownTicks: 5,
+    cooldownTicks: 8,
     weight: 1,
     value: 48,
     description: "화학적 부식을 유지하는 특수 용액. 투척 피해 후 모든 [BLADE] 장비를 강화합니다.",
@@ -400,7 +400,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "나노 봉합사",
     damage: 4,
     staminaCost: 13,
-    cooldownTicks: 5,
+    cooldownTicks: 8,
     weight: 1,
     value: 60,
     description: "미세 봉합 및 내구 보강 섬유. 절단 피해와 함께 체력 회복과 보호막을 부여합니다.",
@@ -419,7 +419,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "경량 티타늄 프레임",
     damage: 7,
     staminaCost: 13,
-    cooldownTicks: 5,
+    cooldownTicks: 8,
     weight: 2,
     value: 70,
     description: "초경량 고강도 합금 골격. 타격과 방호를 동시에 수행합니다.",
@@ -431,7 +431,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "고압 솔레노이드",
     damage: 8,
     staminaCost: 16,
-    cooldownTicks: 5,
+    cooldownTicks: 7,
     weight: 2,
     value: 85,
     description: "자기 가속 코일 부품. 강한 충격과 함께 다음 슬롯의 위력을 높입니다.",
@@ -443,7 +443,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "특수 산업용 연료",
     damage: 10,
     staminaCost: 16,
-    cooldownTicks: 6,
+    cooldownTicks: 8,
     weight: 2,
     value: 80,
     description: "고출력 순환용 정제 연료. 투척 화염 피해와 함께 모든 [TECH] 슬롯을 강화합니다.",
@@ -461,7 +461,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     name: "차폐 동력 코어",
     damage: 5,
     staminaCost: 16,
-    cooldownTicks: 6,
+    cooldownTicks: 8,
     weight: 3,
     value: 120,
     description: "다중우주 잔류 에너지 차폐 코어. 보호막 전개와 양옆 슬롯 가속을 동시에 수행합니다.",
@@ -486,7 +486,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 6,
     castTicks: 0,
     weight: 2,
-    value: 95,
+    value: 190,
     description: "다음 슬롯의 쿨다운을 단축시키는 경량 단검.",
     attackType: "MELEE",
     iconKey: "DAGGER",
@@ -501,7 +501,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 5,
     castTicks: 0,
     weight: 1,
-    value: 210,
+    value: 420,
     description: "빠른 연타마다 다음 슬롯을 크게 가속합니다.",
     attackType: "MELEE",
     iconKey: "DAGGER",
@@ -516,7 +516,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 6,
     castTicks: 0,
     weight: 2,
-    value: 225,
+    value: 440,
     description: "모든 [BLADE] 슬롯을 강화하고 장착된 [BLADE] 수만큼 위력이 증가합니다.",
     attackType: "MELEE",
     iconKey: "DAGGER",
@@ -539,7 +539,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 3,
     castTicks: 0,
     weight: 3,
-    value: 115,
+    value: 210,
     description: "다음 슬롯의 치명타 확률을 높입니다.",
     attackType: "RANGED",
     iconKey: "RIFLE",
@@ -554,7 +554,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 3,
     castTicks: 0,
     weight: 3,
-    value: 255,
+    value: 490,
     description: "모든 [FIREARM] 장비에 피해와 치명타 보너스를 부여합니다.",
     attackType: "RANGED",
     iconKey: "RIFLE",
@@ -575,7 +575,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 3,
     castTicks: 0,
     weight: 3,
-    value: 240,
+    value: 470,
     description: "가장자리 끝 슬롯(01, 06)을 가속하고 강화합니다.",
     attackType: "RANGED",
     iconKey: "RIFLE",
@@ -597,7 +597,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 3,
     castTicks: 0,
     weight: 2,
-    value: 90,
+    value: 180,
     description: "보호막과 스태미나를 확보하고 이전 슬롯을 가속합니다.",
     attackType: "MELEE",
     iconKey: "STAFF",
@@ -618,7 +618,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 3,
     castTicks: 0,
     weight: 2,
-    value: 220,
+    value: 430,
     description: "보호막 전개와 스태미나 대량 보충을 하며 양옆 슬롯을 가속합니다.",
     attackType: "MELEE",
     iconKey: "STAFF",
@@ -639,7 +639,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 5,
     castTicks: 1,
     weight: 4,
-    value: 235,
+    value: 460,
     description: "보호막([ARMOR]당 추가)과 스태미나를 확보하며 모든 [BLUNT] 무기의 치명타를 높입니다.",
     attackType: "MELEE",
     iconKey: "AXE",
@@ -664,7 +664,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 4,
     castTicks: 0,
     weight: 2,
-    value: 110,
+    value: 200,
     description: "양옆 슬롯의 재사용 대기를 줄이는 보조 코일.",
     attackType: "RANGED",
     iconKey: "STAFF",
@@ -679,7 +679,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 4,
     castTicks: 0,
     weight: 2,
-    value: 290,
+    value: 550,
     description: "인접한 양옆 장비를 강력하게 가속·증폭하고 보호막 보너스를 부여합니다.",
     attackType: "RANGED",
     iconKey: "STAFF",
@@ -700,7 +700,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 5,
     castTicks: 0,
     weight: 3,
-    value: 295,
+    value: 560,
     description: "끝 슬롯(01, 06)의 순환·치명타를 극대화하고 장착된 [TECH] 수에 비례해 피해를 줍니다.",
     attackType: "RANGED",
     iconKey: "STAFF",
@@ -723,7 +723,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 6,
     castTicks: 0,
     weight: 2,
-    value: 145,
+    value: 240,
     description: "체력과 스태미나를 함께 회복하는 지속형 주입기.",
     attackType: "MELEE",
     iconKey: "HEAL",
@@ -744,7 +744,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 5,
     castTicks: 0,
     weight: 2,
-    value: 270,
+    value: 520,
     description: "회복·보호막 부여와 동시에 모든 장착 슬롯을 가속합니다.",
     attackType: "MELEE",
     iconKey: "HEAL",
@@ -768,7 +768,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 4,
     castTicks: 0,
     weight: 2,
-    value: 265,
+    value: 510,
     description: "자가 회복 후 다음 슬롯을 강하게 가속·강화합니다.",
     attackType: "MELEE",
     iconKey: "HEAL",
@@ -793,7 +793,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 6,
     castTicks: 0,
     weight: 4,
-    value: 130,
+    value: 225,
     description: "2회 타격마다 보호막을 얻고 다음 슬롯을 강화합니다.",
     attackType: "MELEE",
     iconKey: "SWORD",
@@ -814,7 +814,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 6,
     castTicks: 0,
     weight: 4,
-    value: 280,
+    value: 540,
     description: "2회 발동마다 보호막을 얻고 양옆 슬롯을 가속·강화합니다.",
     attackType: "MELEE",
     iconKey: "SWORD",
@@ -836,7 +836,7 @@ export const CRAFTED_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 5,
     castTicks: 0,
     weight: 4,
-    value: 260,
+    value: 500,
     description: "매 공격마다 모든 [BLADE] 무기를 가속·강화하고 보호막 보너스를 부여합니다.",
     attackType: "MELEE",
     iconKey: "SWORD",
@@ -981,7 +981,7 @@ export const STANDALONE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 6,
     castTicks: 0,
     weight: 3,
-    value: 180,
+    value: 360,
     description:
       "부식성 연무를 뿜어 다음 슬롯을 1틱 가속하고 피해량(+5)과 치명타율(+12%)을 높입니다. 화학 장비 수만큼 자신의 피해도 증가합니다.",
     attackType: "RANGED",
@@ -1008,7 +1008,7 @@ export const STANDALONE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 7,
     castTicks: 0,
     weight: 6,
-    value: 210,
+    value: 400,
     description:
       "즉시 보호막(+12, 방호 장비당 +4)을 전개하고 양끝 슬롯의 다음 발동에 추가 보호막(+6)을 부여합니다.",
     attackType: "MELEE",
@@ -1034,7 +1034,7 @@ export const STANDALONE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 5,
     castTicks: 0,
     weight: 2,
-    value: 170,
+    value: 350,
     description:
       "가장 체력이 높은 적을 지져 양옆 슬롯을 1틱 가속·치명타 +10% 강화하고, 기술 장비 수에 비례해 스태미나를 회복합니다.",
     attackType: "RANGED",
@@ -1062,7 +1062,7 @@ export const STANDALONE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 10,
     castTicks: 0,
     weight: 2,
-    value: 190,
+    value: 370,
     description:
       "체력이 75% 이하일 때 체력(+14, 생체당 +3)·보호막(+6)·스태미나(+6)를 채우고 양옆 슬롯을 1틱 가속·보호막(+5) 강화합니다.",
     attackType: "MELEE",
@@ -1088,12 +1088,12 @@ export const STANDALONE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     id: "eq-mono-katana",
     name: "고기 자르개",
     aliases: ["고주파 단분자도"],
-    damage: 12,
+    damage: 18,
     staminaCost: 26,
-    cooldownTicks: 7,
+    cooldownTicks: 5,
     castTicks: 1,
     weight: 4,
-    value: 260,
+    value: 480,
     description:
       "체력이 약한 적을 우선 베며 도검 장비 수만큼 피해를 보태고, 모든 화학 장비의 피해량(+6)과 치명타율(+15%)을 끌어올립니다.",
     attackType: "MELEE",
@@ -1121,7 +1121,7 @@ export const STANDALONE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 9,
     castTicks: 0,
     weight: 3,
-    value: 210,
+    value: 450,
     description:
       "쿨다운마다 원거리 로케트 배송 드론을 계속 배치합니다. 동시에 최대 2기까지 유지됩니다.",
     attackType: "MELEE",
@@ -1151,7 +1151,7 @@ export const STANDALONE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 12,
     castTicks: 0,
     weight: 2,
-    value: 230,
+    value: 500,
     description:
       "배고픈 나노 개미떼 3기를 한꺼번에 풀어놓습니다. 모두 소멸하면 쿨다운 후 다시 3기를 소환합니다.",
     attackType: "MELEE",
@@ -1182,7 +1182,7 @@ export const STANDALONE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     cooldownTicks: 15,
     castTicks: 2,
     weight: 6,
-    value: 280,
+    value: 540,
     description:
       "역대 최고의 친구를 전개합니다. 포탑이 살아있을 때 재사용하면 체력을 25 회복하고 보호막을 보충합니다.",
     attackType: "MELEE",
@@ -1322,6 +1322,51 @@ export function getItemKind(
     return "MATERIAL";
   }
   return "EQUIPMENT";
+}
+
+export type ItemVisualTier =
+  | "MATERIAL"
+  | "CONSUMABLE"
+  | "T1"
+  | "T2"
+  | "UNIQUE";
+
+const UNIQUE_ITEM_IDS = new Set(STANDALONE_EQUIPMENTS.map((item) => item.id));
+const CONSUMABLE_ITEM_IDS = new Set(CONSUMABLES.map((item) => item.id));
+
+/**
+ * 슬롯 배경 패턴 구분용 아이템 등급/분류를 판별합니다.
+ * - MATERIAL: 조합 재료·유전자 앰플 (패턴 없음)
+ * - CONSUMABLE: 음식·치료 소모품 (도트 패턴)
+ * - T2: 2티어 조합 장비 (대각선 2중 그물 패턴)
+ * - UNIQUE: 유니크 장비 8종 (사각형 그물 패턴)
+ * - T1: 기본·제식·1티어 조합 장비 (단일 대각선 패턴)
+ */
+export function resolveItemVisualTier(
+  item: { id?: string; name?: string } | null | undefined,
+): ItemVisualTier {
+  if (!item) return "T1";
+  const catalog =
+    (item.id ? CATALOG_BY_ID.get(item.id) : undefined) ??
+    (item.name ? CATALOG_BY_NAME.get(item.name) : undefined);
+  const id = catalog?.id ?? item.id ?? "";
+
+  if (getItemKind(catalog ?? item) === "MATERIAL") {
+    return "MATERIAL";
+  }
+  if (
+    CONSUMABLE_ITEM_IDS.has(id) ||
+    catalog?.effect.itemKind === "CONSUMABLE"
+  ) {
+    return "CONSUMABLE";
+  }
+  if (UNIQUE_ITEM_IDS.has(id)) {
+    return "UNIQUE";
+  }
+  if (/^eq-[a-z]+-t2[a-z]?$/.test(id)) {
+    return "T2";
+  }
+  return "T1";
 }
 
 /** DB에 저장된 구버전 아이템에 카탈로그의 최신 태그·스탯·효과를 보완한다. */

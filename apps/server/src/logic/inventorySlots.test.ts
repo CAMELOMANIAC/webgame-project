@@ -94,14 +94,16 @@ test("소지품 가치 및 진입 지연 시간을 계산하고 포맷한다", (
   assert.equal(totalValue, 400); // 150 + 50 + (100 * 2) = 400
 
   const delayMinutes = calculateEntryDelayMinutes(totalValue);
-  assert.equal(delayMinutes, 40); // 400 가치 -> 40분 지연
+  assert.equal(delayMinutes, 80); // 400 가치 -> 80분 지연
 
-  assert.equal(formatRaidTime(delayMinutes), "00:40");
+  assert.equal(formatRaidTime(delayMinutes), "01:20");
   assert.equal(formatRaidTime(0), "00:00");
   assert.equal(formatRaidTime(75), "01:15");
 
-  // 100 미만 가치는 0분 지연
-  assert.equal(calculateEntryDelayMinutes(99), 0);
+  // 50 미만 가치는 0분 지연, 400 초과분은 100당 10분 지연
+  assert.equal(calculateEntryDelayMinutes(49), 0);
+  assert.equal(calculateEntryDelayMinutes(50), 10);
+  assert.equal(calculateEntryDelayMinutes(1000), 140);
   assert.equal(calculateEntryDelayMinutes(0), 0);
   assert.equal(calculateEntryDelayMinutes(-10), 0);
 });
