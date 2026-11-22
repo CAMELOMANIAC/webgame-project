@@ -12,15 +12,17 @@ import {
   getCraftingRecipesForCategory,
   hasBuildingChoiceCondition,
   isBuildingLockedDown,
+  LOCKDOWN_WARNING_MINUTES,
   type MapDistrict,
   matchesRecipeBase,
   MISSION_NODE_LABELS,
   resolveBuildingIntroEvent,
+  resolveBuildingLockdownMinute,
   resolveBuildingMaxCraftTier,
 } from "@webgame/types";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import {
   RiBuilding2Line,
   RiCloseLine,
@@ -35,6 +37,7 @@ import {
 } from "@/atoms/pendingNavigationAtom";
 import {
   currentNodeIdAtom,
+  dismissedBuildingKeysAtom,
   focusRouteTargetAtom,
   highlightedDistrictIdsAtom,
   isCombatAtom,
@@ -55,6 +58,9 @@ import {
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
 import { RollingText } from "@/components/common/RollingValue";
+import ItemDetailModal, {
+  type InspectedItem,
+} from "@/components/itemSlot/ItemDetailModal";
 import ItemSlotContent from "@/components/itemSlot/ItemSlotContent";
 import { useBuildingAction } from "@/utils/hooks/useBuildingAction";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
@@ -123,10 +129,15 @@ const FieldNavTargetSection = () => {
     buildingId: number;
     text: string;
   } | null>(null);
-  const [isBuildingDismissed, setIsBuildingDismissed] = useState(false);
+  const [dismissedBuildingKeys, setDismissedBuildingKeys] = useAtom(
+    dismissedBuildingKeysAtom,
+  );
   const [selectedCraftRecipeId, setSelectedCraftRecipeId] = useState<
     string | null
   >(null);
+  const [inspectedRecipeItem, setInspectedRecipeItem] =
+    useState<InspectedItem | null>(null);
+  const [showFarLandmarks, setShowFarLandmarks] = useState(false);
   const reduceMotion = useReducedMotion();
   const character = data?.raw;
   const locationName =
@@ -556,6 +567,14 @@ const FieldNavTargetSection = () => {
     return claimable;
   }, [pendingLoot, currentWeight, maxWeight]);
 
+  const activeBuildingDismissKey =
+    raidId && activeBuildingId !== null
+      ? `${raidId}:${activeBuildingId}`
+      : null;
+  const isBuildingDismissed = Boolean(
+    activeBuildingDismissKey && dismissedBuildingKeys[activeBuildingDismissKey],
+  );
+
   const hasBuildingEvent = Boolean(
     activeBuilding && activeDistrict && !isMoving && !isCombat && character?.isRaiding,
   );
@@ -566,23 +585,9 @@ const FieldNavTargetSection = () => {
     pendingLoot.length > 0 && !isMoving && !isCombat && character?.isRaiding,
   );
 
-  useEffect(() => {
-    if (isMoving || activeBuildingId === null) {
-      setIsBuildingDismissed(false);
-    }
-  }, [isMoving, activeBuildingId]);
-
-  const prevBuildingIdRef = useRef<number | null>(activeBuildingId);
-  useEffect(() => {
-    if (activeBuildingId !== prevBuildingIdRef.current) {
-      setIsBuildingDismissed(false);
-      prevBuildingIdRef.current = activeBuildingId;
-    }
-  }, [activeBuildingId]);
-
   const currentCard: ActiveFieldCard = hasPendingLoot
     ? "loot"
-    : hasBuildingEvent && !isBuildingDismissed
+    : hasBuildingEvent && !isBuildingDismissed && !isCurrentBuildingCompleted
       ? "building"
       : "nav";
   const cardTransition = {
@@ -744,8 +749,25 @@ const FieldNavTargetSection = () => {
                   <p className={styles.recommendEmpty}>
                     표시할 추천 목적지가 없습니다.
                   </p>
-                ) : (
-                  recommendedDestinations.map((dest) => {
+                ) : (() => {
+                  const NEAR_LANDMARK_MAX_MINUTES = 120;
+                  const farCount = recommendedDestinations.filter(
+                    (d) =>
+                      d.category === "LANDMARK" &&
+                      !d.isCurrent &&
+                      d.travelMinutes > NEAR_LANDMARK_MAX_MINUTES,
+                  ).length;
+                  const visibleDestinations = showFarLandmarks
+                    ? recommendedDestinations
+                    : recommendedDestinations.filter(
+                        (d) =>
+                          d.category !== "LANDMARK" ||
+                          d.isCurrent ||
+                          d.travelMinutes <= NEAR_LANDMARK_MAX_MINUTES,
+                      );
+                  return (
+                    <>
+                      {visibleDestinations.map((dest) => {
                     const isCurrent = dest.isCurrent;
                     const isSelected =
                       dest.buildingId !== undefined
@@ -764,13 +786,38 @@ const FieldNavTargetSection = () => {
                     const backdropImage = dest.buildingCategory
                       ? BUILDING_CATEGORY_IMAGES[dest.buildingCategory]
                       : undefined;
+                    const targetBuilding = dest.buildingId
+                      ? ALL_BUILDINGS_BY_ID.get(dest.buildingId)
+                      : undefined;
+                    const craftTierBadge =
+                      targetBuilding && dest.buildingCategory
+                        ? resolveBuildingMaxCraftTier(targetBuilding) === 2
+                          ? "T1·T2"
+                          : "T1"
+                        : null;
+                    const lockdownMinute = targetBuilding
+                      ? resolveBuildingLockdownMinute(
+                          targetBuilding,
+                          character?.activeRaid?.id ?? "",
+                        )
+                      : Number.POSITIVE_INFINITY;
+                    const remainingLockdown = Number.isFinite(lockdownMinute)
+                      ? lockdownMinute - (character?.activeRaid?.time ?? 0)
+                      : Number.POSITIVE_INFINITY;
+                    const isDestLocked =
+                      Number.isFinite(remainingLockdown) &&
+                      remainingLockdown <= 0;
+                    const isDestWarning =
+                      !isDestLocked &&
+                      Number.isFinite(remainingLockdown) &&
+                      remainingLockdown <= LOCKDOWN_WARNING_MINUTES;
                     return (
                       <button
                         key={dest.id}
                         type="button"
                         className={styles.recommendItem({ active: isSelected })}
                         aria-pressed={isSelected}
-                        disabled={!canAct || isCurrent}
+                        disabled={!canAct || isCurrent || isDestLocked}
                         onClick={() => handleSelectRecommendation(dest)}
                       >
                         {backdropImage && (
@@ -785,6 +832,21 @@ const FieldNavTargetSection = () => {
                             <span className={styles.recommendTag}>
                               {categoryLabel}
                             </span>
+                            {craftTierBadge && (
+                              <span className={styles.recommendTag}>
+                                {craftTierBadge}
+                              </span>
+                            )}
+                            {isDestLocked && (
+                              <span className={styles.lockdownWarningBadge}>
+                                봉쇄됨
+                              </span>
+                            )}
+                            {isDestWarning && (
+                              <span className={styles.lockdownWarningBadge}>
+                                봉쇄 {Math.max(1, remainingLockdown)}분 전
+                              </span>
+                            )}
                             <span className={styles.recommendCode}>
                               NODE #{dest.nodeId}
                             </span>
@@ -802,10 +864,41 @@ const FieldNavTargetSection = () => {
                         </span>
                       </button>
                     );
-                  })
-                )
+                      })}
+                      {farCount > 0 && (
+                        <button
+                          type="button"
+                          className={styles.showMoreBtn}
+                          onClick={() => setShowFarLandmarks((prev) => !prev)}
+                        >
+                          {showFarLandmarks
+                            ? "가까운 랜드마크만 보기"
+                            : `먼 랜드마크 더보기 (+${farCount})`}
+                        </button>
+                      )}
+                    </>
+                  );
+                })()
               ) : (
-                CRAFTING_RECIPES.map((recipe) => {
+                [...CRAFTING_RECIPES]
+                  .sort((a, b) => {
+                    const aBase = ownedWeapons.some((w) =>
+                      matchesRecipeBase(a, w),
+                    );
+                    const bBase = ownedWeapons.some((w) =>
+                      matchesRecipeBase(b, w),
+                    );
+                    const aMats = a.materialIds.every(
+                      (mId) => (ownedItemCounts.get(mId) ?? 0) >= 1,
+                    );
+                    const bMats = b.materialIds.every(
+                      (mId) => (ownedItemCounts.get(mId) ?? 0) >= 1,
+                    );
+                    const aScore = (aBase ? 2 : 0) + (aBase && aMats ? 1 : 0);
+                    const bScore = (bBase ? 2 : 0) + (bBase && bMats ? 1 : 0);
+                    return bScore - aScore;
+                  })
+                  .map((recipe) => {
                   const resultCatalog = getCatalogItemById(
                     recipe.resultEquipmentId,
                   );
@@ -859,6 +952,26 @@ const FieldNavTargetSection = () => {
                               {resultName}
                             </span>
                           </div>
+                          {resultCatalog && (
+                            <button
+                              type="button"
+                              className={styles.recipeDetailBtn}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInspectedRecipeItem({
+                                  id: resultCatalog.id,
+                                  masterId: resultCatalog.id,
+                                  name: resultCatalog.name,
+                                  iconKey: resultCatalog.iconKey,
+                                  weight: resultCatalog.weight,
+                                  value: resultCatalog.value,
+                                  weaponData: resultCatalog,
+                                });
+                              }}
+                            >
+                              상세
+                            </button>
+                          )}
                         </div>
                         <div className={styles.recipeIngredientsRow}>
                           <button
@@ -938,7 +1051,7 @@ const FieldNavTargetSection = () => {
                     direction={isMoving && travelMinutes > 0 ? "down" : undefined}
                   />
                   {isExhausted && !isMoving && travelMinutes > 0 && (
-                    <span className={styles.exhaustedMultiplier}>×2</span>
+                    <span className={styles.exhaustedMultiplier}>×1.5</span>
                   )}
                 </span>
               </div>
@@ -1002,7 +1115,14 @@ const FieldNavTargetSection = () => {
                           (shortestPath.length === 1 &&
                             targetBuildingId === activeBuildingId))
                       ) {
-                        setIsBuildingDismissed(false);
+                        if (activeBuildingDismissKey) {
+                          setDismissedBuildingKeys((prev) => {
+                            if (!prev[activeBuildingDismissKey]) return prev;
+                            const next = { ...prev };
+                            delete next[activeBuildingDismissKey];
+                            return next;
+                          });
+                        }
                         return;
                       }
                       triggerStartNavigation((prev) => prev + 1);
@@ -1180,8 +1300,9 @@ const FieldNavTargetSection = () => {
                         ownedItemIds,
                       );
                       const fatigueCost = choice.fatigueCost ?? 0;
-                      const hasEnoughFatigue =
-                        (character.fatigue ?? 0) >= fatigueCost;
+                      const isLowFatigue =
+                        fatigueCost > 0 &&
+                        (character.fatigue ?? 0) < fatigueCost;
                       const mins = choice.timeCostMinutes ?? 10;
                       const timeLabel = `+${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
                       const actionLabel =
@@ -1193,9 +1314,7 @@ const FieldNavTargetSection = () => {
                           key={choice.id}
                           type="button"
                           className={styles.buildingActionBtn}
-                          disabled={
-                            !canAct || !conditionMet || !hasEnoughFatigue
-                          }
+                          disabled={!canAct || !conditionMet}
                           onClick={() =>
                             handleBuildingAction(
                               "EVENT_CHOICE",
@@ -1214,32 +1333,45 @@ const FieldNavTargetSection = () => {
                           </span>
                           <span className={styles.actionCode}>
                             {actionLabel}
+                            {isLowFatigue && (
+                              <span className={styles.exhaustedMultiplier}>
+                                {" "}
+                                ×1.5
+                              </span>
+                            )}
                           </span>
                         </button>
                       );
                     })}
                   </div>
-                ) : (
-                  <button
-                    type="button"
-                    className={styles.buildingActionBtn}
-                    disabled={
-                      !canAct ||
-                      (character.fatigue ?? 0) <
-                        FATIGUE_RULES.buildingActionCosts.SEARCH
-                    }
-                    onClick={() => handleBuildingAction("SEARCH")}
-                  >
-                    <span>
-                      {buildingAction.isPending
-                        ? "탐색 중…"
-                        : (activeIntroEvent?.searchLabel ?? "탐색하기")}
-                    </span>
-                    <span className={styles.actionCode}>
-                      +00:10 · -{FATIGUE_RULES.buildingActionCosts.SEARCH} ENG
-                    </span>
-                  </button>
-                ))}
+                ) : (() => {
+                  const searchCost = FATIGUE_RULES.buildingActionCosts.SEARCH;
+                  const isLowSearchFatigue =
+                    (character.fatigue ?? 0) < searchCost;
+                  return (
+                    <button
+                      type="button"
+                      className={styles.buildingActionBtn}
+                      disabled={!canAct}
+                      onClick={() => handleBuildingAction("SEARCH")}
+                    >
+                      <span>
+                        {buildingAction.isPending
+                          ? "탐색 중…"
+                          : (activeIntroEvent?.searchLabel ?? "탐색하기")}
+                      </span>
+                      <span className={styles.actionCode}>
+                        +00:10 · -{searchCost} ENG
+                        {isLowSearchFatigue && (
+                          <span className={styles.exhaustedMultiplier}>
+                            {" "}
+                            ×1.5
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })())}
 
               {!isActiveBuildingLockedDown &&
                 activeBuilding.category &&
@@ -1390,11 +1522,7 @@ const FieldNavTargetSection = () => {
                       <button
                         type="button"
                         className={styles.craftSubmitBtn}
-                        disabled={
-                          !canAct ||
-                          !selectedEntry.canCraft ||
-                          !hasEnoughCraftFatigue
-                        }
+                        disabled={!canAct || !selectedEntry.canCraft}
                         onClick={() =>
                           handleBuildingAction("CRAFT", selectedEntry.recipe.id)
                         }
@@ -1405,6 +1533,12 @@ const FieldNavTargetSection = () => {
                         <span className={styles.actionCode}>
                           +00:10 · -{FATIGUE_RULES.buildingActionCosts.CRAFT}{" "}
                           ENG
+                          {!hasEnoughCraftFatigue && (
+                            <span className={styles.exhaustedMultiplier}>
+                              {" "}
+                              ×1.5
+                            </span>
+                          )}
                         </span>
                       </button>
                     )}
@@ -1416,7 +1550,14 @@ const FieldNavTargetSection = () => {
                 type="button"
                 className={styles.buildingDismissBtn}
                 disabled={!canAct}
-                onClick={() => setIsBuildingDismissed(true)}
+                onClick={() => {
+                  if (activeBuildingDismissKey) {
+                    setDismissedBuildingKeys((prev) => ({
+                      ...prev,
+                      [activeBuildingDismissKey]: true,
+                    }));
+                  }
+                }}
               >
                 {isActiveBuildingLockedDown ||
                 (!activeBuilding.category && isActiveBuildingLooted) ||
@@ -1429,6 +1570,10 @@ const FieldNavTargetSection = () => {
           )
         )}
       </AnimatePresence>
+      <ItemDetailModal
+        item={inspectedRecipeItem}
+        onClose={() => setInspectedRecipeItem(null)}
+      />
     </div>
   );
 };

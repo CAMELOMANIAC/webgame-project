@@ -107,3 +107,6 @@ export const lastBuildingMessageAtom = atom<string | null>(null);
 // 건물 이벤트에서 발생한 NPC 전투 로그 (FieldCombat 훅이 감지하여 즉시 재생)
 export const pendingBuildingCombatAtom = atom<BattleLog | null>(null);
 
+// "그냥 넘어간다"/"빠져나간다"로 닫은 건물 카드 키 (raidId:buildingId)
+export const dismissedBuildingKeysAtom = atom<Record<string, true>>({});
+

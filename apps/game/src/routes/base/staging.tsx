@@ -8,7 +8,10 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   calculateEntryDelayMinutes,
   calculateLoadoutTotalValue,
+  CENTRAL_EXTRACTION_NODE_ID,
   formatRaidTime,
+  getCatalogItemById,
+  MAP_DISTRICTS,
 } from "@webgame/types";
 import { useAtomValue, useSetAtom } from "jotai";
 import { AnimatePresence, motion } from "motion/react";
@@ -44,7 +47,13 @@ import { useRaidRules } from "@/utils/hooks/useRaidRules";
 import { useRaidSession } from "@/utils/hooks/useRaidSession";
 import { inventoryMutationKey } from "@/utils/inventoryCache";
 import { mergeRecoveredIntoStash } from "@/utils/loadoutDraft";
+import {
+  estimatePathFatigueCost,
+  estimatePathTravelMinutes,
+  findShortestPath,
+} from "@/utils/pathfinding";
 
+import mapData from "../../../../../packages/types/src/assets/map_graph.json";
 import * as styles from "./staging.css";
 
 interface StagingLoadoutDraft {
@@ -333,6 +342,15 @@ function ExpeditionStagingScreen() {
               </div>
             )}
 
+            {effectiveCharacterData?.raw.equipment.every(
+              (slot) => slot.weaponMaster === null,
+            ) && (
+              <p className={baseStyles.banner({ tone: "positive" })}>
+                현재 비무장 상태입니다. 이대로 진입해도 일반 건물에서 비무장 복구
+                이벤트(구호함 · 예비 보급 락커)가 발동해 기본 장비를 회수할 수
+                있습니다.
+              </p>
+            )}
             <LoadoutEditor
               characterData={effectiveCharacterData}
               isLoading={characterQuery.isLoading}
@@ -383,34 +401,185 @@ function ExpeditionStagingScreen() {
                 {startRaid.error.message}
               </p>
             )}
-            <div className={styles.entryGrid} role="radiogroup" aria-label="진입 지점 선택">
-              {startNodeCandidates.map((nodeId) => {
-                const isSelected = effectiveStartNodeId === nodeId;
-                return (
-                  <button
-                    key={nodeId}
-                    type="button"
-                    role="radio"
-                    aria-checked={isSelected}
-                    disabled={startRaid.isPending}
-                    className={styles.entryCard({ selected: isSelected })}
-                    onClick={() => setSelectedStartNodeId(nodeId)}
-                  >
-                    <div className={styles.entryHeader}>
-                      <span className={styles.entryCode}>NODE #{nodeId}</span>
-                      {nodeId === defaultStartNodeId && (
-                        <span className={styles.entryBadge}>기본 진입</span>
-                      )}
-                    </div>
-                    <span className={styles.entryName}>
-                      {nodeId === defaultStartNodeId
-                        ? `기본 진입 지점 #${nodeId}`
-                        : `진입 지점 #${nodeId}`}
-                    </span>
-                  </button>
+            {(() => {
+              const extractionNodeId =
+                rulesQuery.data?.extractionNodeIds[0] ??
+                CENTRAL_EXTRACTION_NODE_ID;
+              const extractionNode = mapData.nodes[extractionNodeId];
+              const entryDetails = startNodeCandidates.map((nodeId) => {
+                const node = mapData.nodes[nodeId];
+                const nearestDistrict = node
+                  ? [...MAP_DISTRICTS].sort(
+                      (a, b) =>
+                        Math.hypot(node.x - a.seedX, node.y - a.seedY) -
+                        Math.hypot(node.x - b.seedX, node.y - b.seedY),
+                    )[0]
+                  : undefined;
+                const path =
+                  nodeId === extractionNodeId
+                    ? [nodeId]
+                    : findShortestPath(nodeId, extractionNodeId);
+                const travelMinutes = estimatePathTravelMinutes(
+                  path,
+                  false,
+                  character.fatigue,
                 );
-              })}
-            </div>
+                const fatigueCost = estimatePathFatigueCost(path, false);
+                const materialNames = (nearestDistrict?.materialIds ?? [])
+                  .filter((id) => id.startsWith("mat-"))
+                  .slice(0, 4)
+                  .map((id) => getCatalogItemById(id)?.name ?? id);
+                return {
+                  nodeId,
+                  node,
+                  districtName: nearestDistrict?.name ?? "외곽 진입 구역",
+                  travelMinutes,
+                  fatigueCost,
+                  materialNames,
+                };
+              });
+
+              return (
+                <>
+                  <div className={styles.entryMinimapWrap}>
+                    <svg
+                      viewBox="-120 -60 1850 960"
+                      className={styles.entryMinimapSvg}
+                      role="img"
+                      aria-label="진입 지점 및 중앙 탈출구 미니맵"
+                    >
+                      {MAP_DISTRICTS.map((district) => (
+                        <polygon
+                          key={district.id}
+                          points={district.hull
+                            .map((pt) => `${pt.x},${pt.y}`)
+                            .join(" ")}
+                          fill="rgba(255, 255, 255, 0.04)"
+                          stroke="rgba(255, 255, 255, 0.14)"
+                          strokeWidth="3"
+                        />
+                      ))}
+                      {extractionNode && (
+                        <g>
+                          <circle
+                            cx={extractionNode.x}
+                            cy={extractionNode.y}
+                            r="16"
+                            fill="rgba(133, 173, 255, 0.25)"
+                            stroke="#85adff"
+                            strokeWidth="4"
+                          />
+                          <text
+                            x={extractionNode.x}
+                            y={extractionNode.y - 24}
+                            textAnchor="middle"
+                            fill="#85adff"
+                            fontSize="26"
+                            fontFamily="monospace"
+                            fontWeight="700"
+                          >
+                            EXIT #{extractionNodeId}
+                          </text>
+                        </g>
+                      )}
+                      {entryDetails.map(({ nodeId, node }) => {
+                        if (!node) return null;
+                        const isSelected = effectiveStartNodeId === nodeId;
+                        return (
+                          <g
+                            key={nodeId}
+                            style={{ cursor: "pointer" }}
+                            onClick={() => setSelectedStartNodeId(nodeId)}
+                          >
+                            {isSelected && (
+                              <circle
+                                cx={node.x}
+                                cy={node.y}
+                                r="26"
+                                fill="none"
+                                stroke="#fafafa"
+                                strokeWidth="4"
+                              />
+                            )}
+                            <circle
+                              cx={node.x}
+                              cy={node.y}
+                              r={isSelected ? "14" : "10"}
+                              fill={isSelected ? "#fafafa" : "#a1a1aa"}
+                            />
+                            <text
+                              x={node.x}
+                              y={node.y + 34}
+                              textAnchor="middle"
+                              fill={isSelected ? "#fafafa" : "#a1a1aa"}
+                              fontSize="24"
+                              fontFamily="monospace"
+                              fontWeight="700"
+                            >
+                              #{nodeId}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+
+                  <div
+                    className={styles.entryGrid}
+                    role="radiogroup"
+                    aria-label="진입 지점 선택"
+                  >
+                    {entryDetails.map(
+                      ({
+                        nodeId,
+                        districtName,
+                        travelMinutes,
+                        fatigueCost,
+                        materialNames,
+                      }) => {
+                        const isSelected = effectiveStartNodeId === nodeId;
+                        return (
+                          <button
+                            key={nodeId}
+                            type="button"
+                            role="radio"
+                            aria-checked={isSelected}
+                            disabled={startRaid.isPending}
+                            className={styles.entryCard({
+                              selected: isSelected,
+                            })}
+                            onClick={() => setSelectedStartNodeId(nodeId)}
+                          >
+                            <div className={styles.entryHeader}>
+                              <span className={styles.entryCode}>
+                                NODE #{nodeId} · {districtName}
+                              </span>
+                              {nodeId === defaultStartNodeId && (
+                                <span className={styles.entryBadge}>
+                                  기본 진입
+                                </span>
+                              )}
+                            </div>
+                            <span className={styles.entryName}>
+                              {districtName} 진입점 (#{nodeId})
+                            </span>
+                            <span className={styles.entryMeta}>
+                              탈출구까지 +{formatRaidTime(travelMinutes)} · -
+                              {fatigueCost} ENG
+                            </span>
+                            {materialNames.length > 0 && (
+                              <span className={styles.entryMaterials}>
+                                주요 재료: {materialNames.join(" · ")}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      },
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
 

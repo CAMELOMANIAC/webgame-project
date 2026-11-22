@@ -409,6 +409,17 @@ export const recommendTag = style({
   border: `1px solid ${vars.border.subtle}`,
 });
 
+export const lockdownWarningBadge = style({
+  fontFamily: vars.font.mono,
+  fontSize: "10px",
+  fontWeight: 700,
+  color: vars.color.negative,
+  padding: "1px 5px",
+  borderRadius: "2px",
+  border: `1px solid ${vars.border.negative}`,
+  fontVariantNumeric: "tabular-nums",
+});
+
 export const recommendCode = style({
   fontFamily: vars.font.mono,
   fontSize: "10px",
@@ -444,6 +455,30 @@ export const recommendEmpty = style({
   color: vars.text.muted,
   fontSize: "12px",
   textAlign: "center",
+});
+
+export const showMoreBtn = style({
+  width: "100%",
+  padding: "8px 12px",
+  borderRadius: vars.radius.control,
+  border: `1px dashed ${vars.border.subtle}`,
+  backgroundColor: "transparent",
+  color: vars.text.secondary,
+  fontFamily: vars.font.mono,
+  fontSize: "11px",
+  fontWeight: 600,
+  cursor: "pointer",
+  transition: "border-color 0.15s ease, color 0.15s ease",
+  selectors: {
+    "&:hover": {
+      color: vars.text.primary,
+      borderColor: vars.text.primary,
+    },
+    "&:focus-visible": {
+      outline: `1px solid ${vars.text.primary}`,
+      outlineOffset: "1px",
+    },
+  },
 });
 
 export const modeSwitch = style({
@@ -607,6 +642,30 @@ export const recipeName = style({
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+});
+
+export const recipeDetailBtn = style({
+  flexShrink: 0,
+  fontFamily: vars.font.mono,
+  fontSize: "10px",
+  fontWeight: 600,
+  color: vars.text.secondary,
+  backgroundColor: vars.surface.mid,
+  border: `1px solid ${vars.border.subtle}`,
+  borderRadius: vars.radius.badge,
+  padding: "2px 7px",
+  cursor: "pointer",
+  transition: "border-color 0.15s ease, color 0.15s ease",
+  selectors: {
+    "&:hover": {
+      color: vars.text.primary,
+      borderColor: vars.text.primary,
+    },
+    "&:focus-visible": {
+      outline: `1px solid ${vars.text.primary}`,
+      outlineOffset: "1px",
+    },
+  },
 });
 
 export const recipeIngredientsRow = style({

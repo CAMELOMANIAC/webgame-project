@@ -251,3 +251,32 @@ export const entryName = style({
   color: vars.text.primary,
   letterSpacing: "-0.01em",
 });
+
+export const entryMeta = style({
+  fontFamily: vars.font.mono,
+  fontSize: "11px",
+  fontWeight: 600,
+  color: vars.text.secondary,
+  fontVariantNumeric: "tabular-nums",
+});
+
+export const entryMaterials = style({
+  fontSize: "12px",
+  color: vars.text.muted,
+  lineHeight: 1.4,
+});
+
+export const entryMinimapWrap = style({
+  width: "100%",
+  borderRadius: vars.radius.control,
+  border: `1px solid ${vars.border.subtle}`,
+  backgroundColor: vars.surface.low,
+  padding: "8px",
+  boxSizing: "border-box",
+});
+
+export const entryMinimapSvg = style({
+  display: "block",
+  width: "100%",
+  height: "150px",
+});

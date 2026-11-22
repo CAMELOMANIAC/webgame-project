@@ -289,11 +289,11 @@ export function LoadoutEditor({
     });
   };
 
-  const handleMoveToEquipment = (
+  const handleMoveToEquipment = async (
     weaponMasterId: string,
     equipSlotIndex: number,
   ) => {
-    if (!characterData || isBusy || commitMode !== "deferred") return;
+    if (!characterData || isBusy) return;
     const result = moveStashToEquipmentDraft(
       characterData,
       stash,
@@ -306,7 +306,26 @@ export function LoadoutEditor({
       return;
     }
     clearErrors();
-    onDraftChange?.(result.characterData, result.stash);
+    if (commitMode === "deferred") {
+      onDraftChange?.(result.characterData, result.stash);
+      return;
+    }
+    const firstEmptySlot = backpack.find((slot) => slot.weaponMaster === null);
+    const targetBackpackSlot = firstEmptySlot?.slotIndex ?? backpack.length;
+    try {
+      await moveItemMutation.mutateAsync({
+        characterId: characterData.raw.id,
+        direction: "to_backpack",
+        weaponMasterId,
+        slotIndex: targetBackpackSlot,
+      });
+      syncMutation.mutate({
+        characterId: characterData.raw.id,
+        data: result.characterData,
+      });
+    } catch {
+      // Error state is handled by moveItemMutation / syncMutation
+    }
   };
 
   const handleMoveToStash = (
@@ -530,14 +549,14 @@ export function LoadoutEditor({
         stashItem.weaponMaster.effect?.itemKind === "CONSUMABLE" ||
           stashItem.weaponMaster.effect?.consumable,
       );
-      if (commitMode === "deferred" && !isConsumable) {
+      if (!isConsumable) {
         stashActions.push({
           label: "장착",
           tone: "primary",
           disabled: isBusy || firstEmptyEquipIndex < 0,
           onClick: () => {
             if (firstEmptyEquipIndex >= 0) {
-              handleMoveToEquipment(
+              void handleMoveToEquipment(
                 stashItem.weaponMasterId,
                 firstEmptyEquipIndex,
               );
