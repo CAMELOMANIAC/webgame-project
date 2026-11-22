@@ -305,13 +305,13 @@
           </div>
 
           <div class="ctrl-row">
-            <div class="ctrl-head"><span>2티어 고스트 전환 시각 (분)</span><span class="ctrl-val" id="val-t2">61분</span></div>
-            <input id="in-t2" type="range" min="30" max="120" step="5" value="61" />
+            <div class="ctrl-head"><span>2티어 고스트 전환 시각 (분)</span><span class="ctrl-val" id="val-t2">121분</span></div>
+            <input id="in-t2" type="range" min="60" max="180" step="5" value="121" />
           </div>
 
           <div class="ctrl-row">
-            <div class="ctrl-head"><span>3티어 고스트 전환 시각 (분)</span><span class="ctrl-val" id="val-t3">141분</span></div>
-            <input id="in-t3" type="range" min="90" max="210" step="5" value="141" />
+            <div class="ctrl-head"><span>3티어 고스트 전환 시각 (분)</span><span class="ctrl-val" id="val-t3">241분</span></div>
+            <input id="in-t3" type="range" min="150" max="320" step="5" value="241" />
           </div>
 
           <div class="ctrl-row">
@@ -363,8 +363,8 @@
       inv: 0,
       invWeight: 100,
       rate: 100,
-      t2: 61,
-      t3: 141,
+      t2: 121,
+      t3: 241,
       drop: 1.05,
       activePreset: "starter"
     };
@@ -618,13 +618,13 @@
       state.mode = "piecewise";
       state.invWeight = 100;
       state.rate = 100;
-      state.t2 = 61;
-      state.t3 = 141;
+      state.t2 = 121;
+      state.t3 = 241;
       state.drop = 1.05;
       els.invWeight.value = 100;
       els.rate.value = 100;
-      els.t2.value = 61;
-      els.t3.value = 141;
+      els.t2.value = 121;
+      els.t3.value = 241;
       els.drop.value = 1.05;
       document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("active", b.dataset.mode === "piecewise"));
       update();
