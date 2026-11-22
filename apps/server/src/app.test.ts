@@ -239,42 +239,42 @@ test("건물 이벤트 선택지 조건 판정과 레이드당 1회 제한이 �
   assert.equal(hasBuildingChoiceCondition(shuntChoice, ["mat-relay"]), true);
 });
 
-test("거점 복귀 시각 기반 자연 회복이 15초당 HP +1, 피로도 +1로 정확히 계산된다", () => {
+test("거점 복귀 시각 기반 자연 회복이 2초당 HP +1, 피로도 +1로 정확히 계산된다", () => {
   const returnedAt = new Date("2026-11-17T00:00:00.000Z");
 
-  // 53초 경과 -> 3틱(45초) 완료, 다음 틱(60초)까지 7초 남음
-  const after53s = calculateBaseRecovery({
+  // 7초 경과 -> 3틱(6초) 완료, 다음 틱(8초)까지 1초 남음
+  const after7s = calculateBaseRecovery({
     hp: 10,
     maxHp: 100,
     fatigue: 20,
     maxFatigue: 100,
     isRaiding: false,
     returnedAt,
-    now: new Date("2026-11-17T00:00:53.000Z"),
+    now: new Date("2026-11-17T00:00:07.000Z"),
   });
-  assert.deepEqual(after53s, {
+  assert.deepEqual(after7s, {
     hp: 13,
     fatigue: 23,
     isRecovering: true,
-    nextTickInMs: 7000,
+    nextTickInMs: 1000,
   });
 
-  // 클라이언트 라이브 계산: 서버 응답(53초 시점 hp=13, fatigue=23) 후 7초 경과 -> 1틱 추가 (hp=14, fatigue=24)
-  const liveAfter7s = calculateLiveBaseRecovery({
-    hp: after53s.hp,
+  // 클라이언트 라이브 계산: 서버 응답(7초 시점 hp=13, fatigue=23) 후 1초 경과 -> 1틱 추가 (hp=14, fatigue=24)
+  const liveAfter1s = calculateLiveBaseRecovery({
+    hp: after7s.hp,
     maxHp: 100,
-    fatigue: after53s.fatigue,
+    fatigue: after7s.fatigue,
     maxFatigue: 100,
     isRaiding: false,
     returnedAt,
-    serverTime: "2026-11-17T00:00:53.000Z",
-    elapsedSinceResponseMs: 7000,
+    serverTime: "2026-11-17T00:00:07.000Z",
+    elapsedSinceResponseMs: 1000,
   });
-  assert.deepEqual(liveAfter7s, {
+  assert.deepEqual(liveAfter1s, {
     hp: 14,
     fatigue: 24,
     isRecovering: true,
-    nextTickInMs: 15_000,
+    nextTickInMs: 2_000,
   });
 
   // 최대치 도달 시 상한 고정 및 회복 종료

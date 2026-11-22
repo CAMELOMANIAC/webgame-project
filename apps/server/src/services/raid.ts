@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  applyExhaustedActionMinutes,
   type BuildingActionInput,
   type BuildingActionResult,
   type BuildingEventState,
@@ -1706,13 +1707,14 @@ export async function executeRaidBuildingAction(
         return { retreat, pendingRetreat, battleLog };
       };
 
-      const requireAndSpendFatigue = async (cost: number, extraDelta = 0) => {
-        if (cost > 0 && character.fatigue < cost) {
-          throw new InventoryError(
-            "피로도(ENG)가 부족하여 진행할 수 없습니다.",
-            409,
-          );
-        }
+      const requireAndSpendFatigue = async (
+        cost: number,
+        baseMinutes = 10,
+        extraDelta = 0,
+      ) => {
+        const isLowFatigue = cost > 0 && character.fatigue < cost;
+        const extraTimeMinutes =
+          applyExhaustedActionMinutes(baseMinutes, isLowFatigue) - baseMinutes;
         const nextFatigue = Math.max(
           0,
           Math.min(character.maxFatigue, character.fatigue - cost + extraDelta),
@@ -1723,16 +1725,17 @@ export async function executeRaidBuildingAction(
             .set({ fatigue: nextFatigue })
             .where(eq(characters.id, characterId));
         }
-        return nextFatigue;
+        return { nextFatigue, extraTimeMinutes };
       };
 
       if (parsed.action === "INVESTIGATE") {
         if (prevEvent.stage !== "INTRO") {
           throw new InventoryError("이미 건물 내부 상황을 확인했습니다.", 409);
         }
-        await requireAndSpendFatigue(
+        const { extraTimeMinutes } = await requireAndSpendFatigue(
           FATIGUE_RULES.buildingActionCosts.INVESTIGATE,
         );
+        const actionTime = nextTime + extraTimeMinutes;
         const combatTriggered = random() < encounterRate;
         if (combatTriggered) {
           const { retreat, battleLog } = await runBuildingEncounter();
@@ -1745,7 +1748,7 @@ export async function executeRaidBuildingAction(
           return {
             payload,
             pendingRetreat: retreat.finish(battleLog),
-            time: nextTime,
+            time: actionTime,
             encounterTravel: writeExplorationState(raid, exp),
             status: battleLog.playerDied ? "DEAD" : "ACTIVE",
           };
@@ -1763,7 +1766,7 @@ export async function executeRaidBuildingAction(
         };
         return {
           payload,
-          time: nextTime,
+          time: actionTime,
           encounterTravel: writeExplorationState(raid, exp),
         };
       }
@@ -1778,7 +1781,10 @@ export async function executeRaidBuildingAction(
         if (exp.lootedBuildingIds.includes(building.id)) {
           throw new InventoryError("이미 수색을 완료한 건물입니다.", 409);
         }
-        await requireAndSpendFatigue(FATIGUE_RULES.buildingActionCosts.SEARCH);
+        const { extraTimeMinutes } = await requireAndSpendFatigue(
+          FATIGUE_RULES.buildingActionCosts.SEARCH,
+        );
+        const actionTime = nextTime + extraTimeMinutes;
         if (prevEvent.stage === "INTRO" && random() < encounterRate) {
           const { retreat, battleLog } = await runBuildingEncounter();
           const payload: Omit<BuildingActionResult, "raid"> = {
@@ -1790,7 +1796,7 @@ export async function executeRaidBuildingAction(
           return {
             payload,
             pendingRetreat: retreat.finish(battleLog),
-            time: nextTime,
+            time: actionTime,
             encounterTravel: writeExplorationState(raid, exp),
             status: battleLog.playerDied ? "DEAD" : "ACTIVE",
           };
@@ -1811,7 +1817,7 @@ export async function executeRaidBuildingAction(
           };
           return {
             payload,
-            time: nextTime,
+            time: actionTime,
             encounterTravel: writeExplorationState(raid, exp),
           };
         }
@@ -1872,7 +1878,7 @@ export async function executeRaidBuildingAction(
         };
         return {
           payload,
-          time: nextTime,
+          time: actionTime,
           encounterTravel: writeExplorationState(raid, exp),
         };
       }
@@ -1911,12 +1917,7 @@ export async function executeRaidBuildingAction(
           throw new InventoryError("선택지 실행 조건을 충족하지 못했습니다.", 409);
         }
         const fatigueCost = choice.fatigueCost ?? 0;
-        if (fatigueCost > 0 && character.fatigue < fatigueCost) {
-          throw new InventoryError(
-            "피로도(ENG)가 부족하여 진행할 수 없습니다.",
-            409,
-          );
-        }
+        const isLowFatigue = fatigueCost > 0 && character.fatigue < fatigueCost;
 
         if (choice.condition?.consumeItemId) {
           await consumeBackpackItemsInTransaction(tx, characterId, [
@@ -1939,7 +1940,9 @@ export async function executeRaidBuildingAction(
           }
         }
 
-        const timeCost = outcome.timeCostMinutes ?? choice.timeCostMinutes ?? 10;
+        const baseTimeCost =
+          outcome.timeCostMinutes ?? choice.timeCostMinutes ?? 10;
+        const timeCost = applyExhaustedActionMinutes(baseTimeCost, isLowFatigue);
         const hpDelta = outcome.hpDelta ?? 0;
         const fatigueDelta = outcome.fatigueDelta ?? 0;
         // 비전투 함정 피해로 즉사하지 않도록 최소 체력 1을 보장합니다.
@@ -2095,7 +2098,8 @@ export async function executeRaidBuildingAction(
       if (exp.usedCraftBuildingIds.includes(building.id)) {
         throw new InventoryError("이미 조합 설비를 사용한 건물입니다.", 409);
       }
-      await requireAndSpendFatigue(FATIGUE_RULES.buildingActionCosts.CRAFT);
+      const { extraTimeMinutes: craftExtraTime } =
+        await requireAndSpendFatigue(FATIGUE_RULES.buildingActionCosts.CRAFT);
 
       const [equippedList, backpackList] = await Promise.all([
         tx.query.characterWeapons.findMany({
@@ -2187,7 +2191,7 @@ export async function executeRaidBuildingAction(
       };
       return {
         payload,
-        time: nextTime,
+        time: nextTime + craftExtraTime,
         encounterTravel: writeExplorationState(raid, exp),
       };
     },

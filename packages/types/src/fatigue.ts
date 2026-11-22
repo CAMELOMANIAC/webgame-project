@@ -26,12 +26,22 @@ export function applyExhaustedTravelMinutes(
   return baseMinutes;
 }
 
+export function applyExhaustedActionMinutes(
+  baseMinutes: number,
+  isLowFatigue: boolean,
+): number {
+  if (baseMinutes <= 0 || !isLowFatigue) return baseMinutes;
+  return (
+    Math.ceil((baseMinutes * FATIGUE_RULES.exhaustedTravelMultiplier) / 5) * 5
+  );
+}
+
 export const BASE_RECOVERY_RULES = {
-  intervalMs: 15_000,
+  intervalMs: 2_000,
   hpPerInterval: 1,
   fatiguePerInterval: 1,
-  deathReturnHp: 1,
-  deathReturnFatigue: 0,
+  deathReturnHp: 30,
+  deathReturnFatigue: 30,
 } as const;
 
 export interface BaseRecoveryInput {

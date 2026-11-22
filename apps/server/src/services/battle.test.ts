@@ -176,9 +176,9 @@ test("사망 정산은 장비와 가방을 비우고 HP 1·피로도 0 및 복�
     { ...updateData, returnedAt: undefined },
     {
       isRaiding: false,
-      hp: 1,
+      hp: 30,
       stamina: 120,
-      fatigue: 0,
+      fatigue: 30,
       returnedAt: undefined,
       time: 0,
       currentNodeId: 0,
