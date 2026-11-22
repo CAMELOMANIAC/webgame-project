@@ -455,6 +455,8 @@ export interface BuildingActionInput extends RaidActionInput {
   action: "INVESTIGATE" | "SEARCH" | "CRAFT" | "EVENT_CHOICE";
   recipeId?: string;
   choiceId?: string;
+  equipment?: { weaponMasterId: string; slotIndex: number }[];
+  inventory?: { weaponMasterId: string; slotIndex: number; quantity: number }[];
 }
 
 export interface BuildingActionResult {

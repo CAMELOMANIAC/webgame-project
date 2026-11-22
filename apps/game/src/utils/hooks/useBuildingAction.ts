@@ -4,9 +4,10 @@ import type {
   BuildingActionResult,
   RaidActionInput,
 } from "@webgame/types";
-import { useAtomValue } from "jotai";
+import { getDefaultStore, useAtomValue, useSetAtom } from "jotai";
 
 import { selectedUserIdAtom } from "@/atoms/authAtom";
+import { isInventoryDirtyAtom } from "@/atoms/raidAtom";
 
 import { API_BASE_URL, apiFetch } from "../api";
 import { requestJsonWithTimeout } from "../request";
@@ -23,25 +24,49 @@ export interface BuildingActionParams
 export const useBuildingAction = () => {
   const queryClient = useQueryClient();
   const userId = useAtomValue(selectedUserIdAtom);
+  const setIsInventoryDirty = useSetAtom(isInventoryDirtyAtom);
 
   return useMutation<BuildingActionResult, Error, BuildingActionParams>({
     mutationFn: async (params) => {
       if (!userId) throw new Error("개발용 계정을 선택하세요.");
-      const nextParams = { ...params };
+      const characterData = queryClient.getQueryData<CharacterData>(
+        characterKey(userId, params.characterId),
+      );
+      const nextParams: BuildingActionInput & { characterId: string } = {
+        ...params,
+        raidId: params.raidId ?? "",
+        expectedVersion: params.expectedVersion ?? 0,
+        requestId: params.requestId ?? "",
+      };
       if (
-        !nextParams.raidId ||
-        nextParams.expectedVersion === undefined ||
-        !nextParams.requestId
+        !params.raidId ||
+        params.expectedVersion === undefined ||
+        !params.requestId
       ) {
-        const input = raidActionInput(
-          queryClient.getQueryData<CharacterData>(
-            characterKey(userId, nextParams.characterId),
-          ),
-        );
-        nextParams.raidId ??= input.raidId;
-        nextParams.expectedVersion ??= input.expectedVersion;
-        nextParams.requestId ??= input.requestId;
+        const input = raidActionInput(characterData);
+        nextParams.raidId = params.raidId ?? input.raidId;
+        nextParams.expectedVersion =
+          params.expectedVersion ?? input.expectedVersion;
+        nextParams.requestId = params.requestId ?? input.requestId;
       }
+
+      const isInventoryDirty = getDefaultStore().get(isInventoryDirtyAtom);
+      if (isInventoryDirty && characterData) {
+        nextParams.equipment = characterData.raw.equipment
+          .filter((w) => w.weaponMaster !== null)
+          .map((w) => ({
+            weaponMasterId: w.weaponMaster!.id,
+            slotIndex: w.slotIndex,
+          }));
+        nextParams.inventory = characterData.raw.inventory
+          .filter((i) => i.weaponMaster !== null)
+          .map((i) => ({
+            weaponMasterId: i.weaponMaster!.id,
+            slotIndex: i.slotIndex,
+            quantity: i.quantity,
+          }));
+      }
+
       const { characterId, ...body } = nextParams;
       return requestJsonWithTimeout<BuildingActionResult>((signal) =>
         apiFetch(
@@ -56,6 +81,7 @@ export const useBuildingAction = () => {
       );
     },
     onSuccess: (result, params) => {
+      setIsInventoryDirty(false);
       queryClient.setQueryData(
         characterKey(userId, params.characterId),
         (old: CharacterData | undefined) => {

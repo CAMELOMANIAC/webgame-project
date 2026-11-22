@@ -133,6 +133,8 @@ export const BuildingActionSchema = RaidActionSchema.extend({
   action: z.enum(["INVESTIGATE", "SEARCH", "CRAFT", "EVENT_CHOICE"]),
   recipeId: z.string().min(1).optional(),
   choiceId: z.string().min(1).optional(),
+  equipment: SlotsSchema.shape.equipment.optional(),
+  inventory: SlotsSchema.shape.inventory.optional(),
 });
 
 export const RaidLootActionSchema = RaidActionSchema.extend({
@@ -1693,6 +1695,13 @@ export async function executeRaidBuildingAction(
           "봉쇄된 건물에서는 더 이상 행동할 수 없습니다.",
           409,
         );
+      }
+
+      if (parsed.equipment && parsed.inventory) {
+        await syncSlotsInTransaction(tx, characterId, {
+          equipment: parsed.equipment,
+          inventory: parsed.inventory,
+        });
       }
 
       const district = getBuildingDistrict(building);
