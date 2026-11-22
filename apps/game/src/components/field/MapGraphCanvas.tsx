@@ -319,6 +319,15 @@ function classifySegmentRisk(
   return "safe";
 }
 
+const PATH_STYLE_BY_RISK: Record<
+  PathSegmentRisk,
+  { width: number; color: number; alpha: number }
+> = {
+  safe: { width: 4.5, color: 0xfafafa, alpha: 1 },
+  medium: { width: 4.5, color: 0x843d37, alpha: 1 },
+  high: { width: 6, color: 0xff7162, alpha: 1 },
+};
+
 function drawPathLineGraphics(
   g: Graphics,
   points: number[],
@@ -330,40 +339,33 @@ function drawPathLineGraphics(
 
   g.alpha = 1;
 
+  const runs: { risk: PathSegmentRisk; coords: number[] }[] = [];
   for (let i = 0; i < points.length - 2; i += 2) {
     const x1 = points[i]!;
     const y1 = points[i + 1]!;
     const x2 = points[i + 2]!;
     const y2 = points[i + 3]!;
     const risk = classifySegmentRisk(x1, y1, x2, y2, noiseAreas);
-
-    if (risk === "high") {
-      g.moveTo(x1, y1);
-      g.lineTo(x2, y2);
-      g.stroke({
-        width: 6,
-        color: 0xff7162,
-        alpha: 0.92,
-        cap: "round",
-        join: "round",
-      });
-    } else if (risk === "medium") {
-      g.moveTo(x1, y1);
-      g.lineTo(x2, y2);
-      g.stroke({
-        width: 4.5,
-        color: 0xff7162,
-        alpha: 0.45,
-        cap: "round",
-        join: "round",
-      });
+    const last = runs[runs.length - 1];
+    if (last && last.risk === risk) {
+      last.coords.push(x2, y2);
     } else {
-      g.moveTo(x1, y1);
-      g.lineTo(x2, y2);
+      runs.push({ risk, coords: [x1, y1, x2, y2] });
+    }
+  }
+
+  for (const tier of ["safe", "medium", "high"] as const) {
+    const style = PATH_STYLE_BY_RISK[tier];
+    for (const run of runs) {
+      if (run.risk !== tier || run.coords.length < 4) continue;
+      g.moveTo(run.coords[0]!, run.coords[1]!);
+      for (let j = 2; j < run.coords.length; j += 2) {
+        g.lineTo(run.coords[j]!, run.coords[j + 1]!);
+      }
       g.stroke({
-        width: 4.5,
-        color: 0xfafafa,
-        alpha: 1,
+        width: style.width,
+        color: style.color,
+        alpha: style.alpha,
         cap: "round",
         join: "round",
       });
