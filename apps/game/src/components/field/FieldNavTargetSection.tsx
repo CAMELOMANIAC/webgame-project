@@ -1025,57 +1025,68 @@ const FieldNavTargetSection = () => {
           inert={isRecommendOpen}
         >
           <div className={styles.bodyContent}>
-            <div className={styles.telemetryGrid}>
-              <div className={styles.telemetryCell}>
-                <span className={styles.cellLabel}>경과 시간</span>
-                <RollingText
-                  className={styles.cellValue}
-                  value={formatRaidTime(displayCurrentTime)}
-                  direction={isMoving ? "up" : undefined}
-                />
-              </div>
-              <div className={styles.telemetryCell}>
-                <span className={styles.cellLabel}>예상 소모</span>
-                <span className={styles.cellValueRow}>
+            <div className={styles.telemetryGroup}>
+              <div className={styles.telemetryGrid}>
+                <div className={styles.telemetryCell}>
+                  <span className={styles.cellLabel}>경과 시간</span>
                   <RollingText
                     className={styles.cellValue}
-                    value={
-                      travelMinutes > 0
-                        ? `+${formatRaidTime(
-                            isExhausted && !isMoving
-                              ? baseTravelMinutes
-                              : displayRemainingMinutes,
-                          )}`
-                        : "—"
-                    }
-                    direction={isMoving && travelMinutes > 0 ? "down" : undefined}
+                    value={formatRaidTime(displayCurrentTime)}
+                    direction={isMoving ? "up" : undefined}
                   />
-                  {isExhausted && !isMoving && travelMinutes > 0 && (
-                    <span className={styles.exhaustedMultiplier}>×1.5</span>
-                  )}
-                </span>
+                </div>
+                <div className={styles.telemetryCell}>
+                  <span className={styles.cellLabel}>예상 소모</span>
+                  <span className={styles.cellValueRow}>
+                    <RollingText
+                      className={styles.cellValue}
+                      value={
+                        travelMinutes > 0
+                          ? `+${formatRaidTime(
+                              isExhausted && !isMoving
+                                ? baseTravelMinutes
+                                : displayRemainingMinutes,
+                            )}`
+                          : "—"
+                      }
+                      direction={isMoving && travelMinutes > 0 ? "down" : undefined}
+                    />
+                    {isExhausted && !isMoving && travelMinutes > 0 && (
+                      <span className={styles.exhaustedMultiplier}>×1.5</span>
+                    )}
+                  </span>
+                </div>
+                <div className={styles.telemetryCell}>
+                  <span className={styles.cellLabel}>예상 도착</span>
+                  <span className={styles.cellValue}>
+                    {travelMinutes > 0 ? formatRaidTime(estimatedTime) : "—"}
+                  </span>
+                </div>
               </div>
-              <div className={styles.telemetryCell}>
-                <span className={styles.cellLabel}>예상 도착</span>
-                <span className={styles.cellValue}>
-                  {travelMinutes > 0 ? formatRaidTime(estimatedTime) : "—"}
-                </span>
-              </div>
-            </div>
 
-            <div className={styles.pathRiskLegend} aria-label="경로 위험도 범례">
-              <span className={styles.pathRiskItem}>
-                <span className={styles.pathRiskSwatch({ tier: "safe" })} aria-hidden="true" />
-                안전 구간
-              </span>
-              <span className={styles.pathRiskItem}>
-                <span className={styles.pathRiskSwatch({ tier: "medium" })} aria-hidden="true" />
-                보통 구간
-              </span>
-              <span className={styles.pathRiskItem}>
-                <span className={styles.pathRiskSwatch({ tier: "high" })} aria-hidden="true" />
-                높은 위험
-              </span>
+              <div
+                className={styles.pathRiskLegendWrap({
+                  visible: targetNodeId !== null && travelMinutes > 0,
+                })}
+                aria-hidden={!(targetNodeId !== null && travelMinutes > 0)}
+              >
+                <div className={styles.pathRiskLegendInner}>
+                  <div className={styles.pathRiskLegend} aria-label="경로 위험도 범례">
+                    <span className={styles.pathRiskItem}>
+                      <span className={styles.pathRiskSwatch({ tier: "safe" })} aria-hidden="true" />
+                      안전 구간
+                    </span>
+                    <span className={styles.pathRiskItem}>
+                      <span className={styles.pathRiskSwatch({ tier: "medium" })} aria-hidden="true" />
+                      보통 구간
+                    </span>
+                    <span className={styles.pathRiskItem}>
+                      <span className={styles.pathRiskSwatch({ tier: "high" })} aria-hidden="true" />
+                      높은 위험
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {character?.isRaiding || isMoving || hasPending || Boolean(outro) ? (

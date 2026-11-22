@@ -125,12 +125,40 @@ export const exhaustedMultiplier = style({
   fontVariantNumeric: "tabular-nums",
 });
 
+export const telemetryGroup = style({
+  display: "flex",
+  flexDirection: "column",
+});
+
+export const pathRiskLegendWrap = recipe({
+  base: {
+    display: "grid",
+    minHeight: 0,
+    transition:
+      "grid-template-rows 260ms cubic-bezier(0.4, 0, 0.2, 1), opacity 220ms ease-in-out",
+    "@media": {
+      "(prefers-reduced-motion: reduce)": { transition: "none" },
+    },
+  },
+  variants: {
+    visible: {
+      true: { gridTemplateRows: "1fr", opacity: 1 },
+      false: { gridTemplateRows: "0fr", opacity: 0 },
+    },
+  },
+});
+
+export const pathRiskLegendInner = style({
+  minHeight: 0,
+  overflow: "hidden",
+});
+
 export const pathRiskLegend = style({
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   gap: "8px",
-  padding: "2px 2px 0",
+  padding: "8px 2px 0",
 });
 
 export const pathRiskItem = style({
@@ -157,9 +185,9 @@ export const pathRiskSwatch = recipe({
         opacity: 0.6,
       },
       medium: {
-        height: 0,
-        borderTop: `3px dashed ${vars.color.negative}`,
-        opacity: 0.5,
+        height: "3px",
+        backgroundColor: vars.color.negative,
+        opacity: 0.45,
       },
       high: {
         height: "4px",

@@ -348,26 +348,15 @@ function drawPathLineGraphics(
         join: "round",
       });
     } else if (risk === "medium") {
-      const dx = x2 - x1;
-      const dy = y2 - y1;
-      const len = Math.hypot(dx, dy);
-      if (len > 0) {
-        const ux = dx / len;
-        const uy = dy / len;
-        const dashLen = 8;
-        const gapLen = 6;
-        for (let t = 0; t < len; t += dashLen + gapLen) {
-          const endT = Math.min(t + dashLen, len);
-          g.moveTo(x1 + ux * t, y1 + uy * t);
-          g.lineTo(x1 + ux * endT, y1 + uy * endT);
-        }
-        g.stroke({
-          width: 4.5,
-          color: 0xff7162,
-          alpha: 0.45,
-          cap: "round",
-        });
-      }
+      g.moveTo(x1, y1);
+      g.lineTo(x2, y2);
+      g.stroke({
+        width: 4.5,
+        color: 0xff7162,
+        alpha: 0.45,
+        cap: "round",
+        join: "round",
+      });
     } else {
       g.moveTo(x1, y1);
       g.lineTo(x2, y2);
