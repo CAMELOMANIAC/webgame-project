@@ -46,6 +46,7 @@ import {
   pendingBuildingCombatAtom,
   pinnedRecipeIdAtom,
   playerCoordsAtom,
+  raidOutroAtom,
   requestedBuildingIdAtom,
   requestedNodeIdAtom,
   shortestPathAtom,
@@ -108,8 +109,7 @@ const FieldNavTargetSection = () => {
     isRecommendDestinationsOpenAtom,
   );
   const triggerStartNavigation = useSetAtom(startNavigationTriggerAtom);
-  const setNode = useSetAtom(currentNodeIdAtom);
-  const setCoords = useSetAtom(playerCoordsAtom);
+  const outro = useAtomValue(raidOutroAtom);
   const [pinnedRecipeId, setPinnedRecipeId] = useAtom(pinnedRecipeIdAtom);
   const [navListMode, setNavListMode] = useAtom(navListModeAtom);
   const setHighlightedDistrictIds = useSetAtom(highlightedDistrictIdsAtom);
@@ -532,12 +532,7 @@ const FieldNavTargetSection = () => {
 
   const leave = () => {
     if (!character || !canAct) return;
-    extractRaid.mutate(character.id, {
-      onSuccess: () => {
-        setNode(rules?.startNodeId ?? 0);
-        setCoords(null);
-      },
-    });
+    extractRaid.mutate(character.id);
   };
 
   const pendingLoot = useMemo(
@@ -955,7 +950,7 @@ const FieldNavTargetSection = () => {
               </div>
             </div>
 
-            {character?.isRaiding || isMoving || hasPending ? (
+            {character?.isRaiding || isMoving || hasPending || Boolean(outro) ? (
               atExtraction && !canMove && !isMoving && !canReenterBuilding ? (
                 <button
                   type="button"

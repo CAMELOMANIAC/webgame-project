@@ -133,14 +133,19 @@ function GameLayout() {
     );
   }
 
+  const animateRouteTransition = !reduceMotion && !fieldRoute;
+
   return (
     <>
       <div className={`${styles.outletWrapper} content-container`}>
         <motion.div
-          key={path}
-          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+          key={fieldRoute ? "field" : path}
+          initial={animateRouteTransition ? { opacity: 0, y: 8 } : false}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: reduceMotion ? 0 : 0.2, ease: [0.22, 1, 0.36, 1] }}
+          transition={{
+            duration: animateRouteTransition ? 0.2 : 0,
+            ease: [0.22, 1, 0.36, 1],
+          }}
           style={{ width: "100%", height: "100%" }}
         >
           <Outlet />

@@ -12,6 +12,8 @@ import { useState } from "react";
 import { resolveItemImageSrc } from "@/assets/items";
 import { selectedUserIdAtom } from "@/atoms/authAtom";
 import {
+  currentNodeIdAtom,
+  playerCoordsAtom,
   type RaidEndStatus,
   raidOutroAtom,
   unacknowledgedRaidResultsAtom,
@@ -71,6 +73,8 @@ function RaidResultRoute() {
   // 종료 연출은 탐사 종료 직후(위치 기록이 있을 때)에만 재생한다. 새로고침 복구 시에는 생략
   const outro = useAtomValue(raidOutroAtom);
   const setOutro = useSetAtom(raidOutroAtom);
+  const setCurrentNodeId = useSetAtom(currentNodeIdAtom);
+  const setPlayerCoords = useSetAtom(playerCoordsAtom);
   const reduceMotion = useReducedMotion();
   const [hadOutro] = useState(outro !== null);
   const playOutro = hadOutro && !reduceMotion;
@@ -115,6 +119,8 @@ function RaidResultRoute() {
       delete remaining[userId];
       return remaining;
     });
+    setCurrentNodeId(0);
+    setPlayerCoords(null);
     setOutro(null);
     void navigate({ to: "/base", replace: true });
   };
