@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>아이템 등급별 통일 명도·무채색 패턴 미리보기</title>
+  <style>
+    :root {
+      --bg: #09090b;
+      --surface-low: #0c0c0f;
+      --surface-mid: #101013;
+      --slot-bg: #141418;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-slot: rgba(255, 255, 255, 0.18);
+      --text-primary: #fafafa;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --mono: "JetBrains Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+      --sans: "Pretendard Variable", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 28px 20px;
+      background: var(--bg);
+      color: var(--text-primary);
+      font-family: var(--sans);
+      font-size: 13px;
+    }
+    .wrap {
+      max-width: 820px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .code-tag {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    h1 {
+      margin: 4px 0 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .panel {
+      background: var(--surface-mid);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .grid-6 {
+      display: grid;
+      grid-template-columns: repeat(6, 52px);
+      gap: 8px;
+    }
+    .compare-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+      gap: 12px;
+    }
+    .sample-card {
+      background: var(--surface-low);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 14px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      text-align: center;
+    }
+    .sample-meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .sample-meta strong {
+      display: block;
+      color: var(--text-primary);
+      margin-bottom: 2px;
+    }
+
+    /* 모든 슬롯의 기본 명도·배경색·테두리를 100% 통일 */
+    .slot {
+      position: relative;
+      width: 52px;
+      height: 52px;
+      border-radius: 6px;
+      background-color: var(--slot-bg);
+      border: 1px solid var(--border-slot);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      overflow: hidden;
+    }
+    .slot.zoom {
+      transform: scale(1.45);
+      margin: 12px 0;
+    }
+    .slot-icon {
+      font-size: 18px;
+      line-height: 1;
+      opacity: 0.9;
+      margin-bottom: 6px;
+    }
+    .slot-name {
+      position: absolute;
+      bottom: 3px;
+      max-width: 90%;
+      font-size: 9.5px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+    }
+    .tier-tag {
+      position: absolute;
+      top: 3px;
+      left: 4px;
+      font-family: var(--mono);
+      font-size: 8.5px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--text-muted);
+      line-height: 1;
+    }
+    .qty-tag {
+      position: absolute;
+      top: 3px;
+      right: 4px;
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text-secondary);
+      line-height: 1;
+    }
+
+    /* 1. 재료 (MAT): 패턴 없음 */
+    .tier-mat {
+      background-image: none;
+    }
+
+    /* 2. 소모품 (SUP): 은은한 도트 그리드 */
+    .tier-sup {
+      background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+      background-size: 6px 6px;
+    }
+
+    /* 3. T1: 은은한 단일 대각선 */
+    .tier-t1 {
+      background-image: repeating-linear-gradient(
+        -45deg,
+        rgba(255, 255, 255, 0.045) 0px,
+        rgba(255, 255, 255, 0.045) 1px,
+        transparent 1px,
+        transparent 6px
+      );
+    }
+
+    /* 4. T2: 은은한 대각선 2중 교차 그물 */
+    .tier-t2 {
+      background-image:
+        repeating-linear-gradient(
+          -45deg,
+          rgba(255, 255, 255, 0.04) 0px,
+          rgba(255, 255, 255, 0.04) 1px,
+          transparent 1px,
+          transparent 6px
+        ),
+        repeating-linear-gradient(
+          45deg,
+          rgba(255, 255, 255, 0.04) 0px,
+          rgba(255, 255, 255, 0.04) 1px,
+          transparent 1px,
+          transparent 6px
+        );
+    }
+
+    /* 5. 유니크 (UNQ): 은은한 사각형 그물 (수직·수평 격자) */
+    .tier-unq {
+      background-image:
+        repeating-linear-gradient(
+          0deg,
+          rgba(255, 255, 255, 0.05) 0px,
+          rgba(255, 255, 255, 0.05) 1px,
+          transparent 1px,
+          transparent 6px
+        ),
+        repeating-linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0.05) 0px,
+          rgba(255, 255, 255, 0.05) 1px,
+          transparent 1px,
+          transparent 6px
+        );
+    }
+
+    .controls { display: flex; gap: 8px; }
+    .btn {
+      background: var(--surface-low);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn.active {
+      border-color: var(--text-primary);
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div>
+      <div class="code-tag">HL-LAB // UNIFORM BRIGHTNESS · PATTERN ONLY</div>
+      <h1>아이템 등급별 통일 명도 · 은은한 CSS 패턴 미리보기</h1>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">5종 확대 비교 (1.45×)</div>
+        <div class="controls">
+          <button class="btn active" id="btn-show-tag" type="button">좌상단 티어 태그 표시</button>
+          <button class="btn" id="btn-hide-tag" type="button">패턴만 보기</button>
+        </div>
+      </div>
+
+      <div class="compare-row">
+        <div class="sample-card">
+          <div class="slot zoom tier-mat">
+            <span class="tier-tag">MAT</span>
+            <span class="qty-tag">×2</span>
+            <span class="slot-icon">⚙</span>
+            <span class="slot-name">고강도 테이프</span>
+          </div>
+          <div class="sample-meta"><strong>재료 (MAT)</strong>패턴 없음</div>
+        </div>
+
+        <div class="sample-card">
+          <div class="slot zoom tier-sup">
+            <span class="tier-tag">SUP</span>
+            <span class="qty-tag">×1</span>
+            <span class="slot-icon">✚</span>
+            <span class="slot-name">압박 붕대</span>
+          </div>
+          <div class="sample-meta"><strong>소모품 (SUP)</strong>은은한 도트</div>
+        </div>
+
+        <div class="sample-card">
+          <div class="slot zoom tier-t1">
+            <span class="tier-tag">T1</span>
+            <span class="slot-icon">⚔</span>
+            <span class="slot-name">공명 블레이드</span>
+          </div>
+          <div class="sample-meta"><strong>기본 · T1 장비</strong>대각선 (1방향)</div>
+        </div>
+
+        <div class="sample-card">
+          <div class="slot zoom tier-t2">
+            <span class="tier-tag">T2</span>
+            <span class="slot-icon">⚔</span>
+            <span class="slot-name">파동 공명검</span>
+          </div>
+          <div class="sample-meta"><strong>T2 조합 장비</strong>대각선 그물 (2방향)</div>
+        </div>
+
+        <div class="sample-card">
+          <div class="slot zoom tier-unq">
+            <span class="tier-tag">UNQ</span>
+            <span class="slot-icon">⚡</span>
+            <span class="slot-name">고기 자르개</span>
+          </div>
+          <div class="sample-meta"><strong>유니크 (UNQ)</strong>사각형 그물 (격자)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">실제 크기 (52px × 52px) 장착·가방 혼합 배열 예시</div>
+        <span class="code-tag">1:1 SCALE // 6 SLOTS</span>
+      </div>
+      <div class="grid-6">
+        <div class="slot tier-t2"><span class="tier-tag">T2</span><span class="slot-icon">⚔</span><span class="slot-name">파동 공명검</span></div>
+        <div class="slot tier-unq"><span class="tier-tag">UNQ</span><span class="slot-icon">⚡</span><span class="slot-name">고기 자르개</span></div>
+        <div class="slot tier-t1"><span class="tier-tag">T1</span><span class="slot-icon">🔫</span><span class="slot-name">광학 카빈</span></div>
+        <div class="slot tier-mat"><span class="tier-tag">MAT</span><span class="qty-tag">×3</span><span class="slot-icon">⚙</span><span class="slot-name">세라믹 판</span></div>
+        <div class="slot tier-sup"><span class="tier-tag">SUP</span><span class="qty-tag">×2</span><span class="slot-icon">✚</span><span class="slot-name">지혈 주사기</span></div>
+        <div class="slot tier-t1"><span class="tier-tag">T1</span><span class="slot-icon">🗡</span><span class="slot-name">전술 단검</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tags = document.querySelectorAll(".tier-tag");
+    const btnShow = document.getElementById("btn-show-tag");
+    const btnHide = document.getElementById("btn-hide-tag");
+    btnShow.addEventListener("click", () => {
+      tags.forEach((t) => (t.style.display = "block"));
+      btnShow.classList.add("active");
+      btnHide.classList.remove("active");
+    });
+    btnHide.addEventListener("click", () => {
+      tags.forEach((t) => (t.style.display = "none"));
+      btnHide.classList.add("active");
+      btnShow.classList.remove("active");
+    });
+  </script>
+</body>
+</html>

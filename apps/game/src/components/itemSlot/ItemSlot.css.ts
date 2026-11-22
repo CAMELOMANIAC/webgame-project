@@ -6,9 +6,7 @@ import { cornerBrackets, vars } from "@/styles/theme.css";
 export const itemSlotSize = "52px";
 
 const occupiedSlotSurface = {
-  backgroundColor: "rgba(20, 20, 24, 0.92)",
-  backgroundImage:
-    "radial-gradient(circle at 50% 45%, rgba(44, 47, 56, 0.42) 0%, rgba(12, 12, 15, 0.68) 100%)",
+  backgroundColor: "#141418",
   boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.04)",
 } as const;
 
@@ -144,6 +142,8 @@ export const button = style({
 });
 
 export const itemImage = style({
+  position: "relative",
+  zIndex: 1,
   display: "block",
   width: "100%",
   height: "100%",
@@ -153,4 +153,46 @@ export const itemImage = style({
   pointerEvents: "none",
   userSelect: "none",
   filter: "saturate(0.55) contrast(1.04) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.85))",
+});
+
+export const fallbackIcon = style({
+  position: "relative",
+  zIndex: 1,
+});
+
+export const tierPattern = recipe({
+  base: {
+    position: "absolute",
+    inset: 0,
+    borderRadius: "inherit",
+    pointerEvents: "none",
+    zIndex: 0,
+  },
+  variants: {
+    tier: {
+      MATERIAL: {
+        backgroundImage: "none",
+      },
+      CONSUMABLE: {
+        backgroundImage:
+          "radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px)",
+        backgroundSize: "6px 6px",
+      },
+      T1: {
+        backgroundImage:
+          "repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.045) 0px, rgba(255, 255, 255, 0.045) 1px, transparent 1px, transparent 6px)",
+      },
+      T2: {
+        backgroundImage:
+          "repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.04) 0px, rgba(255, 255, 255, 0.04) 1px, transparent 1px, transparent 6px), repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.04) 0px, rgba(255, 255, 255, 0.04) 1px, transparent 1px, transparent 6px)",
+      },
+      UNIQUE: {
+        backgroundImage:
+          "repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.05) 0px, rgba(255, 255, 255, 0.05) 1px, transparent 1px, transparent 6px), repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0px, rgba(255, 255, 255, 0.05) 1px, transparent 1px, transparent 6px)",
+      },
+    },
+  },
+  defaultVariants: {
+    tier: "T1",
+  },
 });

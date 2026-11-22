@@ -1,5 +1,6 @@
 import { getCatalogItemByName } from "@webgame/types";
 
+import eqArcEmitter from "./eq-arc-emitter.png";
 import eqChemCanister from "./eq-chem-canister.png";
 import eqComT1 from "./eq-com-t1.png";
 import eqComT2a from "./eq-com-t2a.png";
@@ -21,11 +22,18 @@ import eqPubT1 from "./eq-pub-t1.png";
 import eqPubT2a from "./eq-pub-t2a.png";
 import eqPubT2b from "./eq-pub-t2b.png";
 import eqReactivePlate from "./eq-reactive-plate.png";
+import eqSummonDrone from "./eq-summon-drone.png";
+import eqSummonSwarm from "./eq-summon-swarm.png";
+import eqSummonTurret from "./eq-summon-turret.png";
+import eqTraumaAutoinjector from "./eq-trauma-autoinjector.png";
 import foodBladeGel from "./food-blade-gel.png";
 import foodCombatRation from "./food-combat-ration.png";
 import foodEnergyBar from "./food-energy-bar.png";
 import foodEspressoShot from "./food-espresso-shot.png";
 import foodIonDrink from "./food-ion-drink.png";
+import geneAmpouleDoyun from "./gene-ampoule-doyun.png";
+import geneAmpouleHaerin from "./gene-ampoule-haerin.png";
+import geneAmpouleJiwon from "./gene-ampoule-jiwon.png";
 import hanlimControlBaton from "./hanlim-control-baton.png";
 import hanlimReliefCarbine from "./hanlim-relief-carbine.png";
 import matAnticoagulant from "./mat-anticoagulant.png";
@@ -45,6 +53,7 @@ import matTape from "./mat-tape.png";
 import matTitanium from "./mat-titanium.png";
 import matWire from "./mat-wire.png";
 import medBandage from "./med-bandage.png";
+import medHemostaticInjector from "./med-hemostatic-injector.png";
 import medTourniquet from "./med-tourniquet.png";
 import medTraumaKit from "./med-trauma-kit.png";
 import wpnDagger from "./wpn_dagger.png";
@@ -103,9 +112,18 @@ export const ITEM_IMAGE_BY_ID: Readonly<Record<string, string>> = {
   "med-bandage": medBandage,
   "med-tourniquet": medTourniquet,
   "med-trauma-kit": medTraumaKit,
+  "med-hemostatic-injector": medHemostaticInjector,
   "eq-chem-canister": eqChemCanister,
   "eq-reactive-plate": eqReactivePlate,
+  "eq-arc-emitter": eqArcEmitter,
+  "eq-trauma-autoinjector": eqTraumaAutoinjector,
   "eq-mono-katana": eqMonoKatana,
+  "eq-summon-drone": eqSummonDrone,
+  "eq-summon-swarm": eqSummonSwarm,
+  "eq-summon-turret": eqSummonTurret,
+  "gene-ampoule-doyun": geneAmpouleDoyun,
+  "gene-ampoule-haerin": geneAmpouleHaerin,
+  "gene-ampoule-jiwon": geneAmpouleJiwon,
 };
 
 export function resolveItemImageSrc(

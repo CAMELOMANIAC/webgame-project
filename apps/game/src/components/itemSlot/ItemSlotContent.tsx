@@ -1,3 +1,4 @@
+import { resolveItemVisualTier } from "@webgame/types";
 import {
   GiBattleAxe,
   GiBowieKnife,
@@ -49,7 +50,13 @@ export function ItemSlotIcon({
     );
   }
   const Icon = icons[iconKey as keyof typeof icons] ?? GiShardSword;
-  return <Icon size={Math.min(size, 20)} aria-hidden="true" />;
+  return (
+    <Icon
+      size={Math.min(size, 20)}
+      className={styles.fallbackIcon}
+      aria-hidden="true"
+    />
+  );
 }
 
 interface ItemSlotContentProps {
@@ -65,8 +72,10 @@ export default function ItemSlotContent({
   iconKey,
   quantity = 1,
 }: ItemSlotContentProps) {
+  const tier = resolveItemVisualTier({ id: itemId, name });
   return (
     <>
+      <div className={styles.tierPattern({ tier })} aria-hidden="true" />
       <ItemSlotIcon itemId={itemId} name={name} iconKey={iconKey} size={38} />
       <span className={styles.itemNameLabel}>{name}</span>
       {quantity > 1 && (
