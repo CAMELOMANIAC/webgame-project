@@ -1063,6 +1063,21 @@ const FieldNavTargetSection = () => {
               </div>
             </div>
 
+            <div className={styles.pathRiskLegend} aria-label="경로 위험도 범례">
+              <span className={styles.pathRiskItem}>
+                <span className={styles.pathRiskSwatch({ tier: "safe" })} aria-hidden="true" />
+                안전 구간
+              </span>
+              <span className={styles.pathRiskItem}>
+                <span className={styles.pathRiskSwatch({ tier: "medium" })} aria-hidden="true" />
+                보통 구간
+              </span>
+              <span className={styles.pathRiskItem}>
+                <span className={styles.pathRiskSwatch({ tier: "high" })} aria-hidden="true" />
+                높은 위험
+              </span>
+            </div>
+
             {character?.isRaiding || isMoving || hasPending || Boolean(outro) ? (
               atExtraction && !canMove && !isMoving && !canReenterBuilding ? (
                 <button

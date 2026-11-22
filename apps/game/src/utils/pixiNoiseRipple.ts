@@ -84,17 +84,49 @@ export function createNoiseRipple(world: Container, mapLayer: Container) {
   };
 
   type Wave = ReturnType<typeof createWave>;
-  let pairs: { primary: Wave; echo: Wave }[] = [];
+  type Pair = { primary: Wave; echo: Wave };
+  const pairs = new Map<string, Pair>();
   let filters: DisplacementFilter[] = [];
+
+  const syncFilters = () => {
+    filters = [];
+    for (const { primary, echo } of pairs.values()) {
+      filters.push(primary.filter, echo.filter);
+    }
+    if (!mapLayer.destroyed) {
+      const hasActive = [...pairs.values()].some(
+        ({ primary, echo }) => primary.filter.enabled || echo.filter.enabled,
+      );
+      mapLayer.filters = hasActive && filters.length > 0 ? filters : null;
+    }
+  };
+
+  const destroyPair = ({ primary, echo }: Pair) => {
+    primary.filter.destroy();
+    primary.sprite.destroy();
+    primary.ring.destroy();
+    echo.filter.destroy();
+    echo.sprite.destroy();
+    echo.ring.destroy();
+  };
 
   const hide = () => {
     if (!mapLayer.destroyed) mapLayer.filters = null;
-    for (const { primary, echo } of pairs) {
+    for (const { primary, echo } of pairs.values()) {
       primary.filter.enabled = false;
       echo.filter.enabled = false;
       if (!primary.ring.destroyed) primary.ring.visible = false;
       if (!echo.ring.destroyed) echo.ring.visible = false;
     }
+  };
+
+  const clear = () => {
+    hide();
+    for (const pair of pairs.values()) {
+      destroyPair(pair);
+    }
+    pairs.clear();
+    filters = [];
   };
 
   const updateWave = (
@@ -122,36 +154,36 @@ export function createNoiseRipple(world: Container, mapLayer: Container) {
     }
   };
 
-  const setAreas = (areas: readonly EnemyNoiseSignal[]) => {
-    hide();
-    for (const { primary, echo } of pairs) {
-      primary.filter.destroy();
-      primary.sprite.destroy();
-      primary.ring.destroy();
-      echo.filter.destroy();
-      echo.sprite.destroy();
-      echo.ring.destroy();
-    }
-    pairs = areas.map((area) => ({
+  const ensureArea = (key: string, area: EnemyNoiseSignal) => {
+    if (pairs.has(key)) return;
+    pairs.set(key, {
       primary: createWave(area, false),
       echo: createWave(area, true),
-    }));
-    filters = pairs.flatMap(({ primary, echo }) => [primary.filter, echo.filter]);
+    });
+    syncFilters();
+  };
+
+  const removeArea = (key: string) => {
+    const pair = pairs.get(key);
+    if (!pair) return;
+    pairs.delete(key);
+    destroyPair(pair);
+    syncFilters();
   };
 
   const updatePair = (
-    index: number,
+    key: string,
     primary?: RippleWave,
     echo?: RippleWave,
   ) => {
-    const pair = pairs[index];
+    const pair = pairs.get(key);
     if (!pair || mapLayer.destroyed) return;
     updateWave(pair.primary, primary);
     updateWave(pair.echo, echo);
     if (primary || echo) {
-      if (!mapLayer.filters) mapLayer.filters = filters;
+      if (!mapLayer.filters && filters.length > 0) mapLayer.filters = filters;
     } else if (
-      pairs.every(
+      [...pairs.values()].every(
         ({ primary: p, echo: e }) => !p.filter.enabled && !e.filter.enabled,
       )
     ) {
@@ -160,9 +192,11 @@ export function createNoiseRipple(world: Container, mapLayer: Container) {
   };
 
   return {
-    setAreas,
-    randomizeOffset(index: number, maxOffset = 8) {
-      const pair = pairs[index];
+    ensureArea,
+    removeArea,
+    clear,
+    randomizeOffset(key: string, maxOffset = 8) {
+      const pair = pairs.get(key);
       if (!pair) return;
       const angle = Math.random() * Math.PI * 2;
       const dist = Math.random() * maxOffset;
@@ -176,15 +210,13 @@ export function createNoiseRipple(world: Container, mapLayer: Container) {
     updatePair,
     show(primary: RippleWave, echo?: RippleWave) {
       if (mapLayer.destroyed || filters.length === 0) return;
-      for (const pair of pairs) {
+      for (const pair of pairs.values()) {
         updateWave(pair.primary, primary);
         updateWave(pair.echo, echo);
       }
       if (!mapLayer.filters) mapLayer.filters = filters;
     },
     hide,
-    destroy() {
-      setAreas([]);
-    },
+    destroy: clear,
   };
 }

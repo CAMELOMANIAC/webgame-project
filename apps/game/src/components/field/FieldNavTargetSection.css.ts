@@ -125,6 +125,51 @@ export const exhaustedMultiplier = style({
   fontVariantNumeric: "tabular-nums",
 });
 
+export const pathRiskLegend = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "8px",
+  padding: "2px 2px 0",
+});
+
+export const pathRiskItem = style({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "5px",
+  fontSize: "11px",
+  color: vars.text.muted,
+  whiteSpace: "nowrap",
+});
+
+export const pathRiskSwatch = recipe({
+  base: {
+    display: "inline-block",
+    width: "16px",
+    flexShrink: 0,
+    borderRadius: "999px",
+  },
+  variants: {
+    tier: {
+      safe: {
+        height: "3px",
+        backgroundColor: vars.text.primary,
+        opacity: 0.6,
+      },
+      medium: {
+        height: 0,
+        borderTop: `3px dashed ${vars.color.negative}`,
+        opacity: 0.5,
+      },
+      high: {
+        height: "4px",
+        backgroundColor: vars.color.negative,
+        opacity: 0.92,
+      },
+    },
+  },
+});
+
 export const accessibleValue = style({
   position: "absolute",
   width: "1px",

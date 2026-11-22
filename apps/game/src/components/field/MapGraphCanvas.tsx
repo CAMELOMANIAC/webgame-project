@@ -2,6 +2,7 @@ import type { UseMutationResult } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   type BattleLog,
+  type EnemyNoiseSignal,
   getBuildingDistrict,
   isBuildingLockedDown,
   LOCKDOWN_WARNING_MINUTES,
@@ -270,23 +271,115 @@ const buildCoordPath = (
   return coordPath;
 };
 
-function drawPathLineGraphics(g: Graphics, points: number[]) {
+type PathSegmentRisk = "safe" | "medium" | "high";
+
+function distPointToSegment(
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.hypot(px - x1, py - y1);
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+function classifySegmentRisk(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  noiseAreas: EnemyNoiseSignal[],
+): PathSegmentRisk {
+  if (noiseAreas.length === 0) return "safe";
+  let nearCount = 0;
+  let broadCount = 0;
+  for (const area of noiseAreas) {
+    const dist = distPointToSegment(area.x, area.y, x1, y1, x2, y2);
+    if (area.tier === "broad") {
+      if (dist <= area.radius) {
+        broadCount += 1;
+      }
+      continue;
+    }
+    if (dist <= area.radius) {
+      return "high";
+    }
+    if (dist <= area.radius * 2.2) {
+      nearCount += 1;
+    }
+  }
+  if (nearCount >= 2 || broadCount >= 2) return "high";
+  if (nearCount >= 1 || broadCount >= 1) return "medium";
+  return "safe";
+}
+
+function drawPathLineGraphics(
+  g: Graphics,
+  points: number[],
+  noiseAreas: EnemyNoiseSignal[] = [],
+) {
   if (g.destroyed) return;
   g.clear();
   if (points.length < 4) return;
 
-  g.alpha = 0.65;
-  g.moveTo(points[0]!, points[1]!);
-  for (let i = 2; i < points.length; i += 2) {
-    g.lineTo(points[i]!, points[i + 1]!);
+  g.alpha = 1;
+
+  for (let i = 0; i < points.length - 2; i += 2) {
+    const x1 = points[i]!;
+    const y1 = points[i + 1]!;
+    const x2 = points[i + 2]!;
+    const y2 = points[i + 3]!;
+    const risk = classifySegmentRisk(x1, y1, x2, y2, noiseAreas);
+
+    if (risk === "high") {
+      g.moveTo(x1, y1);
+      g.lineTo(x2, y2);
+      g.stroke({
+        width: 6,
+        color: 0xff7162,
+        alpha: 0.92,
+        cap: "round",
+        join: "round",
+      });
+    } else if (risk === "medium") {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.hypot(dx, dy);
+      if (len > 0) {
+        const ux = dx / len;
+        const uy = dy / len;
+        const dashLen = 8;
+        const gapLen = 6;
+        for (let t = 0; t < len; t += dashLen + gapLen) {
+          const endT = Math.min(t + dashLen, len);
+          g.moveTo(x1 + ux * t, y1 + uy * t);
+          g.lineTo(x1 + ux * endT, y1 + uy * endT);
+        }
+        g.stroke({
+          width: 4.5,
+          color: 0xff7162,
+          alpha: 0.45,
+          cap: "round",
+        });
+      }
+    } else {
+      g.moveTo(x1, y1);
+      g.lineTo(x2, y2);
+      g.stroke({
+        width: 4.5,
+        color: 0xfafafa,
+        alpha: 0.6,
+        cap: "round",
+        join: "round",
+      });
+    }
   }
-  g.stroke({
-    width: 5,
-    color: 0xffffff,
-    alpha: 1,
-    cap: "round",
-    join: "round",
-  });
 }
 
 const DEFAULT_NODE_COLOR_HEX = "#8e95a5";
@@ -319,6 +412,11 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const sightMaskSpriteRef = useRef<Sprite | null>(null);
   const playerMarkerSpriteRef = useRef<Sprite | null>(null);
   const noiseRippleRef = useRef<ReturnType<typeof createNoiseRipple>>(null);
+  const broadNoiseGraphicsRef = useRef<Graphics | null>(null);
+  const noiseWaveControllersRef = useRef<
+    Map<string, { tween?: TweenHandle; timer?: number; retiring: boolean }>
+  >(new Map());
+  const activeNearKeysRef = useRef<Set<string>>(new Set());
 
   const [isPixiReady, setIsPixiReady] = useState(false);
   const focusTweenRef = useRef<TweenHandle | null>(null);
@@ -345,6 +443,15 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const activeRaidTimeRef = useRef(activeRaidTime);
   activeRaidIdRef.current = activeRaidId;
   activeRaidTimeRef.current = activeRaidTime;
+  const activeNoiseAreas = useMemo(
+    () =>
+      !isCombat && noiseSignals && noiseSignals.raidId === activeRaidId
+        ? noiseSignals.areas
+        : [],
+    [activeRaidId, isCombat, noiseSignals],
+  );
+  const noiseAreasRef = useRef(activeNoiseAreas);
+  noiseAreasRef.current = activeNoiseAreas;
   const queryClient = useQueryClient();
   const [isInventoryDirty, setIsInventoryDirty] = useAtom(isInventoryDirtyAtom);
 
@@ -887,6 +994,10 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         sightMaskSprite.visible = false;
         mapLayer.addChild(sightMaskSprite);
         sightMaskSpriteRef.current = sightMaskSprite;
+
+        const broadNoiseGraphics = new Graphics();
+        worldContainer.addChild(broadNoiseGraphics);
+        broadNoiseGraphicsRef.current = broadNoiseGraphics;
 
         noiseRippleRef.current = createNoiseRipple(worldContainer, mapLayer);
 
@@ -1982,7 +2093,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       if (targetNodeId === null || isCombat) {
         pathLine.clear();
       } else {
-        drawPathLineGraphics(pathLine, shortestPathPoints);
+        drawPathLineGraphics(pathLine, shortestPathPoints, activeNoiseAreas);
       }
     }
     if (targetMarkerGroupRef.current && !targetMarkerGroupRef.current.destroyed) {
@@ -2000,6 +2111,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       }
     }
   }, [
+    activeNoiseAreas,
     isPixiReady,
     isNavigating,
     isCombat,
@@ -2061,91 +2173,228 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     }
   }, [characterData, isNavigating, isCombat, outroActive, currentNodeId, setCurrentNodeId, setPlayerCoords]);
 
-  useEffect(() => {
-    const ripple = noiseRippleRef.current;
-    if (!isPixiReady || !ripple) return;
+  const nearNoiseAreas = useMemo(
+    () => activeNoiseAreas.filter((area) => area.tier !== "broad"),
+    [activeNoiseAreas],
+  );
+  const broadNoiseAreas = useMemo(
+    () => activeNoiseAreas.filter((area) => area.tier === "broad"),
+    [activeNoiseAreas],
+  );
+  const navigatingStateRef = useRef(isNavigating);
+  navigatingStateRef.current = isNavigating;
 
-    const areas =
-      !isCombat && noiseSignals && noiseSignals.raidId === activeRaidId
-        ? noiseSignals.areas
-        : [];
-    ripple.setAreas(areas);
-    if (areas.length === 0) return;
+  // 광역 징후 레이어 (고스트 원거리 대략적 활동 반경)
+  useEffect(() => {
+    const g = broadNoiseGraphicsRef.current;
+    if (!isPixiReady || !g || g.destroyed) return;
+    g.clear();
+    if (broadNoiseAreas.length === 0) {
+      g.visible = false;
+      return;
+    }
+
+    g.visible = true;
+    for (const area of broadNoiseAreas) {
+      g.circle(area.x, area.y, area.radius).fill({
+        color: 0xff7162,
+        alpha: 0.055,
+      });
+      g.circle(area.x, area.y, area.radius * 0.55).stroke({
+        width: 1,
+        color: 0xff7162,
+        alpha: 0.16,
+      });
+      const segments = 20;
+      const stepAngle = (Math.PI * 2) / segments;
+      const dashArc = stepAngle * 0.58;
+      for (let i = 0; i < segments; i += 1) {
+        const startA = i * stepAngle;
+        const endA = startA + dashArc;
+        g.moveTo(
+          area.x + Math.cos(startA) * area.radius,
+          area.y + Math.sin(startA) * area.radius,
+        );
+        g.arc(area.x, area.y, area.radius, startA, endA);
+      }
+      g.stroke({
+        width: 1.5,
+        color: 0xff7162,
+        alpha: 0.3,
+        cap: "round",
+      });
+    }
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      g.alpha = 0.9;
+      return;
+    }
+
+    g.alpha = 0.72;
+    let cancelled = false;
+    let animTween: TweenHandle | undefined;
+    const startLoop = () => {
+      if (cancelled || g.destroyed) return;
+      animTween = runTween({
+        duration: 2.6,
+        onUpdate: (progress) => {
+          if (cancelled || g.destroyed) return;
+          g.alpha = 0.68 + 0.32 * (0.5 - 0.5 * Math.cos(progress * Math.PI * 2));
+        },
+        onFinish: () => {
+          if (!cancelled) startLoop();
+        },
+      });
+    };
+    startLoop();
+
+    return () => {
+      cancelled = true;
+      animTween?.destroy();
+    };
+  }, [broadNoiseAreas, isPixiReady]);
+
+  // 근거리 소음 파동 레이어 (좌표 키 기반 부드러운 추가/유지/페이드아웃)
+  useEffect(() => {
+    const ripple = noiseRippleRef.current;
+    const controllers = noiseWaveControllersRef.current;
+    return () => {
+      for (const ctrl of controllers.values()) {
+        window.clearTimeout(ctrl.timer);
+        ctrl.tween?.destroy();
+      }
+      controllers.clear();
+      activeNearKeysRef.current.clear();
+      ripple?.clear();
+    };
+  }, [activeRaidId, isCombat, isPixiReady]);
+
+  useEffect(() => {
+    const ripple = noiseRippleRef.current;
+    if (!isPixiReady || !ripple || isCombat) return;
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const controllers = noiseWaveControllersRef.current;
+      for (const ctrl of controllers.values()) {
+        window.clearTimeout(ctrl.timer);
+        ctrl.tween?.destroy();
+      }
+      controllers.clear();
+      ripple.clear();
+      const keys = new Set<string>();
+      for (const area of nearNoiseAreas) {
+        const key = `${area.x},${area.y}`;
+        keys.add(key);
+        ripple.ensureArea(key, area);
+      }
+      activeNearKeysRef.current = keys;
       ripple.show({ radiusScale: 1, strength: 0.45 });
-      return ripple.hide;
+      return;
     }
 
     const duration = NOISE_PULSE_SECONDS + NOISE_ECHO_DELAY_SECONDS;
     const waveAt = (elapsed: number, strength: number) => {
       const progress = Math.min(elapsed / NOISE_PULSE_SECONDS, 1);
+      const attack = Math.min(progress / 0.18, 1);
+      const envelope = attack * (1 - progress) * 1.25;
       return {
-        radiusScale: 0.25 + 0.75 * Easings.EaseOut(progress),
-        strength: strength * (1 - progress),
+        radiusScale: 0.2 + 0.8 * Easings.EaseOut(progress),
+        strength: strength * envelope,
       };
     };
-    const cleanups: (() => void)[] = [];
-    let cancelled = false;
 
-    areas.forEach((_, index) => {
-      let tween: TweenHandle | undefined;
-      let timer: number | undefined;
+    const nextAreaByKey = new Map<string, EnemyNoiseSignal>();
+    for (const area of nearNoiseAreas) {
+      nextAreaByKey.set(`${area.x},${area.y}`, area);
+    }
+    activeNearKeysRef.current = new Set(nextAreaByKey.keys());
 
-      const pulse = () => {
-        if (cancelled) return;
-        if (!isNavigating) {
-          ripple.randomizeOffset(index, NOISE_IDLE_JITTER_PX);
+    const controllers = noiseWaveControllersRef.current;
+
+    // 사라진 좌표는 진행 중인 파동이 자연스럽게 소멸한 뒤 제거한다.
+    for (const [key, ctrl] of controllers.entries()) {
+      if (!nextAreaByKey.has(key)) {
+        ctrl.retiring = true;
+        if (!ctrl.tween) {
+          window.clearTimeout(ctrl.timer);
+          controllers.delete(key);
+          ripple.removeArea(key);
         }
-        ripple.updatePair(index, waveAt(0, 1));
-        tween = runTween({
-          duration,
-          onUpdate: (progress) => {
-            const elapsed = progress * duration;
-            const echoElapsed = elapsed - NOISE_ECHO_DELAY_SECONDS;
-            ripple.updatePair(
-              index,
-              waveAt(elapsed, 1),
-              echoElapsed >= 0 ? waveAt(echoElapsed, NOISE_ECHO_STRENGTH) : undefined,
-            );
-          },
-          onFinish: () => {
-            ripple.updatePair(index);
-            if (cancelled || isNavigating) return;
-            const delayMs =
-              NOISE_IDLE_MIN_DELAY_MS +
-              Math.random() * (NOISE_IDLE_MAX_DELAY_MS - NOISE_IDLE_MIN_DELAY_MS);
-            timer = window.setTimeout(pulse, delayMs);
-          },
-        });
-      };
+      }
+    }
 
-      const initialDelayMs = isNavigating
-        ? index === 0
-          ? 0
-          : Math.random() * 220
-        : index === 0
-          ? Math.random() * 250
-          : Math.random() * 1100;
+    const startPulse = (key: string) => {
+      const ctrl = controllers.get(key);
+      if (!ctrl || ctrl.retiring || !activeNearKeysRef.current.has(key)) {
+        controllers.delete(key);
+        ripple.removeArea(key);
+        return;
+      }
+      if (!navigatingStateRef.current) {
+        ripple.randomizeOffset(key, NOISE_IDLE_JITTER_PX);
+      }
+      ripple.updatePair(key, waveAt(0, 1));
+      ctrl.tween = runTween({
+        duration,
+        onUpdate: (progress) => {
+          const elapsed = progress * duration;
+          const echoElapsed = elapsed - NOISE_ECHO_DELAY_SECONDS;
+          ripple.updatePair(
+            key,
+            waveAt(elapsed, 1),
+            echoElapsed >= 0 ? waveAt(echoElapsed, NOISE_ECHO_STRENGTH) : undefined,
+          );
+        },
+        onFinish: () => {
+          ctrl.tween = undefined;
+          ripple.updatePair(key);
+          if (ctrl.retiring || !activeNearKeysRef.current.has(key)) {
+            controllers.delete(key);
+            ripple.removeArea(key);
+            return;
+          }
+          const delayMs = navigatingStateRef.current
+            ? 180 + Math.random() * 240
+            : NOISE_IDLE_MIN_DELAY_MS +
+              Math.random() * (NOISE_IDLE_MAX_DELAY_MS - NOISE_IDLE_MIN_DELAY_MS);
+          ctrl.timer = window.setTimeout(() => {
+            ctrl.timer = undefined;
+            startPulse(key);
+          }, delayMs);
+        },
+      });
+    };
+
+    let newIndex = 0;
+    for (const [key, area] of nextAreaByKey.entries()) {
+      const existing = controllers.get(key);
+      if (existing) {
+        existing.retiring = false;
+        continue;
+      }
+      ripple.ensureArea(key, area);
+      const ctrl: { tween?: TweenHandle; timer?: number; retiring: boolean } = {
+        retiring: false,
+      };
+      controllers.set(key, ctrl);
+
+      const initialDelayMs = navigatingStateRef.current
+        ? newIndex * 90
+        : newIndex === 0
+          ? Math.random() * 200
+          : Math.random() * 900;
+      newIndex += 1;
 
       if (initialDelayMs === 0) {
-        pulse();
+        startPulse(key);
       } else {
-        timer = window.setTimeout(pulse, initialDelayMs);
+        ctrl.timer = window.setTimeout(() => {
+          ctrl.timer = undefined;
+          startPulse(key);
+        }, initialDelayMs);
       }
-
-      cleanups.push(() => {
-        window.clearTimeout(timer);
-        tween?.destroy();
-      });
-    });
-
-    return () => {
-      cancelled = true;
-      cleanups.forEach((cleanup) => cleanup());
-      ripple.hide();
-    };
-  }, [activeRaidId, isCombat, isNavigating, isPixiReady, noiseSignals]);
+    }
+  }, [activeRaidId, isCombat, isPixiReady, nearNoiseAreas]);
 
   // 5.5. requestAnimationFrame 기반 등속(Constant Speed) 부드러운 네비게이션 보간 루프
   useEffect(() => {
@@ -2448,7 +2697,11 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
           const remainingPoints = coords
             .slice(stepIdx)
             .flatMap((c) => [c.x, c.y]);
-          drawPathLineGraphics(pathLineGraphicsRef.current, remainingPoints);
+          drawPathLineGraphics(
+            pathLineGraphicsRef.current,
+            remainingPoints,
+            noiseAreasRef.current,
+          );
         }
 
         currentPathStepRef.current += 1;
@@ -2472,7 +2725,11 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
             newPos.y,
             ...coords.slice(stepIdx).flatMap((c) => [c.x, c.y]),
           ];
-          drawPathLineGraphics(pathLineGraphicsRef.current, remainingPoints);
+          drawPathLineGraphics(
+            pathLineGraphicsRef.current,
+            remainingPoints,
+            noiseAreasRef.current,
+          );
         }
 
         animId = requestAnimationFrame(tick);
