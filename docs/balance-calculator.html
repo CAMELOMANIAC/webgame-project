@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>회성시 레이드 밸런스 계산기</title>
+  <style>
+    :root {
+      --bg: #09090b;
+      --surface-low: #0c0c0f;
+      --surface-mid: #101013;
+      --surface-high: #16161b;
+      --border: rgba(255, 255, 255, 0.09);
+      --border-strong: rgba(255, 255, 255, 0.18);
+      --text: #fafafa;
+      --text-sub: #a1a1aa;
+      --text-muted: #71717a;
+      --blue: #85adff;
+      --blue-bg: rgba(133, 173, 255, 0.12);
+      --red: #ff7162;
+      --red-bg: rgba(255, 113, 98, 0.14);
+      --amber: #f5d77f;
+      --green: #50e389;
+      --mono: "JetBrains Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+      --sans: "Pretendard Variable", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .wrap {
+      max-width: 1080px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .code-tag {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+    h1 {
+      margin: 4px 0 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .btn {
+      background: var(--surface-mid);
+      color: var(--text-sub);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 11px;
+      font-size: 12px;
+      font-family: var(--sans);
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .btn:hover { border-color: var(--border-strong); color: var(--text); }
+    .btn.active {
+      background: var(--surface-high);
+      border-color: var(--text);
+      color: var(--text);
+      font-weight: 600;
+    }
+    .grid-kpi {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 1px;
+      background: #27272a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .kpi {
+      background: var(--surface-mid);
+      padding: 14px 16px;
+    }
+    .kpi-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+    .dot.blue { background: var(--blue); }
+    .dot.red { background: var(--red); }
+    .dot.green { background: var(--green); }
+    .kpi-val {
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 22px;
+      font-weight: 600;
+      margin-top: 6px;
+    }
+    .kpi-sub {
+      font-size: 12px;
+      color: var(--text-sub);
+      margin-top: 4px;
+    }
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 860px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+    .panel {
+      background: var(--surface-mid);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .control-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .ctrl-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .ctrl-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+    .ctrl-val {
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      background: var(--surface-low);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 8px;
+      min-width: 72px;
+      text-align: center;
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--blue);
+      cursor: pointer;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      font-size: 12px;
+      color: var(--text-sub);
+      margin-bottom: 10px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .swatch { width: 12px; height: 3px; border-radius: 2px; }
+    svg { width: 100%; height: auto; display: block; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    th, td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      font-variant-numeric: tabular-nums;
+    }
+    th {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    .badge-ok { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(133, 173, 255, 0.28); }
+    .badge-warn { background: var(--red-bg); color: var(--red); border: 1px solid rgba(255, 113, 98, 0.3); }
+    .badge-neutral { background: var(--surface-high); color: var(--text-sub); border: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div>
+        <div class="code-tag">HL-LAB // BALANCE SIMULATOR</div>
+        <h1>레이드 가치 · 진입 지연 · 고스트 매칭 밸런스 계산기</h1>
+      </div>
+      <div class="presets" id="preset-buttons"></div>
+    </div>
+
+    <div class="grid-kpi">
+      <div class="kpi">
+        <div class="kpi-label"><span class="dot blue"></span>EFFECTIVE VALUE // 계산 가치</div>
+        <div class="kpi-val" id="kpi-value">0</div>
+        <div class="kpi-sub" id="kpi-value-sub">장착 0 + 가방 0</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label"><span class="dot"></span>ENTRY TIME // 레이드 시작 시각</div>
+        <div class="kpi-val" id="kpi-time">00:00 (0분)</div>
+        <div class="kpi-sub" id="kpi-time-sub">매칭 창: 0 ~ 30분</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label"><span class="dot red"></span>MATCHED GHOST // 매칭 고스트 평균</div>
+        <div class="kpi-val" id="kpi-ghost">93</div>
+        <div class="kpi-sub" id="kpi-ghost-sub">1티어 (범위 63 ~ 149)</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label"><span class="dot green" id="dot-verdict"></span>BALANCE // 격차 및 맨몸 도달 시간</div>
+        <div class="kpi-val" id="kpi-verdict">-93</div>
+        <div class="kpi-sub" id="kpi-verdict-sub">맨몸 파밍 도달: 0분</div>
+      </div>
+    </div>
+
+    <div class="main-grid">
+      <div class="panel">
+        <div class="panel-title">
+          <span>시간대별 가치 곡선 (0 ~ 180분)</span>
+          <span class="code-tag" id="formula-label">2구간: 400까지 50당 10분 / 이후 100당 10분</span>
+        </div>
+        <div class="legend">
+          <div class="legend-item"><span class="swatch" style="background: var(--red);"></span>NPC 고스트 평균 가치</div>
+          <div class="legend-item"><span class="swatch" style="background: var(--blue);"></span>진입 지연 허용 가치</div>
+          <div class="legend-item"><span class="swatch" style="background: var(--green);"></span>맨몸 파밍 기대 가치</div>
+          <div class="legend-item"><span class="swatch" style="background: var(--amber);"></span>현재 선택 로드아웃</div>
+        </div>
+        <svg id="chart" viewBox="0 0 640 300"></svg>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">
+          <span>공식 및 환경 변수 조절</span>
+          <button class="btn" id="btn-reset" type="button">현재 코드 기본값 복원</button>
+        </div>
+        <div class="control-list">
+          <div class="ctrl-row">
+            <div class="ctrl-head"><span>지연 공식 유형</span></div>
+            <div class="presets">
+              <button class="btn active" data-mode="piecewise" type="button">2구간 (현재 코드)</button>
+              <button class="btn" data-mode="linear" type="button">단일 선형</button>
+              <button class="btn" data-mode="sqrt" type="button">제곱근</button>
+            </div>
+          </div>
+
+          <div class="ctrl-row">
+            <div class="ctrl-head"><span>장착 슬롯 가치 (0 ~ 1,500)</span><span class="ctrl-val" id="val-equip">150</span></div>
+            <input id="in-equip" type="range" min="0" max="1500" step="10" value="150" />
+          </div>
+
+          <div class="ctrl-row">
+            <div class="ctrl-head"><span>가방 소지품 가치 (0 ~ 500)</span><span class="ctrl-val" id="val-inv">0</span></div>
+            <input id="in-inv" type="range" min="0" max="500" step="10" value="0" />
+          </div>
+
+          <div class="ctrl-row">
+            <div class="ctrl-head"><span>가방 가치 반영률 (%)</span><span class="ctrl-val" id="val-inv-weight">100%</span></div>
+            <input id="in-inv-weight" type="range" min="0" max="100" step="10" value="100" />
+          </div>
+
+          <div class="ctrl-row">
+            <div class="ctrl-head"><span id="lbl-rate">10분 지연당 기준 가치</span><span class="ctrl-val" id="val-rate">100</span></div>
+            <input id="in-rate" type="range" min="25" max="200" step="5" value="100" />
+          </div>
+
+          <div class="ctrl-row">
+            <div class="ctrl-head"><span>2티어 고스트 전환 시각 (분)</span><span class="ctrl-val" id="val-t2">61분</span></div>
+            <input id="in-t2" type="range" min="30" max="120" step="5" value="61" />
+          </div>
+
+          <div class="ctrl-row">
+            <div class="ctrl-head"><span>3티어 고스트 전환 시각 (분)</span><span class="ctrl-val" id="val-t3">141분</span></div>
+            <input id="in-t3" type="range" min="90" max="210" step="5" value="141" />
+          </div>
+
+          <div class="ctrl-row">
+            <div class="ctrl-head"><span>초반 수색 1회당 기대 획득 개수</span><span class="ctrl-val" id="val-drop">1.05개</span></div>
+            <input id="in-drop" type="range" min="0.4" max="1.6" step="0.05" value="1.05" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title"><span>카탈로그 프리셋별 매칭 및 공정성 진단</span></div>
+      <table>
+        <thead>
+          <tr>
+            <th>로드아웃 프리셋</th>
+            <th>장착/가방 가치</th>
+            <th>진입 시각</th>
+            <th>매칭 고스트</th>
+            <th>가치 격차 (나 - 적)</th>
+            <th>맨몸 동일 가치 도달</th>
+            <th>진단</th>
+          </tr>
+        </thead>
+        <tbody id="preset-table"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const PRESETS = [
+      { id: "naked", name: "맨몸 시작", equip: 0, inv: 0, desc: "무기 없음" },
+      { id: "carbine", name: "구호 카빈 세팅", equip: 128, inv: 25, desc: "기업 구호용 카빈(95) + 재료 2 + 붕대" },
+      { id: "starter", name: "기본 도검+단검", equip: 150, inv: 0, desc: "표준 도검(100) + 전술 단검(50)" },
+      { id: "t1", name: "1티어 조합 세팅", equip: 259, inv: 45, desc: "공명 블레이드(130) + 개조 단검(95) + 세라믹(34) + 식량" },
+      { id: "sniper", name: "저격+해머 세팅", equip: 330, inv: 45, desc: "편도 티켓(180) + 뚝배기 분쇄기(150) + 지혈대" },
+      { id: "t2", name: "2티어 풀세팅", equip: 1090, inv: 95, desc: "파동 공명검·연쇄 단검·아드레날린·방화문짝·코어" }
+    ];
+
+    const NPC_TIERS = {
+      1: { avg: 122, min: 81, max: 149, label: "1티어" },
+      2: { avg: 343, min: 222, max: 473, label: "2티어" },
+      3: { avg: 1235, min: 1000, max: 1460, label: "3티어" }
+    };
+
+    const state = {
+      mode: "piecewise",
+      equip: 150,
+      inv: 0,
+      invWeight: 100,
+      rate: 100,
+      t2: 61,
+      t3: 141,
+      drop: 1.05,
+      activePreset: "starter"
+    };
+
+    const els = {
+      equip: document.getElementById("in-equip"),
+      inv: document.getElementById("in-inv"),
+      invWeight: document.getElementById("in-inv-weight"),
+      rate: document.getElementById("in-rate"),
+      t2: document.getElementById("in-t2"),
+      t3: document.getElementById("in-t3"),
+      drop: document.getElementById("in-drop")
+    };
+
+    function calcEffectiveValue(equip, inv) {
+      return Math.round(equip + inv * (state.invWeight / 100));
+    }
+
+    function calcDelayMinutes(value) {
+      if (value <= 0) return 0;
+      if (state.mode === "piecewise") {
+        const earlyRate = state.rate / 2;
+        if (value <= 400) return Math.floor(value / earlyRate) * 10;
+        return Math.floor(400 / earlyRate) * 10 + Math.floor((value - 400) / state.rate) * 10;
+      }
+      if (state.mode === "linear") {
+        return Math.floor(value / state.rate) * 10;
+      }
+      return Math.floor(Math.sqrt(value / (state.rate / 10)) * 2.5) * 10;
+    }
+
+    function allowedValueAtTime(minutes) {
+      if (minutes <= 0) return 0;
+      if (state.mode === "piecewise") {
+        const earlyRate = state.rate / 2;
+        const splitMin = Math.floor(400 / earlyRate) * 10;
+        if (minutes <= splitMin) return (minutes / 10) * earlyRate;
+        return 400 + ((minutes - splitMin) / 10) * state.rate;
+      }
+      if (state.mode === "linear") {
+        return (minutes / 10) * state.rate;
+      }
+      const steps = minutes / 10;
+      return Math.pow(steps / 2.5, 2) * (state.rate / 10);
+    }
+
+    function npcTierAt(minutes) {
+      if (minutes >= state.t3) return NPC_TIERS[3];
+      if (minutes >= state.t2) return NPC_TIERS[2];
+      return NPC_TIERS[1];
+    }
+
+    // 맨몸 파밍 기대 가치: 초반 0~60분은 재료 위주(수색당 10분+이동 평균 5분=15분당 1회 수색, 개당 가치 18),
+    // 60분 이후에는 T1 조합 및 드랍으로 가속되는 근사 모델
+    function nakedFarmValueAt(minutes) {
+      if (minutes <= 0) return 0;
+      const scale = state.drop / 0.6;
+      if (minutes <= 60) {
+        return Math.round((minutes / 60) * 45 * scale);
+      }
+      if (minutes <= 120) {
+        return Math.round((45 + ((minutes - 60) / 60) * 135) * scale);
+      }
+      return Math.round((180 + ((minutes - 120) / 60) * 260) * scale);
+    }
+
+    function timeToReachNakedValue(targetValue) {
+      if (targetValue <= 0) return 0;
+      for (let m = 0; m <= 360; m += 5) {
+        if (nakedFarmValueAt(m) >= targetValue) return m;
+      }
+      return 360;
+    }
+
+    function formatHHMM(mins) {
+      const h = String(Math.floor(mins / 60)).padStart(2, "0");
+      const m = String(mins % 60).padStart(2, "0");
+      return `${h}:${m}`;
+    }
+
+    function renderChart(effVal, delayMin) {
+      const svg = document.getElementById("chart");
+      const W = 640, H = 300;
+      const pad = { l: 54, r: 20, t: 18, b: 36 };
+      const cw = W - pad.l - pad.r;
+      const ch = H - pad.t - pad.b;
+      const maxT = 180;
+      const maxV = 1600;
+
+      const xOf = (t) => pad.l + (Math.min(maxT, Math.max(0, t)) / maxT) * cw;
+      const yOf = (v) => pad.t + ch - (Math.min(maxV, Math.max(0, v)) / maxV) * ch;
+
+      let out = "";
+      // Grid lines
+      for (const v of [0, 400, 800, 1200, 1600]) {
+        const y = yOf(v);
+        out += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="rgba(255,255,255,0.08)" stroke-dasharray="2 4" />`;
+        out += `<text x="${pad.l - 8}" y="${y + 4}" text-anchor="end" fill="#71717a" font-size="11" font-family="var(--mono)">${v}</text>`;
+      }
+      for (const t of [0, 30, 60, 90, 120, 150, 180]) {
+        const x = xOf(t);
+        out += `<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${H - pad.b}" stroke="rgba(255,255,255,0.05)" />`;
+        out += `<text x="${x}" y="${H - 12}" text-anchor="middle" fill="#71717a" font-size="11" font-family="var(--mono)">${t}m</text>`;
+      }
+
+      // NPC step line
+      const npcPts = [
+        [0, NPC_TIERS[1].avg],
+        [state.t2, NPC_TIERS[1].avg],
+        [state.t2, NPC_TIERS[2].avg],
+        [state.t3, NPC_TIERS[2].avg],
+        [state.t3, NPC_TIERS[3].avg],
+        [180, NPC_TIERS[3].avg]
+      ];
+      out += `<polyline fill="none" stroke="#ff7162" stroke-width="2.2" points="${npcPts.map(([t, v]) => `${xOf(t)},${yOf(v)}`).join(" ")}" />`;
+
+      // Allowed value curve
+      const allowPts = [];
+      for (let t = 0; t <= maxT; t += 5) {
+        allowPts.push(`${xOf(t)},${yOf(allowedValueAtTime(t))}`);
+      }
+      out += `<polyline fill="none" stroke="#85adff" stroke-width="2.2" points="${allowPts.join(" ")}" />`;
+
+      // Naked farm curve
+      const farmPts = [];
+      for (let t = 0; t <= maxT; t += 5) {
+        farmPts.push(`${xOf(t)},${yOf(nakedFarmValueAt(t))}`);
+      }
+      out += `<polyline fill="none" stroke="#50e389" stroke-width="2.2" points="${farmPts.join(" ")}" />`;
+
+      // Current loadout marker
+      const cx = xOf(delayMin);
+      const cy = yOf(effVal);
+      out += `<line x1="${cx}" y1="${pad.t}" x2="${cx}" y2="${H - pad.b}" stroke="#f5d77f" stroke-width="1" stroke-dasharray="3 3" />`;
+      out += `<circle cx="${cx}" cy="${cy}" r="5" fill="#f5d77f" stroke="#09090b" stroke-width="1.5" />`;
+
+      svg.innerHTML = out;
+    }
+
+    function update() {
+      const effVal = calcEffectiveValue(state.equip, state.inv);
+      const delayMin = calcDelayMinutes(effVal);
+      const tier = npcTierAt(delayMin);
+      const gap = effVal - tier.avg;
+      const nakedMin = timeToReachNakedValue(effVal);
+
+      document.getElementById("val-equip").textContent = state.equip;
+      document.getElementById("val-inv").textContent = state.inv;
+      document.getElementById("val-inv-weight").textContent = `${state.invWeight}%`;
+      document.getElementById("val-rate").textContent = state.rate;
+      document.getElementById("val-t2").textContent = `${state.t2}분`;
+      document.getElementById("val-t3").textContent = `${state.t3}분`;
+      document.getElementById("val-drop").textContent = `${state.drop.toFixed(2)}개`;
+
+      document.getElementById("formula-label").textContent =
+        state.mode === "piecewise"
+          ? `2구간: 400까지 ${state.rate / 2}당 10분 / 이후 ${state.rate}당 10분`
+          : state.mode === "linear"
+            ? `선형: 가치 ${state.rate}당 10분`
+            : `제곱근: 초반 지연 강화 (기준 ${state.rate})`;
+
+      document.getElementById("kpi-value").textContent = effVal.toLocaleString("ko-KR");
+      document.getElementById("kpi-value-sub").textContent =
+        `장착 ${state.equip} + 가방 ${Math.round(state.inv * (state.invWeight / 100))}`;
+
+      document.getElementById("kpi-time").textContent = `${formatHHMM(delayMin)} (${delayMin}분)`;
+      document.getElementById("kpi-time-sub").textContent =
+        `고스트 매칭 창: ${Math.max(0, delayMin - 30)} ~ ${delayMin + 30}분`;
+
+      document.getElementById("kpi-ghost").textContent = `${tier.avg} (${tier.label})`;
+      document.getElementById("kpi-ghost-sub").textContent =
+        `범위 ${tier.min} ~ ${tier.max}`;
+
+      document.getElementById("kpi-verdict").textContent =
+        `${gap >= 0 ? "+" : ""}${gap}`;
+      document.getElementById("kpi-verdict-sub").textContent =
+        `맨몸 도달 예상: 약 ${nakedMin}분 (지연 대비 ${nakedMin - delayMin >= 0 ? "+" : ""}${nakedMin - delayMin}분)`;
+
+      const verdictDot = document.getElementById("dot-verdict");
+      verdictDot.className = "dot " + (Math.abs(gap) <= 100 ? "green" : gap > 100 ? "blue" : "red");
+
+      renderChart(effVal, delayMin);
+
+      // Update preset table
+      const tbody = document.getElementById("preset-table");
+      tbody.innerHTML = PRESETS.map((p) => {
+        const pv = calcEffectiveValue(p.equip, p.inv);
+        const pd = calcDelayMinutes(pv);
+        const pt = npcTierAt(pd);
+        const pgap = pv - pt.avg;
+        const pnaked = timeToReachNakedValue(pv);
+        let badge = `<span class="badge badge-ok">적정</span>`;
+        if (pgap > 180) badge = `<span class="badge badge-warn">유저 과도 우위 (+${pgap})</span>`;
+        else if (pgap < -80 && pv > 0) badge = `<span class="badge badge-warn">고스트 우위 (${pgap})</span>`;
+        else if (pv === 0) badge = `<span class="badge badge-neutral">맨몸 시작</span>`;
+
+        return `
+          <tr>
+            <td><strong>${p.name}</strong><br><span style="color: var(--text-muted); font-size: 11px;">${p.desc}</span></td>
+            <td>${pv} <span style="color: var(--text-muted);">(${p.equip}+${p.inv})</span></td>
+            <td>${pd}분</td>
+            <td>${pt.label} (${pt.avg})</td>
+            <td>${pgap >= 0 ? "+" : ""}${pgap}</td>
+            <td>${pnaked}분</td>
+            <td>${badge}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function initPresets() {
+      const wrap = document.getElementById("preset-buttons");
+      wrap.innerHTML = PRESETS.map((p) =>
+        `<button class="btn ${p.id === state.activePreset ? "active" : ""}" data-preset="${p.id}" type="button">${p.name}</button>`
+      ).join("");
+      wrap.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-preset]");
+        if (!btn) return;
+        const p = PRESETS.find((x) => x.id === btn.dataset.preset);
+        if (!p) return;
+        state.activePreset = p.id;
+        state.equip = p.equip;
+        state.inv = p.inv;
+        els.equip.value = p.equip;
+        els.inv.value = p.inv;
+        wrap.querySelectorAll(".btn").forEach((b) => b.classList.toggle("active", b === btn));
+        update();
+      });
+    }
+
+    document.querySelectorAll("[data-mode]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.mode = btn.dataset.mode;
+        document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("active", b === btn));
+        update();
+      });
+    });
+
+    Object.entries(els).forEach(([key, el]) => {
+      el.addEventListener("input", () => {
+        state[key] = parseFloat(el.value);
+        if (key === "t2" && state.t2 >= state.t3) {
+          state.t3 = state.t2 + 10;
+          els.t3.value = state.t3;
+        }
+        update();
+      });
+    });
+
+    document.getElementById("btn-reset").addEventListener("click", () => {
+      state.mode = "piecewise";
+      state.invWeight = 100;
+      state.rate = 100;
+      state.t2 = 61;
+      state.t3 = 141;
+      state.drop = 1.05;
+      els.invWeight.value = 100;
+      els.rate.value = 100;
+      els.t2.value = 61;
+      els.t3.value = 141;
+      els.drop.value = 1.05;
+      document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("active", b.dataset.mode === "piecewise"));
+      update();
+    });
+
+    initPresets();
+    update();
+  </script>
+</body>
+</html>
