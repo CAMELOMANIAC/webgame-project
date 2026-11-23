@@ -442,12 +442,23 @@ function ExpeditionStagingScreen() {
                 return {
                   nodeId,
                   node,
+                  path,
                   districtName: nearestDistrict?.name ?? "외곽 진입 구역",
                   travelMinutes,
                   fatigueCost,
                   materialNames,
                 };
               });
+
+                const selectedPathPoints = (
+                  entryDetails.find(
+                    (entry) => entry.nodeId === effectiveStartNodeId,
+                  )?.path ?? []
+                )
+                  .map((id) => mapData.nodes[id])
+                  .filter((node) => node !== undefined)
+                  .map((node) => `${node.x},${node.y}`)
+                  .join(" ");
 
               return (
                 <>
@@ -468,6 +479,13 @@ function ExpeditionStagingScreen() {
                           vectorEffect="non-scaling-stroke"
                         />
                       ))}
+                      {selectedPathPoints && (
+                        <polyline
+                          className={styles.entryMinimapRoute}
+                          points={selectedPathPoints}
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      )}
                     </svg>
                     {extractionNode && (
                       <span

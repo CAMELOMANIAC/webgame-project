@@ -290,6 +290,15 @@ export const entryMinimapDistrict = style({
   strokeLinejoin: "round",
 });
 
+export const entryMinimapRoute = style({
+  fill: "none",
+  stroke: vars.text.primary,
+  strokeOpacity: 0.7,
+  strokeWidth: 2,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+});
+
 const entryMinimapChip = style({
   position: "absolute",
   transform: "translate(-50%, -50%)",
