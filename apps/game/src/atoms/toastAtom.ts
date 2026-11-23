@@ -29,3 +29,6 @@ export type ToastItem = StatusToast | MessageToast;
 export const MAX_VISIBLE_TOASTS = 3;
 
 export const toastsAtom = atom<ToastItem[]>([]);
+
+/** 임무 통신 화면에서 열어 둘 임무. 연락 토스트를 누르면 해당 임무로 바꾼다. */
+export const selectedQuestIdAtom = atom<string | null>(null);

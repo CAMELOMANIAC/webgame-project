@@ -1,15 +1,16 @@
 import { Link } from "@tanstack/react-router";
-import { useAtomValue } from "jotai";
-import { useEffect, useState } from "react";
+import type { JournalMissionItem } from "@webgame/types";
+import { useAtom, useAtomValue } from "jotai";
 
 import { selectedUserIdAtom } from "@/atoms/authAtom";
 import { pendingNavigationAtom } from "@/atoms/pendingNavigationAtom";
-import { ErrorToast } from "@/components/common/ErrorToast";
+import { selectedQuestIdAtom } from "@/atoms/toastAtom";
 import { page } from "@/styles/theme.css";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
-import { useJournal, useMissionAction } from "@/utils/hooks/useJournal";
+import { useJournal } from "@/utils/hooks/useJournal";
 
 import * as styles from "./MissionJournal.css";
+import { QuestChat } from "./questChat/QuestChat";
 
 const labels = {
   OFFERED: "수락 대기",
@@ -20,45 +21,29 @@ const labels = {
   LOCKED: "종료",
 };
 
+function statusTone(status: JournalMissionItem["status"]) {
+  if (status === "RECOVERED") return "negative" as const;
+  if (status === "COMPLETE" || status === "LOCKED") return "neutral" as const;
+  return "positive" as const;
+}
+
 export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
   const userId = useAtomValue(selectedUserIdAtom);
   const pending = useAtomValue(pendingNavigationAtom);
   const journal = useJournal();
   const character = useGetCharacter();
-  const accept = useMissionAction("accept");
-  const report = useMissionAction("report");
-  const mission = journal.data?.mission;
-  const missions = journal.data?.missions ?? (mission ? [mission] : []);
+  const missions = journal.data?.missions ?? [];
   const storyTier = journal.data?.storyTier ?? 0;
+  const [selectedId, setSelectedId] = useAtom(selectedQuestIdAtom);
+  const mission =
+    missions.find((item) => item.id === selectedId) ?? journal.data?.mission;
   const resultPending = Object.values(pending).some(
     (entry) => entry.actorUserId === userId,
   );
-  const locked =
-    !!character.data?.raw.isRaiding ||
-    resultPending ||
-    accept.isPending ||
-    report.isPending;
-  const rawError = journal.error ?? accept.error ?? report.error;
-  const [toastDismissed, setToastDismissed] = useState(false);
-
-  useEffect(() => {
-    if (rawError) {
-      setToastDismissed(false);
-    }
-  }, [rawError]);
-
-  const handleDismissToast = () => {
-    setToastDismissed(true);
-    accept.reset();
-    report.reset();
-  };
-
-  const toastMessage = !toastDismissed && rawError ? rawError.message : null;
   const isUrgent = mission?.status === "RECOVERED" || resultPending;
 
   return (
     <div className={page} style={{ overflowY: "auto" }}>
-      <ErrorToast message={toastMessage} onDismiss={handleDismissToast} />
       <div className={styles.journal}>
         <header className={styles.pageHeader}>
           <div className={styles.telemetryTop}>
@@ -85,18 +70,12 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
             <div className={styles.sectionTopRow}>
               <small
                 className={styles.statusBadge({
-                  tone: isUrgent
-                    ? "negative"
-                    : mission.status === "COMPLETE"
-                      ? "neutral"
-                      : "positive",
+                  tone: isUrgent ? "negative" : statusTone(mission.status),
                 })}
               >
                 {resultPending ? "탐사 결과 확인 필요" : labels[mission.status]}
               </small>
-              <span className={styles.codeTag}>
-                TIER {mission.tier}
-              </span>
+              <span className={styles.codeTag}>TIER {mission.tier}</span>
             </div>
 
             <div className={styles.issuerRow}>
@@ -105,7 +84,8 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
             </div>
 
             <h2>{mission.title}</h2>
-            <p>{mission.briefing}</p>
+
+            <QuestChat key={`${userId}:${mission.id}`} questId={mission.id} />
 
             <div className={styles.metaGrid}>
               <div className={styles.metaCell}>
@@ -123,27 +103,6 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
                 <strong>{mission.rewardDescription}</strong>
               </div>
             </div>
-
-            {mode === "base" && mission.status === "OFFERED" && (
-              <button
-                type="button"
-                className={styles.actionButton}
-                disabled={locked}
-                onClick={() => accept.mutate(mission.id)}
-              >
-                지급품 수령 및 임무 수락
-              </button>
-            )}
-            {mode === "base" && mission.status === "READY" && (
-              <button
-                type="button"
-                className={styles.actionButton}
-                disabled={locked}
-                onClick={() => report.mutate(mission.id)}
-              >
-                회수 기록 보고 · 보상 받기
-              </button>
-            )}
 
             <nav className={styles.navLinks}>
               {mode === "base" ? (
@@ -166,12 +125,18 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
             <div className={styles.sectionTopRow}>
               <h2>임무 수행 이력</h2>
               <span className={styles.codeTag}>
-                CHAIN {missions.filter((m) => m.status === "COMPLETE").length} / 3
+                CHAIN {missions.filter((m) => m.status === "COMPLETE").length} / {missions.length}
               </span>
             </div>
             <div className={styles.chainList}>
               {missions.map((item) => (
-                <div className={styles.chainRow} key={item.id}>
+                <button
+                  type="button"
+                  className={styles.chainRowButton}
+                  key={item.id}
+                  aria-pressed={item.id === mission?.id}
+                  onClick={() => setSelectedId(item.id)}
+                >
                   <div className={styles.contactMeta}>
                     <span className={styles.chainTitle}>
                       {item.tier}차 · {item.title}
@@ -180,19 +145,15 @@ export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
                       {item.issuerName} · {item.targetLabel} #{item.targetNodeId}
                     </span>
                   </div>
-                  <small
-                    className={styles.statusBadge({
-                      tone:
-                        item.status === "COMPLETE"
-                          ? "neutral"
-                          : item.status === "RECOVERED"
-                            ? "negative"
-                            : "positive",
-                    })}
-                  >
-                    {labels[item.status]}
-                  </small>
-                </div>
+                  <span className={styles.chainBadges}>
+                    {item.unread > 0 && (
+                      <span className={styles.unreadDot} aria-label="새 연락" />
+                    )}
+                    <small className={styles.statusBadge({ tone: statusTone(item.status) })}>
+                      {labels[item.status]}
+                    </small>
+                  </span>
+                </button>
               ))}
             </div>
           </section>

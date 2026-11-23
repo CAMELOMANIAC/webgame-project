@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { JournalView } from "@webgame/types";
 import { useAtomValue } from "jotai";
 
@@ -14,27 +14,5 @@ export function useJournal() {
     enabled: !!userId,
     queryFn: async () =>
       readApiResponse(await apiFetch(`${API_BASE_URL}/user/${userId}/journal`)),
-  });
-}
-
-export function useMissionAction(action: "accept" | "report") {
-  const userId = useAtomValue(selectedUserIdAtom);
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: async (questId?: string) =>
-      readApiResponse<JournalView>(
-        await apiFetch(`${API_BASE_URL}/user/${userId}/mission/${action}`, {
-          method: "POST",
-          headers: questId ? { "Content-Type": "application/json" } : undefined,
-          body: questId ? JSON.stringify({ questId }) : undefined,
-        }),
-      ),
-    onSuccess: async (result) => {
-      client.setQueryData(["journal", userId], result);
-      await Promise.all([
-        client.invalidateQueries({ queryKey: ["stash", userId] }),
-        client.invalidateQueries({ queryKey: ["market"] }),
-      ]);
-    },
   });
 }

@@ -268,3 +268,41 @@ export const articleHeader = style({
   marginBottom: "6px",
 });
 
+
+export const chainRowButton = style([
+  chainRow,
+  {
+    width: "100%",
+    textAlign: "left",
+    color: "inherit",
+    font: "inherit",
+    cursor: "pointer",
+    selectors: {
+      "&:hover": { borderColor: vars.text.primary },
+      "&:focus-visible": {
+        outline: `2px solid ${vars.text.primary}`,
+        outlineOffset: "2px",
+      },
+      '&[aria-pressed="true"]': {
+        background: vars.surface.high,
+        borderColor: vars.text.primary,
+      },
+    },
+  },
+]);
+
+export const chainBadges = style({
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  flexShrink: 0,
+});
+
+/** 안 읽은 임무 연락 표시. 사용자 결정에 따라 빨간 점을 쓴다. */
+export const unreadDot = style({
+  width: "6px",
+  height: "6px",
+  borderRadius: "50%",
+  backgroundColor: vars.color.negative,
+  flexShrink: 0,
+});
