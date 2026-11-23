@@ -363,7 +363,6 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const sightMaskSpriteRef = useRef<Sprite | null>(null);
   const playerMarkerSpriteRef = useRef<Sprite | null>(null);
   const noiseRippleRef = useRef<ReturnType<typeof createNoiseRipple>>(null);
-  const broadNoiseGraphicsRef = useRef<Graphics | null>(null);
   const noiseWaveControllersRef = useRef<
     Map<string, { tween?: TweenHandle; timer?: number; retiring: boolean }>
   >(new Map());
@@ -945,10 +944,6 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         sightMaskSprite.visible = false;
         mapLayer.addChild(sightMaskSprite);
         sightMaskSpriteRef.current = sightMaskSprite;
-
-        const broadNoiseGraphics = new Graphics();
-        worldContainer.addChild(broadNoiseGraphics);
-        broadNoiseGraphicsRef.current = broadNoiseGraphics;
 
         noiseRippleRef.current = createNoiseRipple(worldContainer, mapLayer);
 
@@ -2192,86 +2187,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     }
   }, [characterData, isNavigating, isCombat, outroActive, currentNodeId, setCurrentNodeId, setPlayerCoords]);
 
-  const nearNoiseAreas = useMemo(
-    () => activeNoiseAreas.filter((area) => area.tier !== "broad"),
-    [activeNoiseAreas],
-  );
-  const broadNoiseAreas = useMemo(
-    () => activeNoiseAreas.filter((area) => area.tier === "broad"),
-    [activeNoiseAreas],
-  );
   const navigatingStateRef = useRef(isNavigating);
   navigatingStateRef.current = isNavigating;
-
-  // 광역 징후 레이어 (고스트 원거리 대략적 활동 반경)
-  useEffect(() => {
-    const g = broadNoiseGraphicsRef.current;
-    if (!isPixiReady || !g || g.destroyed) return;
-    g.clear();
-    if (broadNoiseAreas.length === 0) {
-      g.visible = false;
-      return;
-    }
-
-    g.visible = true;
-    for (const area of broadNoiseAreas) {
-      g.circle(area.x, area.y, area.radius).fill({
-        color: 0xff7162,
-        alpha: 0.055,
-      });
-      g.circle(area.x, area.y, area.radius * 0.55).stroke({
-        width: 1,
-        color: 0xff7162,
-        alpha: 0.16,
-      });
-      const segments = 20;
-      const stepAngle = (Math.PI * 2) / segments;
-      const dashArc = stepAngle * 0.58;
-      for (let i = 0; i < segments; i += 1) {
-        const startA = i * stepAngle;
-        const endA = startA + dashArc;
-        g.moveTo(
-          area.x + Math.cos(startA) * area.radius,
-          area.y + Math.sin(startA) * area.radius,
-        );
-        g.arc(area.x, area.y, area.radius, startA, endA);
-      }
-      g.stroke({
-        width: 1.5,
-        color: 0xff7162,
-        alpha: 0.3,
-        cap: "round",
-      });
-    }
-
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      g.alpha = 0.9;
-      return;
-    }
-
-    g.alpha = 0.72;
-    let cancelled = false;
-    let animTween: TweenHandle | undefined;
-    const startLoop = () => {
-      if (cancelled || g.destroyed) return;
-      animTween = runTween({
-        duration: 2.6,
-        onUpdate: (progress) => {
-          if (cancelled || g.destroyed) return;
-          g.alpha = 0.68 + 0.32 * (0.5 - 0.5 * Math.cos(progress * Math.PI * 2));
-        },
-        onFinish: () => {
-          if (!cancelled) startLoop();
-        },
-      });
-    };
-    startLoop();
-
-    return () => {
-      cancelled = true;
-      animTween?.destroy();
-    };
-  }, [broadNoiseAreas, isPixiReady]);
 
   // 근거리 소음 파동 레이어 (좌표 키 기반 부드러운 추가/유지/페이드아웃)
   useEffect(() => {
@@ -2301,7 +2218,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       controllers.clear();
       ripple.clear();
       const keys = new Set<string>();
-      for (const area of nearNoiseAreas) {
+      for (const area of activeNoiseAreas) {
         const key = `${area.x},${area.y}`;
         keys.add(key);
         ripple.ensureArea(key, area);
@@ -2323,7 +2240,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
     };
 
     const nextAreaByKey = new Map<string, EnemyNoiseSignal>();
-    for (const area of nearNoiseAreas) {
+    for (const area of activeNoiseAreas) {
       nextAreaByKey.set(`${area.x},${area.y}`, area);
     }
     activeNearKeysRef.current = new Set(nextAreaByKey.keys());
@@ -2413,7 +2330,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         }, initialDelayMs);
       }
     }
-  }, [activeRaidId, isCombat, isPixiReady, nearNoiseAreas]);
+  }, [activeRaidId, isCombat, isPixiReady, activeNoiseAreas]);
 
   // 5.5. requestAnimationFrame 기반 등속(Constant Speed) 부드러운 네비게이션 보간 루프
   useEffect(() => {
