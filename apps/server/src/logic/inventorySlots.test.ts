@@ -94,16 +94,33 @@ test("소지품 가치 및 진입 지연 시간을 계산하고 포맷한다", (
   assert.equal(totalValue, 400); // 150 + 50 + (100 * 2) = 400
 
   const delayMinutes = calculateEntryDelayMinutes(totalValue);
-  assert.equal(delayMinutes, 80); // 400 가치 -> 80분 지연
+  assert.equal(delayMinutes, 110); // 400 가치 -> 110분 지연
 
-  assert.equal(formatRaidTime(delayMinutes), "01:20");
+  assert.equal(formatRaidTime(delayMinutes), "01:50");
   assert.equal(formatRaidTime(0), "00:00");
   assert.equal(formatRaidTime(75), "01:15");
 
-  // 50 미만 가치는 0분 지연, 400 초과분은 100당 10분 지연
+  // 1구간: 150까지 50당 30분 (150 가치 = 약체 구간 종료 90분)
   assert.equal(calculateEntryDelayMinutes(49), 0);
-  assert.equal(calculateEntryDelayMinutes(50), 10);
-  assert.equal(calculateEntryDelayMinutes(1000), 140);
+  assert.equal(calculateEntryDelayMinutes(50), 30);
+  assert.equal(calculateEntryDelayMinutes(95), 30);
+  assert.equal(calculateEntryDelayMinutes(145), 60);
+  assert.equal(calculateEntryDelayMinutes(150), 90);
+  // 2구간: 150~500에서 90분 -> 120분 (500 가치 = 2티어 등장 시각)
+  assert.equal(calculateEntryDelayMinutes(208), 90);
+  assert.equal(calculateEntryDelayMinutes(267), 100);
+  assert.equal(calculateEntryDelayMinutes(499), 110);
+  assert.equal(calculateEntryDelayMinutes(500), 120);
+  // 3구간: 500 초과분 125당 10분 (2,000 가치 = 3티어 등장 시각)
+  assert.equal(calculateEntryDelayMinutes(1000), 160);
+  assert.equal(calculateEntryDelayMinutes(2000), 240);
+  // 가치가 오르면 지연이 줄어들지 않는다.
+  for (let value = 0; value < 3000; value += 5) {
+    assert.ok(
+      calculateEntryDelayMinutes(value + 5) >=
+        calculateEntryDelayMinutes(value),
+    );
+  }
   assert.equal(calculateEntryDelayMinutes(0), 0);
   assert.equal(calculateEntryDelayMinutes(-10), 0);
 });

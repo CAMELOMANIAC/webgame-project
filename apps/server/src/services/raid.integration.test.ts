@@ -92,12 +92,12 @@ test("실제 DB: 소지품 총 가치에 비례하여 탐사 시작 시간이 �
   });
 
   const { raid } = await startRaid(db, user.id, character.id);
-  assert.equal(raid.time, 30); // 가치 350 -> 30분 지연
+  assert.equal(raid.time, 100); // 가치 350 -> 100분 지연
 
   const savedCharacter = await db.query.characters.findFirst({
     where: eq(characters.id, character.id),
   });
-  assert.equal(savedCharacter?.time, 30);
+  assert.equal(savedCharacter?.time, 100);
 });
 
 test("실제 DB: 중복 배치는 같은 탐사를 반환하고 체력을 초기화하지 않는다", async (t) => {

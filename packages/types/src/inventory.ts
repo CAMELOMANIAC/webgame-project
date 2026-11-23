@@ -159,17 +159,60 @@ export function swapEquipmentBackpack<
 }
 
 /**
+ * 투입 지연 곡선의 구간 경계. 같은 수준의 장비를 든 적이 등장하는 시각
+ * (`ENEMY_TIER_TIME_THRESHOLDS`: 약체 0~90분, 2티어 121분~, 3티어 241분~)에 맞춘 값입니다.
+ */
+export const ENTRY_DELAY_RULES = {
+  /** 1구간: 이 가치까지 `earlyValueStep`당 `earlyMinutesPerStep`분 */
+  earlyMaxValue: 150,
+  earlyValueStep: 50,
+  earlyMinutesPerStep: 30,
+  /** 2구간: `earlyMaxValue` ~ 이 가치 사이에서 `midSpanMinutes`분이 10분 단위로 늘어남 */
+  midMaxValue: 500,
+  midSpanMinutes: 30,
+  /** 3구간: `midMaxValue` 초과분 `lateValueStep`당 10분 */
+  lateValueStep: 125,
+} as const;
+
+/**
  * 소지품 총 가치(Value)에 따른 탐사 투입 지연 시간(분)을 계산합니다.
+ * 장착 장비와 가방의 모든 아이템 가치를 합산한 값을 받습니다.
  * 규칙:
- * - 0 ~ 400 가치 구간: 가치 50당 10분 지연 (초반 고가치 양학 방지, 400 가치 = 80분)
- * - 400 초과 가치 구간: 기본 80분 + 초과분 100당 10분 지연 (1,000 가치 = 140분)
+ * - 0 ~ 150 가치: 50당 30분 (150 가치 = 90분, 약체 구간 종료 시각)
+ * - 150 ~ 500 가치: 90분 + 30분을 10분 단위로 균등 배분 (500 가치 = 120분, 2티어 등장 시각)
+ * - 500 초과 가치: 120분 + 초과분 125당 10분 (2,000 가치 = 240분, 3티어 등장 시각)
  */
 export function calculateEntryDelayMinutes(totalValue: number): number {
   if (!Number.isFinite(totalValue) || totalValue <= 0) return 0;
-  if (totalValue <= 400) {
-    return Math.floor(totalValue / 50) * 10;
+  const {
+    earlyMaxValue,
+    earlyValueStep,
+    earlyMinutesPerStep,
+    midMaxValue,
+    midSpanMinutes,
+    lateValueStep,
+  } = ENTRY_DELAY_RULES;
+  const earlyMaxMinutes =
+    (earlyMaxValue / earlyValueStep) * earlyMinutesPerStep;
+  if (totalValue <= earlyMaxValue) {
+    return Math.floor(totalValue / earlyValueStep) * earlyMinutesPerStep;
   }
-  return 80 + Math.floor((totalValue - 400) / 100) * 10;
+  if (totalValue <= midMaxValue) {
+    const midSteps = midSpanMinutes / 10;
+    return (
+      earlyMaxMinutes +
+      Math.floor(
+        ((totalValue - earlyMaxValue) * midSteps) /
+          (midMaxValue - earlyMaxValue),
+      ) *
+        10
+    );
+  }
+  return (
+    earlyMaxMinutes +
+    midSpanMinutes +
+    Math.floor((totalValue - midMaxValue) / lateValueStep) * 10
+  );
 }
 
 /**
