@@ -314,3 +314,39 @@ test("거점 복귀 시각 기반 자연 회복이 2초당 HP +1, 피로도 +1�
   });
 });
 
+
+test("임무 대화 진행 API는 잘못된 입력과 다른 계정의 요청을 거부한다", async (t) => {
+  const database = createTestDb();
+  const originalFindFirst = database.query.users.findFirst;
+  Reflect.set(
+    database.query.users,
+    "findFirst",
+    mock.fn(async () => ({ id: "dialogue-user" })),
+  );
+  const app = buildApp({ database, logger: false });
+  t.after(async () => {
+    await app.close();
+    Reflect.set(database.query.users, "findFirst", originalFindFirst);
+  });
+  const headers = { "x-dev-user-id": "dialogue-user" };
+  const invalid = await app.inject({
+    method: "POST",
+    url: "/user/dialogue-user/quests/hanlim-first-recovery/dialogue/advance",
+    headers,
+    payload: { requestId: "not-a-uuid", expectedSeq: -1 },
+  });
+  assert.equal(invalid.statusCode, 400);
+  const invalidRead = await app.inject({
+    method: "POST",
+    url: "/user/dialogue-user/quests/hanlim-first-recovery/dialogue/read",
+    headers,
+    payload: { seq: "1" },
+  });
+  assert.equal(invalidRead.statusCode, 400);
+  const foreign = await app.inject({
+    method: "GET",
+    url: "/user/other-user/quests/hanlim-first-recovery/dialogue",
+    headers,
+  });
+  assert.equal(foreign.statusCode, 403);
+});
