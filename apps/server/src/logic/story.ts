@@ -8,12 +8,12 @@ import {
   thirdMissionNodeId,
 } from "@webgame/types";
 
-export interface MissionItemGrant {
-  weaponId: string;
-  quantity: number;
-}
+import type { ChainMission, ItemGrant } from "./questDialogue";
 
-export interface MissionDefinition {
+export type MissionItemGrant = ItemGrant;
+
+/** 기존 선형 임무의 원본 데이터. 대화 정의는 `buildLinearMission`이 만든다. */
+interface MissionSeed {
   id: string;
   version: number;
   tier: number;
@@ -34,7 +34,7 @@ export interface MissionDefinition {
 }
 
 // 1막(Tier 1~2: 적응·구호) -> 2막(Tier 3~4: 통제 모순·단일 결재선) -> 3막(Tier 5~6: 중첩 관측·복수 개체)
-export const MISSION_CHAIN: readonly MissionDefinition[] = [
+const MISSION_SEEDS: readonly MissionSeed[] = [
   {
     id: "hanlim-first-recovery",
     version: 2,
@@ -200,6 +200,106 @@ export const MISSION_CHAIN: readonly MissionDefinition[] = [
   },
 ];
 
+export interface MissionDefinition extends MissionSeed, ChainMission {
+  issuerContactId: string;
+  defaultObjectiveId: string;
+}
+
+const ISSUER_CONTACT_IDS: Record<string, string> = {
+  "조 시설과장": "relief-contact",
+  "최 사장": "market-contact",
+  "윤 책임연구원": "lab-contact",
+};
+
+const ACCEPT_LABEL = "지급품 수령 및 임무 수락";
+const REPORT_LABEL = "회수 기록 보고 · 보상 받기";
+
+function briefingLines(seed: MissionSeed) {
+  const body = seed.briefing.startsWith(`${seed.issuerName}:`)
+    ? seed.briefing.slice(seed.issuerName.length + 1).trim()
+    : seed.briefing;
+  const sentences = body.match(/[^.?!]+[.?!]+/g)?.map((text) => text.trim()) ?? [body];
+  return sentences.map((text) => ({ speaker: "issuer" as const, text }));
+}
+
+/** 기존 선형 임무를 대화 그래프로 옮긴다: 브리핑 → 수락 → 목표 대기 → 보고 → 완료. */
+export function buildLinearMission(
+  seed: MissionSeed,
+  index: number,
+  seeds: readonly MissionSeed[],
+): MissionDefinition {
+  const objectiveId = "default";
+  const previous = index > 0 ? seeds[index - 1] : undefined;
+  return {
+    ...seed,
+    act: Math.ceil(seed.tier / 2),
+    issuerContactId: ISSUER_CONTACT_IDS[seed.issuerName] ?? "relief-contact",
+    defaultObjectiveId: objectiveId,
+    objectives: {
+      [objectiveId]: {
+        id: objectiveId,
+        targetNodeId: seed.targetNodeId,
+        targetLabel: seed.targetLabel,
+        enemyArchetypeId: seed.enemyArchetypeId,
+      },
+    },
+    unlock: previous
+      ? { type: "QUEST_OUTCOME", questId: previous.id, outcome: "COMPLETE" }
+      : { type: "ALL", of: [] },
+    final: index === seeds.length - 1,
+    dialogue: {
+      entry: "offer",
+      nodes: {
+        offer: {
+          id: "offer",
+          kind: "CHOICE",
+          lines: briefingLines(seed),
+          choices: [
+            {
+              id: "accept",
+              label: ACCEPT_LABEL,
+              effects: [
+                { type: "ACCEPT_OBJECTIVE", objectiveId },
+                { type: "GRANT_ITEMS", items: seed.supplyItems },
+              ],
+              next: "await",
+            },
+          ],
+        },
+        await: {
+          id: "await",
+          kind: "AWAIT_OBJECTIVE",
+          lines: [],
+          next: "report",
+        },
+        report: {
+          id: "report",
+          kind: "CHOICE",
+          availability: "BASE_ONLY",
+          lines: [],
+          choices: [
+            {
+              id: "report",
+              label: REPORT_LABEL,
+              effects: [
+                { type: "GRANT_ITEMS", items: seed.rewardItems },
+                { type: "GRANT_CREDITS", amount: seed.rewardCredits },
+                { type: "RAISE_STORY_TIER", tier: seed.grantsStoryTier },
+              ],
+              next: "end",
+            },
+          ],
+        },
+        end: { id: "end", kind: "END", lines: [], outcome: "COMPLETE" },
+      },
+    },
+  };
+}
+
+export const MISSION_CHAIN: readonly MissionDefinition[] = MISSION_SEEDS.map(
+  (seed, index, seeds) => buildLinearMission(seed, index, seeds),
+);
+
 export const firstMission = {
   ...MISSION_CHAIN[0]!,
   supplyWeaponId: MISSION_CHAIN[0]!.supplyItems[0]!.weaponId,
@@ -320,4 +420,30 @@ export function disclosedStory(tier: number) {
           : {}),
       })),
   };
+}
+
+export interface StoryContact {
+  id: string;
+  name: string;
+  role: string;
+  affiliation: string;
+  minimumTier: number;
+  entityId?: string;
+}
+
+export function getStoryContactById(contactId: string): StoryContact | undefined {
+  const contact = contacts.find((item) => item.publicId === contactId);
+  if (!contact) return undefined;
+  return {
+    id: contact.publicId,
+    name: contact.publicName,
+    role: contact.role,
+    affiliation: contact.affiliation,
+    minimumTier: contact.minimumTier,
+    ...("entityId" in contact ? { entityId: contact.entityId } : {}),
+  };
+}
+
+export function getStoryRecordById(recordId: string) {
+  return records.find((record) => record.id === recordId);
 }
