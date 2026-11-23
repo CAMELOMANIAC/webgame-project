@@ -231,7 +231,9 @@ const FieldNavTargetSection = () => {
     : [];
   const completedEventIds =
     character?.activeRaid?.exploration?.completedEventIds ?? [];
-  const isUnarmed = (character?.equipment?.length ?? 0) === 0;
+  const isUnarmed =
+    (character?.equipment?.filter((w) => w.weaponMaster !== null).length ??
+      0) === 0;
   const activeIntroEvent = activeBuilding
     ? resolveBuildingIntroEvent(
         activeBuilding,
