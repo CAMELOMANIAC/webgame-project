@@ -13,7 +13,8 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:sync-catalog": "tsx --env-file=.env src/db/syncCatalog.ts",
     "test": "node --require tsx/cjs --test src/app.test.ts src/auth.test.ts src/logic/simulateBattle.test.ts src/logic/enemyCatalog.test.ts src/logic/inventorySlots.test.ts src/logic/request.test.ts src/logic/story.test.ts src/logic/questDialogue.test.ts src/services/battle.test.ts src/services/inventory.test.ts",
-    "test:integration": "node --require tsx/cjs --test --test-concurrency=1 src/services/*.integration.test.ts"
+    "test:integration": "node --require tsx/cjs --test --test-concurrency=1 src/services/*.integration.test.ts",
+    "story:generate": "tsx src/scripts/generateStoryDialogues.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",
