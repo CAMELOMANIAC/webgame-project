@@ -2514,11 +2514,19 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
       return Math.sqrt(dx * dx + dy * dy) < 0.5 && Math.abs(scale - 3.0) < 0.01;
     };
 
-    let navSegmentRisks: PathSegmentRisk[] | undefined =
-      coordSegmentRisksRef.current
-        ? [...coordSegmentRisksRef.current]
-        : undefined;
-    let navRisksSyncedFromServer = false;
+    // 출발 시점의 구간 위험도를 도착할 때까지 고정한다.
+    // 서버 예측이 아직 없는 구간은 출발 시점의 소음 신호로 한 번만 계산한다.
+    const initialRisks = coordSegmentRisksRef.current;
+    const initialNoiseAreas = noiseAreasRef.current;
+    const navSegmentRisks: PathSegmentRisk[] = [];
+    for (let segIdx = 0; segIdx < coords.length - 1; segIdx += 1) {
+      const p1 = coords[segIdx]!;
+      const p2 = coords[segIdx + 1]!;
+      navSegmentRisks.push(
+        initialRisks?.[segIdx] ??
+          classifyPathSegmentRisk(p1.x, p1.y, p2.x, p2.y, initialNoiseAreas),
+      );
+    }
 
     const tick = (time: number) => {
       const deltaTime = (time - lastTime) / 1000;
@@ -2531,26 +2539,6 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
         path.length > 0 &&
         (Math.abs(coords[0]!.x - (nodes[path[0]!]?.x ?? 0)) > 0.1 ||
           Math.abs(coords[0]!.y - (nodes[path[0]!]?.y ?? 0)) > 0.1);
-
-      if (!navRisksSyncedFromServer) {
-        const hopSignals = navigateRaidResponseRef.current?.hopNoiseSignals;
-        if (hopSignals && hopSignals.length > 0 && coords.length >= 2) {
-          navRisksSyncedFromServer = true;
-          const totalSegs = coords.length - 1;
-          const computed: PathSegmentRisk[] = [];
-          for (let segIdx = 0; segIdx < totalSegs; segIdx += 1) {
-            const p1 = coords[segIdx]!;
-            const p2 = coords[segIdx + 1]!;
-            const hopIdx = hasStartPos ? Math.max(0, segIdx - 1) : segIdx;
-            const areas =
-              hopSignals[hopIdx] ?? hopSignals[hopSignals.length - 1] ?? [];
-            computed.push(
-              classifyPathSegmentRisk(p1.x, p1.y, p2.x, p2.y, areas),
-            );
-          }
-          navSegmentRisks = computed;
-        }
-      }
 
       if (stepIdx >= coords.length) {
         const finalPos = coords[coords.length - 1];
@@ -2746,7 +2734,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
             pathLineGraphicsRef.current,
             remainingPoints,
             noiseAreasRef.current,
-            navSegmentRisks?.slice(stepIdx),
+            navSegmentRisks.slice(stepIdx),
           );
         }
 
@@ -2775,7 +2763,7 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
             pathLineGraphicsRef.current,
             remainingPoints,
             noiseAreasRef.current,
-            navSegmentRisks?.slice(Math.max(0, stepIdx - 1)),
+            navSegmentRisks.slice(Math.max(0, stepIdx - 1)),
           );
         }
 
