@@ -17,6 +17,7 @@ import {
   useMarket,
   usePlaceMarketBid,
 } from "@/utils/hooks/useMarket";
+import { useResultToast } from "@/utils/hooks/useResultToast";
 
 import * as styles from "./market.css";
 
@@ -87,6 +88,7 @@ function MarketScreen() {
     tone: "positive" | "negative";
     message: string;
   } | null>(null);
+  useResultToast(feedback?.message, () => setFeedback(null), feedback?.tone);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -309,14 +311,6 @@ function MarketScreen() {
           </p>
         )}
 
-        {feedback && (
-          <p
-            className={baseStyles.banner({ tone: feedback.tone })}
-            role={feedback.tone === "negative" ? "alert" : "status"}
-          >
-            {feedback.message}
-          </p>
-        )}
 
         <div className={styles.toolbar}>
           <div className={styles.tabGroup}>

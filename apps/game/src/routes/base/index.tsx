@@ -9,6 +9,7 @@ import { CharacterCard } from "@/components/lobby/CharacterCard";
 import { useBaseRecovery } from "@/utils/hooks/useBaseRecovery";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useRaidSession } from "@/utils/hooks/useRaidSession";
+import { useResultToast } from "@/utils/hooks/useResultToast";
 
 export const Route = createFileRoute("/base/")({ component: BaseHome });
 
@@ -16,6 +17,7 @@ function BaseHome() {
   const navigate = useNavigate();
   const { data } = useGetCharacter();
   const { startRaid } = useRaidSession();
+  useResultToast(startRaid.error?.message, startRaid.reset);
   const character = data?.raw;
   const recovery = useBaseRecovery(character);
 
@@ -33,11 +35,6 @@ function BaseHome() {
       title="임시 대피 구역"
       description="선택한 개체의 배치 상태와 거점 시설을 확인합니다."
     >
-      {startRaid.error && (
-        <p className={styles.banner({ tone: "negative" })} role="alert">
-          {startRaid.error.message}
-        </p>
-      )}
       <div className={styles.mainGrid}>
         <CharacterCard
           character={character}

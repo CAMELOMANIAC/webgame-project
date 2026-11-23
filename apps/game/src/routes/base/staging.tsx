@@ -45,6 +45,7 @@ import {
 import { type StashItemResponse, useGetStash } from "@/utils/hooks/useGetStash";
 import { useRaidRules } from "@/utils/hooks/useRaidRules";
 import { useRaidSession } from "@/utils/hooks/useRaidSession";
+import { useResultToast } from "@/utils/hooks/useResultToast";
 import { inventoryMutationKey } from "@/utils/inventoryCache";
 import { mergeRecoveredIntoStash } from "@/utils/loadoutDraft";
 import {
@@ -104,6 +105,7 @@ function ExpeditionStagingScreen() {
   const stashQuery = useGetStash();
   const rulesQuery = useRaidRules();
   const { startRaid } = useRaidSession();
+  useResultToast(startRaid.error?.message, startRaid.reset);
 
   const setNode = useSetAtom(currentNodeIdAtom);
   const setIsCombat = useSetAtom(isCombatAtom);
@@ -263,6 +265,10 @@ function ExpeditionStagingScreen() {
 
   const canDeploy = Boolean(character && canEditLoadout);
   const step1ErrorMessage = step1Error ?? select.error?.message;
+  useResultToast(step1ErrorMessage, () => {
+    setStep1Error(null);
+    select.reset();
+  });
 
   return (
     <div className={`${page} ${baseStyles.scrollPage}`}>
@@ -307,11 +313,6 @@ function ExpeditionStagingScreen() {
         {/* STEP 1: 배치 생존자 선택 (Character Selection) */}
         {step === 1 && (
           <div className={styles.contentArea}>
-            {step1ErrorMessage && (
-              <p className={baseStyles.banner({ tone: "negative" })} role="alert">
-                {step1ErrorMessage}
-              </p>
-            )}
             <CharacterCollection
               readOnly={false}
               title="준비된 생존자"
@@ -333,11 +334,6 @@ function ExpeditionStagingScreen() {
         {/* STEP 2: 장비창 및 장비 선택 (Loadout & Inventory) */}
         {step === 2 && character && (
           <div className={styles.contentArea}>
-            {startRaid.error && (
-              <p className={baseStyles.banner({ tone: "negative" })} role="alert">
-                {startRaid.error.message}
-              </p>
-            )}
             {stashQuery.isLoading && <p>창고를 불러오는 중입니다.</p>}
             {stashQuery.isError && !canEditLoadout && (
               <div className={baseStyles.banner({ tone: "negative" })} role="alert">
@@ -405,11 +401,6 @@ function ExpeditionStagingScreen() {
               >
                 진입 지점 다시 불러오기
               </button>
-            )}
-            {startRaid.error && (
-              <p className={baseStyles.banner({ tone: "negative" })} role="alert">
-                {startRaid.error.message}
-              </p>
             )}
             {(() => {
               const extractionNodeId =

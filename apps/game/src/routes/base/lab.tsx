@@ -13,11 +13,11 @@ import { useEffect, useMemo, useState } from "react";
 
 import yoonPortrait from "@/assets/yoon-portrait.png";
 import { BaseScreen } from "@/components/lobby/BaseScreen";
-import * as baseStyles from "@/components/lobby/BaseScreen.css";
 import { useGeneLab } from "@/utils/hooks/useGeneLab";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
 import { useGetStash } from "@/utils/hooks/useGetStash";
 import { useMarket } from "@/utils/hooks/useMarket";
+import { useResultToast } from "@/utils/hooks/useResultToast";
 
 import * as styles from "./lab.css";
 
@@ -105,6 +105,11 @@ function GeneLabScreen() {
     commitGene.error?.message ??
     initGenes.error?.message ??
     null;
+  useResultToast(errorMessage, () => {
+    rerollGene.reset();
+    commitGene.reset();
+    initGenes.reset();
+  });
 
   return (
     <BaseScreen
@@ -112,11 +117,6 @@ function GeneLabScreen() {
       description={'윤 책임연구원 · "위쪽 보고용 기록은 알아서 걸러둘 테니, 지금은 개체 유전자 안정화에만 집중하세요."'}
       portraitSrc={yoonPortrait}
     >
-      {errorMessage && (
-        <p className={baseStyles.banner({ tone: "negative" })} role="alert">
-          {errorMessage}
-        </p>
-      )}
 
       <div className={styles.topBar}>
         <div className={styles.npcMeta}>
