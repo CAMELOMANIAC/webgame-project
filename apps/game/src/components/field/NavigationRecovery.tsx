@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { BattleLog, RaidNavigationResult } from "@webgame/types";
+import type { BattleLog, RaidNavigationLookup, RaidNavigationResult } from "@webgame/types";
 import { getDefaultStore, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useEffect } from "react";
 
@@ -65,7 +65,7 @@ export default function NavigationRecovery({
         expectedVersion: String(expectedVersion),
         requestId: requestId ?? "",
       });
-      return requestJsonWithTimeout<{ result: RaidNavigationResult | null }>(
+      return requestJsonWithTimeout<RaidNavigationLookup>(
         (signal) =>
           apiFetch(
             `${API_BASE_URL}/character/${characterId}/raid/navigate/result?${query}`,
@@ -114,23 +114,30 @@ export default function NavigationRecovery({
     }
   }, [clearRequest, key, queryClient, requestId, setCoords, setDirty, setNode, setNoiseSignals, setTarget, triggerCombat, userId]);
 
+  const lookupStatus = lookup.data?.status;
   const result = lookup.data?.result;
   useEffect(() => {
-    if (canRecover && result && !lookup.isFetching && !lookup.isError && !navigation.isPending) {
+    if (!canRecover || lookup.isFetching || lookup.isError || navigation.isPending) return;
+    if (result) {
       applyResult(result);
+    } else if (lookupStatus === "SUPERSEDED") {
+      // 이미 반영된 뒤 지나간 요청이므로 기록만 지우고 현재 서버 상태를 다시 불러온다.
+      clearRequest();
+      void queryClient.invalidateQueries({ queryKey: ["character", userId] });
     }
-  }, [applyResult, canRecover, lookup.isError, lookup.isFetching, navigation.isPending, result]);
+  }, [applyResult, canRecover, clearRequest, lookup.isError, lookup.isFetching, lookupStatus, navigation.isPending, queryClient, result, userId]);
 
   if (!canRecover || !params || lookup.isFetching || navigation.isPending) return null;
 
+  const notProcessed = lookup.isSuccess && lookupStatus === "NOT_PROCESSED";
   const mutationError = navigation.variables?.requestId === requestId
     ? navigation.error
     : null;
   const isRejected = (error: Error | null) =>
     error instanceof ApiError && [400, 403, 404, 409].includes(error.status);
-  const error = lookup.error ?? (result === null && isRejected(mutationError) ? mutationError : null);
+  const error = lookup.error ?? (notProcessed && isRejected(mutationError) ? mutationError : null);
   const rejected = isRejected(error);
-  const retryMove = !error && lookup.isSuccess && result === null;
+  const retryMove = !error && notProcessed;
   if (!error && !retryMove) return null;
 
   return (
