@@ -18,6 +18,7 @@ import {
 } from "@/atoms/raidAtom";
 import DevelopmentAccountGate from "@/components/common/DevelopmentAccountGate";
 import GlobalNav from "@/components/common/GlobalNav";
+import { ToastViewport } from "@/components/common/toast/ToastViewport";
 import { BaseScreen } from "@/components/lobby/BaseScreen";
 import * as baseStyles from "@/components/lobby/BaseScreen.css";
 import { useGetCharacter } from "@/utils/hooks/useGetCharacter";
@@ -39,6 +40,7 @@ function RouteComponent() {
       <DevelopmentAccountGate>
         <GameLayout />
       </DevelopmentAccountGate>
+      <ToastViewport />
     </main>
   );
 }
