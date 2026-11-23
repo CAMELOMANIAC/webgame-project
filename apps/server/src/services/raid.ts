@@ -512,7 +512,7 @@ async function performRaidAction<T>(
       throw new InventoryError("전투 결과를 먼저 확정해야 합니다.", 409);
     if (raid.version !== input.expectedVersion)
       throw new InventoryError(
-        "Raid state changed; refresh before retrying",
+        "탐사 상태가 변경되었습니다. 최신 상태를 불러온 뒤 다시 시도하세요.",
         409,
       );
     const result = await action(tx, raid, character);

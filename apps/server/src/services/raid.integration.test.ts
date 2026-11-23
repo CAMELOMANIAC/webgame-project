@@ -167,7 +167,7 @@ test("실제 DB: 같은 이동 요청은 위치·버전을 한 번만 변경한�
         ...command(raid),
         path: [nextNode, 0],
       }),
-    /state changed/,
+    /탐사 상태가 변경되었습니다/,
   );
 });
 
