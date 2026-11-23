@@ -25,7 +25,9 @@
 | `RaidCommand`         | 고유 요청 ID·입력 지문·처리 결과. 같은 명령은 저장 결과 재사용   |
 | `GhostSnapshot`       | 서버가 기록한 탐사·개체·위치·경과 시간(분)·장비 복사본·능력치·규칙 버전 |
 | `RaidGhostEncounter`  | 탐사 내 같은 고스트 기록의 반복 사용·보상 방지                   |
-| `QuestProgress`       | 임무 정의 버전, 수락·회수·탈출·보고 상태와 보상 수령 시점        |
+| `QuestProgress`       | 임무 정의 버전, 수락·회수·탈출·보고 상태, 확정 목표, 대화 위치·순번·읽음 위치·대화 기록·선택 이력·서버 확정 선택지 |
+| `StoryFlag` / `StoryDisclosure` | 임무 선택으로 생긴 계정 플래그와 추가 공개 기록·인물 |
+| `QuestDelivery`       | 탐사 중에 생긴 임무 지급. 탐사 종료(탈출·사망) 시 한 번만 지급 |
 
 기존 캐릭터 ID와 상태·장비를 유지하면서 초기 변주와 선택 개체를 연결한다. 기존 고스트 자료는 규칙 버전 0으로 남기고 새 매칭에서 제외한다. 파괴적인 초기화 시드는 마이그레이션에 사용하지 않는다.
 
@@ -56,8 +58,11 @@
 | POST `/character/:characterId/raid/extract`         | 지정 지점에서 한 번만 탈출 정산             |
 | GET `/ghost/match?nodeId=26&time=40`                | 위치·시간대(±30분) 조건에 맞는 다른 계정 기록 조회 |
 | GET `/user/:userId/journal`                         | 임무와 현재 공개할 수 있는 기록·인물만 반환 |
-| POST `/user/:userId/mission/accept`                 | 첫 임무 수락과 구호 장비 지급               |
-| POST `/user/:userId/mission/report`                 | 탈출 후 보고·일회성 보상·연구 기록 공개     |
+| POST `/user/:userId/mission/accept`                 | 호환 경로. 기본 수락 선택지로 대화 진행     |
+| POST `/user/:userId/mission/report`                 | 호환 경로. 기본 보고 선택지로 대화 진행     |
+| GET `/user/:userId/quests/:questId/dialogue`        | 임무 대화(기록·현재 선택지). 해금된 임무는 제안 대화를 시작 |
+| POST `/user/:userId/quests/:questId/dialogue/advance` | `{requestId, expectedSeq, choiceId}` 선택 실행. 어긋나면 409와 최신 대화 |
+| POST `/user/:userId/quests/:questId/dialogue/read`  | `{seq}`까지 읽음 처리                       |
 
 이동·전투·탈출은 `{raidId, expectedVersion, requestId}`를 받는다. 건물을 목적지로 지정할 때 `destinationBuildingId`를 보낸다. 같은 노드의 건물로 이동할 때 `path`에는 현재 노드 하나만 담는다. 이동에는 `path`와 선택적인 `equipment`·`inventory`를 함께 보낸다. 인벤토리 이동은 `{direction: "to_backpack" | "to_stash", weaponMasterId, slotIndex}`, 장착은 `{weaponMasterId: string | null, slotIndex}`를 사용한다.
 
@@ -88,6 +93,15 @@
 이동 중 같은 라운드에 추적 중인 고스트와 같은 노드에 도착하거나 같은 도로를 반대 방향으로 지나면, 플레이어의 도착 노드에서 이동을 멈추고 전투한다. 거점 0에서는 일반 조우가 발생하지 않는다. 첫 임무의 기록 회수 조우는 시설 26에서 별도로 처리한다.
 
 첫 임무는 구호 장비 수령 → 시설 26으로 이동 → 통제 요원 또는 고스트 전투 → 기록 확보 → 탈출 → 보고다. 기록을 확보한 탐사에서 사망하면 회수 단계로 되돌린다. 보고 시 보상과 ‘복귀 개체 관측 기록’을 한 번만 공개한다.
+
+### 임무 대화(채팅형)
+
+임무는 서버 전용 대화 그래프(`apps/server/src/logic/questDialogue.ts`, 정의는 `logic/story.ts`)로 진행한다. 노드는 대사(LINES)·선택(CHOICE)·조건 분기(BRANCH)·목표 대기(AWAIT_OBJECTIVE)·종료(END)이며, 선형 임무는 선택지가 하나인 그래프다. 서버가 노드에 들어갈 때 선택지를 확정해 저장하고, 클라이언트는 내려받은 기록과 선택지만 그린다. 선택 요청은 요청 ID·순번으로 재시도·중복 클릭을 걸러 효과를 한 번만 실행하며, 확정 뒤 조건이 깨지면 409와 최신 대화를 돌려준다.
+
+- 임무는 여러 개를 동시에 수락할 수 있다. 같은 시설을 목표로 하는 임무는 동시에 수락할 수 없다. 목표는 수락 때 확정되며 바꿀 수 없다.
+- 탐사 중에도 대화·수락할 수 있고 탐사 시간을 쓰지 않는다. 아이템·크레딧은 탐사 중에 주고받지 않는다. 탐사 중 생긴 지급은 탐사 종료 후 지급하고, 전달(소모) 선택지는 거점에서만 진행한다.
+- 거절은 제안 대화의 마지막 선택지에서만 둘 수 있다. 1막 임무는 체인을 가르지 않는다. 정의 검증과 체인 전수 탐색 테스트(`logic/questDialogue.test.ts`)로 이 규칙과 막힘 없는 진행을 확인한다.
+- 새 연락은 메시지형 토스트와 임무 탭의 빨간 점으로 알린다. 전투 재생 중에는 토스트를 미룬다.
 
 ## 확정하지 않은 서사·후속 범위
 
