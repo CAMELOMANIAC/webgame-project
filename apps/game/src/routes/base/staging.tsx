@@ -56,6 +56,16 @@ import {
 import mapData from "../../../../../packages/types/src/assets/map_graph.json";
 import * as styles from "./staging.css";
 
+/** 구역 외곽선 전체(약 x -108~1670, y -56~694)에 마커 여백을 더한 진입 지도 범위 */
+const ENTRY_MAP_VIEWBOX = { x: -140, y: -90, width: 1850, height: 820 };
+
+function entryMapPosition(point: { x: number; y: number }) {
+  return {
+    left: `${((point.x - ENTRY_MAP_VIEWBOX.x) / ENTRY_MAP_VIEWBOX.width) * 100}%`,
+    top: `${((point.y - ENTRY_MAP_VIEWBOX.y) / ENTRY_MAP_VIEWBOX.height) * 100}%`,
+  };
+}
+
 interface StagingLoadoutDraft {
   characterData: CharacterData;
   stash: StashItemResponse[];
@@ -443,7 +453,7 @@ function ExpeditionStagingScreen() {
                 <>
                   <div className={styles.entryMinimapWrap}>
                     <svg
-                      viewBox="-120 -60 1850 960"
+                      viewBox={`${ENTRY_MAP_VIEWBOX.x} ${ENTRY_MAP_VIEWBOX.y} ${ENTRY_MAP_VIEWBOX.width} ${ENTRY_MAP_VIEWBOX.height}`}
                       className={styles.entryMinimapSvg}
                       role="img"
                       aria-label="진입 지점 및 중앙 탈출구 미니맵"
@@ -451,77 +461,40 @@ function ExpeditionStagingScreen() {
                       {MAP_DISTRICTS.map((district) => (
                         <polygon
                           key={district.id}
+                          className={styles.entryMinimapDistrict}
                           points={district.hull
                             .map((pt) => `${pt.x},${pt.y}`)
                             .join(" ")}
-                          fill="rgba(255, 255, 255, 0.04)"
-                          stroke="rgba(255, 255, 255, 0.14)"
-                          strokeWidth="3"
+                          vectorEffect="non-scaling-stroke"
                         />
                       ))}
-                      {extractionNode && (
-                        <g>
-                          <circle
-                            cx={extractionNode.x}
-                            cy={extractionNode.y}
-                            r="16"
-                            fill="rgba(133, 173, 255, 0.25)"
-                            stroke="#85adff"
-                            strokeWidth="4"
-                          />
-                          <text
-                            x={extractionNode.x}
-                            y={extractionNode.y - 24}
-                            textAnchor="middle"
-                            fill="#85adff"
-                            fontSize="26"
-                            fontFamily="monospace"
-                            fontWeight="700"
-                          >
-                            탈출구
-                          </text>
-                        </g>
-                      )}
-                      {entryDetails.map(({ nodeId, node }, entryIndex) => {
-                        if (!node) return null;
-                        const isSelected = effectiveStartNodeId === nodeId;
-                        return (
-                          <g
-                            key={nodeId}
-                            style={{ cursor: "pointer" }}
-                            onClick={() => setSelectedStartNodeId(nodeId)}
-                          >
-                            {isSelected && (
-                              <circle
-                                cx={node.x}
-                                cy={node.y}
-                                r="26"
-                                fill="none"
-                                stroke="#fafafa"
-                                strokeWidth="4"
-                              />
-                            )}
-                            <circle
-                              cx={node.x}
-                              cy={node.y}
-                              r={isSelected ? "14" : "10"}
-                              fill={isSelected ? "#fafafa" : "#a1a1aa"}
-                            />
-                            <text
-                              x={node.x}
-                              y={node.y + 34}
-                              textAnchor="middle"
-                              fill={isSelected ? "#fafafa" : "#a1a1aa"}
-                              fontSize="24"
-                              fontFamily="monospace"
-                              fontWeight="700"
-                            >
-                              {String(entryIndex + 1).padStart(2, "0")}
-                            </text>
-                          </g>
-                        );
-                      })}
                     </svg>
+                    {extractionNode && (
+                      <span
+                        className={styles.entryMinimapExtraction}
+                        style={entryMapPosition(extractionNode)}
+                      >
+                        탈출구
+                      </span>
+                    )}
+                    {entryDetails.map(({ nodeId, node }, entryIndex) => {
+                      if (!node) return null;
+                      return (
+                        <button
+                          key={nodeId}
+                          type="button"
+                          tabIndex={-1}
+                          disabled={startRaid.isPending}
+                          className={styles.entryMinimapMarker({
+                            selected: effectiveStartNodeId === nodeId,
+                          })}
+                          style={entryMapPosition(node)}
+                          onClick={() => setSelectedStartNodeId(nodeId)}
+                        >
+                          {String(entryIndex + 1).padStart(2, "0")}
+                        </button>
+                      );
+                    })}
                   </div>
 
                   <div

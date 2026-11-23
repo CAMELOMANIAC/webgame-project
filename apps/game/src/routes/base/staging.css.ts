@@ -267,16 +267,87 @@ export const entryMaterials = style({
 });
 
 export const entryMinimapWrap = style({
+  position: "relative",
   width: "100%",
+  aspectRatio: "1850 / 820",
   borderRadius: vars.radius.control,
   border: `1px solid ${vars.border.subtle}`,
   backgroundColor: vars.surface.low,
-  padding: "8px",
   boxSizing: "border-box",
+  overflow: "hidden",
 });
 
 export const entryMinimapSvg = style({
   display: "block",
   width: "100%",
-  height: "150px",
+  height: "100%",
+});
+
+export const entryMinimapDistrict = style({
+  fill: "rgba(255, 255, 255, 0.03)",
+  stroke: vars.border.strong,
+  strokeWidth: 1,
+  strokeLinejoin: "round",
+});
+
+const entryMinimapChip = style({
+  position: "absolute",
+  transform: "translate(-50%, -50%)",
+  padding: "1px 4px",
+  borderRadius: vars.radius.badge,
+  fontFamily: vars.font.mono,
+  fontSize: "10px",
+  fontWeight: 700,
+  lineHeight: "14px",
+  fontVariantNumeric: "tabular-nums",
+  whiteSpace: "nowrap",
+});
+
+export const entryMinimapExtraction = style([
+  entryMinimapChip,
+  {
+    color: vars.color.positive,
+    backgroundColor: vars.surface.low,
+    border: `1px solid ${vars.border.positive}`,
+    pointerEvents: "none",
+  },
+]);
+
+export const entryMinimapMarker = recipe({
+  base: [
+    entryMinimapChip,
+    {
+      cursor: "pointer",
+      transition: "border-color 0.15s ease, color 0.15s ease",
+      selectors: {
+        "&:disabled": {
+          cursor: "default",
+        },
+      },
+    },
+  ],
+  variants: {
+    selected: {
+      true: {
+        zIndex: 1,
+        color: vars.color.ctaFg,
+        backgroundColor: vars.text.primary,
+        border: `1px solid ${vars.text.primary}`,
+      },
+      false: {
+        color: vars.text.secondary,
+        backgroundColor: vars.surface.high,
+        border: `1px solid ${vars.border.strong}`,
+        selectors: {
+          "&:hover:not(:disabled)": {
+            borderColor: vars.text.primary,
+            color: vars.text.primary,
+          },
+        },
+      },
+    },
+  },
+  defaultVariants: {
+    selected: false,
+  },
 });
