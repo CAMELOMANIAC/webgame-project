@@ -962,12 +962,6 @@ export const buildingEventText = style({
   color: vars.text.primary,
 });
 
-export const buildingErrorText = style({
-  margin: 0,
-  fontSize: "11px",
-  color: vars.color.negative,
-});
-
 export const buildingActionBtn = style({
   width: "100%",
   display: "flex",

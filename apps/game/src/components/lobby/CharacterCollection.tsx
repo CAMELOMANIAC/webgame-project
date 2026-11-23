@@ -8,6 +8,7 @@ import {
   useCharacterCollectionActions,
   useCharacterRoster,
 } from "@/utils/hooks/useCharacterCollection";
+import { useResultToast } from "@/utils/hooks/useResultToast";
 
 import defaultSurvivorPortrait from "../../assets/survivor-portrait-tranparent.png";
 import * as styles from "./CharacterCollection.css";
@@ -57,7 +58,8 @@ export default function CharacterCollection({
           (entry) => entry.params.characterId === character.id,
         ),
     );
-  const error = roster.error ?? (readOnly ? null : select.error);
+  const error = roster.error;
+  useResultToast(readOnly ? null : select.error?.message, select.reset);
   const Card = readOnly ? "div" : "button";
   return (
     <section className={styles.collection} aria-label={title}>

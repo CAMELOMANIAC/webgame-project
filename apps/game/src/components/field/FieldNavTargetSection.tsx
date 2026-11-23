@@ -71,6 +71,7 @@ import { useJournal } from "@/utils/hooks/useJournal";
 import { useLootAction } from "@/utils/hooks/useLootAction";
 import { useRaidRules } from "@/utils/hooks/useRaidRules";
 import { useRaidSession } from "@/utils/hooks/useRaidSession";
+import { useResultToast } from "@/utils/hooks/useResultToast";
 import {
   estimatePathFatigueCost,
   estimatePathTravelMinutes,
@@ -128,6 +129,8 @@ const FieldNavTargetSection = () => {
   const setPendingBuildingCombat = useSetAtom(pendingBuildingCombatAtom);
   const buildingAction = useBuildingAction();
   const lootAction = useLootAction();
+  useResultToast(buildingAction.error?.message, buildingAction.reset);
+  useResultToast(lootAction.error?.message, lootAction.reset);
   const [lastBuildingMsg, setLastBuildingMsg] = useState<{
     buildingId: number;
     text: string;
@@ -1266,12 +1269,6 @@ const FieldNavTargetSection = () => {
               <span className={styles.lootTitle}>전리품 회수</span>
             </div>
 
-            {lootAction.error && (
-              <p className={styles.buildingErrorText}>
-                {lootAction.error.message}
-              </p>
-            )}
-
             <div className={styles.lootList}>
               {pendingLoot.map((item) => {
                 const itemWeight = item.weight * item.quantity;
@@ -1373,12 +1370,6 @@ const FieldNavTargetSection = () => {
                               "")}
                   </p>
                 </div>
-
-              {buildingAction.error && (
-                <p className={styles.buildingErrorText}>
-                  {buildingAction.error.message}
-                </p>
-              )}
 
               {!isActiveBuildingLockedDown &&
                 !activeBuilding.category &&
