@@ -10,6 +10,7 @@ export * from "./lockdown";
 export * from "./market";
 export * from "./characterVariants";
 export * from "./genes";
+export * from "./questDialogue";
 export type TargetingStrategy = "WEAKEST" | "STRONGEST" | "RANDOM";
 export type ItemKind = "EQUIPMENT" | "MATERIAL" | "CONSUMABLE";
 export type ConsumableCategory = "FOOD" | "MEDICAL";
