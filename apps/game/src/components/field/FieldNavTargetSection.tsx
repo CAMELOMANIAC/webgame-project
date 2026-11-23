@@ -327,11 +327,12 @@ const FieldNavTargetSection = () => {
   const recommendedDestinations = useMemo(() => {
     const candidates: RecommendedDestination[] = [];
 
-    if (journal.data?.mission.status === "ACTIVE") {
+    for (const objective of journal.data?.activeObjectives ?? []) {
+      if (objective.status !== "ACTIVE") continue;
       candidates.push({
-        id: `mission-${journal.data.mission.targetNodeId}`,
-        nodeId: journal.data.mission.targetNodeId,
-        name: "기록 중계 시설",
+        id: `mission-${objective.targetNodeId}`,
+        nodeId: objective.targetNodeId,
+        name: objective.targetLabel,
         category: "MISSION",
       });
     }
@@ -380,7 +381,7 @@ const FieldNavTargetSection = () => {
       })
       .sort((a, b) => a.travelMinutes - b.travelMinutes);
   }, [
-    journal.data?.mission,
+    journal.data?.activeObjectives,
     rules?.extractionNodeIds,
     rules?.startNodeId,
     nodeId,
