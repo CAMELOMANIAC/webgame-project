@@ -8,6 +8,7 @@ import {
   findWeaponDropDistricts,
   formatRaidTime,
   getBuildingDistrict,
+  getBuildingEventById,
   getCatalogItemById,
   getCraftingRecipesForCategory,
   hasBuildingChoiceCondition,
@@ -234,13 +235,15 @@ const FieldNavTargetSection = () => {
   const isUnarmed =
     (character?.equipment?.filter((w) => w.weaponMaster !== null).length ??
       0) === 0;
+  // 서버가 진입 시 확정한 이벤트를 우선 표시합니다.
   const activeIntroEvent = activeBuilding
-    ? resolveBuildingIntroEvent(
+    ? (getBuildingEventById(activeEventState?.eventId) ??
+      resolveBuildingIntroEvent(
         activeBuilding,
         activeDistrict,
         completedEventIds,
         { isUnarmed },
-      )
+      ))
     : undefined;
   const activeBuildingImage = activeBuilding
     ? resolveBuildingImage(activeBuilding, activeIntroEvent)
