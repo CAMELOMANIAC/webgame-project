@@ -3,6 +3,7 @@ import {
   applyExhaustedActionMinutes,
   type BuildingActionInput,
   type BuildingActionResult,
+  type BuildingEventDefinition,
   type BuildingEventState,
   calculateBaseRecovery,
   calculateEntryDelayMinutes,
@@ -11,6 +12,7 @@ import {
   FATIGUE_RULES,
   type FoodBuffEffect,
   getBuildingDistrict,
+  getBuildingEventById,
   getCatalogItemById,
   getEnemyArchetypeById,
   getRecipeById,
@@ -630,8 +632,9 @@ export async function navigateRaid(
       if (parsed.path[0] !== raid.currentNodeId)
         throw new InventoryError("Path must start at the current node");
       const isBuildingMove = parsed.path.length === 1;
+      let destBuilding: MapBuilding | undefined;
       if (parsed.destinationBuildingId !== undefined) {
-        const destBuilding = (
+        destBuilding = (
           mapData.buildings as unknown as MapBuilding[]
         ).find(
           (building) =>
@@ -662,6 +665,15 @@ export async function navigateRaid(
       const moveExp = readExplorationState(raid);
       const hadPendingLoot = moveExp.pendingLoot.length > 0;
       moveExp.pendingLoot = [];
+      // 건물 진입 시 표시·검증할 이벤트를 서버에서 확정한다.
+      const pinnedEventChanged = destBuilding
+        ? (
+            await pinBuildingIntroEvent(tx, characterId, moveExp, destBuilding, {
+              refreshIntro: true,
+            })
+          ).changed
+        : false;
+      const shouldWriteExploration = hadPendingLoot || pinnedEventChanged;
       // A building move records one step at the same road node.
       const path = isBuildingMove
         ? [raid.currentNodeId, raid.currentNodeId]
@@ -778,7 +790,7 @@ export async function navigateRaid(
             }
           }
           const encounterTravel =
-            !pendingRetreat || hadPendingLoot || moveExp.pendingLoot.length > 0
+            !pendingRetreat || shouldWriteExploration || moveExp.pendingLoot.length > 0
               ? writeExplorationState(raid, moveExp)
               : undefined;
           return {
@@ -822,7 +834,7 @@ export async function navigateRaid(
         currentBuildingId: parsed.destinationBuildingId ?? null,
         time: lastTravelTime,
         ghostRoster,
-        ...(hadPendingLoot
+        ...(shouldWriteExploration
           ? { encounterTravel: writeExplorationState(raid, moveExp) }
           : {}),
       };
@@ -1373,6 +1385,42 @@ function readExplorationState(raid: RaidSession): InternalExplorationState {
   };
 }
 
+/**
+ * 건물에 표시·검증할 이벤트를 서버에서 확정해 `buildingEvents`에 저장합니다.
+ * 이미 확정된 이벤트가 있으면 그대로 사용하고, `refreshIntro`이면 아직 아무 행동도
+ * 하지 않은(INTRO) 건물의 이벤트를 현재 상태로 다시 확정합니다(건물 재진입 시).
+ */
+async function pinBuildingIntroEvent(
+  tx: TransactionClient,
+  characterId: string,
+  exp: InternalExplorationState,
+  building: MapBuilding,
+  options: { refreshIntro: boolean },
+): Promise<{ event: BuildingEventDefinition; changed: boolean }> {
+  const key = String(building.id);
+  const prev = exp.buildingEvents[key];
+  const pinned = getBuildingEventById(prev?.eventId);
+  const canRefresh = options.refreshIntro && (!prev || prev.stage === "INTRO");
+  if (pinned && !canRefresh) return { event: pinned, changed: false };
+
+  const equipped = await tx.query.characterWeapons.findMany({
+    where: eq(characterWeapons.characterId, characterId),
+    columns: { id: true },
+  });
+  const event = resolveBuildingIntroEvent(
+    building,
+    getBuildingDistrict(building),
+    exp.completedEventIds,
+    { isUnarmed: equipped.length === 0 },
+  );
+  if (pinned?.id === event.id) return { event, changed: false };
+  exp.buildingEvents[key] =
+    prev && prev.stage !== "INTRO"
+      ? { ...prev, eventId: event.id }
+      : { stage: "INTRO", text: event.introText, eventId: event.id };
+  return { event, changed: true };
+}
+
 function writeExplorationState(
   raid: RaidSession,
   next: InternalExplorationState,
@@ -1706,15 +1754,13 @@ export async function executeRaidBuildingAction(
 
       const district = getBuildingDistrict(building);
       const exp = readExplorationState(raid);
-      const equippedForEvent = await tx.query.characterWeapons.findMany({
-        where: eq(characterWeapons.characterId, characterId),
-        columns: { id: true },
-      });
-      const introEvent = resolveBuildingIntroEvent(
+      // 진입 시 확정된 이벤트를 사용합니다(확정 이전 레이드는 여기서 확정).
+      const { event: introEvent } = await pinBuildingIntroEvent(
+        tx,
+        characterId,
+        exp,
         building,
-        district,
-        exp.completedEventIds,
-        { isUnarmed: equippedForEvent.length === 0 },
+        { refreshIntro: false },
       );
       const encounterRate = introEvent.encounterRate ?? 0.3;
       const nextTime = raid.time + 10;
@@ -1765,6 +1811,7 @@ export async function executeRaidBuildingAction(
           }
         }
         exp.buildingEvents[buildingKey] = {
+          eventId: introEvent.id,
           stage: "READY",
           text: `건물 내부 수색 중 ${archetype.name}와(과) 교전했습니다.`,
         };
@@ -1819,6 +1866,7 @@ export async function executeRaidBuildingAction(
         }
 
         exp.buildingEvents[buildingKey] = {
+          eventId: introEvent.id,
           stage: "READY",
           text: "내부는 조용합니다. 남은 물자를 수색할 수 있습니다.",
         };
@@ -1870,6 +1918,7 @@ export async function executeRaidBuildingAction(
         if (remainingAllowance <= 0) {
           exp.lootedBuildingIds.push(building.id);
           exp.buildingEvents[buildingKey] = {
+            eventId: introEvent.id,
             stage: "CLEARED",
             text: "이 지역에서 얻을 건 다 얻은 것 같습니다.",
           };
@@ -1930,6 +1979,7 @@ export async function executeRaidBuildingAction(
         exp.districtLootCounts[district.id] =
           currentDistrictItems + totalObtainedQty;
         exp.buildingEvents[buildingKey] = {
+          eventId: introEvent.id,
           stage: "CLEARED",
           text: resultText,
         };
@@ -2116,6 +2166,7 @@ export async function executeRaidBuildingAction(
           exp.completedEventIds.push(introEvent.id);
         }
         exp.buildingEvents[buildingKey] = {
+          eventId: introEvent.id,
           stage: "CLEARED",
           text: outcome.text,
         };
@@ -2239,6 +2290,7 @@ export async function executeRaidBuildingAction(
       const resultName = resultCatalog?.name ?? recipe.resultEquipmentId;
       exp.usedCraftBuildingIds.push(building.id);
       exp.buildingEvents[buildingKey] = {
+        eventId: introEvent.id,
         stage: "CLEARED",
         text: `${resultName} 조합 완료`,
       };

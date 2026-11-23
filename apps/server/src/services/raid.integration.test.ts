@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID, webcrypto } from "node:crypto";
 import { test } from "node:test";
 import { eq } from "drizzle-orm";
+import { isBuildingLockedDown, type MapBuilding } from "@webgame/types";
 import mapData from "../../../../packages/types/src/assets/map_graph.json";
 import { buildApp } from "../app";
 import {
@@ -17,7 +18,7 @@ import {
 } from "../db";
 import { gameRules } from "../logic/rules";
 import { integrationFixture } from "../testing/integrationFixture";
-import { decideRaidBattle, extractRaid, fightRaidMonster, getRaidNavigationResult, navigateRaid, startRaid } from "./raid";
+import { decideRaidBattle, executeRaidBuildingAction, extractRaid, fightRaidMonster, getRaidNavigationResult, navigateRaid, startRaid } from "./raid";
 
 function command(raid: { id: string; version: number }) {
   return {
@@ -431,3 +432,56 @@ for (const retreat of [true, false]) {
     }
   });
 }
+
+test("실제 DB: 건물 진입 시 확정된 이벤트는 건물 안에서 장비가 바뀌어도 유지된다", async (t) => {
+  const { db, user, character, weapon } = await integrationFixture(t);
+  await db
+    .update(characters)
+    .set({ hp: 1000, maxHp: 1000 })
+    .where(eq(characters.id, character.id));
+  const entryNodeId = 37;
+  const { raid } = await startRaid(db, user.id, character.id, undefined, entryNodeId);
+  const building = (mapData.buildings as unknown as MapBuilding[]).find(
+    (b) =>
+      b.roadNodeId === entryNodeId &&
+      !b.category &&
+      !isBuildingLockedDown(b, raid.time, raid.id),
+  );
+  if (!building) throw new Error("Test map needs a normal building on node 37");
+
+  // 비무장 상태로 진입하면 비무장 복구 이벤트가 확정된다.
+  const entered = await navigateRaid(db, user.id, character.id, {
+    ...command(raid),
+    path: [entryNodeId],
+    destinationBuildingId: building.id,
+  });
+  assert.equal(
+    entered.raid.exploration?.buildingEvents[String(building.id)]?.eventId,
+    "story-unarmed-cache-1",
+  );
+
+  // 건물 안에서 무기를 장착해도 확정된 이벤트의 선택지를 실행할 수 있다.
+  await db.insert(characterWeapons).values({
+    characterId: character.id,
+    weaponMasterId: weapon.id,
+    slotIndex: 0,
+  });
+  const result = await executeRaidBuildingAction(
+    db,
+    user.id,
+    character.id,
+    {
+      ...command(entered.raid),
+      action: "EVENT_CHOICE",
+      choiceId: "trace-supply-tag",
+    },
+    { random: () => 0.99 },
+  );
+  assert.equal(result.action, "EVENT_CHOICE");
+  const state = result.raid.exploration?.buildingEvents[String(building.id)];
+  assert.equal(state?.stage, "CLEARED");
+  assert.equal(state?.eventId, "story-unarmed-cache-1");
+  assert.ok(
+    result.raid.exploration?.completedEventIds?.includes("story-unarmed-cache-1"),
+  );
+});
