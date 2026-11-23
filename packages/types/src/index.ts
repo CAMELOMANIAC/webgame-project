@@ -490,7 +490,6 @@ export interface EnemyNoiseSignal {
   x: number;
   y: number;
   radius: number;
-  tier?: "near" | "broad";
 }
 
 export interface RaidNoiseSignals {
@@ -535,15 +534,8 @@ export function classifyPathSegmentRisk(
 ): PathSegmentRisk {
   if (noiseAreas.length === 0) return "safe";
   let nearCount = 0;
-  let broadCount = 0;
   for (const area of noiseAreas) {
     const dist = distPointToSegment(area.x, area.y, x1, y1, x2, y2);
-    if (area.tier === "broad") {
-      if (dist <= area.radius) {
-        broadCount += 1;
-      }
-      continue;
-    }
     if (dist <= area.radius) {
       return "high";
     }
@@ -551,8 +543,8 @@ export function classifyPathSegmentRisk(
       nearCount += 1;
     }
   }
-  if (nearCount >= 2 || broadCount >= 2) return "high";
-  if (nearCount >= 1 || broadCount >= 1) return "medium";
+  if (nearCount >= 2) return "high";
+  if (nearCount >= 1) return "medium";
   return "safe";
 }
 
