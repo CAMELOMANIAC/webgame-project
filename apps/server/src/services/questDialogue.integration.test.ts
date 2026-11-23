@@ -40,6 +40,28 @@ async function stashQuantity(
   return rows.reduce((sum, row) => sum + row.quantity, 0);
 }
 
+/** 질문 선택지를 거쳐 수락 선택지까지 진행한다. */
+async function acceptThroughDialogue(
+  db: Awaited<ReturnType<typeof integrationFixture>>["db"],
+  userId: string,
+  questId: string,
+) {
+  let view = await getQuestDialogue(db, userId, questId);
+  for (let step = 0; step < 10 && view.status === "OFFERED"; step++) {
+    if (view.pending.kind !== "CHOICE") break;
+    const choices = view.pending.choices.filter((choice) => choice.enabled);
+    const choice = choices.find((item) => item.label.includes("수락")) ?? choices.at(-1)!;
+    const result = await advanceQuestDialogue(db, userId, questId, {
+      requestId: randomUUID(),
+      expectedSeq: view.seq,
+      choiceId: choice.id,
+    });
+    assert.ok(result.ok);
+    view = result.dialogue;
+  }
+  return view;
+}
+
 async function strongCharacter(fixture: Awaited<ReturnType<typeof integrationFixture>>) {
   const { db, character, weapon } = fixture;
   await db.update(characters).set({ hp: 1000, maxHp: 1000 }).where(eq(characters.id, character.id));
@@ -58,9 +80,22 @@ test("실제 DB: 대화 진행은 같은 요청 재시도·중복 클릭·오래
   assert.equal(opened.pending.kind, "CHOICE");
   assert.ok(opened.transcript.length > 0);
   assert.ok(opened.transcript.every((entry) => entry.speaker.kind === "NPC"));
-  const choiceId = opened.pending.kind === "CHOICE" ? opened.pending.choices[0]!.id : "";
+  // 질문 선택지(현장 위험)를 하나 거친 뒤 수락 노드로 간다. 질문 다음 대사의 플레이어 줄이 선택지 문구를 대신한다.
+  const asked = await advanceQuestDialogue(db, user.id, firstMission.id, {
+    requestId: randomUUID(),
+    expectedSeq: opened.seq,
+    choiceId: opened.pending.kind === "CHOICE" ? opened.pending.choices[0]!.id : "",
+  });
+  assert.ok(asked.ok);
+  assert.equal(asked.dialogue.status, "OFFERED");
+  assert.equal(asked.dialogue.transcript.filter((entry) => entry.speaker.kind === "PLAYER").length, 1);
+  const acceptChoice =
+    asked.dialogue.pending.kind === "CHOICE"
+      ? asked.dialogue.pending.choices.find((choice) => choice.label.includes("수락"))
+      : undefined;
+  assert.ok(acceptChoice);
 
-  const request = { requestId: randomUUID(), expectedSeq: opened.seq, choiceId };
+  const request = { requestId: randomUUID(), expectedSeq: asked.dialogue.seq, choiceId: acceptChoice.id };
   const [first, again] = await Promise.all([
     advanceQuestDialogue(db, user.id, firstMission.id, request),
     advanceQuestDialogue(db, user.id, firstMission.id, request),
@@ -87,7 +122,6 @@ test("실제 DB: 대화 진행은 같은 요청 재시도·중복 클릭·오래
   assert.equal(await stashQuantity(db, user.id, firstMission.supplyWeaponId), 1);
   const view = await getQuestDialogue(db, user.id, firstMission.id);
   assert.ok(view.transcript.some((entry) => entry.speaker.kind === "PLAYER"));
-  assert.ok(view.transcript.some((entry) => entry.speaker.kind === "SYSTEM" && entry.text.startsWith("[지급]")));
   assert.equal((await journalView(db, user.id)).activeObjectives[0]?.targetNodeId, firstMission.targetNodeId);
 });
 
@@ -97,16 +131,10 @@ test("실제 DB: 탐사 중 수락한 임무의 지급품은 탐사가 끝난 �
   await strongCharacter(fixture);
   const { raid } = await startRaid(db, user.id, character.id);
 
-  const opened = await getQuestDialogue(db, user.id, firstMission.id);
-  const choiceId = opened.pending.kind === "CHOICE" ? opened.pending.choices[0]!.id : "";
-  const accepted = await advanceQuestDialogue(db, user.id, firstMission.id, {
-    requestId: randomUUID(),
-    expectedSeq: opened.seq,
-    choiceId,
-  });
-  assert.ok(accepted.ok);
+  const accepted = await acceptThroughDialogue(db, user.id, firstMission.id);
+  assert.equal(accepted.status, "ACTIVE");
   assert.equal(await stashQuantity(db, user.id, firstMission.supplyWeaponId), 0);
-  assert.ok(accepted.dialogue.transcript.some((entry) => entry.text.startsWith("[지급 예정]")));
+  assert.ok(accepted.transcript.some((entry) => entry.text.startsWith("[지급 예정]")));
 
   const path = pathToNode(firstMission.targetNodeId);
   const result = await navigateRaid(db, user.id, character.id, { ...command(raid), path });
@@ -180,4 +208,45 @@ test("실제 DB: 대화 위치가 없는 기존 진행 기록은 상태값 기�
   assert.ok(view.transcript.some((entry) => entry.speaker.kind === "PLAYER"));
   assert.equal(await stashQuantity(db, user.id, firstMission.supplyWeaponId), 0);
   assert.equal((await journalView(db, user.id)).missions[0]?.unread, 0);
+});
+
+test("실제 DB: 4차 최 사장 의뢰를 거절하면 조 과장 공식 감사가 열리고, 목표 시설을 골라 수락한다", async (t) => {
+  const { db, user } = await integrationFixture(t);
+  // 1~3차를 완료한 상태를 만든다.
+  for (const questId of ["hanlim-first-recovery", "hanlim-tier2-ration-audit", "hanlim-tier3-ward-manifest"])
+    await db.insert(questProgresses).values({
+      userId: user.id,
+      questId,
+      definitionVersion: 1,
+      status: "COMPLETE",
+      completedAt: new Date(),
+    });
+  let view = await getQuestDialogue(db, user.id, "hanlim-second-contraband");
+  assert.equal(view.pending.kind, "CHOICE");
+  const decline =
+    view.pending.kind === "CHOICE" ? view.pending.choices.find((choice) => choice.label.includes("거절")) : undefined;
+  assert.ok(decline);
+  const declined = await advanceQuestDialogue(db, user.id, "hanlim-second-contraband", {
+    requestId: randomUUID(),
+    expectedSeq: view.seq,
+    choiceId: decline.id,
+  });
+  assert.ok(declined.ok);
+  assert.equal(declined.dialogue.status, "LOCKED");
+  assert.deepEqual(declined.dialogue.pending, { kind: "END", outcome: "DECLINED" });
+  const journal = await journalView(db, user.id);
+  assert.ok(journal.missions.some((mission) => mission.id === "hanlim-tier4-official-audit"));
+
+  view = await getQuestDialogue(db, user.id, "hanlim-tier4-official-audit");
+  const depot =
+    view.pending.kind === "CHOICE" ? view.pending.choices.find((choice) => choice.label.includes("#842")) : undefined;
+  assert.ok(depot);
+  const accepted = await advanceQuestDialogue(db, user.id, "hanlim-tier4-official-audit", {
+    requestId: randomUUID(),
+    expectedSeq: view.seq,
+    choiceId: depot.id,
+  });
+  assert.ok(accepted.ok);
+  assert.deepEqual(accepted.dialogue.objective, { targetNodeId: 842, targetLabel: "서포 물류 중계창" });
+  assert.equal((await journalView(db, user.id)).activeObjectives[0]?.targetNodeId, 842);
 });

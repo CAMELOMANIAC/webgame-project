@@ -19,7 +19,7 @@ import {
   type TransactionClient,
   users,
 } from "../db";
-import { getNode, isMissionUnlocked } from "../logic/questDialogue";
+import { choiceReachesAccept, getNode, isMissionUnlocked } from "../logic/questDialogue";
 import {
   disclosedStory,
   firstMission,
@@ -251,10 +251,17 @@ export async function acceptMission(db: Database, userId: string, questId?: stri
     const context = await currentPlayContext(tx, userId);
     const w = await loadWorking(tx, userId, def, context, { create: true });
     if (!w) throw new InventoryError("Previous mission must be completed first", 409);
-    if (w.row.status === "OFFERED")
-      await performDefaultChoice(tx, userId, w, context, (effects) =>
-        effects.some((effect) => effect.type === "ACCEPT_OBJECTIVE"),
+    // 제안 대화의 질문 선택지를 거쳐 수락 선택지까지 진행한다(목표가 여럿이면 첫 목표).
+    for (let step = 0; step < 20 && w.row.status === "OFFERED"; step++) {
+      const accepted = await performDefaultChoice(tx, userId, w, context, (choice) =>
+        (choice.effects ?? []).some((effect) => effect.type === "ACCEPT_OBJECTIVE"),
       );
+      if (accepted) break;
+      const moved = await performDefaultChoice(tx, userId, w, context, (choice) =>
+        choiceReachesAccept(def.dialogue, choice),
+      );
+      if (!moved) break;
+    }
     return journalView(tx, userId);
   });
 }

@@ -13,6 +13,8 @@ export const MISSION_NODE_LABELS: Record<number, string> = {
   [secondMissionNodeId]: "물류센터 봉쇄 중계점",
   [borderGateNodeId]: "물류단지 외곽 검문소",
   [thirdMissionNodeId]: "중앙 전력 변전소",
+  305: "중앙 보급 집하장",
+  842: "서포 물류 중계창",
 };
 
 export type BuildingCategory =

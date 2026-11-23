@@ -23,6 +23,7 @@ import {
 } from "../db";
 import {
   defaultChoice,
+  type DialogueChoice,
   type DialogueLine,
   type DialogueNode,
   type DialogueState,
@@ -277,7 +278,8 @@ async function applyEffect(
       w.row.acceptedAt = new Date();
       w.row.recoveredRaidId = null;
       w.dirty = true;
-      pushSystem(w, `[목표] ${objective.targetLabel} [NODE #${objective.targetNodeId}]`, context.kind);
+      if (def.announceEffects)
+        pushSystem(w, `[목표] ${objective.targetLabel} [NODE #${objective.targetNodeId}]`, context.kind);
       return;
     }
     case "GRANT_ITEMS":
@@ -299,6 +301,7 @@ async function applyEffect(
         return;
       }
       await grantNow(tx, userId, items, credits);
+      if (!def.announceEffects) return;
       for (const item of items)
         pushSystem(w, `[지급] ${itemLabel(item.weaponId)} ×${item.quantity}`, context.kind);
       if (credits > 0) pushSystem(w, `[지급] ${credits} CR`, context.kind);
@@ -308,7 +311,8 @@ async function applyEffect(
       for (const item of effect.items) {
         const removed = await removeFromStash(tx, userId, item.weaponId, item.quantity);
         if (!removed) throw new InventoryError("전달할 물자가 부족합니다.", 409);
-        pushSystem(w, `[전달] ${itemLabel(item.weaponId)} ×${item.quantity}`, context.kind);
+        if (def.announceEffects)
+          pushSystem(w, `[전달] ${itemLabel(item.weaponId)} ×${item.quantity}`, context.kind);
       }
       return;
     case "SPEND_CREDITS": {
@@ -318,7 +322,7 @@ async function applyEffect(
         .where(and(eq(users.id, userId), sql`${users.credits} >= ${effect.amount}`))
         .returning({ id: users.id });
       if (!updated) throw new InventoryError("크레딧이 부족합니다.", 409);
-      pushSystem(w, `[전달] ${effect.amount} CR`, context.kind);
+      if (def.announceEffects) pushSystem(w, `[전달] ${effect.amount} CR`, context.kind);
       return;
     }
     case "SET_FLAG":
@@ -352,7 +356,7 @@ async function applyEffect(
         .onConflictDoNothing();
       for (const recordId of effect.recordIds ?? []) {
         const record = getStoryRecordById(recordId);
-        if (record) pushSystem(w, `[공개] ${record.title}`, context.kind);
+        if (record && def.announceEffects) pushSystem(w, `[공개] ${record.title}`, context.kind);
       }
       return;
     }
@@ -429,7 +433,11 @@ async function enterFrom(
   if (stop.kind === "END") {
     w.row.outcome = stop.outcome;
     w.row.status = stop.outcome === "COMPLETE" ? "COMPLETE" : "LOCKED";
-    if (stop.outcome === "COMPLETE") w.row.completedAt = new Date();
+    if (stop.outcome === "COMPLETE") {
+      w.row.completedAt = new Date();
+      // 공개 단계(기록·인물 표시)는 임무 완료로 올린다. 원고에 단계 효과를 따로 쓰지 않아도 된다.
+      await applyEffect(tx, userId, w, { type: "RAISE_STORY_TIER", tier: w.def.grantsStoryTier }, context);
+    }
   }
   await pinChoices(tx, userId, w, context);
 }
@@ -488,7 +496,9 @@ function firstNodeOfKind(
     if (node.kind === "CHOICE") {
       const choice = defaultChoice(node);
       choices.push(choice.id);
-      speak({ speaker: "player", text: choice.label });
+      const next = def.dialogue.nodes[choice.next];
+      if (!(next && "lines" in next && next.lines[0]?.speaker === "player"))
+        speak({ speaker: "player", text: choice.label });
       nodeId = choice.next;
     } else {
       nodeId = node.next;
@@ -499,7 +509,8 @@ function firstNodeOfKind(
 
 /** 대화 위치가 없는 기존 진행 행을 상태값 기준으로 대화 위치에 옮긴다(효과 미실행). */
 function normalizeLegacy(w: Working) {
-  if (w.row.dialogueNodeId) return;
+  // 대화 위치가 없거나, 정의가 바뀌어 저장된 노드가 사라졌으면 상태값 기준으로 다시 옮긴다.
+  if (w.row.dialogueNodeId && w.def.dialogue.nodes[w.row.dialogueNodeId]) return;
   const target = w.row.status === "COMPLETE" ? "END" : "AWAIT_OBJECTIVE";
   const path = firstNodeOfKind(w.def, target);
   w.row.dialogueNodeId = path.nodeId;
@@ -568,6 +579,15 @@ export async function loadWorking(
     }
   }
   const w: Working = { def, row, dirty: false };
+  const nodeMissing = !!row.dialogueNodeId && !def.dialogue.nodes[row.dialogueNodeId];
+  if (nodeMissing && row.status === "OFFERED") {
+    // 수락 전 대화는 정의가 바뀌었으면 처음부터 다시 보여준다(효과가 없던 단계).
+    w.row.transcript = [];
+    w.row.choiceHistory = [];
+    w.row.dialogueSeq += 1;
+    w.row.readSeq = w.row.dialogueSeq - 1;
+    await enterFrom(tx, userId, w, def.dialogue.entry, context);
+  }
   normalizeLegacy(w);
   await continueIfReady(tx, userId, w, context);
   await pinChoices(tx, userId, w, context);
@@ -656,7 +676,14 @@ async function performChoice(
       raidId: context.raidId,
     },
   ];
-  pushLine(w, { speaker: "player", text: choice.label, pace: "INSTANT" }, context.kind);
+  // 원고가 다음 노드 첫 줄에 플레이어 대사를 직접 썼으면 선택지 문구를 따로 남기지 않는다.
+  const nextNode = w.def.dialogue.nodes[choice.next];
+  const authoredReply =
+    nextNode !== undefined &&
+    "lines" in nextNode &&
+    nextNode.lines[0]?.speaker === "player";
+  if (!authoredReply)
+    pushLine(w, { speaker: "player", text: choice.label, pace: "INSTANT" }, context.kind);
   for (const effect of choice.effects ?? []) await applyEffect(tx, userId, w, effect, context);
   await enterFrom(tx, userId, w, choice.next, context);
   return { ok: true };
@@ -716,14 +743,14 @@ export async function performDefaultChoice(
   userId: string,
   w: Working,
   context: PlayContext,
-  predicate: (effects: readonly Effect[]) => boolean,
+  predicate: (choice: DialogueChoice) => boolean,
 ) {
   const node = getNode(w.def.dialogue, w.row.dialogueNodeId!);
   if (node.kind !== "CHOICE") return false;
   const enabled = new Set(
     (w.row.presentedChoices?.choices ?? []).filter((choice) => choice.enabled).map((choice) => choice.id),
   );
-  const choice = node.choices.find((item) => enabled.has(item.id) && predicate(item.effects ?? []));
+  const choice = node.choices.find((item) => enabled.has(item.id) && predicate(item));
   if (!choice) return false;
   const result = await performChoice(tx, userId, w, choice.id, context);
   if (!result.ok) throw new InventoryError(result.message, 409);
@@ -787,7 +814,9 @@ export async function recoverMissionRecord(
   w.row.dialogueSeq += 1;
   if (node.kind === "AWAIT_OBJECTIVE")
     for (const line of node.recoveredLines ?? []) pushLine(w, line, "RAID");
-  pushSystem(w, `[기록 확보] ${objectiveOf(def, w.row).targetLabel}`, "RAID");
+  const recoveredLines = node.kind === "AWAIT_OBJECTIVE" ? (node.recoveredLines ?? []) : [];
+  if (recoveredLines.length === 0)
+    pushSystem(w, `[기록 확보] ${objectiveOf(def, w.row).targetLabel}`, "RAID");
   await persist(tx, userId, w);
 }
 

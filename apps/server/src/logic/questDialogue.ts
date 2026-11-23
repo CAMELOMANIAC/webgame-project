@@ -547,3 +547,27 @@ export interface StoredPresentedChoices {
   context: "BASE" | "RAID";
   choices: DialogueChoiceView[];
 }
+
+function acceptsHere(choice: DialogueChoice) {
+  return (choice.effects ?? []).some((effect) => effect.type === "ACCEPT_OBJECTIVE");
+}
+
+/** 이 선택지를 고르면 (질문 등을 거쳐) 수락 선택지에 다시 닿는지. 호환 수락 API가 사용한다. */
+export function choiceReachesAccept(graph: DialogueGraph, choice: DialogueChoice): boolean {
+  if (acceptsHere(choice)) return true;
+  const seen = new Set<string>();
+  const stack = [choice.next];
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const node = graph.nodes[id];
+    if (!node) continue;
+    if (node.kind === "CHOICE") {
+      if (node.choices.some(acceptsHere)) return true;
+      stack.push(...node.choices.map((item) => item.next));
+    } else if (node.kind === "LINES") stack.push(node.next);
+    else if (node.kind === "BRANCH") stack.push(...node.cases.map((item) => item.next), node.otherwise);
+  }
+  return false;
+}

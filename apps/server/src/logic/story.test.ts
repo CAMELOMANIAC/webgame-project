@@ -3,8 +3,8 @@ import { test } from "node:test";
 import { getCatalogItemById, getEnemyArchetypeById } from "@webgame/types";
 import { disclosedStory, firstMission, MISSION_CHAIN } from "./story";
 
-test("임무 체인은 1~6차(3막 구조)로 이어지며 첫 임무의 지급품과 완료 보상이 중복되지 않는다", () => {
-  assert.equal(MISSION_CHAIN.length, 6);
+test("임무 체인은 1~6차(3막 구조)와 4차 대체 임무로 이어지며 첫 임무의 지급품과 완료 보상이 중복되지 않는다", () => {
+  assert.equal(MISSION_CHAIN.length, 7);
   assert.notEqual(firstMission.supplyWeaponId, firstMission.rewardWeaponId);
 
   const issuerNames = MISSION_CHAIN.map((m) => m.issuerName);
@@ -13,6 +13,7 @@ test("임무 체인은 1~6차(3막 구조)로 이어지며 첫 임무의 지급�
     "최 사장",
     "윤 책임연구원",
     "최 사장",
+    "조 시설과장",
     "조 시설과장",
     "윤 책임연구원",
   ]);

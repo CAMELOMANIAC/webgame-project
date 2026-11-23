@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { test } from "node:test";
 
 import { ALL_CATALOG_ITEMS } from "@webgame/types";
@@ -14,7 +16,9 @@ import {
   validateChain,
   validateMissionDialogue,
 } from "./questDialogue";
-import { MISSION_CHAIN } from "./story";
+import { getStoryRecordById, MISSION_CHAIN } from "./story";
+import { STORY_MANUSCRIPT_MISSIONS } from "./storyDialogues.generated";
+import { parseStoryManuscript } from "./storyManuscript";
 
 function state(overrides: Partial<DialogueState> = {}): DialogueState {
   return {
@@ -192,18 +196,56 @@ test("정의 검증은 구조 규칙 위반을 찾아낸다", () => {
   assert.match(errors, /도달할 수 없습니다/);
 });
 
-test("기존 6개 임무는 선형 대화로 옮겨져 규칙을 지키고, 체인이 끝까지 이어진다", () => {
+test("원고로 만든 임무 7개는 정의 규칙을 지키고, 모든 선택 조합이 결말에 도달한다", () => {
   const itemIds = new Set(ALL_CATALOG_ITEMS.map((item) => item.id));
-  for (const mission of MISSION_CHAIN) {
+  for (const mission of MISSION_CHAIN)
     assert.deepEqual(validateMissionDialogue(mission, itemIds), [], mission.id);
-    const offer = mission.dialogue.nodes[mission.dialogue.entry];
-    assert.equal(offer?.kind, "CHOICE");
-    if (offer?.kind === "CHOICE") {
-      assert.ok(offer.lines.length > 0);
-      assert.ok(offer.lines.every((line) => !line.text.startsWith(mission.issuerName)));
-    }
-  }
   assert.deepEqual(validateChain(MISSION_CHAIN), []);
+});
+
+test("원고 md와 생성된 대화 정의가 일치한다", () => {
+  const source = readFileSync(resolve(__dirname, "../../../../docs/quest-story-dialogue.md"), "utf8");
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(parseStoryManuscript(source))),
+    JSON.parse(JSON.stringify(STORY_MANUSCRIPT_MISSIONS)),
+    "docs/quest-story-dialogue.md를 고친 뒤 pnpm --filter server story:generate를 실행하세요.",
+  );
+});
+
+test("원고 연출: 속도·쉼, 회수 직후 대사, 4차 분기 해금, 6차 결말 기록이 정의에 반영된다", () => {
+  const first = MISSION_CHAIN.find((mission) => mission.id === "hanlim-first-recovery")!;
+  const offer = first.dialogue.nodes["offer-1"];
+  assert.equal(offer?.kind, "CHOICE");
+  if (offer?.kind === "CHOICE") assert.equal(offer.lines[1]?.pauseBeforeMs, 400);
+  const awaitNode = first.dialogue.nodes.await;
+  assert.equal(awaitNode?.kind, "AWAIT_OBJECTIVE");
+  if (awaitNode?.kind === "AWAIT_OBJECTIVE") {
+    assert.equal(awaitNode.recoveredLines?.length, 3);
+    assert.equal(awaitNode.next, "report-1");
+  }
+  assert.equal(first.dialogue.nodes["recovered-ping"], undefined);
+
+  const audit = MISSION_CHAIN.find((mission) => mission.id === "hanlim-tier4-official-audit")!;
+  assert.deepEqual(Object.keys(audit.objectives), ["obj-depot-305", "obj-depot-842"]);
+  assert.deepEqual(audit.unlock, {
+    type: "QUEST_OUTCOME",
+    questId: "hanlim-second-contraband",
+    outcome: "DECLINED",
+  });
+
+  const finale = MISSION_CHAIN.find((mission) => mission.id === "hanlim-third-anomaly")!;
+  const report = finale.dialogue.nodes["report-1"];
+  assert.ok(report?.kind === "CHOICE" && report.availability === "BASE_ONLY");
+  if (report?.kind === "CHOICE") {
+    const endings = report.choices.flatMap((choice) =>
+      (choice.effects ?? []).flatMap((effect) => (effect.type === "DISCLOSE" ? (effect.recordIds ?? []) : [])),
+    );
+    assert.deepEqual(
+      endings.filter((id) => id.startsWith("ending-")),
+      ["ending-jo-protocol", "ending-yun-divergence", "ending-choi-arbitrage"],
+    );
+    for (const id of endings) assert.ok(getStoryRecordById(id), id);
+  }
 });
 
 test("체인 검증은 분기로 다음 임무가 모두 닫히는 경우를 찾아낸다", () => {

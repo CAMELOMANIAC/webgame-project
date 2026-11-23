@@ -9,6 +9,8 @@ import {
 } from "@webgame/types";
 
 import type { ChainMission, ItemGrant } from "./questDialogue";
+import { STORY_MANUSCRIPT_MISSIONS } from "./storyDialogues.generated";
+import type { ManuscriptMission } from "./storyManuscript";
 
 export type MissionItemGrant = ItemGrant;
 
@@ -37,7 +39,7 @@ interface MissionSeed {
 const MISSION_SEEDS: readonly MissionSeed[] = [
   {
     id: "hanlim-first-recovery",
-    version: 2,
+    version: 3,
     tier: 1,
     requiredStoryTier: 0,
     grantsStoryTier: 1,
@@ -62,7 +64,7 @@ const MISSION_SEEDS: readonly MissionSeed[] = [
   },
   {
     id: "hanlim-tier2-ration-audit",
-    version: 1,
+    version: 2,
     tier: 2,
     requiredStoryTier: 1,
     grantsStoryTier: 2,
@@ -90,7 +92,7 @@ const MISSION_SEEDS: readonly MissionSeed[] = [
   },
   {
     id: "hanlim-tier3-ward-manifest",
-    version: 1,
+    version: 2,
     tier: 3,
     requiredStoryTier: 2,
     grantsStoryTier: 3,
@@ -117,7 +119,7 @@ const MISSION_SEEDS: readonly MissionSeed[] = [
   },
   {
     id: "hanlim-second-contraband",
-    version: 1,
+    version: 2,
     tier: 4,
     requiredStoryTier: 3,
     grantsStoryTier: 4,
@@ -144,8 +146,36 @@ const MISSION_SEEDS: readonly MissionSeed[] = [
       "떼어온 방화문짝 1개 · 바이오 젤 2개 · 380 CR · 봉쇄 지시서 기록 공개",
   },
   {
+    // 4차 최 사장 의뢰를 거절하고 조 과장에게 알렸을 때 열리는 대체 임무(조 과장 루트).
+    id: "hanlim-tier4-official-audit",
+    version: 2,
+    tier: 4,
+    requiredStoryTier: 3,
+    grantsStoryTier: 4,
+    issuerName: "조 시설과장",
+    issuerRole: "구호·시설 운영",
+    title: "보급 집하장 결재 원부 감사",
+    briefing:
+      "조 시설과장: 최 사장이 언급한 구호 물자와 격리 명령의 통합 결재 원부가 실제로 물류망에 묶여 있는지 운영부 차원에서 공식 감사를 진행해야겠습니다.",
+    targetNodeId: 305,
+    targetLabel: MISSION_NODE_LABELS[305] ?? "중앙 보급 집하장",
+    enemyArchetypeId: "npc-ind-enforcer",
+    supplyItems: [
+      { weaponId: "med-trauma-kit", quantity: 1 },
+      { weaponId: "food-ion-drink", quantity: 1 },
+    ],
+    supplyDescription: "외상 응급 처치 키트 1개 · 전해질 이온 음료 1개",
+    rewardItems: [
+      { weaponId: "eq-reactive-plate", quantity: 1 },
+      { weaponId: "mat-ceramic", quantity: 2 },
+    ],
+    rewardCredits: 380,
+    rewardDescription:
+      "떼어온 방화문짝 1개 · 방열 세라믹 판 2개 · 380 CR · 봉쇄 지시서 기록 공개",
+  },
+  {
     id: "hanlim-tier5-border-alarm",
-    version: 1,
+    version: 2,
     tier: 5,
     requiredStoryTier: 4,
     grantsStoryTier: 5,
@@ -173,7 +203,7 @@ const MISSION_SEEDS: readonly MissionSeed[] = [
   },
   {
     id: "hanlim-third-anomaly",
-    version: 1,
+    version: 2,
     tier: 6,
     requiredStoryTier: 5,
     grantsStoryTier: 6,
@@ -203,6 +233,11 @@ const MISSION_SEEDS: readonly MissionSeed[] = [
 export interface MissionDefinition extends MissionSeed, ChainMission {
   issuerContactId: string;
   defaultObjectiveId: string;
+  /**
+   * true면 수락·지급·공개 효과마다 시스템 줄을 자동으로 남긴다.
+   * 원고가 안내 줄을 직접 쓴 임무는 false(탐사 중 지급 예정·탐사 후 지급 줄은 항상 남긴다).
+   */
+  announceEffects: boolean;
 }
 
 const ISSUER_CONTACT_IDS: Record<string, string> = {
@@ -247,6 +282,7 @@ export function buildLinearMission(
       ? { type: "QUEST_OUTCOME", questId: previous.id, outcome: "COMPLETE" }
       : { type: "ALL", of: [] },
     final: index === seeds.length - 1,
+    announceEffects: true,
     dialogue: {
       entry: "offer",
       nodes: {
@@ -296,8 +332,32 @@ export function buildLinearMission(
   };
 }
 
+/** 원고(docs/quest-story-dialogue.md)가 있는 임무는 원고의 대화·목표·해금 조건을 쓴다. */
+function applyManuscript(
+  mission: MissionDefinition,
+  manuscript: ManuscriptMission | undefined,
+): MissionDefinition {
+  if (!manuscript) return mission;
+  const defaultObjectiveId = Object.keys(manuscript.objectives)[0]!;
+  return {
+    ...mission,
+    act: manuscript.act,
+    issuerContactId: manuscript.issuerContactId,
+    unlock: manuscript.unlock,
+    objectives: manuscript.objectives,
+    defaultObjectiveId,
+    dialogue: manuscript.dialogue,
+    announceEffects: false,
+  };
+}
+
+const MANUSCRIPT_BY_ID = new Map(
+  STORY_MANUSCRIPT_MISSIONS.map((mission) => [mission.id, mission]),
+);
+
 export const MISSION_CHAIN: readonly MissionDefinition[] = MISSION_SEEDS.map(
-  (seed, index, seeds) => buildLinearMission(seed, index, seeds),
+  (seed, index, seeds) =>
+    applyManuscript(buildLinearMission(seed, index, seeds), MANUSCRIPT_BY_ID.get(seed.id)),
 );
 
 export const firstMission = {
@@ -355,6 +415,31 @@ const records = [
     content:
       "중앙 전력 변전소 관측 로그와 결재 생체 서명을 대조한 결과, 동일한 경영 책임자의 서명이 서로 다른 구획에서 동시각에 승인된 흔적이 확인되었다. 유전자 염기 미세 편차 분석에 따라 두 지시는 서로 다른 세계선에서 유입된 별도 개체가 발행한 것으로 판별된다.",
   },
+  // 6차 결말 기록: 공개 단계가 아니라 최종 보고 선택(DISCLOSE)으로만 공개한다.
+  {
+    id: "ending-jo-protocol",
+    minimumTier: 6,
+    revealByTier: false,
+    title: "구호 통제망 특별 보안 인가서",
+    content:
+      "변전소 관측 드라이브는 거점 운영부 보안 금고에 봉인되었다. 상부 결재선의 분열로 인한 혼란을 막기 위해 현장 운영부는 자율 통제 등급을 격상했으며, 보고자는 거점 특별 보안 인력으로 편입되어 정기 동력 보급 권한을 부여받았다.",
+  },
+  {
+    id: "ending-yun-divergence",
+    minimumTier: 6,
+    revealByTier: false,
+    title: "비공식 중첩 파형 대조 초안",
+    content:
+      "변전소 관리자 인증 키를 확보한 연구실은 본사 관측망의 역추적 채널을 개설했다. 복수의 경영 책임자 개체가 서로 다른 실험 지시를 내리는 틈을 이용해, 생존자를 단순 표본에서 벗어나 중첩 경계를 추적하는 독자 관측 주체로 전환하는 연구가 시작되었다.",
+  },
+  {
+    id: "ending-choi-arbitrage",
+    minimumTier: 6,
+    revealByTier: false,
+    title: "이중 결재선 차익 통행권",
+    content:
+      "두 명의 경영 책임자가 각기 발주하는 중복 결재 코드가 거점 거래소의 비공식 물류망에 연동되었다. 본사 지휘 계통의 상호 간섭으로 감시 사각지대가 넓어진 사이, 봉쇄선을 넘나드는 독립 보급 루트가 거점 생존자들의 새로운 생명선으로 자리 잡았다.",
+  },
 ];
 
 // 오너의 이름·세계선·구체적 등장 시점은 미확정이다. 아래는 공개 단계 지원용 표식이다.
@@ -401,7 +486,7 @@ const contacts = [
 export function disclosedStory(tier: number) {
   return {
     records: records
-      .filter((record) => tier >= record.minimumTier)
+      .filter((record) => tier >= record.minimumTier && !("revealByTier" in record && record.revealByTier === false))
       .map(({ id, title, content, minimumTier }) => ({
         id,
         title,
