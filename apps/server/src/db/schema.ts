@@ -21,6 +21,13 @@ import type {
   PendingLootItem,
   WeaponEffect,
 } from "@webgame/types";
+import type {
+  FlagValue,
+  ItemGrant,
+  StoredChoiceRecord,
+  StoredDialogueEntry,
+  StoredPresentedChoices,
+} from "../logic/questDialogue";
 import type { PendingRetreat } from "../logic/retreat";
 
 export const attackTypeEnum = pgEnum("AttackType", ["MELEE", "RANGED"]);
@@ -34,6 +41,13 @@ export const questStatusEnum = pgEnum("QuestStatus", [
   "RECOVERED",
   "READY",
   "COMPLETE",
+  "OFFERED",
+  "LOCKED",
+]);
+export const questOutcomeEnum = pgEnum("QuestOutcome", [
+  "COMPLETE",
+  "DECLINED",
+  "FAILED",
 ]);
 export const marketListingStatusEnum = pgEnum("MarketListingStatus", [
   "ACTIVE",
@@ -483,6 +497,22 @@ export const questProgresses = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
     completedAt: timestamp("completedAt", { precision: 3, mode: "date" }),
+    objectiveId: text("objectiveId"),
+    dialogueNodeId: text("dialogueNodeId"),
+    dialogueSeq: integer("dialogueSeq").notNull().default(0),
+    readSeq: integer("readSeq").notNull().default(0),
+    transcript: jsonb("transcript")
+      .$type<StoredDialogueEntry[]>()
+      .notNull()
+      .default([]),
+    choiceHistory: jsonb("choiceHistory")
+      .$type<StoredChoiceRecord[]>()
+      .notNull()
+      .default([]),
+    presentedChoices: jsonb("presentedChoices").$type<StoredPresentedChoices>(),
+    outcome: questOutcomeEnum("outcome"),
+    lastRequestId: text("lastRequestId"),
+    lastRequestFingerprint: text("lastRequestFingerprint"),
   },
   (table) => [
     primaryKey({
@@ -490,6 +520,67 @@ export const questProgresses = pgTable(
       columns: [table.userId, table.questId],
     }),
   ],
+);
+
+export const storyFlags = pgTable(
+  "StoryFlag",
+  {
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    key: text("key").notNull(),
+    value: jsonb("value").$type<FlagValue>().notNull(),
+    sourceQuestId: text("sourceQuestId"),
+    setAt: timestamp("setAt", { precision: 3, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ name: "StoryFlag_pkey", columns: [table.userId, table.key] }),
+  ],
+);
+
+export const storyDisclosures = pgTable(
+  "StoryDisclosure",
+  {
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    kind: text("kind").$type<"RECORD" | "CONTACT">().notNull(),
+    refId: text("refId").notNull(),
+    sourceQuestId: text("sourceQuestId"),
+    disclosedAt: timestamp("disclosedAt", { precision: 3, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "StoryDisclosure_pkey",
+      columns: [table.userId, table.kind, table.refId],
+    }),
+  ],
+);
+
+/** 탐사 중에 생긴 임무 지급. 탐사가 끝날 때 창고·잔액으로 한 번만 지급한다. */
+export const questDeliveries = pgTable(
+  "QuestDelivery",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    questId: text("questId").notNull(),
+    raidId: text("raidId").notNull(),
+    items: jsonb("items").$type<ItemGrant[]>().notNull().default([]),
+    credits: integer("credits").notNull().default(0),
+    createdAt: timestamp("createdAt", { precision: 3, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    deliveredAt: timestamp("deliveredAt", { precision: 3, mode: "date" }),
+  },
+  (table) => [index("QuestDelivery_raidId_idx").on(table.raidId)],
 );
 
 // Relations
@@ -783,4 +874,8 @@ export type RaidSession = typeof raidSessions.$inferSelect;
 export type RaidCommand = typeof raidCommands.$inferSelect;
 export type RaidGhostEncounter = typeof raidGhostEncounters.$inferSelect;
 export type QuestProgress = typeof questProgresses.$inferSelect;
+export type StoryFlag = typeof storyFlags.$inferSelect;
+export type StoryDisclosure = typeof storyDisclosures.$inferSelect;
+export type QuestDelivery = typeof questDeliveries.$inferSelect;
+export type QuestOutcomeDb = (typeof questOutcomeEnum.enumValues)[number];
 export type MarketListing = typeof marketListings.$inferSelect;
