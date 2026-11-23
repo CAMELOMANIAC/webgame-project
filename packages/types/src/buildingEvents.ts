@@ -1631,6 +1631,29 @@ const DEFAULT_BUILDING_EVENT: BuildingEventDefinition = {
     "방금 전까지 사람이 있었던 흔적이 보입니다. 아직 내부에 가치 있는 것들이 남아 있을지도 모릅니다.",
 };
 
+/** 정의된 모든 건물 이벤트(ID 고유) */
+export const ALL_BUILDING_EVENTS: readonly BuildingEventDefinition[] = [
+  ...Object.values(BUILDING_EVENTS_BY_ID),
+  ...UNARMED_RECOVERY_EVENT_CHAIN,
+  ...Object.values(BUILDING_EVENTS_BY_CATEGORY),
+  ...Object.values(DISTRICT_BUILDING_EVENT_POOL).flat(),
+  ...STORY_BUILDING_EVENTS,
+  DEFAULT_BUILDING_EVENT,
+];
+
+const BUILDING_EVENTS_BY_EVENT_ID = new Map(
+  ALL_BUILDING_EVENTS.map((event) => [event.id, event]),
+);
+
+/** 서버가 확정해 저장한 이벤트 ID로 건물 이벤트 정의를 찾습니다. */
+export function getBuildingEventById(
+  eventId: string | undefined,
+): BuildingEventDefinition | undefined {
+  return eventId === undefined
+    ? undefined
+    : BUILDING_EVENTS_BY_EVENT_ID.get(eventId);
+}
+
 /**
  * 건물 ID → 비무장 복구 특수 이벤트 → 건물 카테고리(이미지 유형) → 구역 성격 및 건물 높이 순으로 초기 건물 이벤트를 결정합니다.
  */

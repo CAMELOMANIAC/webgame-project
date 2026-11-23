@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   getCatalogItemById,
+  ALL_BUILDING_EVENTS,
+  getBuildingEventById,
   getEnemyArchetypeById,
   hasBuildingChoiceCondition,
   type NormalBuildingImageKey,
@@ -109,4 +111,18 @@ test("선택지 조건(태그·단일 아이템·복수 아이템) 판정이 정
     ),
     true,
   );
+});
+
+test("모든 건물 이벤트 ID는 고유하며 확정된 ID로 같은 이벤트를 다시 찾을 수 있다", () => {
+  const ids = ALL_BUILDING_EVENTS.map((event) => event.id);
+  assert.equal(new Set(ids).size, ids.length);
+  for (const event of ALL_BUILDING_EVENTS) {
+    assert.equal(getBuildingEventById(event.id), event);
+  }
+  const unarmed = resolveBuildingIntroEvent({ id: 100, height: 20 }, { kind: "RESIDENTIAL" }, [], {
+    isUnarmed: true,
+  });
+  assert.equal(getBuildingEventById(unarmed.id), unarmed);
+  assert.equal(getBuildingEventById(undefined), undefined);
+  assert.equal(getBuildingEventById("missing-event"), undefined);
 });

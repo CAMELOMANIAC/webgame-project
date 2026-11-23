@@ -390,6 +390,8 @@ export type BuildingEventStage = "INTRO" | "READY" | "CLEARED";
 export interface BuildingEventState {
   stage: BuildingEventStage;
   text: string;
+  /** 건물 진입 시 서버가 확정한 이벤트 ID. 클라이언트는 이 값으로 표시할 이벤트를 찾습니다. */
+  eventId?: string;
 }
 
 export type LootSourceKind = "SEARCH" | "EVENT" | "COMBAT";
