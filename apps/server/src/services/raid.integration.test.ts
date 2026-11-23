@@ -130,7 +130,10 @@ test("실제 DB: 같은 이동 요청은 위치·버전을 한 번만 변경한�
   const { db, user, character } = await integrationFixture(t);
   const { raid } = await startRaid(db, user.id, character.id);
   const input = { ...command(raid), path: [0, nextNode] };
-  assert.equal(await getRaidNavigationResult(db, user.id, character.id, input), null);
+  assert.deepEqual(
+    await getRaidNavigationResult(db, user.id, character.id, input),
+    { status: "NOT_PROCESSED", result: null },
+  );
   const first = await navigateRaid(
     db,
     user.id,
@@ -139,7 +142,10 @@ test("실제 DB: 같은 이동 요청은 위치·버전을 한 번만 변경한�
   );
   const again = await navigateRaid(db, user.id, character.id, input);
   assert.deepEqual(again, first);
-  assert.deepEqual(await getRaidNavigationResult(db, user.id, character.id, input), first);
+  assert.deepEqual(
+    await getRaidNavigationResult(db, user.id, character.id, input),
+    { status: "APPLIED", result: first },
+  );
   const saved = await db.query.raidSessions.findFirst({
     where: eq(raidSessions.id, raid.id),
   });
@@ -167,6 +173,22 @@ test("실제 DB: 같은 이동 요청은 위치·버전을 한 번만 변경한�
         ...command(raid),
         path: [nextNode, 0],
       }),
+    /탐사 상태가 변경되었습니다/,
+  );
+  const later = await navigateRaid(db, user.id, character.id, {
+    ...command(first.raid),
+    path: [nextNode, 0],
+  });
+  assert.equal(later.raid.version, 2);
+  // 이미 반영된 이동은 이후 상태가 바뀌어도 오류 없이 지나간 요청으로 알린다.
+  assert.deepEqual(
+    await getRaidNavigationResult(db, user.id, character.id, input),
+    { status: "SUPERSEDED", result: null },
+  );
+  // 처리되지 않은 요청의 상태가 바뀌었다면 그대로 거부한다.
+  await assert.rejects(
+    () =>
+      getRaidNavigationResult(db, user.id, character.id, command(raid)),
     /탐사 상태가 변경되었습니다/,
   );
 });

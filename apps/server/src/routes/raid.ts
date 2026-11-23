@@ -172,13 +172,14 @@ export function registerRaidRoutes(
           expectedVersion: z.coerce.number().int().nonnegative(),
         }).parse(request.query) as RaidActionInput;
         reply.header("Cache-Control", "no-store");
-        const result = await getRaidNavigationResult(
-          database,
-          actor(request),
-          request.params.characterId,
-          input,
+        return reply.send(
+          await getRaidNavigationResult(
+            database,
+            actor(request),
+            request.params.characterId,
+            input,
+          ),
         );
-        return reply.send({ result });
       } catch (error) {
         return sendInventoryError(reply, error);
       }

@@ -570,6 +570,17 @@ export interface RaidNavigationResult extends RaidNoiseSignals {
   raid: RaidView;
 }
 
+/**
+ * 저장된 이동 요청 조회 결과.
+ * - `APPLIED`: 처리된 결과를 화면에 반영해야 한다(전투 재생·퇴각 결정 포함).
+ * - `NOT_PROCESSED`: 처리 기록이 없고 탐사 상태가 그대로라 같은 요청을 다시 보낼 수 있다.
+ * - `SUPERSEDED`: 이미 처리된 뒤 다른 행동으로 탐사 상태가 바뀌어 반영할 것이 없다.
+ */
+export type RaidNavigationLookup =
+  | { status: "APPLIED"; result: RaidNavigationResult }
+  | { status: "NOT_PROCESSED"; result: null }
+  | { status: "SUPERSEDED"; result: null };
+
 export interface GhostMatch {
   id: string;
   nodeId: number;

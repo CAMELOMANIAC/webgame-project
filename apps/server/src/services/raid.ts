@@ -31,6 +31,7 @@ import {
   type RaidLootActionInput,
   type RaidLootActionResult,
   type RaidNavigationInput,
+  type RaidNavigationLookup,
   type RaidNavigationResult,
   type RaidNoiseResult,
   type RaidPathRiskResult,
@@ -570,7 +571,7 @@ export async function getRaidNavigationResult(
   userId: string,
   characterId: string,
   input: RaidActionInput,
-): Promise<RaidNavigationResult | null> {
+): Promise<RaidNavigationLookup> {
   return withInventoryTransaction(database, async (tx) => {
     const character = await ownedCharacter(tx, userId, characterId);
     const raid = await tx.query.raidSessions.findFirst({
@@ -595,15 +596,18 @@ export async function getRaidNavigationResult(
           (result.battleLog?.retreat && result.battleLog.retreat.battleId === raid.pendingRetreat?.id)) &&
         (!character.activeRaidId || character.activeRaidId === raid.id)
       ) {
-        return result;
+        return { status: "APPLIED", result };
       }
-    } else if (
+      // 이미 반영된 요청이며, 이후 다른 행동으로 탐사 상태가 바뀌었다.
+      return { status: "SUPERSEDED", result: null };
+    }
+    if (
       raid.status === "ACTIVE" &&
       character.activeRaidId === raid.id &&
       character.isRaiding &&
       raid.version === input.expectedVersion
     ) {
-      return null;
+      return { status: "NOT_PROCESSED", result: null };
     }
     throw new InventoryError("탐사 상태가 변경되었습니다.", 409);
   });
