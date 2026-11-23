@@ -593,7 +593,14 @@ export type MissionStatus =
   | "ACTIVE"
   | "RECOVERED"
   | "READY"
-  | "COMPLETE";
+  | "COMPLETE"
+  | "LOCKED";
+
+export type MissionDialogueState =
+  | "NEEDS_INPUT"
+  | "BASE_ONLY"
+  | "AWAITING_OBJECTIVE"
+  | "DONE";
 
 export interface JournalMissionItem {
   id: string;
@@ -608,12 +615,31 @@ export interface JournalMissionItem {
   rewardDescription: string;
   status: MissionStatus;
   completedAt: string | null;
+  dialogueState: MissionDialogueState;
+  unread: number;
+}
+
+export interface JournalActiveObjective {
+  questId: string;
+  title: string;
+  targetNodeId: number;
+  targetLabel: string;
+  status: MissionStatus;
+}
+
+export interface JournalUnreadMessage {
+  questId: string;
+  seq: number;
+  speakerName: string;
+  preview: string;
 }
 
 export interface JournalView {
   storyTier: number;
   mission: JournalMissionItem;
   missions: JournalMissionItem[];
+  activeObjectives: JournalActiveObjective[];
+  unreadMessages: JournalUnreadMessage[];
   records: { id: string; title: string; content: string; tier?: number }[];
   contacts: {
     id: string;

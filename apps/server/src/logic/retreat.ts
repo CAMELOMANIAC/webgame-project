@@ -15,6 +15,8 @@ export interface PendingRetreat {
   returnNodeId: number;
   returnBuildingId: number | null;
   missionEncounter: boolean;
+  /** 전투 시작 시 확정한 임무. 정산 때 이 임무만 회수한다. */
+  missionQuestId?: string;
   deadline: number;
   ready: boolean;
   resolution?: RetreatResolution;

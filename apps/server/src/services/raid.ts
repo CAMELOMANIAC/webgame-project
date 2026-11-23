@@ -101,7 +101,7 @@ import {
 } from "./inventory";
 import {
   finishMissionRaid,
-  getActiveMissionForRecovery,
+  getActiveObjectives,
   recoverMissionRecord,
 } from "./quests";
 
@@ -687,12 +687,10 @@ export async function navigateRaid(
         : parsed.path;
       const plannedVisits = pathTravelVisits(path, raid.time, character.fatigue);
       const lastTravelTime = plannedVisits.at(-1)?.time ?? raid.time;
-      const activeMission = !isBuildingMove
-        ? await getActiveMissionForRecovery(tx, userId)
-        : null;
-      const missionActive =
-        activeMission !== null &&
-        path.indexOf(activeMission.targetNodeId, 1) !== -1;
+      // 진행 중인 모든 임무의 확정 목표. 같은 노드 목표는 동시에 수락할 수 없으므로 노드당 하나다.
+      const activeObjectives = !isBuildingMove
+        ? await getActiveObjectives(tx, userId)
+        : [];
       const ghostRoster = await loadGhostRoster(tx, raid);
       const tracker = createGhostTracker(
         tx,
@@ -708,8 +706,10 @@ export async function navigateRaid(
         const visit = plannedVisits[stopIndex - 1]!;
         const stopNodeId = visit.nodeId;
         const stopTime = visit.time;
-        const isMissionEncounter =
-          missionActive && stopNodeId === activeMission.targetNodeId;
+        const missionAtStop = activeObjectives.find(
+          (objective) => objective.targetNodeId === stopNodeId,
+        );
+        const isMissionEncounter = missionAtStop !== undefined;
         const encounter = await tracker.match(
           path[stopIndex - 1]!,
           stopNodeId,
@@ -735,7 +735,7 @@ export async function navigateRaid(
             .where(eq(characters.id, characterId));
           const previousNode = path[stopIndex - 1]!;
           const retreat = prepareRetreat(
-            raid, previousNode, stopIndex === 1 ? raid.currentBuildingId : null, isMissionEncounter,
+            raid, previousNode, stopIndex === 1 ? raid.currentBuildingId : null, missionAtStop?.questId ?? null,
           );
           const battleLog =
             encounter?.kind === "GHOST"
@@ -759,7 +759,7 @@ export async function navigateRaid(
                 : await executeMissionBattleInTransaction(
                     tx,
                     characterId,
-                    activeMission?.enemyArchetypeId ?? "npc-hanlim-control",
+                    missionAtStop?.enemyArchetypeId ?? "npc-hanlim-control",
                     retreat.defer,
                     { deferLootToPending: true },
                   );
@@ -772,8 +772,8 @@ export async function navigateRaid(
               tracker.defeat(encounter.ghost.source.characterId);
             if (encounter?.kind === "NPC_GHOST")
               tracker.defeatPatrol(encounter.patrolId);
-            if (isMissionEncounter && activeMission) {
-              await recoverMissionRecord(tx, userId, raid.id, activeMission.id);
+            if (missionAtStop) {
+              await recoverMissionRecord(tx, userId, raid.id, missionAtStop.questId);
               moveExp.missionRecovered = true;
             }
           }
@@ -1042,7 +1042,7 @@ export async function useRaidConsumable(
           raid,
           raid.currentNodeId,
           raid.currentBuildingId,
-          false,
+          null,
         );
         const battleLog =
           encounter.kind === "GHOST"
@@ -1157,7 +1157,7 @@ export async function fightRaidMonster(
       await recordGhosts(tx, characterId, raid.id, [
         { nodeId: raid.currentNodeId, time: nextTime },
       ]);
-      const retreat = prepareRetreat(raid, raid.currentNodeId, raid.currentBuildingId, false);
+      const retreat = prepareRetreat(raid, raid.currentNodeId, raid.currentBuildingId, null);
       const battleLog = await executeMonsterBattleInTransaction(
         tx,
         characterId,
@@ -1178,8 +1178,9 @@ function prepareRetreat(
   raid: RaidSession,
   returnNodeId: number,
   returnBuildingId: number | null,
-  missionEncounter: boolean,
+  missionQuestId: string | null,
 ) {
+  const missionEncounter = missionQuestId !== null;
   let pending: PendingRetreat | undefined;
   const defer: DeferBattle = (log, rewardIds, checkpoint) => {
     const first = [];
@@ -1217,6 +1218,7 @@ function prepareRetreat(
       id, openingLog, fullLog: { ...log, timeline: [] }, key, rewardIds,
       hp: player.hp, returnNodeId, returnBuildingId,
       missionEncounter, ready: false,
+      ...(missionQuestId ? { missionQuestId } : {}),
       deadline: Date.now() + retreatPlaybackLimitMs +
         openingLog.result.durationTicks * 1_000 +
         first.reduce((count, entry) => count + entry.events.length, 0) * 250,
@@ -1312,8 +1314,12 @@ export async function decideRaidBattle(
         if (encounter?.sourceCharacterId) tracker.defeat(encounter.sourceCharacterId);
         if (encounter?.patrolId) tracker.defeatPatrol(encounter.patrolId);
         ghostRoster = roster;
-        if (pending.missionEncounter) {
-          await recoverMissionRecord(tx, userId, raid.id);
+        // 전투 시작 때 확정한 임무만 회수한다(이전 형식 기록은 진행 중 첫 목표로 대체).
+        const missionQuestId = pending.missionEncounter
+          ? (pending.missionQuestId ?? (await getActiveObjectives(tx, userId))[0]?.questId)
+          : undefined;
+        if (missionQuestId) {
+          await recoverMissionRecord(tx, userId, raid.id, missionQuestId);
           exp.missionRecovered = true;
         }
       }
@@ -1815,7 +1821,7 @@ export async function executeRaidBuildingAction(
           raid,
           raid.currentNodeId,
           raid.currentBuildingId,
-          false,
+          null,
         );
         const archetype = selectEnemyArchetype({
           timeMinutes: nextTime,
@@ -2158,7 +2164,7 @@ export async function executeRaidBuildingAction(
             raid,
             raid.currentNodeId,
             raid.currentBuildingId,
-            false,
+            null,
           );
           battleLog = await executeArchetypeBattleInTransaction(
             tx,

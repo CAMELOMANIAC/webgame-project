@@ -836,3 +836,23 @@ export async function useBaseConsumable(
     };
   });
 }
+
+/** 창고에서 수량을 뺀다. 부족하면 false를 돌려주고 아무것도 바꾸지 않는다. */
+export async function removeFromStash(
+  tx: Tx,
+  userId: string,
+  weaponMasterId: string,
+  quantity: number,
+): Promise<boolean> {
+  const rows = await tx.query.stashItems.findMany({
+    where: and(
+      eq(stashItems.userId, userId),
+      eq(stashItems.weaponMasterId, weaponMasterId),
+    ),
+    orderBy: [asc(stashItems.id)],
+  });
+  const existing = countItems([], rows).get(weaponMasterId) ?? 0;
+  if (existing < quantity) return false;
+  await writeStashQuantity(tx, userId, weaponMasterId, rows, existing - quantity);
+  return true;
+}

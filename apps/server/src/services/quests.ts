@@ -1,218 +1,260 @@
-import {
-  ALL_CATALOG_ITEMS,
-  type JournalMissionItem,
-  type JournalView,
+import type {
+  AdvanceQuestDialogueRequest,
+  JournalActiveObjective,
+  JournalMissionItem,
+  JournalUnreadMessage,
+  JournalView,
+  MissionDialogueState,
 } from "@webgame/types";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+
 import {
   type Database,
   type DbOrTx,
+  type QuestProgress,
   questProgresses,
   type RaidStatus,
+  storyDisclosures,
+  storyFlags,
   type TransactionClient,
   users,
-  weaponMasters,
 } from "../db";
+import { getNode, isMissionUnlocked } from "../logic/questDialogue";
 import {
   disclosedStory,
   firstMission,
   getMissionDefinitionById,
+  getStoryContactById,
+  getStoryRecordById,
   MISSION_CHAIN,
   type MissionDefinition,
 } from "../logic/story";
 import { requireUserAtBase } from "./characters";
+import { InventoryError, withInventoryTransaction } from "./inventory";
 import {
-  InventoryError,
-  mergeIntoStash,
-  withInventoryTransaction,
-} from "./inventory";
+  advanceDialogueInTx,
+  currentPlayContext,
+  finishMissionRaid as finishQuestRaid,
+  getDialogueInTx,
+  loadWorking,
+  markDialogueReadInTx,
+  objectiveOf,
+  performDefaultChoice,
+  toDialogueEntry,
+} from "./questDialogue";
 
-const CATALOG_BY_ID = new Map(ALL_CATALOG_ITEMS.map((item) => [item.id, item]));
+export {
+  ensureMissionItems,
+  getActiveObjectives,
+  recoverMissionRecord,
+} from "./questDialogue";
 
-function toJournalMissionItem(
-  def: MissionDefinition,
-  progress?: typeof questProgresses.$inferSelect,
-): JournalMissionItem {
+function dialogueStateOf(def: MissionDefinition, row: QuestProgress | undefined): MissionDialogueState {
+  if (!row) return "NEEDS_INPUT";
+  if (!row.dialogueNodeId) {
+    if (row.status === "COMPLETE") return "DONE";
+    return row.status === "READY" ? "BASE_ONLY" : "AWAITING_OBJECTIVE";
+  }
+  const node = def.dialogue.nodes[row.dialogueNodeId];
+  if (!node) return "DONE";
+  switch (node.kind) {
+    case "CHOICE":
+      return node.availability === "BASE_ONLY" ? "BASE_ONLY" : "NEEDS_INPUT";
+    case "AWAIT_OBJECTIVE":
+      return row.status === "READY" ? "BASE_ONLY" : "AWAITING_OBJECTIVE";
+    case "END":
+      return "DONE";
+    default:
+      return "NEEDS_INPUT";
+  }
+}
+
+function offerBriefing(def: MissionDefinition) {
+  const entry = getNode(def.dialogue, def.dialogue.entry);
+  return "lines" in entry ? entry.lines.map((line) => line.text).join(" ") : "";
+}
+
+function toJournalMissionItem(def: MissionDefinition, row?: QuestProgress): JournalMissionItem {
+  const objective = objectiveOf(def, row);
+  const unreadEntries = row ? row.transcript.filter((entry) => entry.seq > row.readSeq) : [];
   return {
     id: def.id,
     tier: def.tier,
     issuerName: def.issuerName,
     issuerRole: def.issuerRole,
     title: def.title,
-    briefing: def.briefing,
-    targetNodeId: def.targetNodeId,
-    targetLabel: def.targetLabel,
+    briefing: offerBriefing(def),
+    targetNodeId: objective.targetNodeId,
+    targetLabel: objective.targetLabel,
     supplyDescription: def.supplyDescription,
     rewardDescription: def.rewardDescription,
-    status: progress?.status ?? "OFFERED",
-    completedAt: progress?.completedAt?.toISOString() ?? null,
+    status: row?.status ?? "OFFERED",
+    completedAt: row?.completedAt?.toISOString() ?? null,
+    dialogueState: dialogueStateOf(def, row),
+    unread: unreadEntries.length,
   };
 }
 
-export async function journalView(
-  db: DbOrTx,
-  userId: string,
-): Promise<JournalView> {
+export async function journalView(db: DbOrTx, userId: string): Promise<JournalView> {
   const user = await db.query.users.findFirst({
     where: eq(users.id, userId),
     columns: { storyTier: true },
   });
   if (!user) throw new InventoryError("User not found", 404);
-  const rows = await db.query.questProgresses.findMany({
-    where: eq(questProgresses.userId, userId),
-  });
+  const [rows, flagRows, disclosureRows] = await Promise.all([
+    db.query.questProgresses.findMany({ where: eq(questProgresses.userId, userId) }),
+    db.query.storyFlags.findMany({ where: eq(storyFlags.userId, userId) }),
+    db.query.storyDisclosures.findMany({ where: eq(storyDisclosures.userId, userId) }),
+  ]);
   const byQuestId = new Map(rows.map((row) => [row.questId, row]));
-
-  const unlockedDefs = MISSION_CHAIN.filter(
-    (def) => user.storyTier >= def.requiredStoryTier || byQuestId.has(def.id),
+  const unlockState = {
+    inRaid: false,
+    flags: new Map(flagRows.map((row) => [row.key, row.value])),
+    quests: new Map(
+      rows.map((row) => [
+        row.questId,
+        {
+          status: row.status,
+          outcome: row.outcome ?? (row.status === "COMPLETE" ? "COMPLETE" : null),
+          choices: new Set(row.choiceHistory.map((choice) => choice.choiceId)),
+        },
+      ]),
+    ),
+    stash: new Map<string, number>(),
+    credits: 0,
+    occupiedTargetNodeIds: new Set<number>(),
+  };
+  const visible = MISSION_CHAIN.filter(
+    (def) => byQuestId.has(def.id) || isMissionUnlocked(def, unlockState),
   );
-  const missions = unlockedDefs.map((def) =>
-    toJournalMissionItem(def, byQuestId.get(def.id)),
-  );
+  const missions = visible.map((def) => toJournalMissionItem(def, byQuestId.get(def.id)));
   const currentMission =
-    missions.find((item) => item.status !== "COMPLETE") ??
+    missions.find((item) => item.status !== "COMPLETE" && item.status !== "LOCKED") ??
     missions.at(-1) ??
     toJournalMissionItem(MISSION_CHAIN[0]!);
+
+  const activeObjectives: JournalActiveObjective[] = visible.flatMap((def) => {
+    const row = byQuestId.get(def.id);
+    if (!row || (row.status !== "ACTIVE" && row.status !== "RECOVERED")) return [];
+    const objective = objectiveOf(def, row);
+    return [
+      {
+        questId: def.id,
+        title: def.title,
+        targetNodeId: objective.targetNodeId,
+        targetLabel: objective.targetLabel,
+        status: row.status,
+      },
+    ];
+  });
+
+  const unreadMessages: JournalUnreadMessage[] = rows.flatMap((row) => {
+    const latest = [...row.transcript]
+      .reverse()
+      .find((entry) => entry.seq > row.readSeq && entry.speaker.kind === "NPC");
+    if (!latest) return [];
+    const view = toDialogueEntry(latest);
+    return [
+      {
+        questId: row.questId,
+        seq: latest.seq,
+        speakerName: view.speaker.kind === "NPC" ? view.speaker.name : "",
+        preview: latest.text,
+      },
+    ];
+  });
+
+  const story = disclosedStory(user.storyTier);
+  const knownRecordIds = new Set(story.records.map((record) => record.id));
+  const extraRecords = disclosureRows
+    .filter((row) => row.kind === "RECORD" && !knownRecordIds.has(row.refId))
+    .map((row) => getStoryRecordById(row.refId))
+    .filter((record): record is NonNullable<typeof record> => !!record)
+    .map(({ id, title, content, minimumTier }) => ({ id, title, content, tier: minimumTier }));
+  const knownContactIds = new Set(story.contacts.map((contact) => contact.id));
+  const extraContacts = disclosureRows
+    .filter((row) => row.kind === "CONTACT" && !knownContactIds.has(row.refId))
+    .map((row) => getStoryContactById(row.refId))
+    .filter((contact): contact is NonNullable<typeof contact> => !!contact)
+    .map(({ id, name, role, affiliation }) => ({ id, name, role, affiliation }));
 
   return {
     storyTier: user.storyTier,
     mission: currentMission,
     missions,
-    ...disclosedStory(user.storyTier),
+    activeObjectives,
+    unreadMessages,
+    records: [...story.records, ...extraRecords],
+    contacts: [...story.contacts, ...extraContacts],
   };
 }
 
-export async function ensureMissionItems(
-  tx: TransactionClient,
-  itemIds: readonly string[],
-) {
-  const uniqueIds = [...new Set(itemIds)];
-  const items = uniqueIds
-    .map((id) => CATALOG_BY_ID.get(id))
-    .filter((item): item is NonNullable<typeof item> => !!item);
-  if (items.length === 0) return;
-  await tx
-    .insert(weaponMasters)
-    .values(
-      items.map((item) => ({
-        id: item.id,
-        name: item.name,
-        damage: item.damage,
-        staminaCost: item.staminaCost,
-        cooldownTicks: item.cooldownTicks,
-        castTicks: item.castTicks,
-        weight: item.weight,
-        value: item.value,
-        description: item.description,
-        attackType: item.attackType,
-        iconKey: item.iconKey,
-        effect: item.effect,
-      })),
-    )
-    .onConflictDoNothing();
+// ---------------------------------------------------------------------------
+// 대화 API
+
+export async function getQuestDialogue(db: Database, userId: string, questId: string) {
+  return withInventoryTransaction(db, (tx) => getDialogueInTx(tx, userId, questId));
 }
 
-async function resolveMissionToAccept(
-  tx: TransactionClient,
-  userId: string,
-  storyTier: number,
-  questId?: string,
-): Promise<MissionDefinition> {
-  if (questId) {
-    const def = getMissionDefinitionById(questId);
-    if (!def) throw new InventoryError("Unknown mission", 404);
-    if (storyTier < def.requiredStoryTier) {
-      throw new InventoryError("Previous mission must be completed first", 409);
-    }
-    return def;
-  }
-  const rows = await tx.query.questProgresses.findMany({
-    where: eq(questProgresses.userId, userId),
-  });
-  const byQuestId = new Map(rows.map((row) => [row.questId, row]));
-  const nextMission =
-    MISSION_CHAIN.find(
-      (def) =>
-        storyTier >= def.requiredStoryTier &&
-        byQuestId.get(def.id)?.status !== "COMPLETE",
-    ) ?? MISSION_CHAIN[0]!;
-  return nextMission;
-}
-
-async function resolveMissionToReport(
-  tx: TransactionClient,
-  userId: string,
-  questId?: string,
-): Promise<{
-  def: MissionDefinition;
-  progress: typeof questProgresses.$inferSelect | undefined;
-}> {
-  if (questId) {
-    const def = getMissionDefinitionById(questId);
-    if (!def) throw new InventoryError("Unknown mission", 404);
-    const progress = await tx.query.questProgresses.findFirst({
-      where: and(
-        eq(questProgresses.userId, userId),
-        eq(questProgresses.questId, def.id),
-      ),
-    });
-    return { def, progress };
-  }
-  const rows = await tx.query.questProgresses.findMany({
-    where: eq(questProgresses.userId, userId),
-  });
-  const byQuestId = new Map(rows.map((row) => [row.questId, row]));
-  const readyDef = MISSION_CHAIN.find(
-    (def) => byQuestId.get(def.id)?.status === "READY",
-  );
-  if (readyDef) {
-    return { def: readyDef, progress: byQuestId.get(readyDef.id) };
-  }
-  const activeOrLastDef =
-    MISSION_CHAIN.find(
-      (def) =>
-        byQuestId.has(def.id) && byQuestId.get(def.id)?.status !== "COMPLETE",
-    ) ??
-    [...MISSION_CHAIN]
-      .reverse()
-      .find((def) => byQuestId.has(def.id)) ??
-    MISSION_CHAIN[0]!;
-  return { def: activeOrLastDef, progress: byQuestId.get(activeOrLastDef.id) };
-}
-
-export async function acceptMission(
+export async function advanceQuestDialogue(
   db: Database,
   userId: string,
-  questId?: string,
+  questId: string,
+  input: AdvanceQuestDialogueRequest,
 ) {
   return withInventoryTransaction(db, async (tx) => {
+    const result = await advanceDialogueInTx(tx, userId, questId, input);
+    return { ...result, journal: await journalView(tx, userId) };
+  });
+}
+
+export async function markQuestDialogueRead(
+  db: Database,
+  userId: string,
+  questId: string,
+  seq: number,
+) {
+  return withInventoryTransaction(db, async (tx) => {
+    await markDialogueReadInTx(tx, userId, questId, seq);
+    return journalView(tx, userId);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 호환 래퍼(기존 수락·보고 API)
+
+function chainOrderedRows(rows: QuestProgress[]) {
+  return new Map(rows.map((row) => [row.questId, row]));
+}
+
+async function resolveMissionToAccept(tx: TransactionClient, userId: string, questId?: string) {
+  if (questId) {
+    const def = getMissionDefinitionById(questId);
+    if (!def) throw new InventoryError("Unknown mission", 404);
+    return def;
+  }
+  const byQuestId = chainOrderedRows(
+    await tx.query.questProgresses.findMany({ where: eq(questProgresses.userId, userId) }),
+  );
+  return (
+    MISSION_CHAIN.find((def) => {
+      const status = byQuestId.get(def.id)?.status;
+      return status !== "COMPLETE" && status !== "LOCKED";
+    }) ?? MISSION_CHAIN[0]!
+  );
+}
+
+export async function acceptMission(db: Database, userId: string, questId?: string) {
+  return withInventoryTransaction(db, async (tx) => {
     await requireUserAtBase(tx, userId);
-    const user = await tx.query.users.findFirst({
-      where: eq(users.id, userId),
-      columns: { storyTier: true },
-    });
-    if (!user) throw new InventoryError("User not found", 404);
-    const def = await resolveMissionToAccept(tx, userId, user.storyTier, questId);
-    const existing = await tx.query.questProgresses.findFirst({
-      where: and(
-        eq(questProgresses.userId, userId),
-        eq(questProgresses.questId, def.id),
-      ),
-    });
-    if (!existing) {
-      await ensureMissionItems(
-        tx,
-        def.supplyItems.map((grant) => grant.weaponId),
+    const def = await resolveMissionToAccept(tx, userId, questId);
+    const context = await currentPlayContext(tx, userId);
+    const w = await loadWorking(tx, userId, def, context, { create: true });
+    if (!w) throw new InventoryError("Previous mission must be completed first", 409);
+    if (w.row.status === "OFFERED")
+      await performDefaultChoice(tx, userId, w, context, (effects) =>
+        effects.some((effect) => effect.type === "ACCEPT_OBJECTIVE"),
       );
-      await tx.insert(questProgresses).values({
-        userId,
-        questId: def.id,
-        definitionVersion: def.version,
-      });
-      for (const grant of def.supplyItems) {
-        await mergeIntoStash(tx, userId, grant.weaponId, grant.quantity);
-      }
-    }
     return journalView(tx, userId);
   });
 }
@@ -221,50 +263,43 @@ export async function acceptFirstMission(db: Database, userId: string) {
   return acceptMission(db, userId, firstMission.id);
 }
 
-export async function getActiveMissionForRecovery(
-  tx: TransactionClient,
-  userId: string,
-): Promise<MissionDefinition | null> {
-  const rows = await tx.query.questProgresses.findMany({
-    where: and(
-      eq(questProgresses.userId, userId),
-      eq(questProgresses.status, "ACTIVE"),
-    ),
-  });
-  for (const def of MISSION_CHAIN) {
-    if (rows.some((row) => row.questId === def.id)) {
-      return def;
-    }
+async function resolveMissionToReport(tx: TransactionClient, userId: string, questId?: string) {
+  if (questId) {
+    const def = getMissionDefinitionById(questId);
+    if (!def) throw new InventoryError("Unknown mission", 404);
+    return def;
   }
-  return null;
+  const byQuestId = chainOrderedRows(
+    await tx.query.questProgresses.findMany({ where: eq(questProgresses.userId, userId) }),
+  );
+  return (
+    MISSION_CHAIN.find((def) => byQuestId.get(def.id)?.status === "READY") ??
+    MISSION_CHAIN.find((def) => {
+      const status = byQuestId.get(def.id)?.status;
+      return status !== undefined && status !== "COMPLETE" && status !== "LOCKED";
+    }) ??
+    MISSION_CHAIN[0]!
+  );
 }
 
-export async function missionNeedsRecovery(
-  tx: TransactionClient,
-  userId: string,
-) {
-  return (await getActiveMissionForRecovery(tx, userId)) !== null;
+export async function reportMission(db: Database, userId: string, questId?: string) {
+  return withInventoryTransaction(db, async (tx) => {
+    await requireUserAtBase(tx, userId);
+    const def = await resolveMissionToReport(tx, userId, questId);
+    const context = await currentPlayContext(tx, userId);
+    const w = await loadWorking(tx, userId, def, context, { create: false });
+    if (w?.row.status === "COMPLETE") return journalView(tx, userId);
+    const reported =
+      w?.row.status === "READY" &&
+      (await performDefaultChoice(tx, userId, w, context, () => true));
+    if (!reported)
+      throw new InventoryError("Recover the record and extract before reporting", 409);
+    return journalView(tx, userId);
+  });
 }
 
-export async function recoverMissionRecord(
-  tx: TransactionClient,
-  userId: string,
-  raidId: string,
-  questId?: string,
-) {
-  const targetQuestId =
-    questId ?? (await getActiveMissionForRecovery(tx, userId))?.id;
-  if (!targetQuestId) return;
-  await tx
-    .update(questProgresses)
-    .set({ status: "RECOVERED", recoveredRaidId: raidId, updatedAt: new Date() })
-    .where(
-      and(
-        eq(questProgresses.userId, userId),
-        eq(questProgresses.questId, targetQuestId),
-        eq(questProgresses.status, "ACTIVE"),
-      ),
-    );
+export async function reportFirstMission(db: Database, userId: string) {
+  return reportMission(db, userId, firstMission.id);
 }
 
 export async function finishMissionRaid(
@@ -274,73 +309,5 @@ export async function finishMissionRaid(
   status: RaidStatus,
 ) {
   if (status === "ACTIVE") return;
-  await tx
-    .update(questProgresses)
-    .set(
-      status === "EXTRACTED"
-        ? { status: "READY", updatedAt: new Date() }
-        : { status: "ACTIVE", recoveredRaidId: null, updatedAt: new Date() },
-    )
-    .where(
-      and(
-        eq(questProgresses.userId, userId),
-        eq(questProgresses.status, "RECOVERED"),
-        eq(questProgresses.recoveredRaidId, raidId),
-      ),
-    );
-}
-
-export async function reportMission(
-  db: Database,
-  userId: string,
-  questId?: string,
-) {
-  return withInventoryTransaction(db, async (tx) => {
-    await requireUserAtBase(tx, userId);
-    const { def, progress } = await resolveMissionToReport(tx, userId, questId);
-    if (progress?.status === "COMPLETE") return journalView(tx, userId);
-    if (progress?.status !== "READY") {
-      throw new InventoryError(
-        "Recover the record and extract before reporting",
-        409,
-      );
-    }
-    await ensureMissionItems(
-      tx,
-      def.rewardItems.map((grant) => grant.weaponId),
-    );
-    for (const grant of def.rewardItems) {
-      await mergeIntoStash(tx, userId, grant.weaponId, grant.quantity);
-    }
-    await tx
-      .update(questProgresses)
-      .set({
-        status: "COMPLETE",
-        completedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(questProgresses.userId, userId),
-          eq(questProgresses.questId, def.id),
-        ),
-      );
-    const user = await tx.query.users.findFirst({
-      where: eq(users.id, userId),
-    });
-    if (!user) throw new InventoryError("User not found", 404);
-    await tx
-      .update(users)
-      .set({
-        storyTier: Math.max(def.grantsStoryTier, user.storyTier),
-        credits: user.credits + def.rewardCredits,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, userId));
-    return journalView(tx, userId);
-  });
-}
-
-export async function reportFirstMission(db: Database, userId: string) {
-  return reportMission(db, userId, firstMission.id);
+  await finishQuestRaid(tx, userId, raidId, status);
 }

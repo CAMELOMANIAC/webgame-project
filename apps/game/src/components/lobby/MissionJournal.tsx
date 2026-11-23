@@ -17,6 +17,7 @@ const labels = {
   RECOVERED: "기록 확보 · 탈출 필요",
   READY: "보고 가능",
   COMPLETE: "보고 완료",
+  LOCKED: "종료",
 };
 
 export function MissionJournal({ mode }: { mode: "raid" | "base" }) {
