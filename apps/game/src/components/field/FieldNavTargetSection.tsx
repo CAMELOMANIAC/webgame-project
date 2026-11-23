@@ -13,6 +13,7 @@ import {
   getCraftingRecipesForCategory,
   hasBuildingChoiceCondition,
   isBuildingLockedDown,
+  isUnarmedLoadout,
   LOCKDOWN_WARNING_MINUTES,
   type MapDistrict,
   matchesRecipeBase,
@@ -232,9 +233,15 @@ const FieldNavTargetSection = () => {
     : [];
   const completedEventIds =
     character?.activeRaid?.exploration?.completedEventIds ?? [];
-  const isUnarmed =
-    (character?.equipment?.filter((w) => w.weaponMaster !== null).length ??
-      0) === 0;
+  const isUnarmed = isUnarmedLoadout(
+    (character?.equipment ?? []).flatMap((slot) =>
+      slot.weaponMaster ? [slot.weaponMaster.id] : [],
+    ),
+  );
+  const backpackItemCount = (character?.inventory ?? []).reduce(
+    (sum, slot) => sum + (slot.weaponMaster ? slot.quantity : 0),
+    0,
+  );
   // 서버가 진입 시 확정한 이벤트를 우선 표시합니다.
   const activeIntroEvent = activeBuilding
     ? (getBuildingEventById(activeEventState?.eventId) ??
@@ -1375,14 +1382,15 @@ const FieldNavTargetSection = () => {
               {!isActiveBuildingLockedDown &&
                 !activeBuilding.category &&
                 !isActiveBuildingLooted &&
-                (activeIntroEvent?.choices &&
-                activeIntroEvent.choices.length > 0 ? (
+                activeIntroEvent?.choices &&
+                activeIntroEvent.choices.length > 0 && (
                   <div className={styles.buildingChoiceList}>
                     {activeIntroEvent.choices.map((choice) => {
                       const ownedItemIds = [...ownedItemCounts.keys()];
                       const conditionMet = hasBuildingChoiceCondition(
                         choice,
                         ownedItemIds,
+                        backpackItemCount,
                       );
                       const fatigueCost = choice.fatigueCost ?? 0;
                       const isLowFatigue =
@@ -1429,7 +1437,14 @@ const FieldNavTargetSection = () => {
                       );
                     })}
                   </div>
-                ) : (() => {
+                )}
+
+              {!isActiveBuildingLockedDown &&
+                !activeBuilding.category &&
+                !isActiveBuildingLooted &&
+                (!activeIntroEvent?.choices?.length ||
+                  activeIntroEvent.allowSearch) &&
+                (() => {
                   const searchCost = FATIGUE_RULES.buildingActionCosts.SEARCH;
                   const isLowSearchFatigue =
                     (character.fatigue ?? 0) < searchCost;
@@ -1456,7 +1471,7 @@ const FieldNavTargetSection = () => {
                       </span>
                     </button>
                   );
-                })())}
+                })()}
 
               {!isActiveBuildingLockedDown &&
                 activeBuilding.category &&

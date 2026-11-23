@@ -449,7 +449,7 @@ test("실제 DB: 건물 진입 시 확정된 이벤트는 건물 안에서 장�
   );
   if (!building) throw new Error("Test map needs a normal building on node 37");
 
-  // 비무장 상태로 진입하면 비무장 복구 이벤트가 확정된다.
+  // 비무장 상태로 진입하면 교환 이벤트가 확정된다.
   const entered = await navigateRaid(db, user.id, character.id, {
     ...command(raid),
     path: [entryNodeId],
@@ -457,8 +457,14 @@ test("실제 DB: 건물 진입 시 확정된 이벤트는 건물 안에서 장�
   });
   assert.equal(
     entered.raid.exploration?.buildingEvents[String(building.id)]?.eventId,
-    "story-unarmed-cache-1",
+    "story-junk-exchange",
   );
+  await db.insert(raidInventoryItems).values({
+    characterId: character.id,
+    weaponMasterId: weapon.id,
+    slotIndex: 0,
+    quantity: 1,
+  });
 
   // 건물 안에서 무기를 장착해도 확정된 이벤트의 선택지를 실행할 수 있다.
   await db.insert(characterWeapons).values({
@@ -473,15 +479,20 @@ test("실제 DB: 건물 진입 시 확정된 이벤트는 건물 안에서 장�
     {
       ...command(entered.raid),
       action: "EVENT_CHOICE",
-      choiceId: "trace-supply-tag",
+      choiceId: "exchange-one-item",
     },
     { random: () => 0.99 },
   );
   assert.equal(result.action, "EVENT_CHOICE");
   const state = result.raid.exploration?.buildingEvents[String(building.id)];
   assert.equal(state?.stage, "CLEARED");
-  assert.equal(state?.eventId, "story-unarmed-cache-1");
+  assert.equal(state?.eventId, "story-junk-exchange");
   assert.ok(
-    result.raid.exploration?.completedEventIds?.includes("story-unarmed-cache-1"),
+    result.raid.exploration?.completedEventIds?.includes("story-junk-exchange"),
   );
+  // 교환에 넣은 가방 아이템은 소모된다.
+  const backpack = await db.query.raidInventoryItems.findMany({
+    where: eq(raidInventoryItems.characterId, character.id),
+  });
+  assert.equal(backpack.length, 0);
 });

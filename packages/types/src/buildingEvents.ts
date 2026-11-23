@@ -37,6 +37,8 @@ export interface BuildingEventChoiceCondition {
   requireItemId?: string;
   requireAnyItemIds?: readonly string[];
   consumeItemId?: string;
+  /** 가방에 든 아이템을 종류와 무관하게 이 개수만큼 소모합니다(가치가 낮은 것부터). */
+  consumeAnyItemCount?: number;
   label: string;
 }
 
@@ -58,6 +60,8 @@ export interface BuildingEventDefinition {
   searchLabel?: string;
   encounterRate?: number;
   oncePerRaid?: boolean;
+  /** 선택지가 있어도 일반 탐색을 함께 허용합니다. */
+  allowSearch?: boolean;
   choices?: readonly BuildingEventChoice[];
 }
 
@@ -67,14 +71,18 @@ export interface StoryBuildingEventDefinition extends BuildingEventDefinition {
 }
 
 /**
- * 선택지 조건(보유 태그 또는 특정 아이템)을 충족하는지 판정합니다.
+ * 선택지 조건(보유 태그, 특정 아이템 또는 가방 아이템 개수)을 충족하는지 판정합니다.
  */
 export function hasBuildingChoiceCondition(
   choice: Pick<BuildingEventChoice, "condition">,
   ownedItemIds: readonly string[],
+  backpackItemCount = 0,
 ): boolean {
   const cond = choice.condition;
   if (!cond) return true;
+  if (cond.consumeAnyItemCount !== undefined) {
+    return backpackItemCount >= cond.consumeAnyItemCount;
+  }
   if (cond.requireItemId && ownedItemIds.includes(cond.requireItemId)) {
     return true;
   }
@@ -1543,87 +1551,62 @@ export const DISTRICT_BUILDING_EVENT_POOL: Record<
 };
 
 export interface BuildingEventResolveOptions {
-  /** 현재 장착된 장비가 전혀 없는 비무장 상태인지 여부 */
+  /** 장착한 무기(재료·소모품 제외)가 없는 비무장 상태인지 여부 */
   isUnarmed?: boolean;
 }
 
-export const UNARMED_RECOVERY_EVENT_CHAIN: readonly BuildingEventDefinition[] =
-  [
+/** 장착 아이템 중 무기(EQUIPMENT)가 하나도 없으면 비무장으로 봅니다. 재료만 장착한 상태도 비무장입니다. */
+export function isUnarmedLoadout(equippedItemIds: readonly string[]): boolean {
+  return equippedItemIds.every((id) => {
+    const kind = getCatalogItemById(id)?.effect.itemKind;
+    return kind === "MATERIAL" || kind === "CONSUMABLE";
+  });
+}
+
+/**
+ * 비무장 상태로 일반 건물에 들어서면 탐사당 한 번, 가방의 아이템을 기초 무장으로 바꿀 수 있습니다.
+ * 교환하지 않고 탐색을 계속해 아이템을 더 모을 수도 있습니다.
+ */
+export const JUNK_EXCHANGE_EVENT: BuildingEventDefinition = {
+  id: "story-junk-exchange",
+  title: "비무장 탐색: 비상 구호 교환함",
+  oncePerRaid: true,
+  allowSearch: true,
+  introText:
+    "계단 아래 벽면에 한림그룹 구호 부서의 비상 교환함이 아직 전원을 유지하고 있습니다. 회수 물품을 투입구에 넣으면 무게를 재고 호신 장비 칸을 한 번 열어 주는 방식입니다.",
+  choices: [
     {
-      id: "story-unarmed-cache-1",
-      title: "비무장 탐색: 버려진 구호함",
-      oncePerRaid: true,
-      introText:
-        "빈손으로 건물 내부를 살피던 중, 계단 아래 구석에 봉인이 반쯤 뜯긴 비상 구호함이 눈에 띕니다. 안쪽에는 기본 호신용 단검과 응급 붕대가 남아 있고, 덮개 안쪽에는 인근 건물의 예비 보급 락커 주파수가 적힌 인식표가 붙어 있습니다.",
-      choices: [
+      id: "exchange-one-item",
+      label: "물품 하나를 넣고 단검과 테이프를 꺼낸다",
+      action: "EVENT_CHOICE",
+      timeCostMinutes: 5,
+      fatigueCost: 0,
+      condition: { consumeAnyItemCount: 1, label: "가방 아이템 1개 소모" },
+      outcomes: [
         {
-          id: "pry-relief-locker",
-          label: "구호함에서 호신용 단검과 응급 붕대를 회수한다",
-          action: "EVENT_CHOICE",
+          text: "투입구가 닫히고 아래 칸이 열렸습니다. 전술 단검과 고강도 테이프를 꺼냈습니다.",
           timeCostMinutes: 5,
-          fatigueCost: 4,
-          outcomes: [
-            {
-              text: "구호함 잠금장치를 풀어 비상용 단검과 붕대를 챙겼습니다. 덮개에 적힌 예비 보급 락커 주파수도 단말기에 기록해 두었습니다.",
-              timeCostMinutes: 5,
-              rewardItemIds: ["wpn_dagger", "med-bandage"],
-            },
-          ],
-        },
-        {
-          id: "trace-supply-tag",
-          label: "단검만 빠르게 챙기고 예비 락커 주파수를 추적한다",
-          action: "EVENT_CHOICE",
-          timeCostMinutes: 5,
-          fatigueCost: 0,
-          outcomes: [
-            {
-              text: "가벼운 호신용 단검만 손에 쥔 채 인식표의 주파수를 단말기에 동기화했습니다. 다음 건물에서 예비 보급 락커를 찾을 수 있을 것 같습니다.",
-              timeCostMinutes: 5,
-              rewardItemIds: ["wpn_dagger"],
-            },
-          ],
+          rewardItemIds: ["wpn_dagger", "mat-tape"],
         },
       ],
     },
     {
-      id: "story-unarmed-cache-2",
-      title: "비무장 탐색: 예비 보급 락커",
-      oncePerRaid: true,
-      introText:
-        "앞서 기록해 둔 구호함 인식표 주파수가 건물 복도 끝 철제 락커 앞에서 짧게 공명합니다. 비상 전원만으로 유지되고 있는 예비 보급 락커에는 대피 당시 남겨진 기본 무장과 보급품이 정리되어 있습니다.",
-      choices: [
+      id: "exchange-two-items",
+      label: "물품 둘을 넣고 구호용 카빈을 꺼낸다",
+      action: "EVENT_CHOICE",
+      timeCostMinutes: 5,
+      fatigueCost: 0,
+      condition: { consumeAnyItemCount: 2, label: "가방 아이템 2개 소모" },
+      outcomes: [
         {
-          id: "open-backup-locker",
-          label: "예비 보급 락커를 열어 구호 카빈과 비상 식량을 확보한다",
-          action: "EVENT_CHOICE",
+          text: "계량이 끝나자 위쪽 장비 칸의 잠금이 풀렸습니다. 기업 구호용 카빈을 꺼냈습니다.",
           timeCostMinutes: 5,
-          fatigueCost: 4,
-          outcomes: [
-            {
-              text: "주파수 인증이 통과되며 락커가 열렸습니다. 상태가 양호한 기업 제식 구호용 카빈과 비상 식량을 회수했습니다.",
-              timeCostMinutes: 5,
-              rewardItemIds: ["hanlim-relief-carbine", "food-combat-ration"],
-            },
-          ],
-        },
-        {
-          id: "take-compact-kit",
-          label: "가벼운 진압봉과 응급 붕대만 챙겨 빠르게 이동한다",
-          action: "EVENT_CHOICE",
-          timeCostMinutes: 5,
-          fatigueCost: 0,
-          outcomes: [
-            {
-              text: "무게 부담을 줄이기 위해 기업 제식 진압봉과 응급 붕대만 챙겨 락커를 닫았습니다.",
-              timeCostMinutes: 5,
-              rewardItemIds: ["hanlim-control-baton", "med-bandage"],
-            },
-          ],
+          rewardItemIds: ["hanlim-relief-carbine"],
         },
       ],
     },
-  ];
+  ],
+};
 
 const DEFAULT_BUILDING_EVENT: BuildingEventDefinition = {
   id: "default-building",
@@ -1634,7 +1617,7 @@ const DEFAULT_BUILDING_EVENT: BuildingEventDefinition = {
 /** 정의된 모든 건물 이벤트(ID 고유) */
 export const ALL_BUILDING_EVENTS: readonly BuildingEventDefinition[] = [
   ...Object.values(BUILDING_EVENTS_BY_ID),
-  ...UNARMED_RECOVERY_EVENT_CHAIN,
+  JUNK_EXCHANGE_EVENT,
   ...Object.values(BUILDING_EVENTS_BY_CATEGORY),
   ...Object.values(DISTRICT_BUILDING_EVENT_POOL).flat(),
   ...STORY_BUILDING_EVENTS,
@@ -1655,7 +1638,7 @@ export function getBuildingEventById(
 }
 
 /**
- * 건물 ID → 비무장 복구 특수 이벤트 → 건물 카테고리(이미지 유형) → 구역 성격 및 건물 높이 순으로 초기 건물 이벤트를 결정합니다.
+ * 건물 ID → 비무장 교환 이벤트(일반 건물, 탐사당 1회) → 건물 카테고리(이미지 유형) → 구역 성격 및 건물 높이 순으로 초기 건물 이벤트를 결정합니다.
  */
 export function resolveBuildingIntroEvent(
   building: Pick<MapBuilding, "id" | "category"> & { height?: number },
@@ -1668,20 +1651,12 @@ export function resolveBuildingIntroEvent(
     return byId;
   }
 
-  if (options?.isUnarmed) {
-    const firstStage = UNARMED_RECOVERY_EVENT_CHAIN[0];
-    const secondStage = UNARMED_RECOVERY_EVENT_CHAIN[1];
-    if (firstStage && !completedEventIds.includes(firstStage.id)) {
-      return firstStage;
-    }
-    if (
-      firstStage &&
-      secondStage &&
-      completedEventIds.includes(firstStage.id) &&
-      !completedEventIds.includes(secondStage.id)
-    ) {
-      return secondStage;
-    }
+  if (
+    options?.isUnarmed &&
+    !building.category &&
+    !completedEventIds.includes(JUNK_EXCHANGE_EVENT.id)
+  ) {
+    return JUNK_EXCHANGE_EVENT;
   }
 
   if (building.category) {

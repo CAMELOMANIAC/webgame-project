@@ -3,6 +3,9 @@ import test from "node:test";
 import {
   ALL_CATALOG_ITEMS,
   getCatalogItemById,
+  hasBuildingChoiceCondition,
+  isUnarmedLoadout,
+  JUNK_EXCHANGE_EVENT,
   NPC_BASE_SUPPLY_ITEM_IDS,
   resolveBuildingIntroEvent,
   resolveMinNextBid,
@@ -11,7 +14,6 @@ import {
   resolveNpcSupplyUnitPrice,
   resolveNpcUndercutTriggerUnitPrice,
   resolveNpcUndercutUnitPrice,
-  UNARMED_RECOVERY_EVENT_CHAIN,
 } from "@webgame/types";
 
 test("모든 NPC 상시 보급 품목 ID가 카탈로그에 존재한다", () => {
@@ -49,49 +51,64 @@ test("최소 다음 입찰가는 첫 입찰 시 시작가, 이후에는 현재�
   assert.equal(resolveMinNextBid(50, 200), 210);
 });
 
-test("비무장 상태에서는 1단계 → 2단계 복구 이벤트 체인이 순서대로 발동한다", () => {
+test("비무장 상태에서는 일반 건물마다 교환 이벤트가 완료 전까지 발동한다", () => {
   const sampleBuilding = { id: 999999, height: 28 };
   const sampleDistrict = { kind: "RESIDENTIAL" as const };
 
-  const stage1 = resolveBuildingIntroEvent(sampleBuilding, sampleDistrict, [], {
+  const first = resolveBuildingIntroEvent(sampleBuilding, sampleDistrict, [], {
     isUnarmed: true,
   });
-  assert.equal(stage1.id, UNARMED_RECOVERY_EVENT_CHAIN[0]?.id);
+  assert.equal(first.id, JUNK_EXCHANGE_EVENT.id);
+  assert.equal(first.oncePerRaid, true);
+  assert.equal(first.allowSearch, true);
 
-  const stage2 = resolveBuildingIntroEvent(
+  const afterExchange = resolveBuildingIntroEvent(
     sampleBuilding,
     sampleDistrict,
-    [stage1.id],
+    [JUNK_EXCHANGE_EVENT.id],
     { isUnarmed: true },
   );
-  assert.equal(stage2.id, UNARMED_RECOVERY_EVENT_CHAIN[1]?.id);
+  assert.notEqual(afterExchange.id, JUNK_EXCHANGE_EVENT.id);
 
-  const afterChain = resolveBuildingIntroEvent(
-    sampleBuilding,
+  // 조합 설비 건물에서는 발동하지 않는다.
+  const facility = resolveBuildingIntroEvent(
+    { id: 999998, category: "PUBLIC" },
     sampleDistrict,
-    [stage1.id, stage2.id],
+    [],
     { isUnarmed: true },
   );
-  assert.notEqual(afterChain.id, stage1.id);
-  assert.notEqual(afterChain.id, stage2.id);
+  assert.notEqual(facility.id, JUNK_EXCHANGE_EVENT.id);
 });
 
-test("비무장 복구 이벤트의 모든 보상 아이템이 카탈로그에 유효하게 존재한다", () => {
-  for (const event of UNARMED_RECOVERY_EVENT_CHAIN) {
-    for (const choice of event.choices ?? []) {
-      for (const outcome of choice.outcomes ?? []) {
-        for (const itemId of outcome.rewardItemIds ?? []) {
-          assert.ok(
-            getCatalogItemById(itemId),
-            `invalid reward item ${itemId}`,
-          );
-        }
-      }
+test("교환 이벤트는 가방 아이템 1개로 단검+테이프, 2개로 카빈을 준다", () => {
+  const [one, two] = JUNK_EXCHANGE_EVENT.choices ?? [];
+  assert.ok(one && two);
+  assert.equal(hasBuildingChoiceCondition(one, [], 0), false);
+  assert.equal(hasBuildingChoiceCondition(one, [], 1), true);
+  assert.equal(hasBuildingChoiceCondition(two, [], 1), false);
+  assert.equal(hasBuildingChoiceCondition(two, [], 2), true);
+  assert.deepEqual(one.outcomes?.[0]?.rewardItemIds, [
+    "wpn_dagger",
+    "mat-tape",
+  ]);
+  assert.deepEqual(two.outcomes?.[0]?.rewardItemIds, [
+    "hanlim-relief-carbine",
+  ]);
+  for (const choice of [one, two]) {
+    for (const itemId of choice.outcomes?.[0]?.rewardItemIds ?? []) {
+      assert.ok(getCatalogItemById(itemId), `invalid reward item ${itemId}`);
     }
   }
 });
 
-test("무장 상태에서는 비무장 복구 이벤트가 발동하지 않는다", () => {
+test("재료만 장착한 상태는 비무장으로 보고 무기를 장착하면 무장으로 본다", () => {
+  assert.equal(isUnarmedLoadout([]), true);
+  assert.equal(isUnarmedLoadout(["mat-tape", "mat-lighter"]), true);
+  assert.equal(isUnarmedLoadout(["mat-tape", "wpn_dagger"]), false);
+  assert.equal(isUnarmedLoadout(["hanlim-relief-carbine"]), false);
+});
+
+test("무장 상태에서는 교환 이벤트가 발동하지 않는다", () => {
   const sampleBuilding = { id: 999999, height: 28 };
   const sampleDistrict = { kind: "RESIDENTIAL" as const };
   const armedEvent = resolveBuildingIntroEvent(
@@ -100,5 +117,5 @@ test("무장 상태에서는 비무장 복구 이벤트가 발동하지 않는�
     [],
     { isUnarmed: false },
   );
-  assert.notEqual(armedEvent.id, UNARMED_RECOVERY_EVENT_CHAIN[0]?.id);
+  assert.notEqual(armedEvent.id, JUNK_EXCHANGE_EVENT.id);
 });

@@ -18,6 +18,7 @@ import {
   getRecipeById,
   hasBuildingChoiceCondition,
   isBuildingLockedDown,
+  isUnarmedLoadout,
   type LootSourceKind,
   type MapBuilding,
   matchesRecipeBase,
@@ -1407,13 +1408,15 @@ async function pinBuildingIntroEvent(
 
   const equipped = await tx.query.characterWeapons.findMany({
     where: eq(characterWeapons.characterId, characterId),
-    columns: { id: true },
+    columns: { weaponMasterId: true },
   });
   const event = resolveBuildingIntroEvent(
     building,
     getBuildingDistrict(building),
     exp.completedEventIds,
-    { isUnarmed: equipped.length === 0 },
+    {
+      isUnarmed: isUnarmedLoadout(equipped.map((row) => row.weaponMasterId)),
+    },
   );
   if (pinned?.id === event.id) return { event, changed: false };
   exp.buildingEvents[key] =
@@ -1656,6 +1659,37 @@ async function consumeBackpackItemsInTransaction(
       needed -= 1;
     }
   }
+}
+
+/** 가방 아이템을 종류와 무관하게 가치가 낮은 것부터 지정 개수만큼 소모합니다. */
+async function consumeAnyBackpackItemsInTransaction(
+  tx: TransactionClient,
+  characterId: string,
+  count: number,
+) {
+  const rows = await tx.query.raidInventoryItems.findMany({
+    where: eq(raidInventoryItems.characterId, characterId),
+    with: { weaponMaster: { columns: { value: true } } },
+    orderBy: [asc(raidInventoryItems.slotIndex)],
+  });
+  rows.sort((a, b) => a.weaponMaster.value - b.weaponMaster.value);
+  let needed = count;
+  for (const row of rows) {
+    if (needed <= 0) break;
+    if (row.quantity <= needed) {
+      await tx
+        .delete(raidInventoryItems)
+        .where(eq(raidInventoryItems.id, row.id));
+      needed -= row.quantity;
+    } else {
+      await tx
+        .update(raidInventoryItems)
+        .set({ quantity: row.quantity - needed })
+        .where(eq(raidInventoryItems.id, row.id));
+      needed = 0;
+    }
+  }
+  if (needed > 0) throw new InventoryError("가방에 넣을 물품이 부족합니다.", 409);
 }
 
 async function stageCatalogItemsAsPendingLoot(
@@ -2021,15 +2055,21 @@ export async function executeRaidBuildingAction(
           }),
           tx.query.raidInventoryItems.findMany({
             where: eq(raidInventoryItems.characterId, characterId),
-            columns: { weaponMasterId: true },
+            columns: { weaponMasterId: true, quantity: true },
           }),
         ]);
+        const backpackItemCount = backpackRows.reduce(
+          (sum, row) => sum + row.quantity,
+          0,
+        );
         const ownedItemIds = [
           ...equippedRows.map((r) => r.weaponMasterId),
           ...backpackRows.map((r) => r.weaponMasterId),
         ];
 
-        if (!hasBuildingChoiceCondition(choice, ownedItemIds)) {
+        if (
+          !hasBuildingChoiceCondition(choice, ownedItemIds, backpackItemCount)
+        ) {
           throw new InventoryError("선택지 실행 조건을 충족하지 못했습니다.", 409);
         }
         const fatigueCost = choice.fatigueCost ?? 0;
@@ -2039,6 +2079,13 @@ export async function executeRaidBuildingAction(
           await consumeBackpackItemsInTransaction(tx, characterId, [
             { itemId: choice.condition.consumeItemId, quantity: 1 },
           ]);
+        }
+        if (choice.condition?.consumeAnyItemCount) {
+          await consumeAnyBackpackItemsInTransaction(
+            tx,
+            characterId,
+            choice.condition.consumeAnyItemCount,
+          );
         }
 
         const roll = random();
