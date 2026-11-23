@@ -23,11 +23,10 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
 
-    "baseUrl": ".",
     "paths": {
       "@webgame/types": ["../../packages/types/src/index.ts"],
-      "@/*": ["src/*"],
-      "src/*": ["src/*"]
+      "@/*": ["./src/*"],
+      "src/*": ["./src/*"]
     }
   },
   "include": ["src", "global.d.ts", "../../packages/types/src/weapon.ts"]
