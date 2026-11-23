@@ -173,7 +173,7 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
     hp: 62,
     stamina: 95,
     staminaRegen: 7,
-    weaponIds: ["wpn_primary", "mat-tape", "mat-ceramic"],
+    weaponIds: ["wpn_primary", "mat-tape"],
     guaranteedRewardId: "wpn_primary",
     rewardIds: ["wpn_primary", "mat-tape", "mat-ceramic", "food-energy-bar"],
   },

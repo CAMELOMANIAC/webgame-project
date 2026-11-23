@@ -126,7 +126,7 @@ export const BASE_EQUIPMENTS: readonly CatalogWeaponMaster[] = [
     id: "wpn_dagger",
     name: "전술 단검",
     aliases: ["Secondary Dagger", "Dagger", "secondary"],
-    damage: 6,
+    damage: 8,
     staminaCost: 10,
     cooldownTicks: 4,
     castTicks: 0,
