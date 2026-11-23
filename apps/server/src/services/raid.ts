@@ -433,6 +433,8 @@ export async function getRaidPathRisks(
       const fromNode = mapData.nodes[path[stopIndex - 1]!];
       const toNode = mapData.nodes[path[stopIndex]!];
       const visit = plannedVisits[stopIndex - 1];
+      // 실제 이동(match)과 같은 순서로 고스트 목록을 갱신한다. 결과는 저장하지 않는다.
+      if (visit) await tracker.advance(visit.nodeId, visit.time);
       if (!fromNode || !toNode || !visit) {
         segmentRisks.push("safe");
         continue;

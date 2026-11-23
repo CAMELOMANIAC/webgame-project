@@ -328,18 +328,24 @@ export function createGhostTracker(
       .slice(0, Math.max(0, vacancies));
   }
 
+  /** 도착 시각 기준으로 기록이 끝난 고스트를 빼고 빈자리를 채운다. */
+  async function advance(to: number, time: number) {
+    roster.tracks = roster.tracks.filter((track) => track.lastTime >= time);
+    await fill(time, to);
+  }
+
   return {
     initialize(entryNodeId: number) {
       return fill(0, entryNodeId, true);
     },
+    advance,
     async match(
       from: number,
       to: number,
       time: number,
       safeArrival: boolean,
     ): Promise<TrackedEncounter | null> {
-      roster.tracks = roster.tracks.filter((track) => track.lastTime >= time);
-      await fill(time, to);
+      await advance(to, time);
       if (safeArrival) return null;
 
       for (const track of roster.tracks) {
