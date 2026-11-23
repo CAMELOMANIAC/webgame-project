@@ -14,7 +14,11 @@ import {
   RiMap2Line,
 } from "react-icons/ri";
 
+import { useJournal } from "@/utils/hooks/useJournal";
+
 import * as styles from "./GlobalNav.css";
+
+const isQuestTab = (to: string) => to === "/field/quest" || to === "/base/quest";
 
 const raidTabs = [
   {
@@ -76,6 +80,8 @@ export default function GlobalNav({
   const { tab } = useSearch({ strict: false });
   const pathname = location.pathname.replace(/\/$/, "");
   const tabs = mode === "raid" ? raidTabs : baseTabs;
+  const journal = useJournal();
+  const unread = (journal.data?.missions ?? []).some((item) => item.unread > 0);
   const activeIndex = tabs.findIndex(({ link }, index) => {
     if (mode === "base" && pathname === "/base/staging") return index === 0;
     if (
@@ -117,7 +123,12 @@ export default function GlobalNav({
             viewTransition={pathname !== link.to}
           >
             <div className={styles.navItem({ active })}>
-              <Icon className={styles.navIcon} />
+              <span className={styles.iconWrap}>
+                <Icon className={styles.navIcon} />
+                {unread && isQuestTab(link.to) && (
+                  <span className={styles.unreadDot} aria-label="새 임무 연락" />
+                )}
+              </span>
               <span className={styles.navLabel}>
                 <span className={styles.navIndex}>
                   {String(index + 1).padStart(2, "0")}

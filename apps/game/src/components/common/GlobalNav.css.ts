@@ -106,3 +106,19 @@ export const navIcon = style({
   width: "16px",
   height: "16px",
 });
+
+export const iconWrap = style({
+  position: "relative",
+  display: "inline-flex",
+});
+
+/** 안 읽은 임무 연락. 사용자 결정에 따라 빨간 점을 쓴다. */
+export const unreadDot = style({
+  position: "absolute",
+  top: "-2px",
+  right: "-4px",
+  width: "6px",
+  height: "6px",
+  borderRadius: "50%",
+  backgroundColor: vars.color.negative,
+});

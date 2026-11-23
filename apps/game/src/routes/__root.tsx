@@ -18,6 +18,7 @@ import {
 } from "@/atoms/raidAtom";
 import DevelopmentAccountGate from "@/components/common/DevelopmentAccountGate";
 import GlobalNav from "@/components/common/GlobalNav";
+import { QuestMessageNotifier } from "@/components/common/QuestMessageNotifier";
 import { ToastViewport } from "@/components/common/toast/ToastViewport";
 import { BaseScreen } from "@/components/lobby/BaseScreen";
 import * as baseStyles from "@/components/lobby/BaseScreen.css";
@@ -139,6 +140,7 @@ function GameLayout() {
 
   return (
     <>
+      <QuestMessageNotifier inRaid={inRaid} />
       <div className={`${styles.outletWrapper} content-container`}>
         <motion.div
           key={fieldRoute ? "field" : path}

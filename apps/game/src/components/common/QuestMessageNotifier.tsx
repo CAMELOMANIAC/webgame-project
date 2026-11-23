@@ -1,0 +1,70 @@
+import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useAtomValue, useSetAtom } from "jotai";
+import { useEffect } from "react";
+
+import { selectedUserIdAtom } from "@/atoms/authAtom";
+import { isCombatAtom } from "@/atoms/raidAtom";
+import { selectedQuestIdAtom } from "@/atoms/toastAtom";
+import { useJournal } from "@/utils/hooks/useJournal";
+import { useToast } from "@/utils/hooks/useToast";
+
+const STORAGE_KEY = "webgame.notifiedQuestMessages";
+
+type Notified = Record<string, Record<string, number>>;
+
+function readNotified(): Notified {
+  try {
+    return JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? "{}") as Notified;
+  } catch {
+    return {};
+  }
+}
+
+function writeNotified(value: Notified) {
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+  } catch {
+    // 저장소를 쓸 수 없으면 이번 화면에서만 중복을 막는다.
+  }
+}
+
+/**
+ * 담당자에게서 새 연락이 오면 화면 위쪽에 메시지형 토스트를 띄운다.
+ * 전투 재생 중에는 미뤘다가 끝난 뒤 띄우고, 같은 연락은 한 번만 띄운다.
+ */
+export function QuestMessageNotifier({ inRaid }: { inRaid: boolean }) {
+  const userId = useAtomValue(selectedUserIdAtom);
+  const isCombat = useAtomValue(isCombatAtom);
+  const setSelectedQuest = useSetAtom(selectedQuestIdAtom);
+  const journal = useJournal();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const onQuestPage = pathname.replace(/\/$/, "").endsWith("/quest");
+  const messages = journal.data?.unreadMessages;
+
+  useEffect(() => {
+    if (!userId || !messages || isCombat) return;
+    const notified = readNotified();
+    const mine = { ...(notified[userId] ?? {}) };
+    let changed = false;
+    for (const message of messages) {
+      if ((mine[message.questId] ?? 0) >= message.seq) continue;
+      mine[message.questId] = message.seq;
+      changed = true;
+      if (onQuestPage) continue;
+      toast.message({
+        key: `quest-message:${message.questId}`,
+        speakerName: message.speakerName,
+        preview: message.preview,
+        onOpen: () => {
+          setSelectedQuest(message.questId);
+          void navigate({ to: inRaid ? "/field/quest" : "/base/quest" });
+        },
+      });
+    }
+    if (changed) writeNotified({ ...notified, [userId]: mine });
+  }, [inRaid, isCombat, messages, navigate, onQuestPage, setSelectedQuest, toast, userId]);
+
+  return null;
+}
