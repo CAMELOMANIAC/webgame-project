@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import {
   type DistrictKind,
   type EnemyArchetype,
-  getEnemyArchetypeById,
   selectEnemyArchetype,
 } from "@webgame/types";
 import { hasRoad, pathTravelVisits } from "./roadDistances";
@@ -70,7 +69,7 @@ const routeById = new Map(routes.map((route) => [route.id, route]));
 
 /**
  * 순찰 ID와 현재 탐사 경과 시간(분)에 맞는 SF 적대 아키타입을 결정합니다.
- * 시간이 경과할수록 파밍을 마친 플레이어 고스트처럼 1 -> 2 -> 3티어 장비로 강해집니다.
+ * 시간이 경과할수록 파밍을 마친 플레이어 고스트처럼 0 -> 1 -> 2 -> 3티어 장비로 강해집니다.
  */
 export function resolvePatrolArchetype(
   patrolId: string,
@@ -78,11 +77,6 @@ export function resolvePatrolArchetype(
 ): EnemyArchetype {
   const route = routeById.get(patrolId);
   const hash = createHash("sha256").update(patrolId).digest().readUInt32BE(0);
-  // 초반 서부 주거지(patrol-01)는 첫 조우 밸런스를 위해 0~60분 구간에 초기 순찰 잔상을 고정 배정
-  if (patrolId === "patrol-01" && timeMinutes <= 60) {
-    const early = getEnemyArchetypeById("npc-patrol-early");
-    if (early) return early;
-  }
   return selectEnemyArchetype({
     timeMinutes,
     districtKind: route?.districtKind,

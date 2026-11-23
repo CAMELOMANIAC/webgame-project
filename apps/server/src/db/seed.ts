@@ -55,7 +55,7 @@ async function main() {
   const weaponById = new Map(weaponData.map((w) => [w.id, w]));
 
   console.log("Seeding SF enemy archetypes...");
-  const tierToLevel = (tier: 1 | 2 | 3) => (tier === 1 ? 1 : tier === 2 ? 3 : 7);
+  const tierToLevel = (tier: 0 | 1 | 2 | 3) => (tier <= 1 ? 1 : tier === 2 ? 3 : 7);
 
   for (const archetype of ENEMY_ARCHETYPES) {
     const [createdEnemy] = await db

@@ -2,7 +2,7 @@ import type { WeaponData } from "./index";
 import { getCatalogItemById } from "./itemCatalog";
 import type { BuildingCategory, DistrictKind } from "./world";
 
-export type EnemyTier = 1 | 2 | 3;
+export type EnemyTier = 0 | 1 | 2 | 3;
 
 export interface EnemyArchetype {
   id: string;
@@ -26,6 +26,8 @@ export interface EnemyArchetype {
 }
 
 export const ENEMY_TIER_TIME_THRESHOLDS = {
+  /** 이 시각(분)까지는 구역과 무관하게 약체(0티어) 적만 등장합니다. */
+  weakEndMinutes: 90,
   midStartMinutes: 121,
   lateStartMinutes: 241,
 } as const;
@@ -37,8 +39,9 @@ const HIGH_RISK_DISTRICTS: readonly DistrictKind[] = [
 ];
 
 /**
- * 탐사 경과 시간(분)과 구역 위험도를 바탕으로 적 티어(1~3)를 결정합니다.
- * - 0~120분: 1티어 (초반, 2~3슬롯)
+ * 탐사 경과 시간(분)과 구역 위험도를 바탕으로 적 티어(0~3)를 결정합니다.
+ * - 0~90분: 0티어 (약체, 보호막 없는 1~2슬롯). 구역 위험도 보정을 적용하지 않습니다.
+ * - 91~120분: 1티어 (초반, 2~3슬롯)
  * - 121~240분: 2티어 (중반, 3~5슬롯)
  * - 241분+: 3티어 (후반, 5~6슬롯)
  * - 산업/의료/기반 구역은 최소 2티어 이상으로 보정됩니다.
@@ -47,6 +50,7 @@ export function resolveEnemyTier(
   timeMinutes: number,
   districtKind?: DistrictKind,
 ): EnemyTier {
+  if (timeMinutes <= ENEMY_TIER_TIME_THRESHOLDS.weakEndMinutes) return 0;
   const baseTier: EnemyTier =
     timeMinutes >= ENEMY_TIER_TIME_THRESHOLDS.lateStartMinutes
       ? 3
@@ -65,12 +69,80 @@ export function resolveEnemyTier(
 }
 
 /**
- * 회성시·한림그룹 세계관 기반 SF 적대 개체 카탈로그 (1~3티어, 2~6슬롯 시너지 빌드).
+ * 회성시·한림그룹 세계관 기반 SF 적대 개체 카탈로그 (0~3티어, 1~6슬롯 시너지 빌드).
  * 테스트 단계에서는 플레이어 고스트의 공백을 메우는 윤활제 역할도 겸합니다.
  */
 export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
   // =========================================================================
-  // Tier 1: 초반 (0~60분, 2~3슬롯)
+  // Tier 0: 약체 (0~90분, 보호막 없는 1~2슬롯). 단검 하나로도 이길 수 있는 상대
+  // =========================================================================
+  {
+    id: "npc-weak-scavenger",
+    name: "굶주린 넝마주이",
+    faction: "무소속 생존자",
+    role: "구역 파밍",
+    reason: "며칠째 빈손으로 주거 구역을 뒤지던 생존자가 단검을 겨눕니다.",
+    tier: 0,
+    districtKinds: ["RESIDENTIAL"],
+    isPatrolEligible: true,
+    hp: 40,
+    stamina: 95,
+    staminaRegen: 7,
+    weaponIds: ["wpn_dagger"],
+    guaranteedRewardId: "wpn_dagger",
+    rewardIds: ["wpn_dagger", "mat-tape", "food-energy-bar"],
+  },
+  {
+    id: "npc-weak-thug",
+    name: "골목 불량배",
+    faction: "상업지구 폭력조직",
+    role: "구역 갈취",
+    reason: "조직 말단이 상가 골목에서 통행자의 짐을 노리고 있습니다.",
+    tier: 0,
+    districtKinds: ["COMMERCIAL"],
+    isPatrolEligible: true,
+    hp: 40,
+    stamina: 100,
+    staminaRegen: 8,
+    weaponIds: ["mat-wire", "wpn_dagger"],
+    guaranteedRewardId: "wpn_dagger",
+    rewardIds: ["wpn_dagger", "mat-wire", "food-ion-drink"],
+  },
+  {
+    id: "npc-weak-drifter",
+    name: "낙오된 일용 인부",
+    faction: "무소속 생존자",
+    role: "작업장 은신",
+    reason: "봉쇄 때 빠져나가지 못한 인부가 작업장에 숨어 외부인을 경계합니다.",
+    tier: 0,
+    districtKinds: ["INDUSTRIAL", "MEDICAL", "INFRA"],
+    isPatrolEligible: true,
+    hp: 40,
+    stamina: 95,
+    staminaRegen: 7,
+    weaponIds: ["mat-lighter", "wpn_dagger"],
+    guaranteedRewardId: "wpn_dagger",
+    rewardIds: ["wpn_dagger", "mat-lighter", "food-energy-bar"],
+  },
+  {
+    id: "npc-weak-patrol",
+    name: "희미한 순찰 잔상",
+    faction: "충돌 잔상",
+    role: "도로 순찰",
+    reason: "갓 진입해 무장을 갖추지 못한 개체와 경로가 겹쳤습니다.",
+    tier: 0,
+    districtKinds: ["RESIDENTIAL", "COMMERCIAL", "INDUSTRIAL", "MEDICAL", "INFRA"],
+    isPatrolEligible: true,
+    hp: 40,
+    stamina: 100,
+    staminaRegen: 7,
+    weaponIds: ["mat-lighter", "wpn_dagger"],
+    guaranteedRewardId: "wpn_dagger",
+    rewardIds: ["wpn_dagger", "mat-lighter", "food-ion-drink"],
+  },
+
+  // =========================================================================
+  // Tier 1: 초반 (91~120분, 2~3슬롯)
   // =========================================================================
   {
     id: "npc-res-scavenger",
@@ -156,7 +228,7 @@ export const ENEMY_ARCHETYPES: readonly EnemyArchetype[] = [
   },
 
   // =========================================================================
-  // Tier 2: 중반 (61~140분 또는 산업·의료·기반 구역 기본, 4슬롯)
+  // Tier 2: 중반 (121~240분, 산업·의료·기반 구역은 91분부터, 4슬롯)
   // =========================================================================
   {
     id: "npc-patrol-mid",
