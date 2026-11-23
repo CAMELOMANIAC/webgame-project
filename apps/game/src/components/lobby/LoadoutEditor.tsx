@@ -30,7 +30,6 @@ import {
   isCombatAtom,
   isNavigatingAtom,
 } from "@/atoms/raidAtom";
-import { ErrorToast } from "@/components/common/ErrorToast";
 import BackpackSlot from "@/components/itemSlot/BackpackSlot";
 import Equipment from "@/components/itemSlot/Equipment";
 import ItemDetailModal, {
@@ -48,6 +47,7 @@ import type { CharacterData } from "@/utils/hooks/useGetCharacter";
 import type { StashItemResponse } from "@/utils/hooks/useGetStash";
 import { useInventoryDrag } from "@/utils/hooks/useInventoryDrag";
 import { useMoveStashItem } from "@/utils/hooks/useMoveStashItem";
+import { useResultToast } from "@/utils/hooks/useResultToast";
 import {
   resolveInspectedSlotDetails,
   type SlotInspectTarget,
@@ -531,6 +531,7 @@ export function LoadoutEditor({
         unequipAllMutation.error?.message ??
         null)
       : null);
+  useResultToast(errorMessage, clearErrors);
 
   const inspectedItem: InspectedItem | null = (() => {
     if (!inspectedTarget) return null;
@@ -699,7 +700,6 @@ export function LoadoutEditor({
         isClickSuppressed={() => suppressClickRef.current}
       >
       <LayoutGroup id="base-inventory-group">
-        <ErrorToast message={errorMessage} onDismiss={clearErrors} />
 
         <div className={baseStyles.inventoryStashArea}>
           {/* 1. 배치 장비 (6슬롯 고정, 3×2 + 일괄 해제 액션) */}
