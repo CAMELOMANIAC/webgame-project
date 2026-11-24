@@ -1,5 +1,12 @@
+import type { CraftTag } from "./craftTags";
 import { MAP_DISTRICTS } from "./districts";
 import { findEnemyArchetypesByDropId } from "./enemyCatalog";
+import {
+  CRAFTING_MATERIALS,
+  getCatalogItemById,
+  getCatalogItemByName,
+  type CatalogWeaponMaster,
+} from "./itemCatalog";
 import type { BuildingCategory, MapDistrict } from "./world";
 
 export * from "./itemCatalog";
@@ -10,7 +17,8 @@ export interface CraftingRecipe {
   tier: 1 | 2 | 3;
   baseEquipmentId: string;
   compatibleBaseNames: string[];
-  materialIds: [string, string];
+  /** 재료 슬롯별 요구 조합 태그. 각 슬롯에 태그가 맞는 재료 1개를 소모합니다. */
+  materialSlots: readonly [CraftTag, CraftTag];
   resultEquipmentId: string;
 }
 
@@ -22,7 +30,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 1,
     baseEquipmentId: "wpn_dagger",
     compatibleBaseNames: ["전술 단검", "Secondary Dagger", "Dagger", "secondary"],
-    materialIds: ["mat-tape", "mat-wire"],
+    materialSlots: ["BIND", "CONDUCT"],
     resultEquipmentId: "eq-log-t1",
   },
   {
@@ -31,7 +39,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 2,
     baseEquipmentId: "eq-log-t1",
     compatibleBaseNames: ["개조 전술 단검"],
-    materialIds: ["mat-titanium", "mat-relay"],
+    materialSlots: ["HIGH_STRENGTH", "CONDUCT"],
     resultEquipmentId: "eq-log-t2a",
   },
   {
@@ -40,7 +48,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 2,
     baseEquipmentId: "eq-log-t1",
     compatibleBaseNames: ["개조 전술 단검"],
-    materialIds: ["mat-titanium", "mat-solenoid"],
+    materialSlots: ["HIGH_OUTPUT", "BIND"],
     resultEquipmentId: "eq-log-t2b",
   },
 
@@ -51,7 +59,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 1,
     baseEquipmentId: "hanlim-relief-carbine",
     compatibleBaseNames: ["기업 구호용 카빈"],
-    materialIds: ["mat-lens", "mat-ceramic"],
+    materialSlots: ["OPTIC", "GUARD"],
     resultEquipmentId: "eq-com-t1",
   },
   {
@@ -60,7 +68,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 2,
     baseEquipmentId: "eq-com-t1",
     compatibleBaseNames: ["광학 조준 카빈"],
-    materialIds: ["mat-relay", "mat-solenoid"],
+    materialSlots: ["HIGH_OUTPUT", "OPTIC"],
     resultEquipmentId: "eq-com-t2a",
   },
   {
@@ -69,7 +77,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 2,
     baseEquipmentId: "eq-com-t1",
     compatibleBaseNames: ["광학 조준 카빈"],
-    materialIds: ["mat-lens", "mat-battery"],
+    materialSlots: ["HIGH_STRENGTH", "OPTIC"],
     resultEquipmentId: "eq-com-t2b",
   },
 
@@ -80,7 +88,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 1,
     baseEquipmentId: "hanlim-control-baton",
     compatibleBaseNames: ["기업 제식 충격봉", "제식 충격봉"],
-    materialIds: ["mat-lighter", "mat-battery"],
+    materialSlots: ["IGNITE", "CONDUCT"],
     resultEquipmentId: "eq-pub-t1",
   },
   {
@@ -89,7 +97,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 2,
     baseEquipmentId: "eq-pub-t1",
     compatibleBaseNames: ["고압 충격봉"],
-    materialIds: ["mat-fuel", "mat-wire"],
+    materialSlots: ["HIGH_OUTPUT", "CONDUCT"],
     resultEquipmentId: "eq-pub-t2a",
   },
   {
@@ -98,7 +106,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 2,
     baseEquipmentId: "eq-pub-t1",
     compatibleBaseNames: ["고압 충격봉"],
-    materialIds: ["mat-fuel", "mat-titanium"],
+    materialSlots: ["HIGH_STRENGTH", "IGNITE"],
     resultEquipmentId: "eq-pub-t2b",
   },
 
@@ -109,7 +117,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 1,
     baseEquipmentId: "hanlim-control-baton",
     compatibleBaseNames: ["기업 제식 충격봉", "응급 생체 팩", "Life-saver"],
-    materialIds: ["mat-wire", "mat-battery"],
+    materialSlots: ["CONDUCT", "GUARD"],
     resultEquipmentId: "eq-inf-t1",
   },
   {
@@ -118,7 +126,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 2,
     baseEquipmentId: "eq-inf-t1",
     compatibleBaseNames: ["가속 릴레이 코일"],
-    materialIds: ["mat-solenoid", "mat-core"],
+    materialSlots: ["HIGH_OUTPUT", "GUARD"],
     resultEquipmentId: "eq-inf-t2a",
   },
   {
@@ -127,7 +135,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 2,
     baseEquipmentId: "eq-inf-t1",
     compatibleBaseNames: ["가속 릴레이 코일"],
-    materialIds: ["mat-relay", "mat-core"],
+    materialSlots: ["HIGH_STRENGTH", "CONDUCT"],
     resultEquipmentId: "eq-inf-t2b",
   },
 
@@ -138,7 +146,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 1,
     baseEquipmentId: "wpn_lifesaver",
     compatibleBaseNames: ["응급 생체 팩", "전술 단검", "Life-saver", "Secondary Dagger"],
-    materialIds: ["mat-biogel", "mat-electrolyte"],
+    materialSlots: ["BIO", "BIO"],
     resultEquipmentId: "eq-med-t1",
   },
   {
@@ -147,7 +155,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 2,
     baseEquipmentId: "eq-med-t1",
     compatibleBaseNames: ["생체 자극 주입기"],
-    materialIds: ["mat-stimulant", "mat-nanosuture"],
+    materialSlots: ["PHARMA", "BIND"],
     resultEquipmentId: "eq-med-t2a",
   },
   {
@@ -156,7 +164,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 2,
     baseEquipmentId: "eq-med-t1",
     compatibleBaseNames: ["생체 자극 주입기"],
-    materialIds: ["mat-anticoagulant", "mat-stimulant"],
+    materialSlots: ["PHARMA", "BIO"],
     resultEquipmentId: "eq-med-t2b",
   },
 
@@ -167,7 +175,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 1,
     baseEquipmentId: "wpn_primary",
     compatibleBaseNames: ["표준 도검", "Primary Sword", "primary"],
-    materialIds: ["mat-tape", "mat-ceramic"],
+    materialSlots: ["BIND", "GUARD"],
     resultEquipmentId: "eq-cul-t1",
   },
   {
@@ -176,7 +184,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 2,
     baseEquipmentId: "eq-cul-t1",
     compatibleBaseNames: ["공명 블레이드"],
-    materialIds: ["mat-anticoagulant", "mat-core"],
+    materialSlots: ["PHARMA", "GUARD"],
     resultEquipmentId: "eq-cul-t2a",
   },
   {
@@ -185,7 +193,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 2,
     baseEquipmentId: "eq-cul-t1",
     compatibleBaseNames: ["공명 블레이드"],
-    materialIds: ["mat-nanosuture", "mat-lens"],
+    materialSlots: ["PHARMA", "OPTIC"],
     resultEquipmentId: "eq-cul-t2b",
   },
 ];
@@ -237,6 +245,88 @@ export function findMaterialDistricts(materialId: string): MapDistrict[] {
   return MAP_DISTRICTS.filter((district) =>
     district.materialIds.includes(materialId),
   );
+}
+
+type CraftItemRef = { id?: string; name?: string } | null | undefined;
+
+/** 아이템의 조합 태그를 카탈로그(ID 우선, 이름 보조)에서 조회합니다. 재료가 아니면 빈 배열입니다. */
+export function getItemCraftTags(item: CraftItemRef): readonly CraftTag[] {
+  if (!item) return [];
+  const catalog =
+    (item.id ? getCatalogItemById(item.id) : undefined) ??
+    (item.name ? getCatalogItemByName(item.name) : undefined);
+  return catalog?.craftTags ?? [];
+}
+
+export function canFillCraftSlot(item: CraftItemRef, tag: CraftTag): boolean {
+  return getItemCraftTags(item).includes(tag);
+}
+
+/** 해당 조합 태그를 가진 재료 카탈로그 목록 */
+export function getCraftTagMaterials(tag: CraftTag): CatalogWeaponMaster[] {
+  return CRAFTING_MATERIALS.filter((material) =>
+    material.craftTags?.includes(tag),
+  );
+}
+
+/** 해당 조합 태그를 가진 재료가 수색 풀에 있는 구역 목록 */
+export function findCraftTagDistricts(tag: CraftTag): MapDistrict[] {
+  const materialIds = new Set(getCraftTagMaterials(tag).map((m) => m.id));
+  return MAP_DISTRICTS.filter((district) =>
+    district.materialIds.some((id) => materialIds.has(id)),
+  );
+}
+
+/** 선택한 재료 ID가 레시피 슬롯 순서대로 태그를 충족하는지 검사합니다. */
+export function isValidCraftMaterialSelection(
+  recipe: CraftingRecipe,
+  materialItemIds: readonly string[],
+): boolean {
+  if (materialItemIds.length !== recipe.materialSlots.length) return false;
+  return recipe.materialSlots.every((tag, index) => {
+    const itemId = materialItemIds[index];
+    return itemId !== undefined && canFillCraftSlot({ id: itemId }, tag);
+  });
+}
+
+export interface CraftMaterialStock {
+  id: string;
+  quantity: number;
+  value: number;
+}
+
+/** 특정 슬롯 태그에 넣을 수 있는 보유 재료를 가치가 낮은 순으로 반환합니다. */
+export function listCraftSlotCandidates(
+  tag: CraftTag,
+  stock: readonly CraftMaterialStock[],
+): CraftMaterialStock[] {
+  return stock
+    .filter((entry) => entry.quantity > 0 && canFillCraftSlot({ id: entry.id }, tag))
+    .sort((a, b) => a.value - b.value);
+}
+
+/**
+ * 보유 재료 중 레시피 슬롯을 모두 채우는 가치 합이 가장 낮은 조합을 반환합니다.
+ * 채울 수 없으면 null을 반환합니다.
+ */
+export function pickDefaultCraftMaterials(
+  recipe: CraftingRecipe,
+  stock: readonly CraftMaterialStock[],
+): [string, string] | null {
+  const [firstTag, secondTag] = recipe.materialSlots;
+  const firstCandidates = listCraftSlotCandidates(firstTag, stock);
+  const secondCandidates = listCraftSlotCandidates(secondTag, stock);
+  let best: { ids: [string, string]; cost: number } | null = null;
+  for (const first of firstCandidates) {
+    for (const second of secondCandidates) {
+      if (first.id === second.id && first.quantity < 2) continue;
+      const cost = first.value + second.value;
+      if (!best || cost < best.cost) {
+        best = { ids: [first.id, second.id], cost };
+      }
+    }
+  }
+  return best?.ids ?? null;
 }
 
 /**

@@ -7,6 +7,7 @@ import type {
   WeaponEffect,
   WeaponTag,
 } from "./index";
+import type { CraftTag } from "./craftTags";
 
 export const WEAPON_TAG_LABELS: Record<WeaponTag, string> = {
   BLADE: "도검",
@@ -33,6 +34,8 @@ export interface CatalogWeaponMaster {
   iconKey: string;
   strategy?: TargetingStrategy;
   tags: WeaponTag[];
+  /** 조합 슬롯 판정용 재료 태그 (재료 전용) */
+  craftTags?: readonly CraftTag[];
   effect: WeaponEffect;
 }
 
@@ -252,6 +255,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     value: 15,
     description: "장비 결속용 산업 테이프. 장착 시 즉석 방어로 보호막을 부여합니다.",
     tags: ["ARMOR"],
+    craftTags: ["BIND"],
     effect: { type: "SHIELD", shieldGain: 8 },
   }),
   makeMaterial({
@@ -264,6 +268,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     value: 18,
     description: "전도율이 높은 피복 배선. 전기 충격과 함께 다음 슬롯을 가속합니다.",
     tags: ["TECH"],
+    craftTags: ["CONDUCT"],
     effect: { type: "SYNERGY", target: "NEXT", hasteTicks: 1 },
   }),
   makeMaterial({
@@ -276,6 +281,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     value: 16,
     description: "점화 및 열원 공급 장치. 점화 피해와 다음 슬롯 피해 보너스를 부여합니다.",
     tags: ["CHEM"],
+    craftTags: ["IGNITE"],
     effect: { type: "SYNERGY", target: "NEXT", damageBonus: 3 },
   }),
   makeMaterial({
@@ -289,6 +295,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     description: "생체 안정 및 냉각용 전해질. 체력과 스태미나를 소량 회복합니다.",
     iconKey: "HEAL",
     tags: ["BIO"],
+    craftTags: ["BIO"],
     effect: {
       type: "HEAL",
       amount: 6,
@@ -310,6 +317,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     attackType: "RANGED",
     iconKey: "TARGET",
     tags: ["TECH", "FIREARM"],
+    craftTags: ["OPTIC"],
     effect: { type: "SYNERGY", target: "NEXT", critChanceBonus: 0.15 },
   }),
   makeMaterial({
@@ -323,6 +331,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     description: "신호 지연 단축용 고속 스위치. 양옆 슬롯의 쿨다운을 줄입니다.",
     attackType: "RANGED",
     tags: ["TECH"],
+    craftTags: ["CONDUCT", "OPTIC"],
     effect: { type: "SYNERGY", target: "ADJACENT", hasteTicks: 1 },
   }),
   makeMaterial({
@@ -335,6 +344,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     value: 35,
     description: "고밀도 휴대 전력 셀. 소모 없이 방전 타격과 함께 스태미나를 공급합니다.",
     tags: ["TECH"],
+    craftTags: ["CONDUCT"],
     effect: { type: "SYNERGY", staminaRestore: 10 },
   }),
   makeMaterial({
@@ -347,6 +357,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     value: 34,
     description: "과열 억제용 세라믹 방열판. 임시 방패로 활용해 큰 보호막을 얻습니다.",
     tags: ["ARMOR", "TECH"],
+    craftTags: ["GUARD"],
     effect: { type: "SHIELD", shieldGain: 14 },
   }),
   // 의료·생체 (4종)
@@ -361,6 +372,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     description: "응급 조직 재생을 돕는 생체 젤. 체력이 감소했을 때 꾸준히 회복합니다.",
     iconKey: "HEAL",
     tags: ["BIO"],
+    craftTags: ["BIO"],
     effect: {
       type: "HEAL",
       amount: 14,
@@ -379,6 +391,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     description: "반사 속도를 끌어올리는 약물. 스태미나를 보충하고 다음 슬롯을 가속·강화합니다.",
     iconKey: "HEAL",
     tags: ["BIO", "CHEM"],
+    craftTags: ["PHARMA", "BIO"],
     effect: {
       type: "SYNERGY",
       target: "NEXT",
@@ -398,6 +411,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     description: "화학적 부식을 유지하는 특수 용액. 투척 피해 후 모든 [BLADE] 장비를 강화합니다.",
     attackType: "RANGED",
     tags: ["CHEM", "BIO"],
+    craftTags: ["PHARMA", "BIO"],
     effect: {
       type: "SYNERGY",
       target: "TAG",
@@ -415,6 +429,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     value: 60,
     description: "미세 봉합 및 내구 보강 섬유. 절단 피해와 함께 체력 회복과 보호막을 부여합니다.",
     tags: ["BIO", "ARMOR", "BLADE"],
+    craftTags: ["HIGH_STRENGTH", "BIND"],
     effect: {
       type: "HEAL",
       amount: 6,
@@ -434,6 +449,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     value: 70,
     description: "초경량 고강도 합금 골격. 타격과 방호를 동시에 수행합니다.",
     tags: ["BLUNT", "ARMOR"],
+    craftTags: ["HIGH_STRENGTH", "GUARD"],
     effect: { type: "SHIELD", shieldGain: 10 },
   }),
   makeMaterial({
@@ -446,6 +462,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     value: 85,
     description: "자기 가속 코일 부품. 강한 충격과 함께 다음 슬롯의 위력을 높입니다.",
     tags: ["TECH", "BLUNT"],
+    craftTags: ["HIGH_OUTPUT", "CONDUCT"],
     effect: { type: "SYNERGY", target: "NEXT", damageBonus: 6 },
   }),
   makeMaterial({
@@ -459,6 +476,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     description: "고출력 순환용 정제 연료. 투척 화염 피해와 함께 모든 [TECH] 슬롯을 강화합니다.",
     attackType: "RANGED",
     tags: ["CHEM"],
+    craftTags: ["HIGH_OUTPUT", "IGNITE"],
     effect: {
       type: "SYNERGY",
       target: "TAG",
@@ -476,6 +494,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     value: 120,
     description: "다중우주 잔류 에너지 차폐 코어. 보호막 전개와 양옆 슬롯 가속을 동시에 수행합니다.",
     tags: ["TECH", "ARMOR"],
+    craftTags: ["HIGH_OUTPUT", "GUARD"],
     effect: {
       type: "SYNERGY",
       target: "ADJACENT",

@@ -2,6 +2,7 @@ export * from "./weapon";
 export * from "./inventory";
 export * from "./world";
 export * from "./districts";
+export * from "./craftTags";
 export * from "./crafting";
 export * from "./buildingEvents";
 export * from "./enemyCatalog";
@@ -457,6 +458,8 @@ export interface RaidView {
 export interface BuildingActionInput extends RaidActionInput {
   action: "INVESTIGATE" | "SEARCH" | "CRAFT" | "EVENT_CHOICE";
   recipeId?: string;
+  /** CRAFT: 레시피 재료 슬롯 순서대로 소모할 재료 아이템 ID */
+  materialItemIds?: string[];
   choiceId?: string;
   equipment?: { weaponMasterId: string; slotIndex: number }[];
   inventory?: { weaponMasterId: string; slotIndex: number; quantity: number }[];
