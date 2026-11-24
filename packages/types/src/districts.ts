@@ -534,8 +534,7 @@ export const MAP_DISTRICTS: readonly MapDistrict[] = [
     "materialIds": [
       "mat-titanium",
       "mat-solenoid",
-      "mat-fuel",
-      "mat-carbon"
+      "mat-fuel"
     ],
     "labelX": 1216.5,
     "labelY": 97.6,
