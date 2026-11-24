@@ -1,5 +1,6 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import {
+  canFillCraftSlot,
   getCatalogItemById,
   getRecipeChainForTarget,
   type Item,
@@ -27,8 +28,12 @@ const BackpackSlot = ({ item, index }: BackpackProps) => {
     if (isEmpty || !pinnedRecipeId) return false;
     const chain = getRecipeChainForTarget(pinnedRecipeId);
     for (const recipe of chain) {
-      for (const matId of recipe.materialIds) {
-        if (getCatalogItemById(matId)?.name === item.name) return true;
+      if (
+        recipe.materialSlots.some((tag) =>
+          canFillCraftSlot({ name: item.name }, tag),
+        )
+      ) {
+        return true;
       }
       if (
         getCatalogItemById(recipe.baseEquipmentId)?.name === item.name ||

@@ -1,9 +1,12 @@
 import { useNavigate } from "@tanstack/react-router";
 import {
   type BuildingActionInput,
+  CRAFT_TAG_LABELS,
   CRAFTING_RECIPES,
   type CraftingRecipe,
+  type CraftMaterialStock,
   FATIGUE_RULES,
+  findCraftTagDistricts,
   findMaterialDistricts,
   findWeaponDropDistricts,
   formatRaidTime,
@@ -14,10 +17,13 @@ import {
   hasBuildingChoiceCondition,
   isBuildingLockedDown,
   isUnarmedLoadout,
+  isValidCraftMaterialSelection,
+  listCraftSlotCandidates,
   LOCKDOWN_WARNING_MINUTES,
   type MapDistrict,
   matchesRecipeBase,
   MISSION_NODE_LABELS,
+  pickDefaultCraftMaterials,
   resolveBuildingIntroEvent,
   resolveBuildingLockdownMinute,
   resolveBuildingMaxCraftTier,
@@ -93,6 +99,42 @@ import * as styles from "./FieldNavTargetSection.css";
 
 type ActiveFieldCard = "nav" | "building" | "loot";
 
+type CraftMaterialPicks = [string | null, string | null];
+
+/** 레시피 슬롯을 보유 재료로 채울 수 있는지 슬롯별로 판정합니다. */
+function isCraftSlotOwned(
+  recipe: CraftingRecipe,
+  index: number,
+  stock: readonly CraftMaterialStock[],
+): boolean {
+  if (pickDefaultCraftMaterials(recipe, stock)) return true;
+  const tag = recipe.materialSlots[index];
+  if (!tag) return false;
+  const needed = recipe.materialSlots
+    .slice(0, index + 1)
+    .filter((slotTag) => slotTag === tag).length;
+  const available = listCraftSlotCandidates(tag, stock).reduce(
+    (sum, entry) => sum + entry.quantity,
+    0,
+  );
+  return available >= needed;
+}
+
+/** 선택한 재료가 슬롯 태그와 보유 수량을 모두 충족하는지 판정합니다. */
+function isCraftPickComplete(
+  recipe: CraftingRecipe,
+  picks: CraftMaterialPicks,
+  stock: readonly CraftMaterialStock[],
+): picks is [string, string] {
+  const [first, second] = picks;
+  if (!first || !second) return false;
+  if (!isValidCraftMaterialSelection(recipe, [first, second])) return false;
+  const quantityOf = (id: string) =>
+    stock.find((entry) => entry.id === id)?.quantity ?? 0;
+  if (first === second) return quantityOf(first) >= 2;
+  return quantityOf(first) >= 1 && quantityOf(second) >= 1;
+}
+
 const FieldNavTargetSection = () => {
   const navigate = useNavigate();
   const recommendListId = useId();
@@ -141,6 +183,10 @@ const FieldNavTargetSection = () => {
   const [selectedCraftRecipeId, setSelectedCraftRecipeId] = useState<
     string | null
   >(null);
+  const [craftMaterialOverride, setCraftMaterialOverride] = useState<{
+    recipeId: string;
+    picks: CraftMaterialPicks;
+  } | null>(null);
   const [inspectedRecipeItem, setInspectedRecipeItem] =
     useState<InspectedItem | null>(null);
   const [showAllDestinations, setShowAllDestinations] = useState(false);
@@ -183,6 +229,16 @@ const FieldNavTargetSection = () => {
     }
     return counts;
   }, [character?.equipment, character?.inventory]);
+
+  const materialStock = useMemo(() => {
+    const stock: CraftMaterialStock[] = [];
+    for (const [id, quantity] of ownedItemCounts) {
+      const catalog = getCatalogItemById(id);
+      if (!catalog?.craftTags?.length) continue;
+      stock.push({ id, quantity, value: catalog.value });
+    }
+    return stock;
+  }, [ownedItemCounts]);
 
   const ownedWeapons = useMemo(() => {
     const list: { id: string; name: string }[] = [];
@@ -398,10 +454,11 @@ const FieldNavTargetSection = () => {
     action: BuildingActionInput["action"],
     recipeId?: string,
     choiceId?: string,
+    materialItemIds?: string[],
   ) => {
     if (!character || !activeBuilding || !canAct) return;
     buildingAction.mutate(
-      { characterId: character.id, action, recipeId, choiceId },
+      { characterId: character.id, action, recipeId, choiceId, materialItemIds },
       {
         onSuccess: (res) => {
           setLastBuildingMsg({ buildingId: activeBuilding.id, text: res.message });
@@ -495,14 +552,14 @@ const FieldNavTargetSection = () => {
     setPinnedRecipeId(recipe.id);
     setSelectedMaterialId(null);
 
-    const missingMatIds = recipe.materialIds.filter(
-      (matId) => (ownedItemCounts.get(matId) ?? 0) < 1,
+    const missingTags = recipe.materialSlots.filter(
+      (_, index) => !isCraftSlotOwned(recipe, index, materialStock),
     );
 
-    if (missingMatIds.length > 0) {
+    if (missingTags.length > 0) {
       const districtMap = new Map<string, MapDistrict>();
-      for (const matId of missingMatIds) {
-        for (const district of findMaterialDistricts(matId)) {
+      for (const tag of missingTags) {
+        for (const district of findCraftTagDistricts(tag)) {
           if (!districtMap.has(district.id)) {
             districtMap.set(district.id, district);
           }
@@ -550,13 +607,14 @@ const FieldNavTargetSection = () => {
   const handleSelectIngredient = (
     e: React.MouseEvent,
     recipe: CraftingRecipe,
-    materialId: string,
+    slotIndex: number,
   ) => {
     e.stopPropagation();
+    const tag = recipe.materialSlots[slotIndex];
+    if (!tag) return;
     setPinnedRecipeId(recipe.id);
-    setSelectedMaterialId(materialId);
-    const districts = findMaterialDistricts(materialId);
-    selectNearestDestinationForDistricts(districts);
+    setSelectedMaterialId(`slot:${slotIndex}`);
+    selectNearestDestinationForDistricts(findCraftTagDistricts(tag));
   };
 
   const leave = () => {
@@ -927,12 +985,10 @@ const FieldNavTargetSection = () => {
                   const bBase = ownedWeapons.some((w) =>
                     matchesRecipeBase(b, w),
                   );
-                  const aMats = a.materialIds.every(
-                    (mId) => (ownedItemCounts.get(mId) ?? 0) >= 1,
-                  );
-                  const bMats = b.materialIds.every(
-                    (mId) => (ownedItemCounts.get(mId) ?? 0) >= 1,
-                  );
+                  const aMats =
+                    pickDefaultCraftMaterials(a, materialStock) !== null;
+                  const bMats =
+                    pickDefaultCraftMaterials(b, materialStock) !== null;
                   const aScore = (aBase ? 2 : 0) + (aBase && aMats ? 1 : 0);
                   const bScore = (bBase ? 2 : 0) + (bBase && bMats ? 1 : 0);
                   return bScore - aScore;
@@ -1042,26 +1098,28 @@ const FieldNavTargetSection = () => {
                           >
                             {baseName}
                           </button>
-                          {recipe.materialIds.map((matId) => {
-                            const matName =
-                              getCatalogItemById(matId)?.name ?? matId;
-                            const hasMat =
-                              (ownedItemCounts.get(matId) ?? 0) >= 1;
+                          {recipe.materialSlots.map((tag, slotIndex) => {
+                            const hasMat = isCraftSlotOwned(
+                              recipe,
+                              slotIndex,
+                              materialStock,
+                            );
                             const isMatSelected =
-                              isCardSelected && selectedMaterialId === matId;
+                              isCardSelected &&
+                              selectedMaterialId === `slot:${slotIndex}`;
                             return (
                               <button
-                                key={matId}
+                                key={`${tag}-${slotIndex}`}
                                 type="button"
                                 className={styles.ingredientChip({
                                   owned: hasMat,
                                   selected: isMatSelected,
                                 })}
                                 onClick={(e) =>
-                                  handleSelectIngredient(e, recipe, matId)
+                                  handleSelectIngredient(e, recipe, slotIndex)
                                 }
                               >
-                                {matName}
+                                {CRAFT_TAG_LABELS[tag]}
                               </button>
                             );
                           })}
@@ -1489,16 +1547,8 @@ const FieldNavTargetSection = () => {
                     character.inventory.some((s) =>
                       matchesRecipeBase(recipe, s.weaponMaster),
                     );
-                  const matCountsNeeded = new Map<string, number>();
-                  for (const mId of recipe.materialIds) {
-                    matCountsNeeded.set(
-                      mId,
-                      (matCountsNeeded.get(mId) ?? 0) + 1,
-                    );
-                  }
-                  const hasAllMats = [...matCountsNeeded.entries()].every(
-                    ([mId, qty]) => (ownedItemCounts.get(mId) ?? 0) >= qty,
-                  );
+                  const hasAllMats =
+                    pickDefaultCraftMaterials(recipe, materialStock) !== null;
                   return {
                     recipe,
                     resultItem,
@@ -1518,6 +1568,44 @@ const FieldNavTargetSection = () => {
                 const hasEnoughCraftFatigue =
                   (character.fatigue ?? 0) >=
                   FATIGUE_RULES.buildingActionCosts.CRAFT;
+                const selectedRecipe = selectedEntry?.recipe;
+                const overridePicks =
+                  selectedRecipe &&
+                  craftMaterialOverride?.recipeId === selectedRecipe.id &&
+                  craftMaterialOverride.picks.every(
+                    (id) =>
+                      id === null ||
+                      materialStock.some((entry) => entry.id === id),
+                  )
+                    ? craftMaterialOverride.picks
+                    : null;
+                const craftPicks: CraftMaterialPicks =
+                  overridePicks ??
+                  (selectedRecipe
+                    ? pickDefaultCraftMaterials(selectedRecipe, materialStock)
+                    : null) ?? [null, null];
+                const isPickComplete =
+                  !!selectedRecipe &&
+                  isCraftPickComplete(selectedRecipe, craftPicks, materialStock);
+                const handlePickMaterial = (
+                  slotIndex: number,
+                  itemId: string,
+                ) => {
+                  if (!selectedRecipe) return;
+                  const next: CraftMaterialPicks = [...craftPicks];
+                  next[slotIndex] = itemId;
+                  const otherIndex = slotIndex === 0 ? 1 : 0;
+                  const quantity =
+                    materialStock.find((entry) => entry.id === itemId)
+                      ?.quantity ?? 0;
+                  if (next[otherIndex] === itemId && quantity < 2) {
+                    next[otherIndex] = null;
+                  }
+                  setCraftMaterialOverride({
+                    recipeId: selectedRecipe.id,
+                    picks: next,
+                  });
+                };
                 return (
                   <>
                     <div
@@ -1528,7 +1616,6 @@ const FieldNavTargetSection = () => {
                       {craftEntries.map((entry) => {
                         const isSelected =
                           selectedEntry?.recipe.id === entry.recipe.id;
-                        const matSeenCounts = new Map<string, number>();
                         return (
                           <label
                             key={entry.recipe.id}
@@ -1609,39 +1696,94 @@ const FieldNavTargetSection = () => {
                                 >
                                   {entry.baseName}
                                 </span>
-                                {entry.recipe.materialIds.map((matId, idx) => {
-                                  const seen =
-                                    (matSeenCounts.get(matId) ?? 0) + 1;
-                                  matSeenCounts.set(matId, seen);
-                                  const matName =
-                                    getCatalogItemById(matId)?.name ?? matId;
-                                  const hasMat =
-                                    (ownedItemCounts.get(matId) ?? 0) >= seen;
-                                  return (
-                                    <span
-                                      key={`${matId}-${idx}`}
-                                      className={styles.ingredientChip({
-                                        owned: hasMat,
-                                      })}
-                                    >
-                                      {matName}
-                                    </span>
-                                  );
-                                })}
+                                {entry.recipe.materialSlots.map((tag, idx) => (
+                                  <span
+                                    key={`${tag}-${idx}`}
+                                    className={styles.ingredientChip({
+                                      owned: isCraftSlotOwned(
+                                        entry.recipe,
+                                        idx,
+                                        materialStock,
+                                      ),
+                                    })}
+                                  >
+                                    {CRAFT_TAG_LABELS[tag]}
+                                  </span>
+                                ))}
                               </div>
                             </div>
                           </label>
                         );
                       })}
                     </div>
+                    {selectedEntry?.canCraft && (
+                      <div className={styles.craftMaterialPicker}>
+                        {selectedEntry.recipe.materialSlots.map(
+                          (tag, slotIndex) => (
+                            <div
+                              key={`${tag}-${slotIndex}`}
+                              className={styles.craftSlotRow}
+                              role="radiogroup"
+                              aria-label={CRAFT_TAG_LABELS[tag]}
+                            >
+                              <span className={styles.craftSlotLabel}>
+                                {CRAFT_TAG_LABELS[tag]}
+                              </span>
+                              {listCraftSlotCandidates(tag, materialStock).map(
+                                (candidate) => {
+                                  const isPicked =
+                                    craftPicks[slotIndex] === candidate.id;
+                                  return (
+                                    <button
+                                      key={candidate.id}
+                                      type="button"
+                                      role="radio"
+                                      aria-checked={isPicked}
+                                      disabled={!canAct}
+                                      className={styles.ingredientChip({
+                                        owned: true,
+                                        selected: isPicked,
+                                      })}
+                                      onClick={() =>
+                                        handlePickMaterial(
+                                          slotIndex,
+                                          candidate.id,
+                                        )
+                                      }
+                                    >
+                                      {getCatalogItemById(candidate.id)?.name ??
+                                        candidate.id}
+                                    </button>
+                                  );
+                                },
+                              )}
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    )}
                     {selectedEntry && (
                       <button
                         type="button"
                         className={styles.craftSubmitBtn}
-                        disabled={!canAct || !selectedEntry.canCraft}
-                        onClick={() =>
-                          handleBuildingAction("CRAFT", selectedEntry.recipe.id)
+                        disabled={
+                          !canAct || !selectedEntry.canCraft || !isPickComplete
                         }
+                        onClick={() => {
+                          if (!isCraftPickComplete(
+                            selectedEntry.recipe,
+                            craftPicks,
+                            materialStock,
+                          )) {
+                            return;
+                          }
+                          handleBuildingAction(
+                            "CRAFT",
+                            selectedEntry.recipe.id,
+                            undefined,
+                            craftPicks,
+                          );
+                        }}
                       >
                         <span>
                           {buildingAction.isPending ? "조합 중…" : "조합하기"}

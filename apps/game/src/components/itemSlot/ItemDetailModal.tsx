@@ -1,4 +1,5 @@
 import {
+  CRAFT_TAG_LABELS,
   formatSynergySummary,
   getCatalogItemById,
   getCatalogItemByName,
@@ -133,6 +134,7 @@ export default function ItemDetailModal({ item, onClose }: ItemDetailModalProps)
 
   const itemKind = mergedWeapon ? getItemKind(mergedWeapon) : "EQUIPMENT";
   const tags = mergedWeapon ? getWeaponTags(mergedWeapon) : [];
+  const craftTags = catalog?.craftTags ?? [];
   const synergySummary = mergedWeapon
     ? formatSynergySummary(mergedWeapon.effect)
     : null;
@@ -209,6 +211,16 @@ export default function ItemDetailModal({ item, onClose }: ItemDetailModalProps)
                 {tags.map((tag) => (
                   <span key={tag} className={styles.tagBadge}>
                     {WEAPON_TAG_LABELS[tag]}
+                  </span>
+                ))}
+              </div>
+            )}
+            {craftTags.length > 0 && (
+              <div className={styles.tagRow}>
+                <span className={styles.slotMeta}>조합</span>
+                {craftTags.map((tag) => (
+                  <span key={tag} className={styles.tagBadge}>
+                    {CRAFT_TAG_LABELS[tag]}
                   </span>
                 ))}
               </div>

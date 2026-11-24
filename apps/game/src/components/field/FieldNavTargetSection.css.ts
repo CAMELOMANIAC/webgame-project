@@ -1148,6 +1148,29 @@ export const craftCardContent = style([
   },
 ]);
 
+export const craftMaterialPicker = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: "6px",
+  paddingTop: "6px",
+  borderTop: `1px solid ${vars.border.subtle}`,
+});
+
+export const craftSlotRow = style({
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: "4px",
+});
+
+export const craftSlotLabel = style({
+  minWidth: "44px",
+  fontFamily: vars.font.mono,
+  fontSize: "11px",
+  lineHeight: 1.2,
+  color: vars.text.secondary,
+});
+
 export const lootCard = style([
   fieldWidget({ tone: "default" }),
   {

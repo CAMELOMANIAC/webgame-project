@@ -1,5 +1,6 @@
 import {
   BASE_EQUIPMENTS,
+  CRAFT_TAG_LABELS,
   CRAFTING_MATERIALS,
   CRAFTING_RECIPES,
   type DistrictKind,
@@ -27,8 +28,8 @@ export function resolveItemSource(itemId: string | undefined): string | null {
     const categoryLabel = BUILDING_CATEGORY_LABELS[recipe.buildingCategory];
     const baseName =
       getCatalogItemById(recipe.baseEquipmentId)?.name ?? recipe.baseEquipmentId;
-    const materialNames = recipe.materialIds
-      .map((id) => getCatalogItemById(id)?.name ?? id)
+    const materialNames = recipe.materialSlots
+      .map((tag) => CRAFT_TAG_LABELS[tag])
       .join(" + ");
     return `${categoryLabel} 건물 조합 (${recipe.tier}단계) · ${baseName} + ${materialNames}`;
   }
