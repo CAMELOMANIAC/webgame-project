@@ -19,6 +19,7 @@ import {
   hasBuildingChoiceCondition,
   isBuildingLockedDown,
   isUnarmedLoadout,
+  isValidCraftMaterialSelection,
   type LootSourceKind,
   type MapBuilding,
   matchesRecipeBase,
@@ -136,6 +137,7 @@ export const NavigateSchema = RaidActionSchema.extend({
 export const BuildingActionSchema = RaidActionSchema.extend({
   action: z.enum(["INVESTIGATE", "SEARCH", "CRAFT", "EVENT_CHOICE"]),
   recipeId: z.string().min(1).optional(),
+  materialItemIds: z.array(z.string().min(1)).max(2).optional(),
   choiceId: z.string().min(1).optional(),
   equipment: SlotsSchema.shape.equipment.optional(),
   inventory: SlotsSchema.shape.inventory.optional(),
@@ -2272,6 +2274,13 @@ export async function executeRaidBuildingAction(
       if (exp.usedCraftBuildingIds.includes(building.id)) {
         throw new InventoryError("이미 조합 설비를 사용한 건물입니다.", 409);
       }
+      const materialItemIds = parsed.materialItemIds ?? [];
+      if (!isValidCraftMaterialSelection(recipe, materialItemIds)) {
+        throw new InventoryError(
+          "선택한 재료가 레시피의 재료 태그 조건과 맞지 않습니다.",
+          400,
+        );
+      }
       const { extraTimeMinutes: craftExtraTime } =
         await requireAndSpendFatigue(FATIGUE_RULES.buildingActionCosts.CRAFT);
 
@@ -2301,7 +2310,7 @@ export async function executeRaidBuildingAction(
       }
 
       const materialCountMap = new Map<string, number>();
-      for (const matId of recipe.materialIds) {
+      for (const matId of materialItemIds) {
         materialCountMap.set(matId, (materialCountMap.get(matId) ?? 0) + 1);
       }
       const materialReqs = [...materialCountMap.entries()].map(
