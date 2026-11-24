@@ -75,8 +75,18 @@ describe("태그 기반 조합 규칙", () => {
     assert.deepEqual(picked, ["mat-wire", "mat-ceramic"]);
   });
 
+  it("생체 태그는 의료 구역 재료에만 있어 의료 T1은 의료 구역 수색이 필요하다", () => {
+    const bioDistricts = findCraftTagDistricts("BIO");
+    assert.ok(bioDistricts.length > 0);
+    assert.ok(bioDistricts.every((district) => district.kind === "MEDICAL"));
+    assert.deepEqual(getRecipeById("rcp-med-1")!.materialSlots, ["BIO", "CONDUCT"]);
+  });
+
   it("같은 재료로 두 칸을 채우려면 2개가 필요하다", () => {
-    const recipe = getRecipeById("rcp-med-1")!; // 생체 + 생체
+    const recipe = {
+      ...getRecipeById("rcp-med-1")!,
+      materialSlots: ["BIO", "BIO"] as const,
+    };
     assert.equal(pickDefaultCraftMaterials(recipe, stockOf("mat-biogel")), null);
     assert.deepEqual(
       pickDefaultCraftMaterials(recipe, stockOf("mat-biogel", "mat-biogel")),

@@ -146,7 +146,7 @@ export const CRAFTING_RECIPES: readonly CraftingRecipe[] = [
     tier: 1,
     baseEquipmentId: "wpn_lifesaver",
     compatibleBaseNames: ["응급 생체 팩", "전술 단검", "Life-saver", "Secondary Dagger"],
-    materialSlots: ["BIO", "BIO"],
+    materialSlots: ["BIO", "CONDUCT"],
     resultEquipmentId: "eq-med-t1",
   },
   {

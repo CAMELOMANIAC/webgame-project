@@ -295,7 +295,7 @@ export const CRAFTING_MATERIALS: readonly CatalogWeaponMaster[] = [
     description: "생체 안정 및 냉각용 전해질. 체력과 스태미나를 소량 회복합니다.",
     iconKey: "HEAL",
     tags: ["BIO"],
-    craftTags: ["BIO"],
+    craftTags: ["CONDUCT"],
     effect: {
       type: "HEAL",
       amount: 6,
