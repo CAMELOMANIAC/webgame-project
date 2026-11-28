@@ -58,8 +58,8 @@ export const useNavigateRaid = () => {
       );
     },
     onSuccess: (result, params) => {
-      void queryClient.invalidateQueries({ queryKey: ["journal", userId] });
       if (!result.encounterTriggered) {
+        void queryClient.invalidateQueries({ queryKey: ["journal", userId] });
         const key = pendingNavigationKey(userId, params.characterId);
         getDefaultStore().set(pendingNavigationAtom, (pending) => {
           if (pending[key]?.params.requestId !== params.requestId)

@@ -3,7 +3,8 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { useEffect } from "react";
 
 import { selectedUserIdAtom } from "@/atoms/authAtom";
-import { isCombatAtom } from "@/atoms/raidAtom";
+import { pendingNavigationAtom } from "@/atoms/pendingNavigationAtom";
+import { isCombatAtom, isNavigatingAtom } from "@/atoms/raidAtom";
 import { selectedQuestIdAtom } from "@/atoms/toastAtom";
 import { useJournal } from "@/utils/hooks/useJournal";
 import { useToast } from "@/utils/hooks/useToast";
@@ -30,11 +31,13 @@ function writeNotified(value: Notified) {
 
 /**
  * 담당자에게서 새 연락이 오면 화면 위쪽에 메시지형 토스트를 띄운다.
- * 전투 재생 중에는 미뤘다가 끝난 뒤 띄우고, 같은 연락은 한 번만 띄운다.
+ * 이동·전투 재생 중에는 미뤘다가 끝난 뒤 띄우고, 같은 연락은 한 번만 띄운다.
  */
 export function QuestMessageNotifier({ inRaid }: { inRaid: boolean }) {
   const userId = useAtomValue(selectedUserIdAtom);
   const isCombat = useAtomValue(isCombatAtom);
+  const isNavigating = useAtomValue(isNavigatingAtom);
+  const pendingNavigation = useAtomValue(pendingNavigationAtom);
   const setSelectedQuest = useSetAtom(selectedQuestIdAtom);
   const journal = useJournal();
   const toast = useToast();
@@ -42,9 +45,13 @@ export function QuestMessageNotifier({ inRaid }: { inRaid: boolean }) {
   const { pathname } = useLocation();
   const onQuestPage = pathname.replace(/\/$/, "").endsWith("/quest");
   const messages = journal.data?.unreadMessages;
+  const hasPendingNavigation = Object.values(pendingNavigation).some(
+    (entry) => entry.actorUserId === userId,
+  );
+  const busy = isCombat || isNavigating || hasPendingNavigation;
 
   useEffect(() => {
-    if (!userId || !messages || isCombat) return;
+    if (!userId || !messages || busy) return;
     const notified = readNotified();
     const mine = { ...(notified[userId] ?? {}) };
     let changed = false;
@@ -64,7 +71,7 @@ export function QuestMessageNotifier({ inRaid }: { inRaid: boolean }) {
       });
     }
     if (changed) writeNotified({ ...notified, [userId]: mine });
-  }, [inRaid, isCombat, messages, navigate, onQuestPage, setSelectedQuest, toast, userId]);
+  }, [busy, inRaid, messages, navigate, onQuestPage, setSelectedQuest, toast, userId]);
 
   return null;
 }
