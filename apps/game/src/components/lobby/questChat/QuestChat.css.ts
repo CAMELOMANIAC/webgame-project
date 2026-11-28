@@ -13,14 +13,22 @@ const blink = keyframes({
   "40%": { opacity: 1 },
 });
 
+export const root = style({
+  display: "flex",
+  flexDirection: "column",
+  flex: 1,
+  minHeight: 0,
+  width: "100%",
+});
+
 export const thread = style({
   display: "flex",
   flexDirection: "column",
-  gap: "10px",
-  maxHeight: "min(56vh, 520px)",
-  minHeight: "120px",
+  flex: 1,
+  minHeight: 0,
+  gap: "12px",
   overflowY: "auto",
-  padding: "4px 2px",
+  padding: "16px",
 });
 
 export const entry = recipe({
@@ -119,10 +127,12 @@ export const typingDot = style({
 });
 
 export const choiceList = style({
+  flexShrink: 0,
   display: "flex",
   flexDirection: "column",
   gap: "8px",
-  paddingTop: "12px",
+  padding: "12px 16px",
+  background: vars.surface.mid,
   borderTop: `1px solid ${vars.border.subtle}`,
 });
 
@@ -167,9 +177,22 @@ export const choiceCondition = style({
   color: vars.text.muted,
 });
 
+export const footerStatus = style({
+  flexShrink: 0,
+  padding: "10px 16px",
+  background: vars.surface.mid,
+  borderTop: `1px solid ${vars.border.subtle}`,
+  fontFamily: vars.font.mono,
+  fontSize: "12px",
+  color: vars.text.muted,
+  fontVariantNumeric: "tabular-nums",
+  textAlign: "center",
+});
+
 export const statusLine = style({
   margin: 0,
+  padding: "16px",
   fontFamily: vars.font.mono,
-  fontSize: "11px",
+  fontSize: "12px",
   color: vars.text.muted,
 });

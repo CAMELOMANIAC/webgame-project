@@ -81,8 +81,17 @@ export function QuestChat({ questId }: { questId: string }) {
   const pending = data.pending;
   const choices = pending.kind === "CHOICE" || pending.kind === "BASE_ONLY" ? pending.choices : [];
 
+  const awaitLabel =
+    allShown && choices.length === 0 && pending.kind === "AWAIT_OBJECTIVE"
+      ? data.status === "RECOVERED"
+        ? "기록 확보 완료 · 중앙 탈출 지점으로 복귀 필요"
+        : data.objective
+          ? `현장 목표 수행 대기 중 · ${data.objective.targetLabel} (#${data.objective.targetNodeId})`
+          : "현장 목표 수행 대기 중"
+      : null;
+
   return (
-    <div>
+    <div className={styles.root}>
       <div className={styles.thread} ref={threadRef} aria-live="polite">
         {transcript.slice(0, shown).map((entry, index) => (
           <ChatEntry key={`${entry.seq}-${index}`} entry={entry} />
@@ -113,6 +122,7 @@ export function QuestChat({ questId }: { questId: string }) {
           ))}
         </div>
       )}
+      {awaitLabel && <div className={styles.footerStatus}>{awaitLabel}</div>}
     </div>
   );
 }
