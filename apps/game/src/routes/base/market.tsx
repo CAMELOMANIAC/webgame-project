@@ -276,7 +276,7 @@ function MarketScreen() {
   return (
     <BaseScreen
       title="거래소"
-      description={'최 사장 · "쓸 만한 물건이면 내가 시세 맞춰 바로 쳐줄게. 급하면 여기 매대부터 뒤져봐."'}
+      description="최 사장이 반가운 기색으로 손짓하며 매대 앞으로 이쪽을 불러 물건을 보여주려 한다."
       portraitSrc={choiPortrait}
     >
       <div className={styles.layout}>

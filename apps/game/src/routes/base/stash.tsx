@@ -28,8 +28,8 @@ function StashScreen() {
 
   return (
     <BaseScreen
-      title="거점 정비소"
-      description={'조 시설과장 · "규정대로 장비부터 점검하십시오. 현장에선 매뉴얼 하나가 목숨을 좌우합니다."'}
+      title="거점"
+      description="조 시설과장이 서류철을 덮고 다가와 출격 전 정비 사항부터 짚어주려 한다."
       portraitSrc={choPortrait}
     >
       <CharacterCollection disabled={isSavingInventory || isSelecting} />

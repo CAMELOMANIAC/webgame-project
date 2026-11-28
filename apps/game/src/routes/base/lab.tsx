@@ -113,8 +113,8 @@ function GeneLabScreen() {
 
   return (
     <BaseScreen
-      title="유전자 연구실"
-      description={'윤 책임연구원 · "위쪽 보고용 기록은 알아서 걸러둘 테니, 지금은 개체 유전자 안정화에만 집중하세요."'}
+      title="연구소"
+      description="윤 책임연구원이 단말기에서 시선을 떼고 주위를 한 번 살핀 뒤 이쪽으로 조용히 말을 건네려 한다."
       portraitSrc={yoonPortrait}
     >
 

@@ -51,7 +51,7 @@ function BaseHome() {
               />
             </div>
             <div className={styles.facilityCardContent}>
-              <h2 className={styles.facilityTitle}>거점 정비소</h2>
+              <h2 className={styles.facilityTitle}>거점</h2>
               <span className={styles.facilityRole}>조 시설과장</span>
             </div>
             <div className={styles.facilityFooter}>
@@ -68,7 +68,7 @@ function BaseHome() {
               />
             </div>
             <div className={styles.facilityCardContent}>
-              <h2 className={styles.facilityTitle}>유전자 연구실</h2>
+              <h2 className={styles.facilityTitle}>연구소</h2>
               <span className={styles.facilityRole}>윤 책임연구원</span>
             </div>
             <div className={styles.facilityFooter}>
@@ -85,7 +85,7 @@ function BaseHome() {
               />
             </div>
             <div className={styles.facilityCardContent}>
-              <h2 className={styles.facilityTitle}>거점 거래소</h2>
+              <h2 className={styles.facilityTitle}>거래소</h2>
               <span className={styles.facilityRole}>최 사장</span>
             </div>
             <div className={styles.facilityFooter}>
