@@ -608,10 +608,12 @@ export type MissionDialogueState =
 export interface JournalMissionItem {
   id: string;
   tier: number;
+  issuerContactId: string;
   issuerName: string;
   issuerRole: string;
   title: string;
   briefing: string;
+  lastMessagePreview: string;
   targetNodeId: number;
   targetLabel: string;
   supplyDescription: string;

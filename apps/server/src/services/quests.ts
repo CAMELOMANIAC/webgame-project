@@ -74,16 +74,35 @@ function offerBriefing(def: MissionDefinition) {
   return "lines" in entry ? entry.lines.map((line) => line.text).join(" ") : "";
 }
 
+function offerFirstLine(def: MissionDefinition) {
+  const entry = getNode(def.dialogue, def.dialogue.entry);
+  return "lines" in entry ? (entry.lines[0]?.text ?? "") : "";
+}
+
+function lastMessagePreviewOf(def: MissionDefinition, row?: QuestProgress) {
+  if (row) {
+    for (let i = row.transcript.length - 1; i >= 0; i -= 1) {
+      const entry = row.transcript[i];
+      if (entry && entry.speaker.kind !== "SYSTEM") return entry.text;
+    }
+  }
+  return offerFirstLine(def);
+}
+
 function toJournalMissionItem(def: MissionDefinition, row?: QuestProgress): JournalMissionItem {
   const objective = objectiveOf(def, row);
-  const unreadEntries = row ? row.transcript.filter((entry) => entry.seq > row.readSeq) : [];
+  const unread = row
+    ? row.transcript.filter((entry) => entry.seq > row.readSeq).length
+    : 1;
   return {
     id: def.id,
     tier: def.tier,
+    issuerContactId: def.issuerContactId,
     issuerName: def.issuerName,
     issuerRole: def.issuerRole,
     title: def.title,
     briefing: offerBriefing(def),
+    lastMessagePreview: lastMessagePreviewOf(def, row),
     targetNodeId: objective.targetNodeId,
     targetLabel: objective.targetLabel,
     supplyDescription: def.supplyDescription,
@@ -91,7 +110,7 @@ function toJournalMissionItem(def: MissionDefinition, row?: QuestProgress): Jour
     status: row?.status ?? "OFFERED",
     completedAt: row?.completedAt?.toISOString() ?? null,
     dialogueState: dialogueStateOf(def, row),
-    unread: unreadEntries.length,
+    unread,
   };
 }
 
