@@ -200,7 +200,8 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
     queryKey: ["pending-battle", userId, characterId],
     enabled: !!characterId && !!characterData?.raw.isRaiding && !isCombat && !isMoving &&
       !pendingNavigation[pendingNavigationKey(userId, characterId)],
-    staleTime: Infinity,
+    staleTime: 0,
+    refetchOnMount: "always",
     refetchOnWindowFocus: false,
     queryFn: () => requestJsonWithTimeout<{ battleLog: BattleLog | null }>(
       (signal) => apiFetch(battleEndpoint, { signal }),
@@ -281,6 +282,7 @@ export function useFieldCombat(characterData: CharacterData | undefined) {
       });
       queryClient.invalidateQueries({ queryKey: ["characters", userId] });
       queryClient.invalidateQueries({ queryKey: ["stash", userId] });
+      queryClient.invalidateQueries({ queryKey: ["journal", userId] });
 
       if (playerDied) {
         queryClient.setQueryData(

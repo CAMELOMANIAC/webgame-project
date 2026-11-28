@@ -24,6 +24,7 @@ import {
   isRecommendDestinationsOpenAtom,
   raidOutroAtom,
   shortestPathAtom,
+  startNavigationTriggerAtom,
   targetBuildingIdAtom,
   targetNodeIdAtom,
 } from "@/atoms/raidAtom";
@@ -107,23 +108,28 @@ function RouteComponent() {
   const [, setTargetNodeId] = useAtom(targetNodeIdAtom);
   const [, setTargetBuildingId] = useAtom(targetBuildingIdAtom);
   const [, setShortestPath] = useAtom(shortestPathAtom);
+  const [, setStartNavigationTrigger] = useAtom(startNavigationTriggerAtom);
   const [isRecommendOpen, setIsRecommendOpen] = useAtom(
     isRecommendDestinationsOpenAtom,
   );
 
   useEffect(() => {
-    setIsNavigating(false);
-    setIsCombat(false);
-    setTargetNodeId(null);
-    setTargetBuildingId(null);
-    setShortestPath([]);
-    setIsRecommendOpen(false);
+    return () => {
+      setIsNavigating(false);
+      setIsCombat(false);
+      setTargetNodeId(null);
+      setTargetBuildingId(null);
+      setShortestPath([]);
+      setStartNavigationTrigger(0);
+      setIsRecommendOpen(false);
+    };
   }, [
     setIsNavigating,
     setIsCombat,
     setTargetNodeId,
     setTargetBuildingId,
     setShortestPath,
+    setStartNavigationTrigger,
     setIsRecommendOpen,
   ]);
 

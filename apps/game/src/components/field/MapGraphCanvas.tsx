@@ -378,7 +378,8 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   const outroPhase = outro?.phase;
   const focusRouteTarget = useAtomValue(focusRouteTargetAtom);
   const highlightedDistrictIds = useAtomValue(highlightedDistrictIdsAtom);
-  const startNavigationTrigger = useAtomValue(startNavigationTriggerAtom);
+  const [startNavigationTrigger, setStartNavigationTrigger] = useAtom(startNavigationTriggerAtom);
+  const lastNavigationTriggerRef = useRef(startNavigationTrigger);
 
   const { data: characterData } = useGetCharacter();
   const exploration = characterData?.raw.activeRaid?.exploration;
@@ -673,7 +674,10 @@ const MapGraphCanvas = ({ isCombat = false, navigateRaid, triggerCombat }: MapGr
   ]);
 
   useEffect(() => {
+    if (startNavigationTrigger === lastNavigationTriggerRef.current) return;
+    lastNavigationTriggerRef.current = startNavigationTrigger;
     if (startNavigationTrigger === 0) return;
+    setStartNavigationTrigger(0);
     if (targetNodeId === null || shortestPath.length === 0) return;
     startNavigation(shortestPath, targetBuilding);
     // eslint-disable-next-line react-hooks/exhaustive-deps
