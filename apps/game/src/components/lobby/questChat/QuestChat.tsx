@@ -76,19 +76,28 @@ export function QuestChat({ questId }: { questId: string }) {
   }, [allShown, data, markReadMutate]);
 
   if (dialogue.isPending) return <p className={styles.statusLine}>임무 통신을 불러오는 중입니다.</p>;
+  if (dialogue.isError) {
+    return (
+      <div className={styles.errorBox} role="alert">
+        <p className={styles.errorText}>
+          {dialogue.error instanceof Error
+            ? dialogue.error.message
+            : "임무 통신을 불러오지 못했습니다."}
+        </p>
+        <button
+          type="button"
+          className={styles.retryButton}
+          onClick={() => void dialogue.refetch()}
+        >
+          다시 불러오기
+        </button>
+      </div>
+    );
+  }
   if (!data) return null;
 
   const pending = data.pending;
   const choices = pending.kind === "CHOICE" || pending.kind === "BASE_ONLY" ? pending.choices : [];
-
-  const awaitLabel =
-    allShown && choices.length === 0 && pending.kind === "AWAIT_OBJECTIVE"
-      ? data.status === "RECOVERED"
-        ? "기록 확보 완료 · 중앙 탈출 지점으로 복귀 필요"
-        : data.objective
-          ? `현장 목표 수행 대기 중 · ${data.objective.targetLabel} (#${data.objective.targetNodeId})`
-          : "현장 목표 수행 대기 중"
-      : null;
 
   return (
     <div className={styles.root}>
@@ -122,7 +131,6 @@ export function QuestChat({ questId }: { questId: string }) {
           ))}
         </div>
       )}
-      {awaitLabel && <div className={styles.footerStatus}>{awaitLabel}</div>}
     </div>
   );
 }
@@ -144,7 +152,6 @@ function ChatEntry({ entry }: { entry: DialogueEntry }) {
     <div className={styles.entry({ side: "npc" })}>
       <div className={styles.speakerRow}>
         <span className={styles.speakerName}>{entry.speaker.name}</span>
-        <span className={styles.speakerRole}>{entry.speaker.role}</span>
       </div>
       <p className={styles.bubble({ side: "npc" })}>{entry.text}</p>
     </div>

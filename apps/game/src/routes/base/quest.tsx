@@ -1,7 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-
-import { MissionJournal } from "@/components/lobby/MissionJournal";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/base/quest")({
-  component: () => <MissionJournal />,
+  component: () => <Outlet />,
 });

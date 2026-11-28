@@ -89,6 +89,8 @@ export default function GlobalNav({
       (pathname === "/base/quarters" || pathname === "/base/lab")
     )
       return index === 1;
+    if (isQuestTab(link.to) && (pathname === link.to || pathname.startsWith(`${link.to}/`)))
+      return true;
     if (pathname !== link.to) return false;
     return (
       link.to !== "/field" || (tab === "backpack" ? index === 1 : index === 0)

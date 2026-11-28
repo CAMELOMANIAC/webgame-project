@@ -21,6 +21,9 @@ import { Route as BaseMarketRouteImport } from './routes/base/market'
 import { Route as BaseLabRouteImport } from './routes/base/lab'
 import { Route as FieldUserIndexRouteImport } from './routes/field/user/index'
 import { Route as FieldQuestIndexRouteImport } from './routes/field/quest/index'
+import { Route as BaseQuestIndexRouteImport } from './routes/base/quest/index'
+import { Route as FieldQuestContactIdRouteImport } from './routes/field/quest/$contactId'
+import { Route as BaseQuestContactIdRouteImport } from './routes/base/quest/$contactId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -82,18 +85,36 @@ const FieldQuestIndexRoute = FieldQuestIndexRouteImport.update({
   path: '/field/quest/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BaseQuestIndexRoute = BaseQuestIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => BaseQuestRoute,
+} as any)
+const FieldQuestContactIdRoute = FieldQuestContactIdRouteImport.update({
+  id: '/field/quest/$contactId',
+  path: '/field/quest/$contactId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BaseQuestContactIdRoute = BaseQuestContactIdRouteImport.update({
+  id: '/$contactId',
+  path: '/$contactId',
+  getParentRoute: () => BaseQuestRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/base/lab': typeof BaseLabRoute
   '/base/market': typeof BaseMarketRoute
   '/base/quarters': typeof BaseQuartersRoute
-  '/base/quest': typeof BaseQuestRoute
+  '/base/quest': typeof BaseQuestRouteWithChildren
   '/base/staging': typeof BaseStagingRoute
   '/base/stash': typeof BaseStashRoute
   '/field/result': typeof FieldResultRoute
   '/base/': typeof BaseIndexRoute
   '/field/': typeof FieldIndexRoute
+  '/base/quest/$contactId': typeof BaseQuestContactIdRoute
+  '/field/quest/$contactId': typeof FieldQuestContactIdRoute
+  '/base/quest/': typeof BaseQuestIndexRoute
   '/field/quest/': typeof FieldQuestIndexRoute
   '/field/user/': typeof FieldUserIndexRoute
 }
@@ -102,12 +123,14 @@ export interface FileRoutesByTo {
   '/base/lab': typeof BaseLabRoute
   '/base/market': typeof BaseMarketRoute
   '/base/quarters': typeof BaseQuartersRoute
-  '/base/quest': typeof BaseQuestRoute
   '/base/staging': typeof BaseStagingRoute
   '/base/stash': typeof BaseStashRoute
   '/field/result': typeof FieldResultRoute
   '/base': typeof BaseIndexRoute
   '/field': typeof FieldIndexRoute
+  '/base/quest/$contactId': typeof BaseQuestContactIdRoute
+  '/field/quest/$contactId': typeof FieldQuestContactIdRoute
+  '/base/quest': typeof BaseQuestIndexRoute
   '/field/quest': typeof FieldQuestIndexRoute
   '/field/user': typeof FieldUserIndexRoute
 }
@@ -117,12 +140,15 @@ export interface FileRoutesById {
   '/base/lab': typeof BaseLabRoute
   '/base/market': typeof BaseMarketRoute
   '/base/quarters': typeof BaseQuartersRoute
-  '/base/quest': typeof BaseQuestRoute
+  '/base/quest': typeof BaseQuestRouteWithChildren
   '/base/staging': typeof BaseStagingRoute
   '/base/stash': typeof BaseStashRoute
   '/field/result': typeof FieldResultRoute
   '/base/': typeof BaseIndexRoute
   '/field/': typeof FieldIndexRoute
+  '/base/quest/$contactId': typeof BaseQuestContactIdRoute
+  '/field/quest/$contactId': typeof FieldQuestContactIdRoute
+  '/base/quest/': typeof BaseQuestIndexRoute
   '/field/quest/': typeof FieldQuestIndexRoute
   '/field/user/': typeof FieldUserIndexRoute
 }
@@ -139,6 +165,9 @@ export interface FileRouteTypes {
     | '/field/result'
     | '/base/'
     | '/field/'
+    | '/base/quest/$contactId'
+    | '/field/quest/$contactId'
+    | '/base/quest/'
     | '/field/quest/'
     | '/field/user/'
   fileRoutesByTo: FileRoutesByTo
@@ -147,12 +176,14 @@ export interface FileRouteTypes {
     | '/base/lab'
     | '/base/market'
     | '/base/quarters'
-    | '/base/quest'
     | '/base/staging'
     | '/base/stash'
     | '/field/result'
     | '/base'
     | '/field'
+    | '/base/quest/$contactId'
+    | '/field/quest/$contactId'
+    | '/base/quest'
     | '/field/quest'
     | '/field/user'
   id:
@@ -167,6 +198,9 @@ export interface FileRouteTypes {
     | '/field/result'
     | '/base/'
     | '/field/'
+    | '/base/quest/$contactId'
+    | '/field/quest/$contactId'
+    | '/base/quest/'
     | '/field/quest/'
     | '/field/user/'
   fileRoutesById: FileRoutesById
@@ -176,12 +210,13 @@ export interface RootRouteChildren {
   BaseLabRoute: typeof BaseLabRoute
   BaseMarketRoute: typeof BaseMarketRoute
   BaseQuartersRoute: typeof BaseQuartersRoute
-  BaseQuestRoute: typeof BaseQuestRoute
+  BaseQuestRoute: typeof BaseQuestRouteWithChildren
   BaseStagingRoute: typeof BaseStagingRoute
   BaseStashRoute: typeof BaseStashRoute
   FieldResultRoute: typeof FieldResultRoute
   BaseIndexRoute: typeof BaseIndexRoute
   FieldIndexRoute: typeof FieldIndexRoute
+  FieldQuestContactIdRoute: typeof FieldQuestContactIdRoute
   FieldQuestIndexRoute: typeof FieldQuestIndexRoute
   FieldUserIndexRoute: typeof FieldUserIndexRoute
 }
@@ -272,20 +307,56 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FieldQuestIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/base/quest/': {
+      id: '/base/quest/'
+      path: '/'
+      fullPath: '/base/quest/'
+      preLoaderRoute: typeof BaseQuestIndexRouteImport
+      parentRoute: typeof BaseQuestRoute
+    }
+    '/field/quest/$contactId': {
+      id: '/field/quest/$contactId'
+      path: '/field/quest/$contactId'
+      fullPath: '/field/quest/$contactId'
+      preLoaderRoute: typeof FieldQuestContactIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/base/quest/$contactId': {
+      id: '/base/quest/$contactId'
+      path: '/$contactId'
+      fullPath: '/base/quest/$contactId'
+      preLoaderRoute: typeof BaseQuestContactIdRouteImport
+      parentRoute: typeof BaseQuestRoute
+    }
   }
 }
+
+interface BaseQuestRouteChildren {
+  BaseQuestContactIdRoute: typeof BaseQuestContactIdRoute
+  BaseQuestIndexRoute: typeof BaseQuestIndexRoute
+}
+
+const BaseQuestRouteChildren: BaseQuestRouteChildren = {
+  BaseQuestContactIdRoute: BaseQuestContactIdRoute,
+  BaseQuestIndexRoute: BaseQuestIndexRoute,
+}
+
+const BaseQuestRouteWithChildren = BaseQuestRoute._addFileChildren(
+  BaseQuestRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BaseLabRoute: BaseLabRoute,
   BaseMarketRoute: BaseMarketRoute,
   BaseQuartersRoute: BaseQuartersRoute,
-  BaseQuestRoute: BaseQuestRoute,
+  BaseQuestRoute: BaseQuestRouteWithChildren,
   BaseStagingRoute: BaseStagingRoute,
   BaseStashRoute: BaseStashRoute,
   FieldResultRoute: FieldResultRoute,
   BaseIndexRoute: BaseIndexRoute,
   FieldIndexRoute: FieldIndexRoute,
+  FieldQuestContactIdRoute: FieldQuestContactIdRoute,
   FieldQuestIndexRoute: FieldQuestIndexRoute,
   FieldUserIndexRoute: FieldUserIndexRoute,
 }

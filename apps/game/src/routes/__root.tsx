@@ -130,7 +130,11 @@ function GameLayout() {
   if (!inRaid && fieldRoute) {
     return (
       <Navigate
-        to={path === "/field/quest" ? "/base/quest" : "/base"}
+        to={
+          path.startsWith("/field/quest")
+            ? path.replace("/field/quest", "/base/quest")
+            : "/base"
+        }
         replace
       />
     );

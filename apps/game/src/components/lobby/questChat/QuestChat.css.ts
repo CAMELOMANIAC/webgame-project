@@ -19,6 +19,7 @@ export const root = style({
   flex: 1,
   minHeight: 0,
   width: "100%",
+  background: vars.surface.base,
 });
 
 export const thread = style({
@@ -61,12 +62,6 @@ export const speakerName = style({
   fontSize: "12px",
   fontWeight: 600,
   color: vars.text.primary,
-});
-
-export const speakerRole = style({
-  fontFamily: vars.font.mono,
-  fontSize: "11px",
-  color: vars.text.muted,
 });
 
 export const bubble = recipe({
@@ -177,22 +172,50 @@ export const choiceCondition = style({
   color: vars.text.muted,
 });
 
-export const footerStatus = style({
-  flexShrink: 0,
-  padding: "10px 16px",
-  background: vars.surface.mid,
-  borderTop: `1px solid ${vars.border.subtle}`,
-  fontFamily: vars.font.mono,
-  fontSize: "12px",
-  color: vars.text.muted,
-  fontVariantNumeric: "tabular-nums",
-  textAlign: "center",
-});
-
 export const statusLine = style({
   margin: 0,
   padding: "16px",
   fontFamily: vars.font.mono,
   fontSize: "12px",
   color: vars.text.muted,
+});
+
+export const errorBox = style({
+  flex: 1,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "12px",
+  padding: "24px 16px",
+  textAlign: "center",
+  background: vars.surface.base,
+});
+
+export const errorText = style({
+  margin: 0,
+  fontSize: "13px",
+  color: vars.color.negative,
+  lineHeight: 1.5,
+  wordBreak: "keep-all",
+});
+
+export const retryButton = style({
+  padding: "8px 14px",
+  borderRadius: vars.radius.control,
+  border: 0,
+  background: vars.color.ctaBg,
+  color: vars.color.ctaFg,
+  fontSize: "12px",
+  fontWeight: 600,
+  cursor: "pointer",
+  selectors: {
+    "&:hover": {
+      background: vars.color.ctaHover,
+    },
+    "&:focus-visible": {
+      outline: `2px solid ${vars.text.primary}`,
+      outlineOffset: "2px",
+    },
+  },
 });

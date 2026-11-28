@@ -6,6 +6,7 @@ import { selectedUserIdAtom } from "@/atoms/authAtom";
 import { pendingNavigationAtom } from "@/atoms/pendingNavigationAtom";
 import { isCombatAtom, isNavigatingAtom } from "@/atoms/raidAtom";
 import { selectedQuestIdAtom } from "@/atoms/toastAtom";
+import { resolveMissionContactId } from "@/components/lobby/missionThreads";
 import { useJournal } from "@/utils/hooks/useJournal";
 import { useToast } from "@/utils/hooks/useToast";
 
@@ -43,8 +44,15 @@ export function QuestMessageNotifier({ inRaid }: { inRaid: boolean }) {
   const toast = useToast();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const onQuestPage = pathname.replace(/\/$/, "").endsWith("/quest");
+  const normalizedPath = pathname.replace(/\/$/, "");
+  const onQuestPage =
+    normalizedPath === "/field/quest" ||
+    normalizedPath.startsWith("/field/quest/") ||
+    normalizedPath === "/base/quest" ||
+    normalizedPath.startsWith("/base/quest/");
   const messages = journal.data?.unreadMessages;
+  const missions = journal.data?.missions;
+  const contacts = journal.data?.contacts;
   const hasPendingNavigation = Object.values(pendingNavigation).some(
     (entry) => entry.actorUserId === userId,
   );
@@ -65,13 +73,23 @@ export function QuestMessageNotifier({ inRaid }: { inRaid: boolean }) {
         speakerName: message.speakerName,
         preview: message.preview,
         onOpen: () => {
+          const matched = missions?.find((item) => item.id === message.questId);
+          if (matched && contacts) {
+            const contactId = resolveMissionContactId(matched, contacts);
+            void navigate({
+              to: inRaid ? "/field/quest/$contactId" : "/base/quest/$contactId",
+              params: { contactId },
+              search: { questId: message.questId },
+            });
+            return;
+          }
           setSelectedQuest(message.questId);
           void navigate({ to: inRaid ? "/field/quest" : "/base/quest" });
         },
       });
     }
     if (changed) writeNotified({ ...notified, [userId]: mine });
-  }, [busy, inRaid, messages, navigate, onQuestPage, setSelectedQuest, toast, userId]);
+  }, [busy, contacts, inRaid, messages, missions, navigate, onQuestPage, setSelectedQuest, toast, userId]);
 
   return null;
 }
